@@ -67,7 +67,7 @@ func talosGuideCluster(ipam string) *fake.Clientset {
 		},
 	}
 
-	return fake.NewSimpleClientset(ds, cm)
+	return fake.NewSimpleClientset(ds, cm, operatorDeployment())
 }
 
 func TestLiveValuesFromCluster_TalosGuideHasNoConflicts(t *testing.T) {
@@ -114,7 +114,7 @@ func TestLiveValuesFromCluster_ReadsDefaultsOfAHelmStyleInstall(t *testing.T) {
 	// Auto-mounted cgroup, no service host, default capabilities: every cgroup/service key differs.
 	ds := agentDaemonSet("quay.io/cilium/cilium:v" + ChartVersion)
 	ds.Spec.Template.Spec.InitContainers = []corev1.Container{{Name: "mount-cgroup"}}
-	kube := fake.NewSimpleClientset(ds, &corev1.ConfigMap{
+	kube := fake.NewSimpleClientset(ds, operatorDeployment(), &corev1.ConfigMap{
 		Namespace: ReleaseNamespace, Name: configMapName,
 		Data: map[string]string{
 			keyIPAM: modeKubernetes, "cgroup-root": "/run/cilium/cgroupv2", "kube-proxy-replacement": "false",

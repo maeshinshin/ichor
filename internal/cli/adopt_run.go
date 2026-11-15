@@ -1217,7 +1217,7 @@ func (st *adoptState) preflight(ctx context.Context, deps adoptDeps, user map[st
 
 	rep, err := deps.Preflight(ctx, cilium.PreflightInput{
 		IchorNamespace: ichorControllerNamespace, Effective: effective, UserValues: deps.CiliumValues,
-		KubeProxy: mode, Tunnel: st.cluster.Spec.CNI.Tunnel,
+		KubeProxy: mode, Tunnel: st.cluster.Spec.CNI.Tunnel, KubePrism: st.kubePrismAnswers(deps),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adopt: Cilium takeover checks: %w", err)
@@ -1240,7 +1240,7 @@ func printPreflight(say adoptSay, rep *cilium.PreflightReport) {
 		say(adoptInfo, "Cilium takeover: %s", rep.Version)
 	}
 
-	for _, e := range []error{rep.ForeignErr, rep.VersionErr, rep.CRDsErr} {
+	for _, e := range []error{rep.ForeignErr, rep.VersionErr, rep.CRDsErr, rep.AgentsErr, rep.KubePrismErr} {
 		if e != nil {
 			say(adoptWarn, "Cilium takeover: %v", e)
 		}
@@ -1618,4 +1618,61 @@ func (st *adoptState) checkKubePrism(deps adoptDeps) error {
 	}
 
 	return nil
+}
+
+// kubePrismAnswers is cilium.PreflightInput.KubePrism: it asks every approved node's Talos API for
+// its KubePrism status (read-only) and names each node where KubePrism is not answering on 7445,
+// or could not be asked. checkKubePrism only reads the configuration; ADR 0103 wants it answering.
+func (st *adoptState) kubePrismAnswers(deps adoptDeps) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		const want = "127.0.0.1:7445"
+
+		var errs []error
+
+		var addrs []string
+
+		for _, n := range st.nodes {
+			if n.Skipped != "" {
+				continue
+			}
+
+			var problem string
+
+			switch host, healthy, err := probeKubePrism(ctx, deps, n); {
+			case err != nil:
+				problem = fmt.Sprintf("could not ask whether KubePrism answers: %v", err)
+			case host != want:
+				problem = fmt.Sprintf("KubePrism is not running on %s (Talos reports %q)", want, host)
+			case !healthy:
+				problem = fmt.Sprintf("KubePrism on %s is up but reports no healthy API server", want)
+			default:
+				continue
+			}
+
+			errs = append(errs, fmt.Errorf("node %s (%s): %s", n.M.Name, n.M.DialEndpoint(), problem))
+			addrs = append(addrs, n.M.DialEndpoint())
+		}
+
+		if len(errs) == 0 {
+			return nil
+		}
+
+		return fmt.Errorf("KubePrism is not answering: %w; the CNI Job reaches the API through it while the agents restart. "+
+			"Fix it with your usual tool; `talosctl -n %s get kubeprismstatuses` shows host and healthy on those nodes. "+
+			"Then run adopt again", errors.Join(errs...), strings.Join(addrs, ","))
+	}
+}
+
+func probeKubePrism(ctx context.Context, deps adoptDeps, n *adoptNode) (host string, healthy bool, err error) {
+	talos, err := deps.DialTalos(ctx, n.M.DialEndpoint())
+	if err != nil {
+		return "", false, err
+	}
+
+	kr, ok := talos.(kubePrismReader)
+	if !ok {
+		return "", false, errors.New("the Talos client cannot read the KubePrism status")
+	}
+
+	return kr.KubePrismStatus(ctx)
 }

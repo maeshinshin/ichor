@@ -23,9 +23,11 @@ import (
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
+	"github.com/cosi-project/runtime/pkg/state"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clusterres "github.com/siderolabs/talos/pkg/machinery/resources/cluster"
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
+	k8sres "github.com/siderolabs/talos/pkg/machinery/resources/k8s"
 
 	"github.com/maeshinshin/ichor/internal/controller"
 )
@@ -128,4 +130,22 @@ func (t *talosClient) ClusterMembers(ctx context.Context) ([]ClusterMember, erro
 	}
 
 	return out, nil
+}
+
+// KubePrismStatus reads Talos's own verdict on the node-local API load balancer: the KubePrismStatuses
+// resource (id k8s-loadbalancer), written by machined every few seconds from the load balancer's
+// health check. host is "" when the resource does not exist, which is how Talos reports KubePrism off.
+func (t *talosClient) KubePrismStatus(ctx context.Context) (host string, healthy bool, err error) {
+	md := resource.NewMetadata(k8sres.NamespaceName, k8sres.KubePrismStatusesType, k8sres.KubePrismStatusesID, resource.VersionUndefined)
+
+	res, err := safe.StateGet[*k8sres.KubePrismStatuses](ctx, t.c.COSI, md)
+	if state.IsNotFoundError(err) {
+		return "", false, nil
+	}
+
+	if err != nil {
+		return "", false, fmt.Errorf("reading the KubePrism status: %w", err)
+	}
+
+	return res.TypedSpec().Host, res.TypedSpec().Healthy, nil
 }

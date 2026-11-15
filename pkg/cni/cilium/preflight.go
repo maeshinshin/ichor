@@ -49,6 +49,10 @@ type PreflightInput struct {
 	// KubeProxy and Tunnel are what the owned-key comparison expects.
 	KubeProxy cni.KubeProxyMode
 	Tunnel    string
+	// KubePrism reports nil when KubePrism answers on every node and otherwise an error that names
+	// each node where it does not. It is the caller's, because the probe goes to each node (the
+	// Talos API). nil is refused: Preflight will not take an unprobed KubePrism for a healthy one.
+	KubePrism func(ctx context.Context) error
 }
 
 // PreflightReport is the outcome of Preflight. Each check records its own result so a plan can
@@ -70,6 +74,10 @@ type PreflightReport struct {
 	Differences []Difference
 	// CRDsErr is set when the pinned chart ships crds/.
 	CRDsErr error
+	// AgentsErr is set when the DaemonSet or the operator is not Ready on every node.
+	AgentsErr error
+	// KubePrismErr is set when KubePrism does not answer on some node.
+	KubePrismErr error
 }
 
 // Preflight runs the takeover preconditions read-only and returns the report. An error means a
@@ -97,6 +105,15 @@ func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error)
 	}
 
 	rep.Version, rep.VersionErr = CheckVersion(image)
+
+	if rep.AgentsErr, err = CheckAgentsReady(ctx, in.Kube); err != nil {
+		return nil, err
+	}
+
+	rep.KubePrismErr = errors.New("cilium: KubePrism was not probed, so it is not known to answer on every node")
+	if in.KubePrism != nil {
+		rep.KubePrismErr = in.KubePrism(ctx)
+	}
 
 	if live != nil {
 		if rep.Conflicts, err = OwnedKeyConflicts(live, in.KubeProxy, in.Tunnel); err != nil {
@@ -151,7 +168,9 @@ func agentImage(ctx context.Context, kube kubernetes.Interface) (string, error) 
 // Err is nil when the takeover may proceed: every check passed, and the owned-key changes and
 // the diff were accepted (--accept-cilium-changes, --accept-cilium-diff).
 func (r *PreflightReport) Err(acceptChanges, acceptDiff bool) error {
-	errs := []error{r.ForeignErr, r.VersionErr, r.CRDsErr, AcceptConflicts(r.Conflicts, acceptChanges)}
+	errs := []error{
+		r.ForeignErr, r.VersionErr, r.CRDsErr, r.AgentsErr, r.KubePrismErr, AcceptConflicts(r.Conflicts, acceptChanges),
+	}
 
 	if len(r.Differences) > 0 && !acceptDiff {
 		errs = append(errs, fmt.Errorf("cilium: %d differences between the live objects and the chart; "+

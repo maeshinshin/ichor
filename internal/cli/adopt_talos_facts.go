@@ -317,6 +317,12 @@ type talosVersionReader interface {
 	TalosVersion(ctx context.Context) (string, error)
 }
 
+// kubePrismReader is implemented by a node reader that can report whether the node's KubePrism
+// load balancer is answering (the KubePrismStatuses resource). host is "" when KubePrism is off.
+type kubePrismReader interface {
+	KubePrismStatus(ctx context.Context) (host string, healthy bool, err error)
+}
+
 // TalosMembersReader is implemented by a node reader that can list the discovery membership of
 // the cluster the node belongs to.
 type TalosMembersReader interface {

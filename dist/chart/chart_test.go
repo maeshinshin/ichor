@@ -437,14 +437,14 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vtaloscredentialrequest-v1alpha1.kb.io": {opCreate},
 				// A patch is dry-rendered against the machines it selects.
 				"vtalosconfigpatch-v1alpha1.kb.io":  {opCreate, opUpdate},
-				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate, "DELETE"},
+				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate, opDelete},
 				"vtaloscluster-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete},
 				// The role-grant and last-admin rules hold for kubectl too.
 				"vichoruser-v1alpha1.kb.io": {opCreate, opUpdate, opDelete},
 				// Override checks writes to existing CRs only.
 				"voverride-v1alpha1.kb.io": {opUpdate},
 				// And the creation of a node reset by hand.
-				"voverrideop-v1alpha1.kb.io": {"CREATE", "UPDATE"},
+				"voverrideop-v1alpha1.kb.io": {opCreate, opUpdate},
 				// A change to spec.authentication, on create and update: and the
 				// delete of a tracked cluster.
 				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},
@@ -634,7 +634,7 @@ func TestUIOIDC(t *testing.T) {
 	sawOpenUsers := false
 	for _, r := range rules {
 		rm, _ := r.(map[string]any)
-		isUsers := containsStr(rm["resources"], "users") && slices.Contains(stringsOf(rm["verbs"]), "impersonate")
+		isUsers := containsStr(rm["resources"], "users") && slices.Contains(stringsOf(rm["verbs"]), verbImpersonate)
 		if isUsers && rm["resourceNames"] == nil {
 			sawOpenUsers = true
 		}
@@ -654,7 +654,7 @@ func impersonationRules(role map[string]any) map[string][]string {
 	rules, _ := role["rules"].([]any)
 	for _, r := range rules {
 		rm, _ := r.(map[string]any)
-		if !slices.Contains(stringsOf(rm["verbs"]), "impersonate") {
+		if !slices.Contains(stringsOf(rm["verbs"]), verbImpersonate) {
 			continue
 		}
 		for _, res := range stringsOf(rm["resources"]) {
@@ -779,7 +779,7 @@ func containerEnvValue(deployment map[string]any, name string) (string, bool) {
 	containers, _ := podSpec["containers"].([]any)
 	for _, c := range containers {
 		cm, _ := c.(map[string]any)
-		if cm["name"] != "ichor-ui" {
+		if cm["name"] != ichorUIDeploymentName {
 			continue
 		}
 		envs, _ := cm["env"].([]any)
@@ -843,7 +843,7 @@ func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[st
 		rules, _ := role["rules"].([]any)
 		for _, r := range rules {
 			rm, _ := r.(map[string]any)
-			if !slices.Contains(stringsOf(rm["verbs"]), "impersonate") {
+			if !slices.Contains(stringsOf(rm["verbs"]), verbImpersonate) {
 				kept = append(kept, r)
 			}
 		}
@@ -968,7 +968,7 @@ func TestManagerToleratesTheControlPlaneTaint(t *testing.T) {
 	}
 
 	// ichor-ui too: a tainted-preset init waits for it before any worker is approved.
-	ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "ichor-ui"))
+	ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, ichorUIDeploymentName))
 	if !reflect.DeepEqual(ui, want) {
 		t.Errorf("ichor-ui tolerations = %v, want %v", ui, want)
 	}
@@ -1177,9 +1177,9 @@ func hasCreateListWatchSecrets(rules []any) bool {
 			continue
 		}
 		if containsStr(rm["resources"], "secrets") &&
-			containsStr(rm["verbs"], "create") &&
-			containsStr(rm["verbs"], "list") &&
-			containsStr(rm["verbs"], "watch") {
+			containsStr(rm["verbs"], verbCreateController) &&
+			containsStr(rm["verbs"], verbList) &&
+			containsStr(rm["verbs"], verbWatch) {
 			return true
 		}
 	}
@@ -1192,9 +1192,9 @@ func hasCertResourceNameRule(rules []any) bool {
 		if !containsStr(rm["resourceNames"], certSecretName) {
 			continue
 		}
-		if containsStr(rm["verbs"], "get") &&
+		if containsStr(rm["verbs"], verbGetController) &&
 			containsStr(rm["verbs"], "patch") &&
-			containsStr(rm["verbs"], "update") {
+			containsStr(rm["verbs"], verbUpdate) {
 			return true
 		}
 	}
@@ -1236,7 +1236,8 @@ func checkNoClusterWideSecretsRead(t *testing.T, release string, docs []map[stri
 				continue
 			}
 
-			if containsStr(rm["verbs"], "get") || containsStr(rm["verbs"], "list") || containsStr(rm["verbs"], "watch") {
+			if containsStr(rm["verbs"], verbGetController) || containsStr(rm["verbs"], verbList) ||
+				containsStr(rm["verbs"], verbWatch) {
 				t.Errorf(
 					"helm template %s .: ClusterRole %q grants %v on secrets across every namespace with no "+
 						"resourceNames; the bundle Secret is resolved in the controller's own namespace"+
@@ -1524,16 +1525,16 @@ func TestControllerRBACHoldsNoEscalation(t *testing.T) {
 			// The one exception: the controller keeps the list of Ichor users that ichor-ui may
 			// impersonate in one named ClusterRole, and needs `escalate` on that role alone to grant the
 			// impersonate right it does not hold. Only the exact name qualifies.
-			managed := triple.group == "rbac.authorization.k8s.io" && triple.resource == resClusterRoles &&
+			managed := triple.group == rbacGroup && triple.resource == resClusterRoles &&
 				triple.names == "ichor-ui-impersonate"
-			if managed && (triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == verbUpdate) {
+			if managed && (triple.verb == verbEscalate || triple.verb == verbGetController || triple.verb == verbUpdate) {
 				continue
 			}
 
 			switch {
-			case triple.verb == "escalate" || triple.verb == "bind",
+			case triple.verb == verbEscalate || triple.verb == "bind",
 				triple.resource == "customresourcedefinitions" && triple.verb != verbGetController,
-				triple.resource == "clusterroles", triple.resource == "clusterrolebindings",
+				triple.resource == resClusterRoles, triple.resource == "clusterrolebindings",
 				triple.resource == "deployments" && triple.verb == verbCreateController:
 				t.Errorf("the controller holds %s; the one-shot Jobs apply cluster-wide objects, not the controller", triple)
 			}
@@ -1618,7 +1619,7 @@ func checkInstallerCoversEveryCRD(t *testing.T, clusterRole map[string]any) {
 
 		name := nameOf(crd)
 
-		for _, verb := range []string{"patch", "update"} {
+		for _, verb := range []string{"patch", verbUpdate} {
 			covered := false
 
 			for tr := range triples {
@@ -1648,7 +1649,7 @@ func TestPodNamespaceFromDownwardAPI(t *testing.T) {
 		for _, c := range containers {
 			cm, _ := c.(map[string]any)
 			name, _ := cm["name"].(string)
-			if name != "manager" && name != ichorUIDeploymentName {
+			if name != managerContainerName && name != ichorUIDeploymentName {
 				continue
 			}
 			seen[name] = true
@@ -1657,7 +1658,7 @@ func TestPodNamespaceFromDownwardAPI(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"manager", ichorUIDeploymentName} {
+	for _, name := range []string{managerContainerName, ichorUIDeploymentName} {
 		if !seen[name] {
 			t.Errorf("no %q container rendered", name)
 		}

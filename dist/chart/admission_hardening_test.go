@@ -100,11 +100,11 @@ func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 			return strings.Join(ops, ",")
 		}
 
-		if !strings.Contains(opsOf("voverrideop-v1alpha1.kb.io"), "UPDATE") {
+		if !strings.Contains(opsOf("voverrideop-v1alpha1.kb.io"), opUpdate) {
 			t.Errorf("%s: voverrideop does not see UPDATE, so a TalosOperation finalizer can be stripped unchecked", label)
 		}
 
-		if !strings.Contains(opsOf("vichorinstallation-v1alpha1.kb.io"), "DELETE") {
+		if !strings.Contains(opsOf("vichorinstallation-v1alpha1.kb.io"), opDelete) {
 			t.Errorf("%s: vichorinstallation does not see DELETE", label)
 		}
 	}
@@ -160,7 +160,7 @@ func escalationNames(t *testing.T, label string, roles ...map[string]any) map[st
 			rm, _ := r.(map[string]any)
 			verbs := stringsOf(rm["verbs"])
 
-			if !slices.Contains(verbs, "bind") && !slices.Contains(verbs, "escalate") {
+			if !slices.Contains(verbs, "bind") && !slices.Contains(verbs, verbEscalate) {
 				continue
 			}
 
@@ -646,7 +646,7 @@ func TestControllerDeletesPodsOnlyInKubeSystem(t *testing.T) {
 		var role map[string]any
 
 		for _, d := range findAll(docs, kindRole) {
-			if namespaceOf(d) == "kube-system" && rbacTriples(allRules(d))[deletePods] {
+			if namespaceOf(d) == kubeSystemNs && rbacTriples(allRules(d))[deletePods] {
 				role = d
 			}
 		}
@@ -660,7 +660,7 @@ func TestControllerDeletesPodsOnlyInKubeSystem(t *testing.T) {
 
 		for _, b := range findAll(docs, kindRoleBinding) {
 			ref, _ := b["roleRef"].(map[string]any)
-			if namespaceOf(b) == "kube-system" && ref["name"] == nameOf(role) {
+			if namespaceOf(b) == kubeSystemNs && ref["name"] == nameOf(role) {
 				bound = true
 			}
 		}

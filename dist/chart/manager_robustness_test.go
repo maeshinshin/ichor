@@ -92,7 +92,7 @@ func TestControllerSurvivesALoadedCluster(t *testing.T) {
 // TestUIProbesRideOutCPUStarvation: the one-second default timeout of the ichor-ui probes is as tight as the
 // controller's was, and the UI hashes passwords with argon2id on the same 500m CPU.
 func TestUIProbesRideOutCPUStarvation(t *testing.T) {
-	for label, d := range deploymentsByInstall(t, "ichor-ui", "../../config/manager-ui/manager.yaml") {
+	for label, d := range deploymentsByInstall(t, ichorUIDeploymentName, "../../config/manager-ui/manager.yaml") {
 		c := firstContainer(d)
 
 		for _, probe := range []string{"livenessProbe", "readinessProbe"} {

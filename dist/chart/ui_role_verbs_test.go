@@ -15,7 +15,7 @@ func uiRoleVerbs(t *testing.T) map[string][]string {
 
 	for _, r := range rules {
 		rm, _ := r.(map[string]any)
-		if !containsStr(rm["apiGroups"], "ichor.maesh.dev") {
+		if !containsStr(rm["apiGroups"], ichorGroup) {
 			continue
 		}
 
@@ -38,7 +38,7 @@ func TestUIRoleOpenModeVerbs(t *testing.T) {
 	for _, sub := range []string{
 		"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown",
 	} {
-		if !slices.Contains(got["talosoperations/"+sub], "start") {
+		if !slices.Contains(got["talosoperations/"+sub], verbStart) {
 			t.Errorf("ichor-ui-role has no start on talosoperations/%s: %v", sub, got["talosoperations/"+sub])
 		}
 	}

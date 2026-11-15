@@ -82,7 +82,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 
 		// Subjects: exactly the one group, in both the chart and the kustomize binding.
 		want := fmt.Sprint([]any{map[string]any{
-			"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "ichor:" + n,
+			"apiGroup": rbacGroup, "kind": "Group", "name": "ichor:" + n,
 		}})
 		for label, set := range map[string][]map[string]any{labelChart: docs, "kustomize": configDocs} {
 			bname := "ichor-" + n + "-rolebinding"
@@ -113,7 +113,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosclusters/secret-references", verbUpdate, ""},
 		{ichorGroup, "talosetcdbackups/secret-references", verbUpdate, ""},
 		{ichorGroup, "ichorusers/password", verbUpdate, ""},
-		{ichorGroup, "talosclusters", verbOverride, ""},
+		{ichorGroup, resClusters, verbOverride, ""},
 		{ichorGroup, "talosclusters/credentials", "download", ""},
 		{ichorGroup, "talosmachines/support-bundle", "download", ""},
 		{ichorGroup, "ichorusers", verbCreateController, ""},
@@ -158,7 +158,7 @@ func TestUserAccessRoleEvents(t *testing.T) {
 
 	got := rbacTriples(allRules(role))
 	for _, g := range []string{"", "events.k8s.io"} {
-		for _, v := range []string{"get", "list", "watch"} {
+		for _, v := range []string{verbGetController, verbList, verbWatch} {
 			if !got[rbacTriple{g, "events", v, ""}] {
 				t.Errorf("Role ichor-user-access lacks %s events %s", g, v)
 			}
@@ -166,7 +166,7 @@ func TestUserAccessRoleEvents(t *testing.T) {
 	}
 
 	for tr := range got {
-		if tr.resource == "events" && tr.verb != "get" && tr.verb != "list" && tr.verb != "watch" {
+		if tr.resource == "events" && tr.verb != verbGetController && tr.verb != verbList && tr.verb != verbWatch {
 			t.Errorf("Role ichor-user-access grants %s", tr)
 		}
 		if tr.verb == "*" || tr.verb == verbImpersonate || strings.Contains(tr.resource, "secrets") {
@@ -189,7 +189,7 @@ func TestOverrideRole(t *testing.T) {
 	checkRBACRulesMatch(t, "ichor", "ClusterRole ichor-override-role", cfgRole, chartRole,
 		"config/rbac/override_role.yaml", "dist/chart/templates/rbac/ichor-override-role.yaml")
 
-	for _, res := range []string{"talosclusters", "talosconfigpatches", "talosmachines"} {
+	for _, res := range []string{resClusters, "talosconfigpatches", "talosmachines"} {
 		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, verbOverride, ""}] {
 			t.Errorf("config/rbac/override_role.yaml does not grant override on %s", res)
 		}

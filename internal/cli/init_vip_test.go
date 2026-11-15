@@ -123,12 +123,11 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 	}
 }
 
-// A static address for the first node is taken for any endpoint type. A node or loadBalancer gets no VIP, only the
-// addressing on its link.
+// A static address for the first node is taken for any endpoint type. A node gets no VIP, only the addressing on its link.
 func TestRunInit_StaticAddressForAnyEndpointType(t *testing.T) {
 	one := []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink}
 
-	for _, typ := range []string{endpointNode, endpointLoadBalancer} {
+	for _, typ := range []string{endpointNode} {
 		t.Run(typ, func(t *testing.T) {
 			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
 				o.EndpointType, o.Addresses, o.Gateway = typ, []string{testStaticCIDR}, testHWGateway
@@ -156,7 +155,7 @@ func TestRunInit_StaticAddressForAnyEndpointType(t *testing.T) {
 
 // Any other endpoint type leaves the node as it was: no spec.network, no VIP, and the links are not asked for.
 func TestRunInit_OtherEndpointTypesGetNoVIP(t *testing.T) {
-	for _, typ := range []string{endpointNode, endpointLoadBalancer} {
+	for _, typ := range []string{endpointNode} {
 		t.Run(typ, func(t *testing.T) {
 			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
 				o.EndpointType = typ
@@ -265,17 +264,19 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 		want   string
 	}{
 		"a vip must be an IP address": {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" },
-			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type loadBalancer would take a hostname`},
-		"loadBalancer takes a hostname":       {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointLoadBalancer, "lb.example.com" }, ""},
-		"loadBalancer takes an IP":            {func(in *initPlanInput) { in.EndpointType = endpointLoadBalancer }, ""},
+			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type node would take a hostname`},
+		"node takes a hostname": {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointNode, "lb.example.com" }, ""},
+		"loadBalancer is refused": {func(in *initPlanInput) {
+			in.EndpointType, in.EndpointAddress = ichorv1alpha1.EndpointTypeLoadBalancer, "lb.example.com"
+		}, "endpoint type loadBalancer is removed: use type node"},
 		"--nic is taken for a node endpoint":  {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, ""},
 		"--nic written as a MAC needs colons": {func(in *initPlanInput) { in.NIC = "52-54-00-dd-ee-ff" }, "not a MAC address"},
 		"--nic may be a link name":            {func(in *initPlanInput) { in.NIC = testHWLink }, ""},
 		"--address is taken for a node endpoint": {func(in *initPlanInput) {
 			in.EndpointType, in.Addresses = endpointNode, []string{testStaticCIDR}
 		}, ""},
-		"--gateway is taken for a loadBalancer endpoint": {func(in *initPlanInput) {
-			in.EndpointType, in.Gateway = endpointLoadBalancer, testHWGateway
+		"--gateway is taken for a node endpoint": {func(in *initPlanInput) {
+			in.EndpointType, in.Gateway = endpointNode, testHWGateway
 		}, ""},
 		"a valid vip and --nic are allowed": {func(in *initPlanInput) { in.NIC = testSecondMAC }, ""},
 	} {
@@ -324,8 +325,9 @@ func TestInitFile_NIC(t *testing.T) {
 	t.Fatal("firstNode.nic does not set --nic")
 }
 
-// adopt calls an address that is no node's own a load balancer: vip means Ichor configures it, and adopt did not.
-func TestAdoptCallsAnUnmatchedEndpointALoadBalancer(t *testing.T) {
+// adopt takes node for every endpoint that is not vip: node takes a name or an address, and vip would mean Ichor
+// configures an address adopt did not.
+func TestAdoptTakesNodeForEveryEndpoint(t *testing.T) {
 	node := func(endpoint, host string) *adoptNode {
 		m := &ichorv1alpha1.TalosMachine{Spec: ichorv1alpha1.TalosMachineSpec{Endpoint: endpoint, Role: roleControlPlane}}
 
@@ -333,9 +335,9 @@ func TestAdoptCallsAnUnmatchedEndpointALoadBalancer(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct{ endpoint, host, want string }{
-		"an address in front of the nodes": {testAdoptAddr, testEndpointAddr, "loadBalancer"},
+		"an address in front of the nodes": {testAdoptAddr, testEndpointAddr, endpointNode},
 		"a node's own address":             {testAdoptAddr, testAdoptAddr, endpointNode},
-		"a name":                           {testAdoptAddr, "k8s.example.com", endpointLoadBalancer},
+		"a name":                           {testAdoptAddr, "k8s.example.com", endpointNode},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, err := clusterFromNodes("c", "ns", "v1.14.3", []*adoptNode{node(tc.endpoint, tc.host)})
@@ -580,7 +582,7 @@ func TestRunInit_EndpointAddressAgainstTypeIsRefusedBeforeAnythingIsCreated(t *t
 	opts.EndpointAddress = "cluster.example.com"
 
 	err := runInit(context.Background(), opts, deps)
-	if err == nil || !strings.Contains(err.Error(), "needs an IP address") || !strings.Contains(err.Error(), "type loadBalancer would take a hostname") {
+	if err == nil || !strings.Contains(err.Error(), "needs an IP address") || !strings.Contains(err.Error(), "type node would take a hostname") {
 		t.Fatalf("err = %v", err)
 	}
 

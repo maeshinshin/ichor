@@ -34,13 +34,12 @@ import (
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
-// endpointTypes is the one definition of TalosCluster.spec.endpoint.type's values (the CRD enum), with
-// what --endpoint-address holds for each. The flag help, buildInitPlan's check, the `init -f`
-// template and the prompt all read it. The first is the --endpoint-type default.
+// endpointTypes is what init offers for TalosCluster.spec.endpoint.type, with what --endpoint-address holds for
+// each. The CRD enum still has loadBalancer, which init refuses (ADR 0160) and so does not offer. The flag help,
+// buildInitPlan's check, the `init -f` template and the prompt all read it. The first is the --endpoint-type default.
 var endpointTypes = []struct{ Name, Address string }{
 	{"vip", "an IP address"},
-	{"loadBalancer", "a hostname"},
-	{"node", "an IP address"},
+	{"node", "an IP address or a hostname"},
 }
 
 // endpointTypeNames lists the names joined by sep, with the last one joined by lastSep.

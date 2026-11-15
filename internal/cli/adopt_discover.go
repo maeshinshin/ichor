@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/netip"
 	"regexp"
 	"slices"
 	"strings"
@@ -235,15 +234,10 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 
 	f := cp.Facts
 
-	// A name, and an address that is no node's own, is in front of the nodes, which is what loadBalancer takes.
-	// It is never vip: that type means Ichor puts the address on the control planes (pkg/render), and adopt
-	// must never claim an address it did not configure.
-	endpointType := endpointLoadBalancer
-
-	if addr, err := netip.ParseAddr(f.EndpointHost); err == nil &&
-		slices.ContainsFunc(nodes, func(n *adoptNode) bool { return n.M.Spec.Endpoint == addr.String() }) {
-		endpointType = endpointNode
-	}
+	// Always node: it takes an IP address or a name, so a load balancer in front of the nodes is node too, and an
+	// address that is a node's own is node. It is never vip: that type means Ichor puts the address on the control
+	// planes (pkg/render), and adopt must never claim an address it did not configure.
+	endpointType := endpointNode
 
 	if f.EndpointHost == "" {
 		return nil, errors.New("adopt: the control plane's configuration names no cluster endpoint")
@@ -360,9 +354,8 @@ func readNodes(nodes []*adoptNode) []*adoptNode {
 }
 
 const (
-	endpointVIP          = "vip"
-	endpointLoadBalancer = "loadBalancer"
-	endpointNode         = "node"
+	endpointVIP  = "vip"
+	endpointNode = "node"
 )
 
 func kubernetesVersionOr(v string) string {

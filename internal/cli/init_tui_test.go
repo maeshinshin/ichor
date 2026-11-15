@@ -89,7 +89,6 @@ func send(t *testing.T, m promptModel, msgs ...tea.Msg) (promptModel, tea.Cmd) {
 
 const (
 	tuiCluster   = "demo"
-	tuiLB        = "loadBalancer"
 	tuiSata      = "sata"
 	tuiNVMe      = "nvme"
 	tuiSdb       = "/dev/sdb"
@@ -121,10 +120,10 @@ func typeQuestion(t *testing.T) promptModel {
 	return promptModel{}
 }
 
-// The prompt offers the types the CRD takes: a hostname is loadBalancer, so there is no dns.
-func TestPromptModel_OffersNoDNSEndpointType(t *testing.T) {
-	if v := shown(typeQuestion(t)); strings.Contains(v, "dns") {
-		t.Fatalf("the endpoint type prompt offers dns:\n%s", v)
+// The prompt offers vip and node: loadBalancer is refused (ADR 0160), and there is no dns.
+func TestPromptModel_OffersNoRemovedEndpointType(t *testing.T) {
+	if v := shown(typeQuestion(t)); strings.Contains(v, "dns") || strings.Contains(v, "loadBalancer") {
+		t.Fatalf("the endpoint type prompt offers a type init refuses:\n%s", v)
 	}
 }
 
@@ -137,10 +136,10 @@ func TestPromptModel_TypingNarrowsTheEndpointTypes(t *testing.T) {
 		}
 	}
 
-	m, _ = send(t, m, typedKeys("load"))
+	m, _ = send(t, m, typedKeys("nod"))
 
-	if v := shown(m); !strings.Contains(v, tuiLB) || strings.Contains(v, "dns") || strings.Contains(v, "vip") {
-		t.Errorf("typing did not narrow the list to loadBalancer:\n%s", v)
+	if v := shown(m); !strings.Contains(v, endpointNode) || strings.Contains(v, "dns") || strings.Contains(v, "vip") {
+		t.Errorf("typing did not narrow the list to node:\n%s", v)
 	}
 }
 
@@ -155,10 +154,10 @@ func TestPromptModel_EndpointAddressSaysWhatKindFollowsTheType(t *testing.T) {
 	flags := newInitFlags(t)
 
 	m := newPromptModel(initQuestions(flags), map[string]string{flagEndpointType: "vip"})
-	m, _ = send(t, m, typedKeys(tuiCluster), keyOf(tea.KeyEnter), keyOf(tea.KeyDown), keyOf(tea.KeyEnter)) // loadBalancer
+	m, _ = send(t, m, typedKeys(tuiCluster), keyOf(tea.KeyEnter), keyOf(tea.KeyDown), keyOf(tea.KeyEnter)) // node
 
-	if v := shown(m); !strings.Contains(v, "a hostname is expected here") {
-		t.Errorf("a loadBalancer address is a hostname:\n%s", v)
+	if v := shown(m); !strings.Contains(v, "an IP address or a hostname is expected here") {
+		t.Errorf("a node address is an IP address or a hostname:\n%s", v)
 	}
 
 	m = newPromptModel(initQuestions(flags), map[string]string{flagEndpointType: "vip"})
@@ -300,8 +299,8 @@ func TestAskPrompts_CtrlCOnTheTerminalCancels(t *testing.T) {
 }
 
 func TestPromptModel_EnterTakesTheOnlyRemainingCandidate(t *testing.T) {
-	m, _ := send(t, typeQuestion(t), typedKeys("load"), keyOf(tea.KeyEnter))
-	if m.state != promptDone || m.got[flagEndpointType] != tuiLB {
+	m, _ := send(t, typeQuestion(t), typedKeys("nod"), keyOf(tea.KeyEnter))
+	if m.state != promptDone || m.got[flagEndpointType] != endpointNode {
 		t.Errorf("state %d, got %v", m.state, m.got)
 	}
 
@@ -313,7 +312,7 @@ func TestPromptModel_EnterTakesTheOnlyRemainingCandidate(t *testing.T) {
 }
 
 func TestPromptModel_EnterNeedsTwoPressesWhileSeveralRemain(t *testing.T) {
-	m, _ := send(t, typeQuestion(t), typedKeys("d")) // loadBalancer and node have a d
+	m, _ := send(t, diskQuestion(testDisks...), typedKeys("d")) // both disks have a d
 
 	if n := len(m.pick.VisibleItems()); n < 2 {
 		t.Fatalf("%d candidates match", n)
@@ -324,7 +323,7 @@ func TestPromptModel_EnterNeedsTwoPressesWhileSeveralRemain(t *testing.T) {
 		t.Fatal("the first Enter took an answer")
 	}
 
-	if m, _ = send(t, m, keyOf(tea.KeyEnter)); m.state != promptDone || m.got[flagEndpointType] == "" {
+	if m, _ = send(t, m, keyOf(tea.KeyEnter)); m.state != promptDone || m.got[flagInstallDisk] == "" {
 		t.Errorf("state %d, got %v", m.state, m.got)
 	}
 }

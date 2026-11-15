@@ -169,7 +169,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 
 	var out bytes.Buffer
 
-	// One row down from vip is loadBalancer; the cluster and node endpoint are given.
+	// One row down from vip is node, which takes a hostname; the cluster and node endpoint are given.
 	if err := flags.Parse([]string{"--cluster", "c", "--node-endpoint", "n:1", "--address", "192.168.1.9/24"}); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, _ := flags.GetString(flagEndpointType); got != tuiLB {
+	if got, _ := flags.GetString(flagEndpointType); got != endpointNode {
 		t.Errorf("type = %q", got)
 	}
 

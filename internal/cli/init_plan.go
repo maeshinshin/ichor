@@ -318,6 +318,11 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: --cni-tunnel %q is invalid: must be %q or %q", in.CNITunnel, ciliumTunnelVxlan, ciliumTunnelGeneve)
 	}
 
+	// Named before the list check, so that the refusal says what to use instead of listing the types.
+	if in.EndpointType == ichorv1alpha1.EndpointTypeLoadBalancer {
+		return nil, fmt.Errorf("init: %w", ichorv1alpha1.ErrLoadBalancerRemoved)
+	}
+
 	if !validEndpointType(in.EndpointType) {
 		return nil, fmt.Errorf("init: --endpoint-type %q is invalid: must be one of %s", in.EndpointType, endpointTypeNames(", ", ", "))
 	}

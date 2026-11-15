@@ -1,6 +1,6 @@
 # 0039. Config editing UI: PatchService screens, opaque-JSON editing, no generic schema-driven renderer
 
-Status: Accepted · Date: 2026-10-26 · Design section: CLI and UI, Patch layers
+Status: Accepted · Date: 2026-10-26 · Amended · Design section: CLI and UI, Patch layers
 
 Decided: built the `PatchService` CRUD screens (list, create, edit, delete) and an explicit impact-preview action on `ui/src/pages/PatchList.tsx`/`PatchDetail.tsx`, editing each `PatchDocument` and `LabelSelector` as a JSON blob in a `Textarea` rather than through a generic schema-driven form renderer, and relying on the apiserver's own CRD validation (surfaced via `describeError`) instead of a second, hand-written validation layer.
 
@@ -231,3 +231,36 @@ the search without either.
   saved. Where Talos documents a field with an empty table entry (the
   v1alpha1 `Config` has many), the row has no description and the search still
   finds it by its path.
+
+## Amendment: the index has each setting once, by its path in spec.config (2026-11-16)
+
+The index of the first amendment read the `spec.config` schema and wrote each
+setting back as a Talos document kind and a path inside it. A setting that more
+than one document spells was a row for each spelling (`machine.sysctls` of the
+v1alpha1 document and `params` of `SysctlConfig`), and every row named a kind a
+reader has no reason to know. `spec.config` is the only place a patch carries
+Talos configuration (ADR 0165), and it has one path for each setting, so the
+index follows it.
+
+- **A row is a setting of `spec.config`, by its path there.** The search shows
+  that path, the type and the description, and finds a setting by its name, its
+  path, the kind of the document that spells it or its description. A setting
+  is one row however many documents spell it.
+- **The `ichor` tags give the way back to the documents.** Each setting of the
+  schema is tagged with where the documents spell it, as `Kind:path`; a row
+  below a setting that is a Talos type has the same rest of the path in both.
+  The row's `doc` is the first of them (a document before the v1alpha1
+  document), and the description and the allowed values are read there, by the
+  rule of the first amendment. A gendocs test fails when two places of the
+  schema name the same setting of a document, which would be two rows for one
+  setting.
+- **A collection has two rows.** The collection itself (`machine.volumes.user`),
+  which adds a document of the kind, and its key (`machine.volumes.user.<key>`),
+  which is the document's name. The fields below are written
+  `machine.volumes.user.<key>.provisioning.grow`.
+- **The editor still writes documents, and `doc` is how.** The wire carries
+  `PatchDocument` and the kind `Select` and the JSON `Textarea` are unchanged,
+  so a chosen row goes into the document its `doc` names, and a patch edited
+  either way saves the same. `doc` and the kind `Select` go when the wire and
+  the editor move to `spec.config`, which is the change after this one; nothing
+  in the index is needed for it but the path.

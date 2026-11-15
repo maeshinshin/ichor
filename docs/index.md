@@ -94,7 +94,8 @@ The complete list is in the [changelog](https://github.com/maeshinshin/ichor/blo
   cluster, or bring existing Talos machines in.
 - [Users and login](guides/users-and-login.md),
   [Settings](guides/settings.md) and [Hardening](guides/hardening.md).
-- [Rotating the service-account and secretbox keys](guides/rotate-keys.md).
+- [Back up etcd to S3](guides/etcd-backup.md) and
+  [Rotating the service-account and secretbox keys](guides/rotate-keys.md).
 - Concepts: [Clusters and machines](concepts/clusters-and-machines.md),
   [Operations](concepts/operations.md), [CNI and Cilium](concepts/cni.md),
   [Security model](concepts/security.md),

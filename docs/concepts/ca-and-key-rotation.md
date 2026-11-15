@@ -11,8 +11,12 @@ Ichor rotates two kinds of cluster secrets, each as a
 [`TalosOperation`](../reference/crds/talosoperation.md) of its own kind, so each
 follows the rules of [Operations](operations.md): one cluster lock, pause on a
 failed step, `resume` to run the step again. Starting either needs a verb that
-only `ichor-admin` holds ([Security model](security.md)). Take an etcd snapshot
-first (`ichor backup etcd NAME`).
+only `ichor-admin` holds ([Security model](security.md)). Hold a snapshot first.
+Set up a scheduled backup once ([Back up etcd to S3](../guides/etcd-backup.md):
+`ichor create etcd-backup`), then `ichor backup etcd NAME` takes one now; it is
+encrypted, in your bucket, and `ichor restore` reads it. `ichor snapshot etcd --node NODE`
+needs no setup, but writes the snapshot as **plaintext** (it holds every Secret in the
+cluster) to your disk, and `ichor restore` does not take that file.
 
 | | CA rotation | Key rotation |
 |---|---|---|

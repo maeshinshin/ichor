@@ -1,16 +1,17 @@
 ---
 title: "ichor create"
-description: "Create a user, or write credentials for talosctl and kubectl"
+description: "Create a user or an etcd backup, or write credentials for talosctl and kubectl"
 ---
 
 ## ichor create
 
-Create a user, or write credentials for talosctl and kubectl
+Create a user or an etcd backup, or write credentials for talosctl and kubectl
 
 ### Synopsis
 
 create makes an Ichor user, or writes the files a person needs to reach a cluster: the admin
-credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig.
+credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig. It
+also creates a scheduled etcd backup to an S3 bucket.
 
 ```sh
 ichor create [command]
@@ -43,6 +44,7 @@ ichor create [command]
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
 * [ichor create credentials](ichor_create_credentials.md)	 - Write a kubeconfig and a talosconfig for the cluster's admin, from its secrets bundle
+* [ichor create etcd-backup](ichor_create_etcd-backup.md)	 - Create a scheduled, encrypted etcd backup to an S3 bucket: the TalosEtcdBackup and its credentials Secret
 * [ichor create kubeconfig](ichor_create_kubeconfig.md)	 - Download your own kubeconfig (it holds no secret: it runs `ichor auth token`)
 * [ichor create talosconfig](ichor_create_talosconfig.md)	 - Write a short-lived os:reader talosconfig for talosctl
 * [ichor create user](ichor_create_user.md)	 - Create a user and set its first password (it must be changed at the first sign-in)

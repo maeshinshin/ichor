@@ -55,6 +55,14 @@ command does. Each item is described where it is listed below.
 
 ### CLI
 
+- **New: `ichor create etcd-backup`** writes the S3 credentials Secret, in the
+  controller's namespace, and the `TalosEtcdBackup` that names it. Nothing in
+  Ichor created a `TalosEtcdBackup` before, so a scheduled backup meant writing
+  the object by hand, and the advice to take a snapshot before a CA rotation
+  could not be followed. The S3 credentials come from `ICHOR_S3_ACCESS_KEY_ID` and
+  `ICHOR_S3_SECRET_ACCESS_KEY`, as for `ichor restore cluster`, never from flags.
+  The bucket is not created. The `TalosEtcdBackup` sample is a working example,
+  and a new guide, Back up etcd to S3, has the procedure (CLI, ADR 0164).
 - **Breaking: the command surface is verb first.** `ichor machine list` is now
   `ichor get nodes`, and `ichor machine approve NAME` is
   `ichor approve node NAME`. The noun-first groups `cluster`, `machine`,

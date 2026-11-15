@@ -57,7 +57,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.
 #### Change Commands
 
 * [ichor apply](ichor_apply.md)	 - Create or update a TalosConfigPatch from a file (shows its impact first; confirms if it needs a reboot or reinstall)
-* [ichor create](ichor_create.md)	 - Create a user, or write credentials for talosctl and kubectl
+* [ichor create](ichor_create.md)	 - Create a user or an etcd backup, or write credentials for talosctl and kubectl
 * [ichor delete](ichor_delete.md)	 - Delete a node, patch, operation or user
 * [ichor discovery](ichor_discovery.md)	 - List, add or remove the addresses and ranges Ichor scans for new nodes
 * [ichor edit](ichor_edit.md)	 - Edit an object in $EDITOR, or change a user's fields

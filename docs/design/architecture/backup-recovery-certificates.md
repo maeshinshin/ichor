@@ -7,7 +7,9 @@ sidebar_order: 18
 
 `TalosEtcdBackup` takes snapshots on a schedule from a healthy non-leader
 control plane, verifies them, encrypts them (snapshots contain Secrets) and
-stores them in S3-compatible storage with retention. A snapshot can also be
+stores them in S3-compatible storage with retention. `ichor create etcd-backup` writes the
+object and its credentials Secret; the bucket is the operator's
+([Back up etcd to S3](../../guides/etcd-backup.md)). A snapshot can also be
 taken outside the schedule (`ichor backup etcd`, Back up now on the Backups
 page), which sets an annotation the controller acts on. Failures and staleness
 surface as metrics and alerts.

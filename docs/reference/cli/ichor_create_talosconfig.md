@@ -61,5 +61,5 @@ ichor create talosconfig NAME [flags]
 
 ### SEE ALSO
 
-* [ichor create](ichor_create.md)	 - Create a user, or write credentials for talosctl and kubectl
+* [ichor create](ichor_create.md)	 - Create a user or an etcd backup, or write credentials for talosctl and kubectl
 

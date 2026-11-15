@@ -58,7 +58,7 @@ are kept. The prefix defaults to the cluster's name; two clusters need two prefi
 
 Setting the credentials Secret and the destination needs the "update" verb on
 talosetcdbackups/secret-references. An existing Secret or TalosEtcdBackup of that name is never
-overwritten. Take a first snapshot at once with 'ichor backup etcd NAME'.`,
+overwritten. The controller takes the first snapshot as soon as it sees the object.`,
 	Example: `  export ICHOR_S3_ACCESS_KEY_ID=... ICHOR_S3_SECRET_ACCESS_KEY=...
   ichor create etcd-backup nightly --cluster prod --s3-endpoint https://s3.example.com --s3-bucket ichor-backups
   ichor create etcd-backup nightly --cluster prod --s3-endpoint https://s3.example.com --s3-bucket ichor-backups \
@@ -167,9 +167,9 @@ func runCreateEtcdBackup(ctx context.Context, k8s ctrlclient.Client, out, errw i
 	}
 
 	_, _ = fmt.Fprintf(out, "Created etcd backup %s/%s for cluster %s and its credentials Secret %s/%s (content not printed).\n"+
-		"The bucket %q is not checked here. Take the first snapshot with: ichor backup etcd %s\n"+
-		"Then look at status.conditions and status.lastSnapshot: kubectl -n %s get talosetcdbackup %s -o yaml\n",
-		o.Namespace, o.Name, o.Cluster, ichorNamespace, o.SecretName, o.Bucket, o.Name, o.Namespace, o.Name)
+		"The bucket %q is not checked here; the controller takes the first snapshot shortly. "+
+		"Look at status.conditions and status.lastSnapshot: kubectl -n %s get talosetcdbackup %s -o yaml\n",
+		o.Namespace, o.Name, o.Cluster, ichorNamespace, o.SecretName, o.Bucket, o.Namespace, o.Name)
 
 	return nil
 }

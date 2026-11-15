@@ -284,7 +284,8 @@ under SecureBoot, else `none`).
 node, for three reasons Talos gives: a GRUB install cannot become UKI, key
 enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
 state (PCR 7). The path, one node at a time, as for disk encryption: set the
-mode (and the confirm annotation for `Required`); take an etcd backup; remove the
+mode (and the confirm annotation for `Required`); take an etcd backup
+([Back up etcd to S3](etcd-backup.md)); remove the
 node with a full system-disk wipe, `ichor delete node NODE --wipe-mode system-disk --reboot --override --confirm MACHINE`
 (or choose "The whole system disk" under "What to wipe" in the UI's Remove node
 dialog); boot the machine
@@ -471,8 +472,10 @@ you list.
   service has no restart call, so a reboot is the only way a member loads the
   CA): three reboots of every control plane, each preceded by cordon and drain.
   A cluster with one control plane has no Kubernetes API while its only member
-  reboots. Take a snapshot first
-  (`ichor backup etcd NAME`). Snapshots stay readable: the backup key does
+  reboots. Take a snapshot first: set up a scheduled backup once
+  ([Back up etcd to S3](etcd-backup.md)), then `ichor backup etcd NAME`.
+  (`ichor snapshot etcd --node NODE` needs no setup but is **plaintext** and
+  not an input to `ichor restore`; see that page.) Snapshots stay readable: the backup key does
   not depend on the CAs.
 - **aggregator.** kube-apiserver publishes the CAs it accepts for extension API
   servers (for example metrics-server) in `extension-apiserver-authentication`.

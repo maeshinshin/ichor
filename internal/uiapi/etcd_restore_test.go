@@ -358,7 +358,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	}
 
 	// The start right is asked first, and denied here, so override is not reached.
-	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != "etcd-restore" {
+	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != startEtcdRestore {
 		t.Fatalf("start is asked first: %+v", asked)
 	}
 

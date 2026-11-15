@@ -46,11 +46,11 @@ import (
 const reclaimLabelValue = "true"
 
 // mayAll asks Kubernetes, as the caller, whether they hold every one of the attributes (a verb on a resource).
-// With nobody to ask (the backend on its own ServiceAccount) it allows: the webhook then judges the ServiceAccount.
+// With nobody to ask (the backend on its own ServiceAccount, no sign-in) the answer is no: nobody may.
 func (s *Server) mayAll(ctx context.Context, attrs ...authv1.ResourceAttributes) (bool, error) {
 	_, signedIn := IdentityFrom(ctx)
 	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
-		return true, nil
+		return false, nil
 	}
 
 	return s.askAll(ctx, "reclaim: ", attrs...)

@@ -12,11 +12,22 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+// Value sets the chart tests share, named once so that none of them is a literal in many files.
+const (
+	oidcEnabledSet = "ichorUI.oidc.enabled=true"
+	oidcClientID   = "ichorUI.oidc.clientId=ichor"
+	oidcIssuerSet  = "ichorUI.oidc.issuer=https://idp.example.test"
+	installerOn    = "installer.enabled=true"
+	allowOpenSet   = "ichorUI.allowUnauthenticated=true"
+)
+
 // destructiveStarts are the six subresources of talosoperations whose `start` verb starts an operation
 // that can take a cluster down. They are written out here, the way the CRD and docs/concepts/security.md
 // name them, and not read from the role under test or from StartSubresource, which is what the backend
 // asks. TestDestructiveStartsAreTheSixTheCRDHas ties the list to the CRD, so a seventh cannot slip past.
-var destructiveStarts = []string{"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown"}
+var destructiveStarts = []string{
+	"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown",
+}
 
 // ruleGrants reports whether rm, a decoded RBAC rule, gives verb on resource in the ichor group, the
 // wildcards the API server honours included.
@@ -52,7 +63,7 @@ func serviceAccountRules(docs []map[string]any, name string) []map[string]any {
 			bound := slices.ContainsFunc(subjects, func(s any) bool {
 				sm, _ := s.(map[string]any)
 
-				return sm["kind"] == "ServiceAccount" && sm["name"] == name
+				return kindOf(sm) == kindServiceAccount && sm["name"] == name
 			})
 			if !bound {
 				continue
@@ -60,9 +71,8 @@ func serviceAccountRules(docs []map[string]any, name string) []map[string]any {
 
 			ref, _ := b["roleRef"].(map[string]any)
 			refName, _ := ref["name"].(string)
-			refKind, _ := ref["kind"].(string)
 
-			for _, rule := range allRules(find(docs, refKind, refName)) {
+			for _, rule := range allRules(find(docs, kindOf(ref), refName)) {
 				rm, _ := rule.(map[string]any)
 				out = append(out, rm)
 			}
@@ -80,37 +90,35 @@ func TestUIServiceAccountHoldsNoStartVerb(t *testing.T) {
 	for _, sets := range [][]string{
 		nil,
 		{usersOn, usersURL},
-		{"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp.example.test", "ichorUI.oidc.clientId=ichor", "ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}"},
+		{
+			oidcEnabledSet, oidcIssuerSet, oidcClientID,
+			"ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}",
+		},
 		{"ichorUI.credentials.serviceAccount=true"},
 		{"ichorUI.diagnostics.serviceAccount=true"},
-		{"installer.enabled=true"},
+		{installerOn},
 	} {
 		docs := renderChartWithValues(t, "ichor", sets...)
 
 		rules := serviceAccountRules(docs, ichorUIServiceAccountName)
 		if len(rules) == 0 {
-			t.Fatalf("%v: no rule is bound to the ServiceAccount %s, so this test would pass for any role", sets, ichorUIServiceAccountName)
+			t.Fatalf("%v: no rule is bound to %s: the test would pass for any role", sets, ichorUIServiceAccountName)
 		}
 
 		for _, sub := range destructiveStarts {
 			for _, rm := range rules {
 				if ruleGrants(rm, verbStart, "talosoperations/"+sub) {
-					t.Errorf("%v: the ServiceAccount %s holds start on talosoperations/%s through %v", sets, ichorUIServiceAccountName, sub, rm)
+					t.Errorf("%v: %s holds start on talosoperations/%s through %v", sets, ichorUIServiceAccountName, sub, rm)
 				}
 			}
 		}
 	}
 
-	// A control that the matcher sees a grant: the admin role holds the verb on every subresource.
-	admin := serviceAccountRules([]map[string]any{
-		{"kind": kindClusterRoleBinding, "subjects": []any{map[string]any{"kind": "ServiceAccount", "name": "x"}},
-			"roleRef": map[string]any{"kind": kindClusterRole, "name": "r"}},
-		{"kind": kindClusterRole, "metadata": map[string]any{"name": "r"}, "rules": []any{
-			map[string]any{"apiGroups": []any{ichorGroup}, "resources": []any{"talosoperations/*"}, "verbs": []any{"*"}},
-		}},
-	}, "x")
-	if len(admin) != 1 || !ruleGrants(admin[0], verbStart, "talosoperations/shutdown") {
-		t.Errorf("the matcher does not see a wildcard grant of start: %v", admin)
+	// A control that the matcher sees a grant: a wildcard binding of start to a ServiceAccount.
+	control := decodeYAMLDocs(t, []byte(wildcardGrant), "the control")
+	got := serviceAccountRules(control, "x")
+	if len(got) != 1 || !ruleGrants(got[0], verbStart, "talosoperations/shutdown") {
+		t.Errorf("the matcher does not see a wildcard grant of start: %v", got)
 	}
 
 	// RemoveMachine is the only delete of a TalosMachine and asks for the override verb, which the
@@ -165,7 +173,8 @@ func TestDestructiveStartsAreTheSixTheCRDHas(t *testing.T) {
 
 	if !slices.Equal(slices.Compact(reached), want) {
 		t.Errorf("the CRD's kinds %v and node actions %v need the start subresources %v, destructiveStarts lists %v: "+
-			"a new destructive kind must be added to the list so the ServiceAccount test covers it", kinds, actions, slices.Compact(reached), want)
+			"a new destructive kind must be added to the list, so that the ServiceAccount test covers it",
+			kinds, actions, slices.Compact(reached), want)
 	}
 }
 
@@ -191,3 +200,14 @@ func walk(t *testing.T, v any, path ...string) any {
 
 	return v
 }
+
+const wildcardGrant = `
+kind: ClusterRoleBinding
+subjects: [{kind: ServiceAccount, name: x}]
+roleRef: {kind: ClusterRole, name: r}
+---
+kind: ClusterRole
+metadata: {name: r}
+rules:
+- {apiGroups: [ichor.maesh.dev], resources: ["talosoperations/*"], verbs: ["*"]}
+`

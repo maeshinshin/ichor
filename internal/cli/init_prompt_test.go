@@ -56,7 +56,7 @@ func typed(t *testing.T, keys string) io.Reader {
 	return r
 }
 
-var allButTheDisk = []string{"--cluster", "c", "--endpoint-address", "a", "--node-endpoint", "n:1"}
+var allButTheDisk = []string{clusterArg, "c", "--endpoint-address", "a", "--node-endpoint", "n:1"}
 
 func newInitFlags(t *testing.T) *pflag.FlagSet {
 	t.Helper()
@@ -173,7 +173,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 	var out bytes.Buffer
 
 	// One row down from vip is node, which takes a hostname; the cluster and node endpoint are given.
-	if err := flags.Parse([]string{"--cluster", "c", "--node-endpoint", "n:1", "--address", "192.168.1.9/24"}); err != nil {
+	if err := flags.Parse([]string{clusterArg, "c", "--node-endpoint", "n:1", "--address", "192.168.1.9/24"}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -2,6 +2,7 @@ package chart
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,13 +24,13 @@ func TestAllowUnauthenticatedIsRefused(t *testing.T) {
 	users := []string{usersOn, "ichorUI.users.externalURL=https://x"}
 
 	for name, sets := range map[string][]string{
-		"alone":              {"ichorUI.allowUnauthenticated=true"},
-		"beside Ichor users": append([]string{"ichorUI.allowUnauthenticated=true"}, users...),
+		"alone":              {allowOpenSet},
+		"beside Ichor users": slices.Concat([]string{allowOpenSet}, users),
 		"beside OIDC": {
-			"ichorUI.allowUnauthenticated=true", "ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp.example.test",
-			"ichorUI.oidc.clientId=ichor", "ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}",
+			allowOpenSet, oidcEnabledSet, oidcIssuerSet, oidcClientID,
+			"ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}",
 		},
-		"with ichor-ui off": {"ichorUI.enabled=false", "ichorUI.allowUnauthenticated=true"},
+		"with ichor-ui off": {"ichorUI.enabled=false", allowOpenSet},
 		"as a string":       {"ichorUI.allowUnauthenticated=\"true\""},
 	} {
 		out, err := renderChartWithValuesErr("ichor", sets...)
@@ -39,7 +40,8 @@ func TestAllowUnauthenticatedIsRefused(t *testing.T) {
 			continue
 		}
 
-		for _, want := range []string{"ichorUI.allowUnauthenticated was removed", "ichorUI.users.enabled=true", "--set ichorUI.allowUnauthenticated=null"} {
+		wants := []string{"ichorUI.allowUnauthenticated was removed", usersOn, "--set ichorUI.allowUnauthenticated=null"}
+		for _, want := range wants {
 			if !strings.Contains(string(out)+err.Error(), want) {
 				t.Errorf("%s: the refusal does not say %q: %s %v", name, want, out, err)
 			}
@@ -54,7 +56,7 @@ func TestAllowUnauthenticatedIsRefused(t *testing.T) {
 		}
 	}
 
-	proxies := ui(append(users, "ichorUI.users.trustedProxyCIDRs={10.0.0.0/8,192.168.0.0/16}")...)
+	proxies := ui(slices.Concat(users, []string{"ichorUI.users.trustedProxyCIDRs={10.0.0.0/8,192.168.0.0/16}"})...)
 	if !strings.Contains(proxies, "--trusted-proxy-cidrs=10.0.0.0/8,192.168.0.0/16") {
 		t.Error("trustedProxyCIDRs does not reach ichor-ui")
 	}

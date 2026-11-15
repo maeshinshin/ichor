@@ -213,7 +213,7 @@ func TestChartDynamicTalosEgressFalseRestoresWorld(t *testing.T) {
 }
 
 var oidcOn = []string{
-	"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp.example.test", "ichorUI.oidc.clientId=ichor",
+	oidcEnabledSet, oidcIssuerSet, oidcClientID,
 	"ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.users={oidc:alice}",
 }
 

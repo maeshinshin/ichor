@@ -523,7 +523,7 @@ func bindsCNIJob(b map[string]any) bool {
 		name, _ := sm["name"].(string)
 		ns, _ := sm["namespace"].(string)
 
-		if sm["kind"] == "ServiceAccount" && ns == kubeSystemNs && (name == "ichor-cni" || name == "cni") {
+		if sm["kind"] == kindServiceAccount && ns == kubeSystemNs && (name == "ichor-cni" || name == "cni") {
 			return true
 		}
 	}

@@ -232,15 +232,6 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 // openModeEnv matches the removed ICHOR_ALLOW_UNAUTHENTICATED variable.
 func openModeEnv(e corev1.EnvVar) bool { return e.Name == envAllowUnauthenticated }
 
-// hasOIDC reports whether the container is set up for an external OIDC provider.
-func hasOIDC(c *corev1.Container) bool {
-	if argValue(c.Args, "--oidc-issuer=") != "" {
-		return true
-	}
-
-	return slices.ContainsFunc(c.Env, func(e corev1.EnvVar) bool { return e.Name == envOIDCIssuer && e.Value != "" })
-}
-
 func usersVolumes(dep *appsv1.Deployment, c *corev1.Container) {
 	if !slices.ContainsFunc(c.Ports, func(p corev1.ContainerPort) bool { return p.Name == UIInternalPortName }) {
 		c.Ports = append(c.Ports, corev1.ContainerPort{Name: UIInternalPortName, ContainerPort: UIInternalPort, Protocol: corev1.ProtocolTCP})

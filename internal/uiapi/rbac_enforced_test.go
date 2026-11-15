@@ -198,7 +198,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		Expect(may("create", "")).To(BeTrue(), "the role is bound: it still creates TalosOperations")
 
-		for _, sub := range []string{"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown"} {
+		for _, sub := range []string{startShutdown, startCARotation, startKeyRotation, startEtcdRestore, startNodeReset, startNodeShutdown} {
 			Expect(may("start", sub)).To(BeFalse(), sub)
 		}
 	})

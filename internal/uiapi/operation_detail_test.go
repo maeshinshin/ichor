@@ -70,7 +70,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 			ichorSummary23},
 		{"ca", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindCARotation}, ichorv1alpha1.TalosOperationStatus{},
 			"Rotate the cluster CAs"},
-		{"shutdown", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindShutdown}, ichorv1alpha1.TalosOperationStatus{},
+		{startShutdown, ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindShutdown}, ichorv1alpha1.TalosOperationStatus{},
 			"Shut down the cluster"},
 		{"config", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindConfig},
 			ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "a"}}},

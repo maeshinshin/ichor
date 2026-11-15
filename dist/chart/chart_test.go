@@ -596,7 +596,7 @@ func TestUIOIDC(t *testing.T) {
 		t.Error("OIDC env present by default; it must be off")
 	}
 
-	base := []string{"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor"}
+	base := []string{oidcEnabledSet, "ichorUI.oidc.issuer=https://idp.example", oidcClientID}
 	withGroups := "ichorUI.oidc.impersonate.groups={oidc:platform}"
 	withUsers := "ichorUI.oidc.impersonate.users={oidc:alice}"
 	named := append(slices.Clone(base), withGroups, withUsers)

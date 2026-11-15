@@ -39,10 +39,10 @@ func TestRoleBindingSubjectsExist(t *testing.T) {
 
 	valueSets := [][]string{
 		nil,
-		{"installer.enabled=true"},
+		{installerOn},
 		{"cniHelm.enabled=false"},
 		{"rbac.helpers.enabled=true"},
-		{"ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x"},
+		{usersOn, "ichorUI.users.externalURL=https://x"},
 		{"ichorUI.credentials.serviceAccount=true"},
 		{"ichorUI.diagnostics.serviceAccount=true"},
 	}

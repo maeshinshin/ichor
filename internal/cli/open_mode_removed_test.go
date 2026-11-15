@@ -10,6 +10,13 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const (
+	allowArg   = "--" + flagAllowUnauthenticated
+	clusterArg = "--cluster"
+	cmdInit    = "init"
+	cmdAdopt   = "adopt"
+)
+
 // resetFlags puts every flag of cmd back to its default, so a flag a test set does not reach the next one.
 func resetFlags(t *testing.T, cmd *cobra.Command) {
 	t.Helper()
@@ -34,13 +41,13 @@ func TestInitAndAdoptRefuseTheRemovedOpenMode(t *testing.T) {
 	resetFlags(t, adoptCmd)
 
 	for name, args := range map[string][]string{
-		"init bare":         {"init", "--allow-unauthenticated"},
-		"init true":         {"init", "--allow-unauthenticated=true"},
-		"init false":        {"init", "--allow-unauthenticated=false"},
-		"adopt bare":        {"adopt", "--cluster", "c", "--allow-unauthenticated"},
-		"adopt true":        {"adopt", "--cluster", "c", "--allow-unauthenticated=true"},
-		"adopt false":       {"adopt", "--cluster", "c", "--allow-unauthenticated=false"},
-		"adopt add-machine": {"adopt", "--cluster", "c", "--add-machine", "10.0.0.5", "--allow-unauthenticated"},
+		"init bare":         {cmdInit, allowArg},
+		"init true":         {cmdInit, allowArg + "=true"},
+		"init false":        {cmdInit, allowArg + "=false"},
+		"adopt bare":        {cmdAdopt, clusterArg, "c", allowArg},
+		"adopt true":        {cmdAdopt, clusterArg, "c", allowArg + "=true"},
+		"adopt false":       {cmdAdopt, clusterArg, "c", allowArg + "=false"},
+		"adopt add-machine": {cmdAdopt, clusterArg, "c", "--add-machine", testEndpointAddr, allowArg},
 	} {
 		t.Run(name, func(t *testing.T) {
 			out, err := run(t, args...)
@@ -76,7 +83,7 @@ func TestInitFileThatSetsTheRemovedOpenModeIsRefused(t *testing.T) {
 
 	t.Cleanup(func() { initFile = "" })
 
-	_, err := run(t, "init", "-f", path)
+	_, err := run(t, cmdInit, "-f", path)
 	if err == nil || !strings.Contains(err.Error(), "--allow-unauthenticated was removed") {
 		t.Fatalf("init -f = %v, want the refusal", err)
 	}

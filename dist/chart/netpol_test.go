@@ -37,8 +37,8 @@ const (
 )
 
 var netpolAllOn = []string{
-	"networkPolicy.cilium.enabled=true", "installer.enabled=true",
-	"ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://ichor.example.com",
+	"networkPolicy.cilium.enabled=true", installerOn,
+	usersOn, "ichorUI.users.externalURL=https://ichor.example.com",
 }
 
 // cnpSpecs maps a policy's name with its prefix removed ("controller-manager") to its spec without

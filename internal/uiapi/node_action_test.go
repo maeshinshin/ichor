@@ -256,7 +256,7 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	}
 
 	// The start right is asked first, and denied here, so override is not reached.
-	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != "node-reset" {
+	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != startNodeReset {
 		t.Fatalf("access review = %+v", asked)
 	}
 

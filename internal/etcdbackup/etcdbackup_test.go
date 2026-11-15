@@ -313,3 +313,29 @@ func TestPruneNeverDeletesTheKeyJustWritten(t *testing.T) {
 		t.Fatalf("retained %v, want the new key and the 2 newest others %v", got, want)
 	}
 }
+
+func TestPruneIgnoresAFutureDatedName(t *testing.T) {
+	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+
+	real := func(h int) Object {
+		o := obj(base.Add(time.Duration(h) * time.Hour))
+		o.Modified = o.Time
+
+		return o
+	}
+
+	// Named for 2099 but written before all the real ones.
+	forged := obj(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC))
+	forged.Modified = base.Add(-24 * time.Hour)
+
+	st := &listStore{objs: []Object{forged, real(3), real(2), real(1)}}
+
+	if err := Prune(context.Background(), st, "p", real(3).Key, 3); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{real(3).Key, real(2).Key, real(1).Key}
+	if got := st.keys(); !slices.Equal(got, want) {
+		t.Fatalf("retained %v, want the 3 real snapshots %v", got, want)
+	}
+}

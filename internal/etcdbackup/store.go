@@ -17,6 +17,7 @@ limitations under the License.
 package etcdbackup
 
 import (
+	"cmp"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -60,10 +61,14 @@ func ParseObjectName(name string) (time.Time, bool) {
 
 // Object is one stored snapshot.
 type Object struct {
-	Key  string // full key, prefix included
-	Name string // base name
-	Time time.Time
+	Key  string    // full key, prefix included
+	Name string    // base name
+	Time time.Time // from the name: anyone who can write a key can set it
 	Size int64
+
+	// Modified is the store's own last-modified time (S3 LastModified), set by the
+	// server when the object is written. Zero when the store gives none.
+	Modified time.Time
 }
 
 // Store is the object storage a backup goes to. Keys are always
@@ -171,7 +176,7 @@ func (s *s3Store) List(ctx context.Context, prefix string) ([]Object, error) {
 
 		name := o.Key[len(prefix)+1:]
 		if t, ok := ParseObjectName(name); ok {
-			out = append(out, Object{Key: o.Key, Name: name, Time: t, Size: o.Size})
+			out = append(out, Object{Key: o.Key, Name: name, Time: t, Size: o.Size, Modified: o.LastModified})
 		}
 	}
 
@@ -184,13 +189,18 @@ func (s *s3Store) List(ctx context.Context, prefix string) ([]Object, error) {
 // (the key the caller has just uploaded) as one of them. justWritten is never
 // deleted, whatever its name says: a clock that stepped backwards names it
 // older than snapshots that were taken before it. The rest of the keep are the
-// newest by the time in the name. A failed delete is returned after trying the
-// rest.
+// newest by the store's Modified time; the name's time only breaks ties, since
+// a key named for the far future would otherwise outrank every real snapshot.
+// A failed delete is returned after trying the rest.
 func Prune(ctx context.Context, s Store, prefix, justWritten string, keep int) error {
 	objs, err := s.List(ctx, prefix)
 	if err != nil {
 		return err
 	}
+
+	slices.SortStableFunc(objs, func(a, b Object) int {
+		return cmp.Or(b.Modified.Compare(a.Modified), b.Time.Compare(a.Time))
+	})
 
 	var errs []error
 

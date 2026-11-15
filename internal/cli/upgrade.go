@@ -113,27 +113,41 @@ and in which order, and asks for confirmation unless --yes.`,
 
 			listOnly := optional && upgradeList
 
-			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-				if listOnly {
-					m, err := upgradeTargets(ctx, c, upgradeFlags.Cluster, kind)
-					if err != nil {
-						return err
+			start := func() error {
+				return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+					if listOnly {
+						m, err := upgradeTargets(ctx, c, upgradeFlags.Cluster, kind)
+						if err != nil {
+							return err
+						}
+
+						return printUpgradeTargets(cmd.OutOrStdout(), kind, m)
 					}
 
-					return printUpgradeTargets(cmd.OutOrStdout(), kind, m)
-				}
+					if optional && target == "" {
+						t, err := chooseUpgradeTarget(ctx, c, cmd.ErrOrStderr(), kind, upgradeFlags.Cluster)
+						if err != nil {
+							return err
+						}
 
-				if optional && target == "" {
-					t, err := chooseUpgradeTarget(ctx, c, cmd.ErrOrStderr(), kind, upgradeFlags.Cluster)
-					if err != nil {
-						return err
+						target = t
 					}
 
-					target = t
-				}
+					return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind)})
+				})
+			}
 
-				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind)})
-			})
+			if kind != pb.OperationKind_OPERATION_KIND_ICHOR || listOnly {
+				return start()
+			}
+
+			// The Ichor this installs does not start without a sign-in: set it up first, and show the password last.
+			k, err := newKubeClient(kubeconfigPath)
+			if err != nil {
+				return fmt.Errorf("upgrade: building the Kubernetes client: %w", err)
+			}
+
+			return upgradeWithSignIn(cmd.Context(), k, cmd.InOrStdin(), cmd.ErrOrStderr(), upgradeSignIn, assumeYes, start)
 		},
 	}
 }
@@ -262,12 +276,32 @@ func init() {
 	upgradeIchorCmd.Flags().BoolVar(&upgradeSkipSignature, "skip-signature-check", false,
 		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
 
+	f := upgradeIchorCmd.Flags()
+	f.StringVar(&upgradeSignIn.UIURL, "ui-url", "",
+		"if ichor-ui has no sign-in yet: the https URL at which browsers and the CLI reach it, the issuer of every token (default "+defaultUIURL+")")
+	f.StringVar(&upgradeSignIn.AdminUser, "admin-user", "",
+		"if ichor-ui has no sign-in yet: name of the first administrator (default "+defaultAdminUser+"); its generated password is printed once to stderr")
+	f.StringVar(&upgradeSignIn.UITLSSecret, "ui-tls-secret", "", "if ichor-ui has no sign-in yet: serve it over TLS with this existing kubernetes.io/tls Secret")
+	f.StringVar(&upgradeSignIn.UITLSCert, "ui-tls-cert", "", "if ichor-ui has no sign-in yet: PEM certificate file for its TLS; stored with --ui-tls-key as a Secret")
+	f.StringVar(&upgradeSignIn.UITLSKey, "ui-tls-key", "", "with --ui-tls-cert: PEM private key file (never printed)")
+	f.StringVar(&upgradeSignIn.KubeAPIServerURL, "kube-api-server-url", "", "if ichor-ui has no sign-in yet: https URL of the Kubernetes API put in users' kubeconfigs")
+	f.StringVar(&upgradeSignIn.KubeAPITLSServerName, "kube-api-tls-server-name", "", "if ichor-ui has no sign-in yet: tls-server-name in users' kubeconfigs")
+
 	markWrites(upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
 
 	upgradeTalosCmd.Example = `  ichor upgrade talos --list
   ichor upgrade talos v1.14.1 --cluster prod --follow`
 	upgradeKubernetesCmd.Example = `  ichor upgrade kubernetes --list
   ichor upgrade kubernetes v1.36.3 --cluster prod --follow`
+	upgradeIchorCmd.Long += `
+
+The ichor-ui this installs does not start without a sign-in. If yours has none (an install made before
+sign-in became the default), the upgrade first turns Ichor's own sign-in on, as ichor init does: it creates the
+first administrator, switches ichor-ui to sign-in at --ui-url (default ` + defaultUIURL + `) and sets
+spec.authentication.ichor on each TalosCluster that can carry it (Talos v1.14 or later). That last step marks
+every control plane APIServerRestartRequired; kube-apiserver restarts on each control plane only when you run
+"ichor rollout config". It asks first (--yes skips the question) and prints the generated password once, at the
+end. An Ichor that Helm installed is not touched: set ichorUI.users.enabled or ichorUI.oidc in the chart values.`
 	upgradeIchorCmd.Example = `  ichor upgrade ichor v0.3.1 --follow`
 }
 

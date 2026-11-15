@@ -637,6 +637,22 @@ func notePendingSchematic(p *opPlan, cluster *ichorv1alpha1.TalosCluster, m *ich
 	}
 }
 
+// splitControllerMachine takes the machine the controller runs on out of both lists; when that could not be read, the
+// plan's warning says so.
+func (s *Server) splitControllerMachine(
+	ctx context.Context, p *opPlan, machines []ichorv1alpha1.TalosMachine, cluster string, cps, workers []*ichorv1alpha1.TalosMachine,
+) (outCPs, outWorkers []*ichorv1alpha1.TalosMachine, own *ichorv1alpha1.TalosMachine) {
+	name, unread := s.controllerMachine(ctx, machines, cluster, "")
+	outCPs, outWorkers, own = splitOwnMachine(cps, workers, name)
+
+	if own == nil && unread != "" {
+		p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " This plan could not determine which machine runs Ichor's controller (" +
+			unread + "), so it cannot show which is rebooted last.")
+	}
+
+	return outCPs, outWorkers, own
+}
+
 // splitOwnMachine takes the machine named name (the one the controller runs on) out of both lists.
 func splitOwnMachine(
 	cps, workers []*ichorv1alpha1.TalosMachine, name string,
@@ -793,13 +809,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	var own *ichorv1alpha1.TalosMachine
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
-		name, unread := s.controllerMachine(ctx, list.Items, cluster.Name, "")
-		cps, workers, own = splitOwnMachine(cps, workers, name)
-
-		if own == nil && unread != "" {
-			p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " This plan could not determine which machine runs Ichor's controller (" +
-				unread + "), so it cannot show which is rebooted last.")
-		}
+		cps, workers, own = s.splitControllerMachine(ctx, p, list.Items, cluster.Name, cps, workers)
 	}
 
 	step := int32(0)

@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-29 · Design section: Testing
 
-Decided: the e2e harness keeps one cached Talos ISO per Talos version and schematic (`ichor-e2e-talos-<version>-<schematic8>-base`, in `ichor-e2e`) that no `down*` deletes, and each node's ISO disk is cloned from it instead of importing the ISO again; `ICHOR_E2E_BASE_CACHE=0` keeps the old per-node import; a pre-installed disk image is not cached.
+Decided: the e2e harness keeps one cached Talos ISO per Talos version and schematic (`<e2e-namespace>-talos-<version>-<schematic8>-base`, in `<e2e-namespace>`) that no `down*` deletes, and each node's ISO disk is cloned from it instead of importing the ISO again; `ICHOR_E2E_BASE_CACHE=0` keeps the old per-node import; a pre-installed disk image is not cached.
 
 ## Context
 

@@ -121,7 +121,7 @@ That narrowing works for `ichor-webhook-server-cert` because it always lives in
 the controller's own namespace. The bundle Secret does not, if `loadBundle`
 resolves it in `cluster.Namespace` -- *whichever namespace that particular
 `TalosCluster` happens to live in* (the e2e suite creates its `TalosCluster`
-in `ichor-e2e`, not the controller's namespace). A `Role` scoped to one fixed namespace can never grant
+in `<e2e-namespace>`, not the controller's namespace). A `Role` scoped to one fixed namespace can never grant
 access to a Secret whose namespace varies per `TalosCluster`; Kubernetes RBAC
 has no way to express "the Secret this field names, wherever its owner
 lives" below cluster scope.

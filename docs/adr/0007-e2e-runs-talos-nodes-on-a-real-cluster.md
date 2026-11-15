@@ -156,12 +156,12 @@ Constraints the harness has to respect:
 - **`MachineStatus.ready` lives at `spec.status.ready`, not `spec.ready`.**
   `spec.status` is itself an object, not a flattening of its parent; the same
   holds for any other MachineStatus field.
-- **The inner cluster needs its own `ichor-e2e` namespace.** The harness only
+- **The inner cluster needs its own `<e2e-namespace>` namespace.** The harness only
   gets the node and the CRDs up, and the e2e spec's CEL fixtures assume the
   namespace exists on the *inner* cluster. The controller's leader election
   also needs it: `ctrl.Options.LeaderElectionNamespace` is unset in
   `cmd/main.go` and auto-detects from the pod's mounted service-account
-  namespace file, which is the *outer* pod's namespace (`ichor-e2e`), so the
+  namespace file, which is the *outer* pod's namespace (`<e2e-namespace>`), so the
   lease lookup against the inner apiserver fails until a namespace of that name
   exists there. The name collides with the *outer* cluster's namespace, which
   does pre-exist: two different clusters, same name, one of them needs
@@ -175,7 +175,7 @@ Constraints the harness has to respect:
   use a different local name.
 - **Cleanup must check its target as carefully as setup does.** A stale
   kubeconfig context can make cleanup fail outright, or worse, silently target
-  a live cluster that has its own `ichor-e2e` namespace. Both targets share the
+  a live cluster that has its own `<e2e-namespace>` namespace. Both targets share the
   same prerequisite check, and the harness binary itself refuses to run at all
   (`up` or `down`) when `KUBECONFIG` is unset, rather than fall back to
   kubectl's ambient context.
@@ -216,7 +216,7 @@ are separate process invocations with no shared state between them. Two
 concurrent runs against the same cluster would collide on both. That is
 accepted: `make test-e2e`'s short set, and a human running
 `setup`/`test-e2e`/`cleanup` by hand, run one invocation at a time against
-`ichor-e2e`. Making the names unique would need a state file handed from `up` to
+`<e2e-namespace>`. Making the names unique would need a state file handed from `up` to
 `down` across those separate invocations, for concurrency the harness is not
 asked to support.
 
@@ -239,7 +239,7 @@ and resuming) hit the boundary stated in Consequences:
   the harness is not reachable from that pod network at all. A kubeconfig
   pointed at the inner cluster lets the controller's own API calls go out
   through a tunnel; it does nothing for the inner apiserver's calls back in.
-- **The controller runs as a pod inside `ichor-e2e` on the outer cluster, not
+- **The controller runs as a pod inside `<e2e-namespace>` on the outer cluster, not
   behind a Service.** That pod sits on the same flat pod network the nodes do
   (the way the `talosctl` one-shot pods already reach a node's maintenance API
   directly by IP), so it is reachable both ways without a tunnel. A `ClusterIP`

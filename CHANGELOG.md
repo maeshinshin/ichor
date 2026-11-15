@@ -22,9 +22,11 @@ command does. Each item is described where it is listed below.
 
 - **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
   flags, and `-o FILE` became `--out FILE` (CLI).
-- **A `TalosCluster` whose endpoint type is `dns`** holds a value the CRD no
-  longer lists, and one whose type is `loadBalancer` is refused on any change to
-  its endpoint. Move both to `node`; the address stays as it is (Cluster).
+- **A `TalosCluster` whose endpoint type is `dns` or `loadBalancer`** still
+  reads, and an update that leaves its endpoint alone still goes through. A new
+  one with either type is refused, and so is an update that changes the type or
+  the address. Move it to `node` when you next change the endpoint; the address
+  stays as it is (Cluster).
 - **A `TalosConfigPatch` or `TalosCluster` that sets
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
@@ -255,10 +257,15 @@ command does. Each item is described where it is listed below.
   refused.** `spec.endpoint.type` takes `vip` or `node`; the enum keeps
   `loadBalancer` only so that stored objects still read. A hostname or address
   in front of the control planes is a `node` endpoint, since only `vip` changes
-  the configuration Ichor renders. A `TalosCluster` that says `dns` holds a
-  value the CRD no longer lists, and one that says `loadBalancer` is refused on
-  create and on any change to its endpoint. Move them before you next edit
-  them. The address stays as it is:
+  the configuration Ichor renders. A stored `TalosCluster` that says `dns`
+  still reads, and an update that leaves its endpoint alone is accepted,
+  because Kubernetes does not re-check a CRD field whose value an update does
+  not change. Creating a cluster with `dns`, or changing the type to it, is
+  refused by the CRD schema. `loadBalancer` is refused by the admission
+  webhook instead, with "use type node": a stored one also reads and an
+  endpoint-free update passes, but a create, or an update that changes the type
+  or the address, is refused. Move either to `node` when you next change the
+  endpoint, and a host name then works as it is. The address stays as it is:
 
   ```
   kubectl -n NAMESPACE patch talosclusters.ichor.maesh.dev NAME --type=merge -p '{"spec":{"endpoint":{"type":"node"}}}'

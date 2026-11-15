@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-preact'
@@ -10,14 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { buildSysctlDocument, defaultDocument, DOCUMENT_KINDS, kindInfo, parseSysctlParams, summarizeDocument, type SysctlRow } from '@/lib/patchDocs'
 import { t } from '@/lib/i18n'
+import type { DocItem } from '@/lib/fieldSearch'
+import { FieldInput } from '@/components/FieldInput'
 
-export interface DocItem {
-  id: number
-  kind: string
-  document: string
-  // fresh marks a document added in this session: its editor opens at once.
-  fresh?: boolean
-}
+export type { DocItem }
 
 // One document of a patch: a summary line (kind and key fields) with Edit and
 // Remove, and an editor that opens for a new document or on Edit. The editor
@@ -34,6 +30,11 @@ export function PatchDocumentCard({
   onRemove: () => void
 }) {
   const [editing, setEditing] = useState(startEditing)
+  const chosen = doc.fields ?? []
+  // A field chosen in the search opens the editor it appears in.
+  useEffect(() => {
+    if (chosen.length > 0) setEditing(true)
+  }, [chosen.length])
   const info = kindInfo(doc.kind)
   const summary = summarizeDocument(doc.kind, doc.document)
 
@@ -61,20 +62,36 @@ export function PatchDocumentCard({
           <FieldGroup>
             <Field>
               <FieldLabel>{t('patch.kindLabel')}</FieldLabel>
-              <Select value={doc.kind} onValueChange={(v) => onChange({ kind: v, document: defaultDocument(v) })}>
+              <Select value={doc.kind} onValueChange={(v) => onChange({ kind: v, document: defaultDocument(v), fields: [] })}>
                 <SelectTrigger className="w-full sm:w-64 min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DOCUMENT_KINDS.map((k) => (
-                    <SelectItem key={k.kind} value={k.kind}>
-                      {k.kind}
+                  {/* A kind chosen in the search may not be one of the six described here. */}
+                  {[...new Set([...DOCUMENT_KINDS.map((k) => k.kind), doc.kind])].map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {k}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {info && <FieldDescription>{t(info.descKey)}</FieldDescription>}
             </Field>
+
+            {chosen.length > 0 && (
+              <Field>
+                <FieldTitle>{t('patch.chosenFields')}</FieldTitle>
+                {chosen.map((row) => (
+                  <FieldInput
+                    key={row.path}
+                    row={row}
+                    document={doc.document}
+                    onChange={(document) => onChange({ document })}
+                    onRemove={() => onChange({ fields: chosen.filter((f) => f !== row) })}
+                  />
+                ))}
+              </Field>
+            )}
 
             {info && (
               <Field>

@@ -3,11 +3,14 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
+
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 func indexRows(t *testing.T, crds string) map[string]fieldRow {
@@ -20,30 +23,59 @@ func indexRows(t *testing.T, crds string) map[string]fieldRow {
 
 	out := map[string]fieldRow{}
 	for _, r := range rows {
-		out[r.Kind+" "+r.Path] = r
+		if _, dup := out[r.Path]; dup {
+			t.Errorf("the index has two rows for %q", r.Path)
+		}
+
+		out[r.Path] = r
 	}
 
 	return out
 }
 
-// TestFieldIndexHasTheFieldsOfEveryDocumentKind checks the index holds the documents the editor writes: the kinds
-// that spec.config converts to, each with its own row and the fields of its settings in their document paths.
-func TestFieldIndexHasTheFieldsOfEveryDocumentKind(t *testing.T) {
+// TestFieldIndexHasEachSettingOnceByItsPathInSpecConfig checks a row is a setting of spec.config, by its path
+// there: a setting several Talos documents spell is one row, and the documents' own spellings are not rows.
+func TestFieldIndexHasEachSettingOnceByItsPathInSpecConfig(t *testing.T) {
 	rows := indexRows(t, filepath.Join(repoRoot, crdDir))
 
-	for _, key := range []string{
-		"Config ", "SysctlConfig params", "SysctlConfig ", "KernelModuleConfig name", "KernelModuleConfig parameters",
-		"UserVolumeConfig provisioning.diskSelector.match", "KubeletConfig extraArgs", "Config machine.install.disk",
-		"KubeAPIServerConfig certExtraSANs", "BondConfig bondMode",
+	for path, doc := range map[string]string{
+		"machine.sysctls":                              "SysctlConfig:params",
+		"machine.kernel.modules":                       "KernelModuleConfig:",
+		"machine.kernel.modules.<key>":                 "KernelModuleConfig:name",
+		"machine.kernel.modules.<key>.parameters":      "KernelModuleConfig:parameters",
+		"machine.volumes.user.<key>.provisioning.grow": "UserVolumeConfig:provisioning.grow",
+		"machine.install.disk":                         "Config:machine.install.disk",
+		"cluster.apiServer.certSANs":                   "",
+		"machine.network.nameservers[].address":        "ResolverConfig:nameservers[].address",
+		"machine.network.bonds.<key>.bondMode":         "BondConfig:bondMode",
+		"machine.kubelet.extraArgs":                    "KubeletConfig:extraArgs",
 	} {
-		if _, ok := rows[key]; !ok {
-			t.Errorf("the index has no row %q", key)
+		r, ok := rows[path]
+		switch {
+		case doc == "" && ok:
+			t.Errorf("%q is a row, and the schema does not carry it", path)
+		case doc != "" && !ok:
+			t.Errorf("the index has no row %q", path)
+		case doc != "" && r.Doc != doc:
+			t.Errorf("%q is written in %q, want %q", path, r.Doc, doc)
 		}
 	}
 
-	// A setting a document spells is a row of the document, not of the v1alpha1 document that also has it.
-	if _, ok := rows["Config machine.sysctls"]; ok {
-		t.Error("machine.sysctls is a row of the v1alpha1 document as well as SysctlConfig")
+	// The spelling of a document is not a row of its own: the row is the path, not Kind plus a path.
+	for _, spelling := range []string{"params", "Config", "SysctlConfig", "machine.sysctls.params"} {
+		if _, ok := rows[spelling]; ok {
+			t.Errorf("%q is a row, and it is a spelling of machine.sysctls", spelling)
+		}
+	}
+
+	seen := map[string]string{}
+
+	for path, r := range rows {
+		if other, dup := seen[r.Doc]; dup {
+			t.Errorf("%q and %q are the same setting of a document, %q", path, other, r.Doc)
+		}
+
+		seen[r.Doc] = path
 	}
 
 	if len(rows) < 1000 {
@@ -51,8 +83,47 @@ func TestFieldIndexHasTheFieldsOfEveryDocumentKind(t *testing.T) {
 	}
 }
 
-// TestFieldIndexFollowsTheSchema changes the format of a setting in the CRD and checks the row has it, with no
-// other change: the index is built from the schema, not from a list kept beside it.
+// TestASettingHasOnePathInSpecConfig checks no setting of a document is written at two places of the schema,
+// which would be two rows of the search for one setting.
+func TestASettingHasOnePathInSpecConfig(t *testing.T) {
+	seen := map[string]string{}
+
+	var walk func(rt reflect.Type, path string)
+
+	walk = func(rt reflect.Type, path string) {
+		for f := range rt.Fields() {
+			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			p := join(path, name)
+
+			tag := f.Tag.Get("ichor")
+			if sub := structOf(f.Type); sub.PkgPath() == rt.PkgPath() {
+				walk(sub, p)
+			}
+
+			if strings.HasPrefix(tag, "docs=") {
+				continue
+			}
+
+			for part := range strings.SplitSeq(tag, ";") {
+				if part == "" || strings.HasPrefix(part, "+") {
+					continue
+				}
+
+				if other, dup := seen[part]; dup {
+					t.Errorf("%q is written at %q and at %q", part, other, p)
+				}
+
+				seen[part] = p
+			}
+		}
+	}
+
+	walk(reflect.TypeFor[ichorconfig.Config](), "")
+}
+
+// TestFieldIndexFollowsTheSchema changes the format of a setting in the CRD, and adds a field to a Talos type's
+// object in it, and checks the rows have both with no other change: the index is built from the schema, not
+// from a list kept beside it.
 func TestFieldIndexFollowsTheSchema(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(repoRoot, crdDir, patchCRD))
 	if err != nil {
@@ -64,9 +135,17 @@ func TestFieldIndexFollowsTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sysctls := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["machine"].Properties["sysctls"]
+	machine := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["machine"]
+
+	sysctls := machine.Properties["sysctls"]
 	sysctls.Format = "test-format"
-	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["machine"].Properties["sysctls"] = sysctls
+	machine.Properties["sysctls"] = sysctls
+
+	install := machine.Properties["install"]
+	install.Properties["brandNewField"] = apiextv1.JSONSchemaProps{Type: "string"}
+	machine.Properties["install"] = install
+
+	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["machine"] = machine
 
 	changed, err := yaml.Marshal(&crd)
 	if err != nil {
@@ -78,13 +157,14 @@ func TestFieldIndexFollowsTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	row, ok := indexRows(t, dir)["SysctlConfig params"]
-	if !ok {
-		t.Fatal("the setting has no row")
+	rows := indexRows(t, dir)
+
+	if r, ok := rows["machine.sysctls"]; !ok || r.Format != "test-format" {
+		t.Errorf("machine.sysctls = %+v", r)
 	}
 
-	if row.Format != "test-format" {
-		t.Errorf("row = %+v", row)
+	if r, ok := rows["machine.install.brandNewField"]; !ok || r.Doc != "Config:machine.install.brandNewField" {
+		t.Errorf("machine.install.brandNewField = %+v", r)
 	}
 }
 
@@ -93,30 +173,31 @@ func TestFieldIndexFollowsTheSchema(t *testing.T) {
 func TestFieldIndexTakesTalosDocumentation(t *testing.T) {
 	rows := indexRows(t, filepath.Join(repoRoot, crdDir))
 
-	if r := rows["BGPInstanceConfig advertise"]; !strings.Contains(r.Description, "originated into BGP") {
-		t.Errorf("BGPInstanceConfig advertise has description %q", r.Description)
+	if r := rows["machine.network.bgp.<key>.advertise"]; !strings.Contains(r.Description, "originated into BGP") {
+		t.Errorf("machine.network.bgp.<key>.advertise has description %q", r.Description)
 	}
 
-	if r := rows["UserVolumeConfig volumeType"]; strings.Join(r.Values, ",") != "directory,disk,partition" {
-		t.Errorf("UserVolumeConfig volumeType has values %v", r.Values)
+	if r := rows["machine.volumes.user.<key>.volumeType"]; strings.Join(r.Values, ",") != "directory,disk,partition" {
+		t.Errorf("machine.volumes.user.<key>.volumeType has values %v", r.Values)
 	}
 
-	if r := rows["BondConfig bondMode"]; len(r.Values) != 0 {
+	if r := rows["machine.network.bonds.<key>.bondMode"]; len(r.Values) != 0 {
 		t.Errorf("an integer field takes no value names, got %v", r.Values)
 	}
 }
 
-// TestFieldIndexKeepsTheStaticPodToOneRow checks the pod kind is reachable and its 1,075 fields are not in.
-func TestFieldIndexKeepsTheStaticPodToOneRow(t *testing.T) {
+// TestFieldIndexKeepsTheStaticPodToTwoRows checks the pod is reachable, by its collection and its key, and its
+// 1,075 fields are not in.
+func TestFieldIndexKeepsTheStaticPodToTwoRows(t *testing.T) {
 	n := 0
 
-	for key := range indexRows(t, filepath.Join(repoRoot, crdDir)) {
-		if strings.HasPrefix(key, "KubeStaticPodConfig ") {
+	for path := range indexRows(t, filepath.Join(repoRoot, crdDir)) {
+		if strings.HasPrefix(path, "machine.staticPods") {
 			n++
 		}
 	}
 
-	if n != 1 {
-		t.Errorf("KubeStaticPodConfig has %d rows, want its own row only", n)
+	if n != 2 {
+		t.Errorf("machine.staticPods has %d rows, want the collection and its key", n)
 	}
 }

@@ -2,7 +2,7 @@
 // per ichor command (from the real cobra command tree, docs/reference/cli) and one page per
 // custom resource (from the CRD schemas in config/crd/bases, docs/reference/crds). Every page
 // starts with the YAML frontmatter the docs site reads. It also writes the field index the web UI
-// searches (ui/src/gen/fieldindex.json): the fields of every document kind in the TalosConfigPatch
+// searches (ui/src/gen/fieldindex.json): the settings of spec.config, one row each, from the TalosConfigPatch
 // schema, with the descriptions and allowed values from the Talos machinery documentation tables.
 // The index is not committed, because the repository holds none of Talos's prose; "make ui-fieldindex"
 // writes it, and every UI target that reads it depends on that.

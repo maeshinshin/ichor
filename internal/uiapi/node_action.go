@@ -20,13 +20,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -488,6 +491,8 @@ func (s *Server) RemoveMachine(
 		return nil, err
 	}
 
+	before := maps.Clone(m.Annotations)
+
 	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.AllowDeleteAnnotation, deleteguard.AllowDeleteValue)
 	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.ResetOnDeleteAnnotation, deleteguard.AllowDeleteValue)
 
@@ -504,12 +509,68 @@ func (s *Server) RemoveMachine(
 	controllerutil.AddFinalizer(m, ichorv1alpha1.TalosMachineRemovalFinalizer)
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("allowing the removal of", namespacedName(ref), err)
+		return nil, s.disarm(ctx, m, before, mapOperationWriteError("allowing the removal of", namespacedName(ref), err))
 	}
 
 	if err := s.Delete(ctx, m, client.Preconditions{UID: &m.UID}); err != nil {
-		return nil, mapOperationWriteError("removing node", namespacedName(ref), err)
+		return nil, s.disarm(ctx, m, before, mapOperationWriteError("removing node", namespacedName(ref), err))
 	}
 
 	return connect.NewResponse(&pb.RemoveMachineResponse{Audit: s.opAudit(ctx, "remove", objectRef(m.Namespace, m.Name))}), nil
+}
+
+// removalGuard is the set of annotations RemoveMachine arms for one delete: the webhook's allow-delete
+// and the reset opt-ins the removal flow reads.
+var removalGuard = []string{
+	deleteguard.AllowDeleteAnnotation,
+	deleteguard.ResetOnDeleteAnnotation,
+	deleteguard.ResetWipeModeAnnotation,
+	deleteguard.ResetPowerOffAnnotation,
+}
+
+// disarm puts the removalGuard annotations of armed back to before, for a removal that did not
+// delete. It reads the machine again and touches it only while it is the object armed (same UID); a
+// machine already gone has no guard left. If the restore fails too, that is joined onto err, since
+// the machine then stays armed.
+func (s *Server) disarm(ctx context.Context, armed *ichorv1alpha1.TalosMachine, before map[string]string, err error) error {
+	restoreErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cur ichorv1alpha1.TalosMachine
+		if gerr := s.Get(ctx, client.ObjectKeyFromObject(armed), &cur); apierrors.IsNotFound(gerr) {
+			return nil
+		} else if gerr != nil {
+			return gerr
+		}
+
+		if cur.UID != armed.UID {
+			return nil
+		}
+
+		changed := false
+		for _, k := range removalGuard {
+			want, hadWant := before[k]
+			got, hasGot := cur.Annotations[k]
+			if hadWant == hasGot && want == got {
+				continue
+			}
+
+			changed = true
+			if hadWant {
+				metav1.SetMetaDataAnnotation(&cur.ObjectMeta, k, want)
+			} else {
+				delete(cur.Annotations, k)
+			}
+		}
+
+		if !changed {
+			return nil
+		}
+
+		return s.Update(ctx, &cur, strictFieldValidation)
+	})
+	if restoreErr == nil {
+		return err
+	}
+
+	return errors.Join(err, fmt.Errorf("could not confirm the removal guard on %q was restored, so a plain delete may still reset the node: %w",
+		armed.Name, restoreErr))
 }

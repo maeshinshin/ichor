@@ -18,14 +18,18 @@ package uiapi
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -355,6 +359,48 @@ func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
 		m.Annotations[deleteguard.ResetOnDeleteAnnotation] != deleteguard.AllowDeleteValue ||
 		m.Annotations[deleteguard.ResetPowerOffAnnotation] != deleteguard.AllowDeleteValue) {
 		t.Fatalf("a remove must reset the node and power it off: %+v", m)
+	}
+}
+
+// The guard is what lets a plain kubectl delete reset the node, so a removal whose delete is refused
+// must leave the machine's guard annotations as it found them, not armed.
+func TestRemoveMachineRestoresTheGuardWhenTheDeleteIsRefused(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	ctx := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+	// w1 already carries a wipe mode from an earlier step; the refused removal must put it back, not drop it.
+	var w1 ichorv1alpha1.TalosMachine
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &w1); err != nil {
+		t.Fatal(err)
+	}
+	w1.Annotations = map[string]string{deleteguard.ResetWipeModeAnnotation: ichorv1alpha1.WipeModeSystemDisk}
+	if err := k8s.Update(ctx, &w1); err != nil {
+		t.Fatal(err)
+	}
+
+	// The caller holds update and override but not delete on talosmachines.
+	denied := apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: resourceTalosMachines}, "w1", nil)
+	var asked []authv1.ResourceAttributes
+	s.Impersonate = func(Identity) (client.Client, error) {
+		return interceptor.NewClient(reviewing(k8s, true, &asked).(client.WithWatch), interceptor.Funcs{
+			Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error { return denied },
+		}), nil
+	}
+
+	_, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
+		Machine: objectRef(opNS, "w1"), Confirm: "w1", Override: &pb.Override{}, WipeMode: ichorv1alpha1.WipeModeAll,
+	}))
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("want PermissionDenied from the refused delete, got %v", err)
+	}
+
+	var got ichorv1alpha1.TalosMachine
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := map[string]string{deleteguard.ResetWipeModeAnnotation: ichorv1alpha1.WipeModeSystemDisk}; !maps.Equal(got.Annotations, want) {
+		t.Fatalf("a refused removal must leave the guard as it found it: annotations = %v, want %v", got.Annotations, want)
 	}
 }
 

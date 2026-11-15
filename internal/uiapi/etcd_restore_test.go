@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -475,5 +478,46 @@ func TestRequestEtcdBackupSetsTheAnnotationAndRefusesWhatCannotRun(t *testing.T)
 
 	if _, err := s.RequestEtcdBackup(context.Background(), connect.NewRequest(&pb.RequestEtcdBackupRequest{})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("no backup: %v", err)
+	}
+}
+
+// The CA and key rotation guards read the operations, after an earlier read of them that can fail on its own.
+// A failed read that the next read does not repeat must fail the plan and the create. An empty Blocked here
+// would read as "nothing blocks this restore", and the guards would be skipped.
+func TestEtcdRestoreIsRefusedWhenTheOperationsReadFailsOnce(t *testing.T) {
+	ctx := context.Background()
+
+	newServer := func() (*Server, client.WithWatch) {
+		base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(restoreObjects()...).WithStatusSubresource(&ichorv1alpha1.TalosOperation{}).Build()
+		failed := false
+
+		return &Server{Client: interceptor.NewClient(base, interceptor.Funcs{
+			List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if _, ok := list.(*ichorv1alpha1.TalosOperationList); ok && !failed {
+					failed = true
+
+					return errors.New("the operations could not be listed this time")
+				}
+
+				return c.List(ctx, list, opts...)
+			},
+		})}, base
+	}
+
+	s, _ := newServer()
+
+	res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", false)))
+	if err == nil {
+		t.Fatalf("a plan whose guards could not be read must fail, got blocked = %q", res.Msg.GetBlocked())
+	}
+
+	s, base := newServer()
+
+	if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, true))); err == nil {
+		t.Fatal("create: a restore whose guards could not be read was written")
+	}
+
+	if n := len(listOps(t, base)); n != 0 {
+		t.Fatalf("%d operations written", n)
 	}
 }

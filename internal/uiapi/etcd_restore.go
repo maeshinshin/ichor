@@ -125,16 +125,19 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		"control plane it stops with it and `ichor restore cluster` finishes the restore. That command is also the way out "+
 		"if the restore stops with an error.", whenText(taken))
 
-	p.resp.Blocked, _ = s.etcdRestoreBlocked(ctx, p, cluster, &bk, taken, len(cps))
+	// A failed check is the plan's error, not an empty Blocked: an empty one reads as "nothing blocks this restore".
+	blocked, err := s.etcdRestoreBlocked(ctx, p, cluster, &bk, taken, len(cps))
+	if err != nil {
+		return nil, err
+	}
 
-	if p.resp.Blocked == "" {
-		blocked, err := s.unfinishedOperation(ctx, cluster)
-		if err != nil {
+	if blocked == "" {
+		if blocked, err = s.unfinishedOperation(ctx, cluster); err != nil {
 			return nil, err
 		}
-
-		p.resp.Blocked = blocked
 	}
+
+	p.resp.Blocked = blocked
 
 	return p, nil
 }

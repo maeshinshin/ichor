@@ -541,12 +541,18 @@ proto-breaking: ## Check proto/ for breaking changes against main; a no-op until
 ui-install: ## Install UI dependencies (npm ci).
 	cd ui && npm ci --ignore-scripts
 
+# The field search index holds Talos's field descriptions, and the repository holds none of Talos's prose
+# (TestNoUpstreamProse), so it is written here, untracked, before anything reads it.
+.PHONY: ui-fieldindex
+ui-fieldindex: ## Write ui/src/gen/fieldindex.json, the UI's field search index (from the CRD schema and the Talos machinery documentation tables).
+	go run ./internal/tools/gendocs fieldindex
+
 .PHONY: ui-build
-ui-build: ui-install ## Build the UI; Vite writes straight into cmd/ichor-ui/dist.
+ui-build: ui-install ui-fieldindex ## Build the UI; Vite writes straight into cmd/ichor-ui/dist.
 	cd ui && npm run build
 
 .PHONY: ui-typecheck
-ui-typecheck: ui-install ## Type-check the UI (tsc --noEmit).
+ui-typecheck: ui-install ui-fieldindex ## Type-check the UI (tsc --noEmit).
 	cd ui && npm run typecheck
 
 .PHONY: ui-lint
@@ -575,7 +581,7 @@ manifests-ichor-ui: controller-gen ## Generate the UI backend's own ClusterRole,
 ##@ UI screens
 
 .PHONY: ui-test
-ui-test: ui-install ## Run the UI's own unit tests (node --test; no test framework dependency added).
+ui-test: ui-install ui-fieldindex ## Run the UI's own unit tests (node --test; no test framework dependency added).
 	cd ui && npm test
 
 .PHONY: ui-proto-generate

@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,6 +57,21 @@ var _ = Describe("TalosCluster Webhook: removing an immutable field", func() {
 		noCNI.Spec.CNI = ichorv1alpha1.TalosClusterCNI{}
 		_, err = v.ValidateUpdate(ctx, old, noCNI)
 		Expect(err).To(MatchError(ContainSubstring("spec.cni is fixed once the cluster exists")))
+	})
+
+	It("refuses an update that drops spec.cni.cilium while it holds values, and allows clearing it as {}", func() {
+		old := withNetworkAndCNI()
+		old.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{"hubble":{"enabled":true}}`)}}
+
+		dropped := old.DeepCopy()
+		dropped.Spec.CNI.Cilium = nil
+		_, err := v.ValidateUpdate(ctx, old, dropped)
+		Expect(err).To(MatchError(ContainSubstring("would drop spec.cni.cilium")))
+
+		cleared := old.DeepCopy()
+		cleared.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{}
+		_, err = v.ValidateUpdate(ctx, old, cleared)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("allows setting spec.network or spec.cni on a cluster that had neither", func() {
@@ -143,6 +159,51 @@ var _ = Describe("TalosCluster Webhook: spec.cni through the API server", func()
 
 		It("refuses a JSON patch that empties the preset", func() {
 			Expect(patch(`[{"op":"replace","path":"/spec/cni/preset","value":""}]`)).To(MatchError(ContainSubstring("Unsupported value")))
+		})
+	})
+
+	Context("on a cilium cluster that holds Cilium values", func() {
+		const values = `{"hubble":{"enabled":true},"operator":{"replicas":1}}`
+
+		BeforeEach(func() {
+			obj = newTestCluster()
+			obj.Spec.CNI = ichorv1alpha1.TalosClusterCNI{
+				Preset: ciliumPreset, Cilium: &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(values)}},
+			}
+			Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		})
+
+		valuesOf := func() string {
+			readBack := &ichorv1alpha1.TalosCluster{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), readBack)).To(Succeed())
+
+			if readBack.Spec.CNI.Cilium == nil || readBack.Spec.CNI.Cilium.Values == nil {
+				return ""
+			}
+
+			return string(readBack.Spec.CNI.Cilium.Values.Raw)
+		}
+
+		It("refuses a JSON patch that replaces spec.cni with {}, which the defaults would turn into a stanza with no values", func() {
+			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":{}}]`)).To(MatchError(ContainSubstring("would drop spec.cni.cilium")))
+			Expect(valuesOf()).To(MatchJSON(values))
+		})
+
+		It("refuses an update that sends spec.cni without cilium", func() {
+			obj.Spec.CNI = ichorv1alpha1.TalosClusterCNI{}
+			Expect(k8sClient.Update(ctx, obj)).To(MatchError(ContainSubstring("would drop spec.cni.cilium")))
+			Expect(valuesOf()).To(MatchJSON(values))
+		})
+
+		It("admits clearing the values on purpose with spec.cni.cilium as {}", func() {
+			Expect(patch(`[{"op":"replace","path":"/spec/cni/cilium","value":{}}]`)).To(Succeed())
+			Expect(valuesOf()).To(BeEmpty())
+		})
+
+		It("admits an update that leaves spec.cni as it is", func() {
+			obj.Spec.KubernetesVersion = testK8sVersion
+			Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+			Expect(valuesOf()).To(MatchJSON(values))
 		})
 	})
 

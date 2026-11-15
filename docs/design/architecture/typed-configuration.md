@@ -83,10 +83,19 @@ rendered only when set: `spec.security.secureBoot` (`Off`, `Preferred`,
 and holds the first configuration of a node without SecureBoot under `Required`;
 `spec.security.kernelLockdown` is checked against what each node reports; both
 surface as per-node and cluster conditions, and a node's state is read from its
-`SecurityState`, never changed in place. A reset with `spec.node.wipeMode`
-`system-disk`, `all` (the same whole system disk, user disks left alone) or `system-disk-and-user-disks` (a TalosOperation of kind node, or `ichor delete node --wipe-mode`)
-wipes more than STATE and EPHEMERAL so a node can be installed afresh from the
-SecureBoot ISO.
+`SecurityState`, never changed in place.
+
+A reset, a TalosOperation of kind node with `spec.node.wipeMode` or
+`ichor delete node --wipe-mode`, can wipe more than STATE and EPHEMERAL, so a node
+can be installed afresh from the SecureBoot ISO. The modes, by what they erase:
+
+- `system-partitions` (the default; no `wipeMode` on the operation): STATE and
+  EPHEMERAL only.
+- `system-disk`: the whole system disk, boot and EFI included. User disks stay.
+- `all`: the same whole system disk as `system-disk`. User disks stay; it does
+  not mean every disk.
+- `system-disk-and-user-disks`: the whole system disk and every user disk.
+
 `spec.security.kubeletServingCertificates` renders `serverTLSBootstrap` and the
 kube-apiserver's kubelet CA, and the controller approves each kubelet's
 serving-certificate request itself, only for that node's own names and addresses,

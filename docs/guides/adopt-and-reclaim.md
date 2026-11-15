@@ -31,19 +31,18 @@ blocks the machine and offers the wipe: `ichor reclaim node ADDRESS --cluster NA
 
 ### What you need
 
-- Every node you adopt runs Talos v1.12 or later, and the version contract of
-  the `TalosCluster` adopt creates is v1.14 or later. The contract is probed on
-  the first control plane only (a node that differs shows up in its own plan), from
-  its running version down to v1.12, and `--version-contract` names one instead.
-  The v1.14 floor applies only when adopt creates the `TalosCluster`; adding a
-  machine to a cluster Ichor already manages (`--add-machine`) needs only the
-  v1.12 floor. Either refusal is made before anything is written. When the
-  cluster runs a Talos below v1.14, upgrade it first, outside Ichor, with
-  `talosctl upgrade` or your usual tool (`ichor upgrade talos` works only on a
-  cluster Ichor already manages, and there is no `TalosCluster` yet), then adopt
-  again. When the cluster runs v1.14 but an older contract was probed, adopt it
-  with `--version-contract v1.14`. Ichor turns sign-in on by default, and only
-  v1.14 can carry its issuer.
+- Every node you adopt runs Talos v1.14 or later, a node added with
+  `--add-machine` included, and the version contract of the `TalosCluster` adopt
+  creates is v1.14 or later. Sign-in cannot be turned off, and only v1.14 can carry
+  Ichor's issuer. The contract is probed on the first control plane only (a node
+  that differs shows up in its own plan), from its running version down to v1.12 so
+  that a configuration generated for an older contract is refused by name, and
+  `--version-contract` names one instead. Either refusal is made before anything is
+  written. When the cluster runs a Talos below v1.14, upgrade it first, outside
+  Ichor, with `talosctl upgrade` or your usual tool (`ichor upgrade talos` works
+  only on a cluster Ichor already manages, and there is no `TalosCluster` yet),
+  then adopt again. When the cluster runs v1.14 but an older contract was probed,
+  adopt it with `--version-contract v1.14`.
 - Your own `talosconfig` for the cluster (`--talosconfig`, `$TALOSCONFIG` or
   `~/.talos/config`) and a kubeconfig for its Kubernetes API (`--kubeconfig`,
   `$KUBECONFIG` or `~/.kube/config`). Adopt reads nodes with the talosconfig

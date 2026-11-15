@@ -14,6 +14,14 @@ Upgrade Ichor itself (IchorInstallation.spec.version).
 Without VERSION it uses the recommended version (see `--list`). It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.
 
+The ichor-ui this installs does not start without a sign-in. If yours has none (an install made before
+sign-in became the default), the upgrade first turns Ichor's own sign-in on, as ichor init does: it creates the
+first administrator, switches ichor-ui to sign-in at --ui-url (default https://localhost:8443) and sets
+spec.authentication.ichor on each TalosCluster that can carry it (Talos v1.14 or later). That last step marks
+every control plane APIServerRestartRequired; kube-apiserver restarts on each control plane only when you run
+"ichor rollout config". It asks first (--yes skips the question) and prints the generated password once, at the
+end. An Ichor that Helm installed is not touched: set ichorUI.users.enabled or ichorUI.oidc in the chart values.
+
 ```sh
 ichor upgrade ichor VERSION [flags]
 ```
@@ -27,12 +35,19 @@ ichor upgrade ichor VERSION [flags]
 ### Options
 
 ```text
-      --cluster string            the cluster (default: the only one in the namespace)
-      --follow                    after creating the operation, follow its progress until it finishes
-  -h, --help                      help for ichor
-      --installer-digest string   pin the installer image to this digest (sha256:...) instead of resolving the version's tag
-      --max-unavailable int32     workers handled at once (default 1)
-      --skip-signature-check      run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)
+      --admin-user string                 if ichor-ui has no sign-in yet: name of the first administrator (default admin); its generated password is printed once to stderr
+      --cluster string                    the cluster (default: the only one in the namespace)
+      --follow                            after creating the operation, follow its progress until it finishes
+  -h, --help                              help for ichor
+      --installer-digest string           pin the installer image to this digest (sha256:...) instead of resolving the version's tag
+      --kube-api-server-url string        if ichor-ui has no sign-in yet: https URL of the Kubernetes API put in users' kubeconfigs
+      --kube-api-tls-server-name string   if ichor-ui has no sign-in yet: tls-server-name in users' kubeconfigs
+      --max-unavailable int32             workers handled at once (default 1)
+      --skip-signature-check              run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)
+      --ui-tls-cert string                if ichor-ui has no sign-in yet: PEM certificate file for its TLS; stored with --ui-tls-key as a Secret
+      --ui-tls-key string                 with --ui-tls-cert: PEM private key file (never printed)
+      --ui-tls-secret string              if ichor-ui has no sign-in yet: serve it over TLS with this existing kubernetes.io/tls Secret
+      --ui-url string                     if ichor-ui has no sign-in yet: the https URL at which browsers and the CLI reach it, the issuer of every token (default https://localhost:8443)
 ```
 
 ### Options inherited from parent commands

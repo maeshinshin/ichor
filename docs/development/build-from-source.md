@@ -155,5 +155,8 @@ repositories at the images you pushed:
 
 ```sh
 helm install ichor ./dist/chart --namespace ichor-system --create-namespace \
-  --set manager.image.repository=REPO --set ichorUI.image.repository=REPO
+  --set manager.image.repository=REPO --set ichorUI.image.repository=REPO \
+  --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443
 ```
+
+The chart refuses an ichor-ui with no sign-in, so it needs `ichorUI.users` (as here) or `ichorUI.oidc`.

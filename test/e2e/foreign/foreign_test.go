@@ -466,7 +466,7 @@ func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 	}
 }
 
-// TestB8: Talos older than v1.12 is refused with the upgrade message and nothing is written.
+// TestB8: Talos older than v1.14 is refused with the upgrade message and the reason and nothing is written.
 // ICHOR_E2E_F_TALOS defaults to v1.11.5 here.
 func TestB8TalosTooOldRefused(t *testing.T) {
 	if os.Getenv("ICHOR_E2E_F_TALOS") == "" {
@@ -476,9 +476,9 @@ func TestB8TalosTooOldRefused(t *testing.T) {
 	before := cniPaths(t, c)
 	out, err := adopt(t, c, "--cni-unmanaged")
 	if err == nil {
-		t.Fatal("adopt succeeded on a Talos older than v1.12")
+		t.Fatal("adopt succeeded on a Talos older than v1.14")
 	}
-	if !strings.Contains(out, "older than the oldest version Ichor adopts (v1.12)") {
+	if !strings.Contains(out, "older than the oldest version Ichor adopts (v1.14)") {
 		t.Errorf("refusal does not carry the upgrade message: %s", out)
 	}
 	sameHashes(t, before, cniPaths(t, c))

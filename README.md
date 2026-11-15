@@ -61,7 +61,9 @@ Install Ichor with Helm, then register the cluster with `ichor adopt`:
 ```sh
 helm repo add ichor https://ichor.maesh.dev/charts
 helm install ichor ichor/ichor --version 0.3.0 \
-  --namespace ichor-system --create-namespace
+  --namespace ichor-system --create-namespace \
+  --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443
+ichor create user admin --role admin --generate --bootstrap
 ```
 
 Conditions:

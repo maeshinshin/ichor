@@ -33,13 +33,15 @@ Adding later nodes goes through the normal approval flow; `init` is the
 special case of approving the first control plane.
 
 `ichor adopt` brings a running Talos cluster that Ichor did not create under
-management. It refuses a node below Talos v1.12 with "upgrade Talos first", writing
-nothing, and it refuses a new `TalosCluster` whose version contract is below v1.14
-(Ichor turns sign-in on by default, and only v1.14 can carry its issuer). The contract is
+management. It takes Talos v1.14 and later only, because sign-in is always on and only
+v1.14 can carry Ichor's issuer. It refuses a node below Talos v1.14 with "upgrade Talos
+first", writing nothing, and it refuses a new `TalosCluster` whose version contract is
+below v1.14. The contract is
 probed on the first control plane alone, from its running version down to v1.12 (the
-one with the fewest unrepresentable paths wins), and `--version-contract v1.14` is the way out
-when an older contract wins on a control plane that runs v1.14. The v1.12 floor is the check
-every node passes. Above that floor, a cluster is adopted as it runs, whatever its version against this Ichor's set: a version
+one with the fewest unrepresentable paths wins; the probe goes below the floor so that a
+configuration generated for an older contract is refused by name), and `--version-contract v1.14`
+is the way out when an older contract wins on a control plane that runs v1.14. The v1.14 floor is the
+check every node passes, including a node added with `--add-machine`. Above that floor, a cluster is adopted as it runs, whatever its version against this Ichor's set: a version
 the compatibility table does not know at all is refused, and an incompatible pair is reported and adopted. It works in four phases, and nothing is applied to a node until the
 last one:
 

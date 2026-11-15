@@ -82,8 +82,9 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 				"set ichorUI.tls.secretName, ichorUI.users.kubeAPIServerURL and ichorUI.users.kubeAPITLSServerName in the chart values instead")
 		}
 
-		deps.say(adoptInfo, "Ichor is Helm-managed, so adopt leaves ichor-ui as the chart has it; turn sign-in on with "+
-			"ichorUI.users.enabled=true and ichorUI.users.externalURL=%s", opts.UIURL)
+		deps.say(adoptInfo, "Ichor is Helm-managed, so adopt leaves ichor-ui as the chart has it (the chart requires a sign-in) and "+
+			"creates no administrator: if you have not, run `ichor create user %s --role admin --generate --bootstrap`, and set "+
+			"spec.authentication.ichor (url %s) on the TalosCluster", opts.AdminUser, opts.UIURL)
 
 		return nil
 	}

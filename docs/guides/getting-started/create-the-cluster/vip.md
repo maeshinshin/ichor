@@ -33,20 +33,64 @@ the Talos API is then the way to recover, which needs the machine's own address.
 
 *One address, held by one control plane at a time. When that one is gone, another takes it over.*
 
+## Machines that already run Talos
+
+Ichor creates a cluster on machines in maintenance mode. A machine that already
+runs Talos, such as one left over from another cluster, has to go back to
+maintenance mode first. Skip this section for a machine that is already in
+maintenance mode.
+
+> [!WARNING]
+> This reset erases the machine's configuration and cluster certificates (the
+> `STATE` partition) and its data (`EPHEMERAL`). Run it only on a machine whose
+> old cluster you are giving up, after you have kept any data you need.
+
+Reset the machine with the old cluster's talosconfig as the current context:
+
+```sh
+talosctl reset --nodes 192.168.1.50 \
+  --system-labels-to-wipe STATE \
+  --system-labels-to-wipe EPHEMERAL \
+  --reboot=true --graceful=false
+```
+
+Do not stop at the exit status. Talos accepts the request and does the wipe
+afterwards, and a failed wipe is written to the node's log rather than returned
+to the command. The default `--wait` also passes when the node only reboots,
+because its post-check accepts a reboot. An exit status of 0 therefore says the
+request was accepted, not that the disk was wiped. Ask the node for its volumes
+instead:
+
+```sh
+talosctl get discoveredvolumes --insecure --nodes 192.168.1.50
+```
+
+The wipe worked when `STATE` and `EPHEMERAL` are no longer listed and only
+`META` is. This command reads the node in maintenance mode, which is why it
+takes `--insecure`. If `STATE` or `EPHEMERAL` is still listed, the node still
+holds its old configuration: do not run `ichor init` against it. Check the
+node again with the old talosconfig, without `--insecure`, and reset it again
+only once you know why the first reset did not wipe it.
+
+`META` is not in the list of partitions to wipe, so the reset keeps it. `META`
+can hold the machine's static network settings, and the node may come back on
+the address it had.
+
 ## Interactive
 
 Run `ichor init` with the settings you know. On a terminal, init asks for each
-required setting you did not give:
+required setting you did not give, in this order:
 
 - **Endpoint type:** pick `vip` from the list.
 - **Endpoint address:** the free address, an IP address.
 - **First node:** a network such as `192.168.1.0/24` (your own network is the
   default) to scan on port 50000 for nodes in maintenance mode, which are listed
   to pick from; or the node's address, which skips the scan.
-- **Link:** the first node's network link. The picker
-  lists each link as `enp1s0 <84:47:09:5c:ed:49>`, the name followed by the
-  MAC address.
-- **Install disk:** asked last, from the disks the node reports.
+- **Node address:** the first node's address with its prefix length, such as
+  `192.168.1.50/24`. Leave it empty to keep DHCP on the link.
+- **Install disk:** from the disks the node reports.
+- **Primary link:** the first node's network link. The picker lists each link
+  as `enp1s0 <84:47:09:5c:ed:49>`, the name followed by the MAC address.
 
 Esc or Ctrl-C cancels and nothing is written. Without a terminal there is no
 prompt, so pass the flags or the file.
@@ -91,6 +135,9 @@ ichor init --cluster demo \
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
   required.
+- `--install-disk` takes a device such as `/dev/sda`, or `serial:SERIAL` (or
+  `wwid:ID`, or a `/dev/disk/by-id/` path). Prefer the serial or the id: device
+  names are not stable across reboots.
 - `--nic` is the first node's link. It takes either a MAC address or a link
   name such as `enp1s0`. Whichever you give, Ichor stores and renders the
   permanent MAC address of that link.

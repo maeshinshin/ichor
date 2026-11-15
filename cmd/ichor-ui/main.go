@@ -99,7 +99,7 @@ func main() {
 	oidcUserPrefix := flag.String("oidc-username-prefix", os.Getenv("ICHOR_OIDC_USERNAME_PREFIX"), "prefix added to the user name")
 	oidcGroupsPrefix := flag.String("oidc-groups-prefix", os.Getenv("ICHOR_OIDC_GROUPS_PREFIX"), "prefix added to each group")
 	allowAnonymous := flag.Bool("allow-unauthenticated", envTrue("ICHOR_ALLOW_UNAUTHENTICATED"),
-		"REMOVED: ichor-ui refuses to start with it; without OIDC or Ichor users only read-only calls are served")
+		"REMOVED: ichor-ui refuses to start with it; ichor-ui does not start without OIDC or Ichor users either")
 	// Ichor's own users and issuer; off by default.
 	var users usersFlags
 

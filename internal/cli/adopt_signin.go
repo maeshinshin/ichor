@@ -157,7 +157,7 @@ func (st *adoptState) finishSignIn(ctx context.Context, deps adoptDeps, clusterN
 
 	if !complete {
 		deps.say(adoptWarn, "sign-in is not turned on yet: run `ichor adopt` again once the Cilium takeover is done; "+
-			"until then ichor-ui serves read-only calls only")
+			"until then ichor-ui does not start, since it needs a sign-in")
 
 		return nil
 	}

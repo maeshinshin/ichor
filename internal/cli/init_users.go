@@ -288,7 +288,7 @@ func uiReachNotice(uiURL string) string {
 }
 
 // initEpilogue ends init's output: on success how long it took, then what the operator has to do
-// (a warning when ichor-ui has no sign-in; with --ui-url the steps that follow, and the generated
+// (the steps that follow the sign-in, and the generated
 // password, once, verbatim), then the commands to run next. A failed run prints no total and no
 // next steps, but still the password: by then the user exists and nothing else could show it.
 func initEpilogue(p *progress, opts initOptions, password string, ok bool) {

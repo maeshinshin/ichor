@@ -154,8 +154,7 @@ has it until you grant it. (The chart value `reclaim.enabled` and
    The role grants `create`, `delete`, `get`, `list`, `update` and the verb `reclaim` on
    `machinereclaims`. The UI checks the verb and does not offer the button to
    anyone without it; the webhook checks it again on every create and on every
-   confirmation. With Ichor's users off, the UI acts as its ServiceAccount, so
-   bind the role to `ichor-system:ichor-ichor-ui` the same way.
+   confirmation. The UI acts as the signed-in user, never as its ServiceAccount.
 2. In the UI, open the cluster's "Add node" page. When discovery reaches an
    address that already runs a Talos configuration, the page offers "Reset and
    add" next to the message; the Machines page has the same button. Enter the

@@ -12,15 +12,15 @@ what it decides, plus the CLI flags the implementation added (`--ca-file`,
 
 `ichor init` turns users on by default, with the issuer `https://localhost:8443`
 (where `ichor ui` serves ichor-ui) unless you pass `--ui-url`. The Helm chart
-still defaults to off (`ichorUI.users.enabled`); nothing there applies until you
-turn it on.
+has no default: it refuses an ichor-ui with neither `ichorUI.users.enabled` nor
+`ichorUI.oidc` (see below).
 
 ## Without any sign-in
 
-With neither Ichor users nor an external OIDC provider (`ichorUI.oidc`), ichor-ui
-has no way to tell callers apart. It then serves read-only calls only and
-refuses every change with "ichor-ui has no sign-in configured"; the UI shows a
-"Read-only" banner saying so. Downloads need an identity and are refused too.
+ichor-ui does not start without a sign-in, Ichor users or an external OIDC provider
+(`ichorUI.oidc`), and a caller it cannot identify is served nothing: every call is
+refused, reads included. What is reachable without a login is only what the sign-in
+page needs: the page itself, `/auth/config` and the issuer's own endpoints.
 
 There is no way to let ichor-ui make changes without a sign-in. The open mode, where
 anyone who can reach ichor-ui writes with its ServiceAccount's permissions, was
@@ -38,9 +38,21 @@ and says what to do instead:
   `helm upgrade --reuse-values` carries the old value forward; pass
   `--set ichorUI.allowUnauthenticated=null` with it, or drop `--reuse-values`.
   Then enable `ichorUI.users` or `ichorUI.oidc`.
-- `ichor-installer` upgrading an install that had the flag drops it and prints a
-  `NOTICE`. That ichor-ui serves read-only calls until users or OIDC are on.
-  Everything the UI did can still be done with `ichor` and your own kubeconfig.
+- `ichor upgrade ichor` on an install whose ichor-ui has no sign-in turns Ichor's own
+  sign-in on first, as `ichor init` does: it asks (`--yes` skips the question), creates
+  the first administrator, switches ichor-ui, sets `spec.authentication.ichor` on each
+  `TalosCluster` that can carry it (Talos v1.14 or later) and prints the password once,
+  at the end. It takes `--ui-url`, `--admin-user` and the TLS and kubeconfig flags of
+  `ichor init`. The installer Job refuses an ichor-ui with no sign-in and says to use this
+  command, so an upgrade started any other way (a hand-written `TalosOperation`, the
+  controller's own patch upgrades) changes nothing. An install with the removed flag has
+  it dropped, with a `NOTICE`.
+- The chart refuses `ichorUI.enabled` with neither `ichorUI.users.enabled` (with
+  `ichorUI.users.externalURL`) nor `ichorUI.oidc.enabled`, naming what to set. A Helm
+  install is not touched by `ichor upgrade ichor`: before `helm upgrade` to this release,
+  set one of them in the values, then create the first administrator with
+  `ichor create user admin --role admin --generate --bootstrap` (see "Turn users on").
+  `ichorUI.enabled=false` installs Ichor without ichor-ui.
 
 ## Before you start
 

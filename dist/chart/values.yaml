@@ -255,7 +255,8 @@ ichorUI:
       groups: []
       anyUser: false
 
-  ## Ichor's own users and OIDC issuer. Off by default: it needs an https URL
+  ## Ichor's own users and OIDC issuer. One of this and ichorUI.oidc is required while ichorUI.enabled:
+  ## it needs an https URL
   ## that browsers and the CLI reach, a Talos v1.14 contract and a config rollout on the control
   ## planes. On: ichor-ui serves a small OIDC issuer, accepts its tokens next to ichorUI.oidc.*'s
   ## (users "ichor:<name>", groups "ichor:<role>"), and every request needs a token. Create the

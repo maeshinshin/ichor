@@ -67,7 +67,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 		return fmt.Errorf("init: decoding Ichor's own install manifest: %w", err)
 	}
 
-	// ichor-ui serves read-only calls until initUsers turns its sign-in on.
+	// ichor-ui does not start until initUsers turns its sign-in on.
 	if objs, err = installer.CustomizeObjects(objs, installer.UISettings{}); err != nil {
 		return fmt.Errorf("init: preparing Ichor's own install manifest: %w", err)
 	}

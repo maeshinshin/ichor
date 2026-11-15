@@ -67,6 +67,7 @@ rules:
   resources:
   - talosclusters
   - talosetcdbackups
+  - talosmachines
   verbs:
   - get
   - list
@@ -96,15 +97,6 @@ rules:
   verbs:
   - create
   - get
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosmachines
-  verbs:
-  - delete
-  - get
-  - list
-  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:

@@ -63,8 +63,9 @@ package uiapi
 // update: with --allow-unauthenticated the ServiceAccount rejects a pending node (RejectMachine) and
 // sets the install disk of an approved one before its first install (SetMachineInstall). It cannot
 // approve: the webhook asks for approve on talosmachines/approval and fails closed.
-// delete: (to be settled in the next commit)
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update;delete
+// No delete: the only delete of a TalosMachine is RemoveMachine, which asks for the override verb, so
+// the ServiceAccount never reaches it, and with a sign-in it is the user who deletes.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
 // An etcd restore is planned and chosen from the backups' status: get/list, nothing written.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list;update
 // GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStorages with

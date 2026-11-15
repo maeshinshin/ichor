@@ -11,7 +11,6 @@ on the next call, with no rollout.
 | `users.refreshLifetime` | `spec.users.refreshLifetime` | Refresh lifetime, 1h to 720h; must not be shorter than the token lifetime. |
 | `defaults.driftPolicy` | `spec.defaults.driftPolicy` | `warnOnly` or `autoCorrect`: the drift policy a new `TalosCluster` gets. |
 | `updateCheck.enabled` | `spec.updateCheck.enabled` | Whether Ichor looks for a newer release and shows it on the dashboard. On by default; see [Updates](#updates). |
-
 | `autoPatch.enabled` | `spec.autoPatch.enabled` | Apply patch releases of the running minor automatically. Off by default; see [Automatic patching](#automatic-patching). |
 | `autoPatch.components` | `spec.autoPatch.components` | Which of `talos`, `cilium`, `kubernetes`; empty means all three. |
 | `autoPatch.window` | `spec.autoPatch.window` | A daily UTC window `HH:MM-HH:MM` an upgrade may start in; empty means any time. |

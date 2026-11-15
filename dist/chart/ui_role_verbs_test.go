@@ -35,7 +35,9 @@ func TestUIRoleOpenModeVerbs(t *testing.T) {
 
 	// The start verb on all six subresources. The webhook lets the ServiceAccount through for four of
 	// them; node-reset and etcd-restore also need the override verb (TestOpenModeServiceAccountStarts).
-	for _, sub := range []string{"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown"} {
+	for _, sub := range []string{
+		"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown",
+	} {
 		if !slices.Contains(got["talosoperations/"+sub], "start") {
 			t.Errorf("ichor-ui-role has no start on talosoperations/%s: %v", sub, got["talosoperations/"+sub])
 		}

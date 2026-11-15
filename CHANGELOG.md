@@ -297,6 +297,15 @@ command does. Each item is described where it is listed below.
   `spec.cni.cilium: {}` clears them on purpose, which is what `ichor apply
   cni-values` with an empty file writes. A cluster with no values is not
   affected (ADR 0163).
+- **With kube-proxy enabled, you can set Cilium's API address.**
+  `k8sServiceHost` and `k8sServicePort` in `spec.cni.cilium.values` used to be
+  refused in both kube-proxy modes, although Ichor sets them only when
+  kube-proxy is replaced, so an `enabled` cluster could not change the chart's
+  default. They are now accepted when kube-proxy is `enabled` and still refused
+  when it is `replaced`, where the refusal says that Ichor sets them because
+  `spec.cni.kubeProxy` is replaced. The Cilium page of the UI lists them as
+  Ichor-owned only on a `replaced` cluster. A value set on an `enabled` cluster
+  is refused if the cluster later switches to `replaced` (ADR 0159).
 - An update that makes `spec.cni.preset` `unmanaged` is refused unless the
   object carries the adoption annotation, as create already was. A JSON patch
   could do it to a stored cluster without one, and it stops Ichor's Cilium

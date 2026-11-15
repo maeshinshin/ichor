@@ -304,8 +304,7 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 	}
 
 	if !opts.signInOn() {
-		p.Warn("ichor-ui has no sign-in (--allow-unauthenticated): anyone who can reach ichor-ui can change the cluster " +
-			"with ichor-ui's permissions, including resetting nodes. Sign-in is the default; leave the flag out.")
+		p.Warn("ichor-ui has no sign-in (--allow-unauthenticated): " + openUIReach + ". Sign-in is the default; leave the flag out.")
 	} else {
 		p.Info(fmt.Sprintf("Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s", opts.UIURL))
 		if opts.UIURL != defaultUIURL {

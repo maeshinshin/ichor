@@ -127,7 +127,5 @@ ichor rollout config --cluster demo --follow
 With one control plane the Kubernetes API is down for about a minute while it
 restarts.
 
-To run ichor-ui with no sign-in, pass `--allow-unauthenticated`. Then anyone who
-can reach ichor-ui can change the cluster with ichor-ui's permissions, including
-resetting nodes, and init prints a warning saying so. There is no sign-in
+To run ichor-ui with no sign-in, pass `--allow-unauthenticated`. Then anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, which include starting a CA or key rotation and shutting down the cluster or a node, but not resetting a node or restoring etcd, and init prints a warning saying so. There is no sign-in
 step, admin or rollout in that case.

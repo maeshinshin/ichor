@@ -51,8 +51,8 @@ echo "GATE_SECONDS=$(( $(date +%s) - start ))"
 EOF
 }
 
-# manifest: the PVC (kept after the run) and the Job (deleted by name after the run).
-manifest() {
+# claim_manifest: the PVC, kept after the run. job_manifest: the Job, deleted by name after the run.
+claim_manifest() {
   cat <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -63,7 +63,11 @@ spec:
   accessModes: [ReadWriteOnce]
   resources: {requests: {storage: $CACHE_SIZE}}
   ${SC:+storageClassName: $SC}
----
+EOF
+}
+
+job_manifest() {
+  cat <<EOF
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -103,6 +107,12 @@ $(pod_script | sed 's/^/          /')
       - name: cache
         persistentVolumeClaim: {claimName: $PVC}
 EOF
+}
+
+manifest() {
+  claim_manifest
+  echo ---
+  job_manifest
 }
 
 if [ -n "${GATE_RENDER:-}" ]; then

@@ -99,7 +99,7 @@ Type the machine's UUID to continue: 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
 Done in 2m41s
 
 Next
-  ichor get nodes -n default
+  ichor get nodes
 ```
 
 A refusal (the machine is already an Ichor machine, or a control plane whose
@@ -120,8 +120,13 @@ Flags:
   installed with a configuration of its own and never joined anything has no
   reachable cluster, so a graceful reset would hang: Ichor refuses it and tells
   you to pass this flag.
-- `--wait DURATION`: how long to wait for maintenance mode (default 10m,
-  0 to not wait).
+- `--wait DURATION`: how long to wait for maintenance mode (default 10m).
+  `0` does not wait, and does more than that: the CLI does not check that the
+  machine came back with its UUID and does not add its address to the cluster's
+  discovery, so it will not appear as a pending machine until you do (the reset
+  itself is already accepted). For an orphan (`--cluster` without a talosconfig)
+  it returns once the request is confirmed, prints the request's name, and does
+  not register the machine either.
 
 If the node's DHCP address changed after the reboot, the command says so and
 suggests a scan instead of guessing.
@@ -146,7 +151,7 @@ has it until you grant it. (The chart value `reclaim.enabled` and
      --clusterrole=ichor-machine-reclaimer --user=ichor:alice
    ```
 
-   The role grants `create`, `get`, `list`, `update` and the verb `reclaim` on
+   The role grants `create`, `delete`, `get`, `list`, `update` and the verb `reclaim` on
    `machinereclaims`. The UI checks the verb and does not offer the button to
    anyone without it; the webhook checks it again on every create and on every
    confirmation. With Ichor's users off, the UI acts as its ServiceAccount, so

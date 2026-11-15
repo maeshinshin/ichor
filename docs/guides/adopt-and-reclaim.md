@@ -217,8 +217,9 @@ Done in 4m12s
 ! the Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid; consider `ichor rotate ca`
 
 Next
-  ichor get cluster prod -n default
-  ichor get nodes -n default
+  ichor get cluster prod
+  ichor get nodes
+  ichor ui
 ```
 
 The consent prompt and the reminder to back up a recovered secrets bundle stay

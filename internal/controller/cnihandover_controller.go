@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -129,6 +130,9 @@ type CNIHandoverReconciler struct {
 
 	// Images pins the Cilium Job's installer image to a verified digest; nil refuses to start any Job.
 	Images InstallerImages
+
+	// Recorder announces a Cilium Job run without a signature check; nil records no Event.
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
@@ -326,7 +330,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, r.Images,
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, r.Images, r.Recorder,
 		cniValuesCheck(r.Client, r.reader(), r.Namespace, cluster, mode), "", time.Time{})
 
 	var failed *CNIHelmJobFailedError

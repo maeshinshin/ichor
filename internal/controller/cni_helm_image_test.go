@@ -2,12 +2,15 @@ package controller
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -89,7 +92,7 @@ func TestCNIJobImageIsADigestTheControllerChecked(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := cniJobImage(t.Context(), tc.images, tc.inst)
+			got, err := cniJobImage(t.Context(), cniFakeClient(t, tc.inst.DeepCopy()), tc.images, tc.inst, nil)
 
 			if tc.wantErr != "" {
 				if got != "" || pauseReason(err) != tc.wantErr {
@@ -106,9 +109,67 @@ func TestCNIJobImageIsADigestTheControllerChecked(t *testing.T) {
 	}
 
 	t.Run("no verifier: refused, never an unchecked image", func(t *testing.T) {
-		got, err := cniJobImage(t.Context(), nil, cniTestInstallation())
+		got, err := cniJobImage(t.Context(), cniFakeClient(t), nil, cniTestInstallation(), nil)
 		if got != "" || pauseReason(err) != reasonInstallerImageUnverified {
 			t.Fatalf("image, err = %q, %v; want no image and %s", got, err, reasonInstallerImageUnverified)
+		}
+	})
+}
+
+// A Cilium Job that runs under skip leaves what an upgrade's skip leaves: the digest and Skipped in
+// IchorInstallation status, and a Warning Event. A checked image leaves no Skipped record.
+func TestCNIJobUnderSkipLeavesATrace(t *testing.T) {
+	skipped := cniTestInstallation()
+	skipped.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
+
+	read := func(c client.Client) *ichorv1alpha1.IchorInstallerImageStatus {
+		t.Helper()
+
+		var got ichorv1alpha1.IchorInstallation
+		if err := c.Get(t.Context(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &got); err != nil {
+			t.Fatal(err)
+		}
+
+		return got.Status.InstallerImage
+	}
+
+	t.Run("skip", func(t *testing.T) {
+		c := cniFakeClient(t, skipped.DeepCopy())
+		rec := record.NewFakeRecorder(5)
+
+		inst := skipped.DeepCopy()
+		if _, err := cniJobImage(t.Context(), c, &fakeInstallerImages{digest: testInstallerDigest}, inst, rec); err != nil {
+			t.Fatal(err)
+		}
+
+		got := read(c)
+		if got == nil || got.Verification != ichorv1alpha1.InstallerImageSkipped || got.Digest != testInstallerDigest ||
+			got.Version != "v0.9.0" || got.Repository != skipped.Spec.InstallerRepository {
+			t.Fatalf("status.installerImage = %+v; want Skipped for %s", got, testInstallerDigest)
+		}
+
+		select {
+		case ev := <-rec.Events:
+			for _, want := range []string{"Warning " + reasonInstallerSignatureSkipped, "NOT checked", testInstallerDigest} {
+				if !strings.Contains(ev, want) {
+					t.Fatalf("event %q lacks %q", ev, want)
+				}
+			}
+		default:
+			t.Fatal("no Warning Event")
+		}
+	})
+
+	t.Run("checked", func(t *testing.T) {
+		c := cniFakeClient(t, cniTestInstallation())
+		rec := record.NewFakeRecorder(5)
+
+		if _, err := cniJobImage(t.Context(), c, &fakeInstallerImages{digest: testInstallerDigest}, cniTestInstallation(), rec); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := read(c); got != nil || len(rec.Events) != 0 {
+			t.Fatalf("a checked image left status %+v and %d events", got, len(rec.Events))
 		}
 	})
 }
@@ -122,7 +183,7 @@ func TestAdvanceCNIHelmJobStartsNoJobForAnUnverifiedImage(t *testing.T) {
 	hash, _ := CNIValuesHash(cluster, specMode(cluster), 0)
 	name := cniHelmJobName(cluster, hash)
 
-	done, err := AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images,
+	done, err := AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images, nil,
 		nil, "", time.Time{})
 	if done || pauseReason(err) != reasonInstallerImageUnverified {
 		t.Fatalf("= %t, %v; want not done and the reason %s", done, err, reasonInstallerImageUnverified)
@@ -136,7 +197,7 @@ func TestAdvanceCNIHelmJobStartsNoJobForAnUnverifiedImage(t *testing.T) {
 	// Verified: the Job runs the digest.
 	images.verifyErr = nil
 
-	if _, err := AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images,
+	if _, err := AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images, nil,
 		nil, "", time.Time{}); err != nil {
 		t.Fatal(err)
 	}

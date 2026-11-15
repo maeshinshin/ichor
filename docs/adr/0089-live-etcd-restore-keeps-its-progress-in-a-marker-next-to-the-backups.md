@@ -111,7 +111,9 @@ operation pauses with the reason. A final error pauses the operation (`failureRe
 and is never retried by itself, as everywhere (ADR 0026).
 A person's retry (the annotation of ADR 0095) is the exception: the controller clears the marker's `failure`, sets its
 start to the time of the retry so that both limits count from there, and runs the step again from the marker's step. What
-the marker records as done (the step, `ownWipeAt`, `ownDone`) is not repeated.
+the marker records as done (the step, `ownWipeAt`, `ownDone`) is not repeated. The marker is written before the request is
+consumed, so a write that fails leaves the request for the next pass. The resumed step is gated by the nodes' state, not
+only by the marker, so a snapshot upload can happen again on a target that has no etcd data.
 
 **Resume design.** Where each piece of state lives, and who reads it after each kind of interruption:
 

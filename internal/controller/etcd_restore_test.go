@@ -768,6 +768,36 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			}
 		})
 
+		It("a retry is left in place when the marker cannot be written, and acted on at the next pass", func() {
+			f := newRestoreFixture("")
+			f.wipeHooks()
+			op := f.newOp(nil)
+			f.reconcile(op)
+
+			f.lastJob().fail(ctx, errors.New("wiping etcd data: permission denied"))
+
+			got := f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			f.backup.store.putErr = errors.New("the bucket is away")
+			f.jobs = nil
+
+			got = f.reconcile(op)
+			Expect(got.Annotations).To(HaveKey(ichorv1alpha1.OperationRetryAnnotation), "the request stays, so the next pass can act on it")
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(f.marker().Failure).To(ContainSubstring("permission denied"))
+
+			f.backup.store.putErr = nil
+			got = f.reconcile(op)
+			Expect(got.Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation))
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+			Expect(f.marker().Failure).To(BeEmpty())
+			Expect(f.jobs).To(HaveLen(1))
+		})
+
 		It("a node that is not ready for recovery yet is waited for, not failed", func() {
 			f := newRestoreFixture("")
 			f.wipeHooks()

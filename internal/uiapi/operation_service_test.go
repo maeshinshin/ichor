@@ -49,6 +49,7 @@ const (
 	testControllerLabelKey = "control-plane"
 	testControllerPodName  = "ichor-controller"
 	testControllerLabelVal = "controller-manager"
+	testControllerNode     = "ctl-node"
 )
 
 func opMachine(name, role string, labels, annotations map[string]string) *ichorv1alpha1.TalosMachine {
@@ -547,9 +548,9 @@ func TestPlanConfigListsTheControllersOwnMachineLast(t *testing.T) {
 
 	pod := &corev1.Pod{
 		Name: testControllerPodName, Namespace: opNS, Labels: map[string]string{testControllerLabelKey: testControllerLabelVal},
-		Spec: corev1.PodSpec{NodeName: "ctl-node"},
+		Spec: corev1.PodSpec{NodeName: testControllerNode},
 	}
-	node := &corev1.Node{Name: "ctl-node", Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}
+	node := &corev1.Node{Name: testControllerNode, Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.22"}}}}
 
 	srv, _ := opServer(t, append(objs, node, pod)...)
 
@@ -910,7 +911,7 @@ func TestMachineActionsAcceptAUniqueNamePrefixAndRefuseAnAmbiguousOne(t *testing
 func TestPlanConfigSaysWhenItCouldNotTellWhereTheControllerRuns(t *testing.T) {
 	pod := &corev1.Pod{
 		Name: testControllerPodName, Namespace: opNS, Labels: map[string]string{testControllerLabelKey: testControllerLabelVal},
-		Spec: corev1.PodSpec{NodeName: "ctl-node"},
+		Spec: corev1.PodSpec{NodeName: testControllerNode},
 	}
 	base, _ := opServer(t, append(configObjects(), pod)...)
 	srv := &Server{ControllerNamespace: opNS, Client: interceptor.NewClient(base.Client.(client.WithWatch), interceptor.Funcs{

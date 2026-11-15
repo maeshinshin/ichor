@@ -375,7 +375,7 @@ var _ = Describe("TalosCluster", func() {
 		Entry("4 is rejected", int32(4), false),
 	)
 
-	// The enum keeps loadBalancer so that stored objects still read; the webhook refuses it (ADR 0160), which
+	// The enum keeps loadBalancer so that stored objects still read; the webhook refuses it (ADR 0161), which
 	// this suite does not run. The enum has no dns: a host name is a node address.
 	DescribeTable("endpoint.type",
 		func(typ string, accepted bool) {

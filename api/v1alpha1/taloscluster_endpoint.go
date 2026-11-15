@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-// Endpoint types of TalosClusterEndpoint.Type. loadBalancer is deprecated and refused (ADR 0160): it stays in the
+// Endpoint types of TalosClusterEndpoint.Type. loadBalancer is deprecated and refused (ADR 0161): it stays in the
 // enum so that a stored object still reads, and node takes a load balancer's address or name.
 const (
 	EndpointTypeVIP          = "vip"

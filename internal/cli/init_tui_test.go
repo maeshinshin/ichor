@@ -120,7 +120,7 @@ func typeQuestion(t *testing.T) promptModel {
 	return promptModel{}
 }
 
-// The prompt offers vip and node: loadBalancer is refused (ADR 0160), and there is no dns.
+// The prompt offers vip and node: loadBalancer is refused (ADR 0161), and there is no dns.
 func TestPromptModel_OffersNoRemovedEndpointType(t *testing.T) {
 	if v := shown(typeQuestion(t)); strings.Contains(v, "dns") || strings.Contains(v, "loadBalancer") {
 		t.Fatalf("the endpoint type prompt offers a type init refuses:\n%s", v)

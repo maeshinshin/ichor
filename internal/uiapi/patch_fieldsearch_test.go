@@ -104,6 +104,36 @@ var _ = Describe("PatchService with the config the UI's field search builds", fu
 	})
 })
 
+var _ = Describe("PatchService opening and saving a patch", func() {
+	// The editor has no kind to pick: it reads config, and sends config back.
+	It("saves a patch it read back, config only, and the config is unchanged", func() {
+		cluster := newTestCluster("does-not-exist")
+		s := &Server{Client: k8sClient}
+		config := `{"machine":{"kernel":{"modules":{"br_netfilter":{},"nbd":{}}},"sysctls":{"net.core.somaxconn":"1024"}}}`
+
+		_, err := s.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: &pb.Patch{
+			Ref: objectRef(testNamespace, "open-and-save"), Cluster: objectRef(testNamespace, cluster.Name),
+			Layer: pb.ConfigLayer_CONFIG_LAYER_CLUSTER, Config: config,
+		}}))
+		Expect(err).NotTo(HaveOccurred())
+
+		got, err := s.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(testNamespace, "open-and-save")}))
+		Expect(err).NotTo(HaveOccurred())
+
+		opened := got.Msg.GetPatch()
+		Expect(opened.GetDocuments()).To(BeEmpty()) //nolint:staticcheck // never set
+		opened.Priority = 7
+
+		_, err = s.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: opened}))
+		Expect(err).NotTo(HaveOccurred())
+
+		again, err := s.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(testNamespace, "open-and-save")}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(again.Msg.GetPatch().GetPriority()).To(Equal(int32(7)))
+		Expect(again.Msg.GetPatch().GetConfig()).To(MatchJSON(config))
+	})
+})
+
 // jsonEqual compares two JSON texts by value.
 func jsonEqual(a, b []byte) bool {
 	var x, y any

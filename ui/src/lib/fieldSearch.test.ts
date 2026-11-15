@@ -132,3 +132,16 @@ test('removing a setting takes its value out of the config', () => {
   assert.deepEqual(JSON.parse(out.config), { machine: { sysctls: { a: '1' } } })
   assert.equal(out.chosen.length, 1)
 })
+
+test('the JSON text and the typed fields are one object: an edit of either keeps what the other wrote', () => {
+  const { chosen, config } = choose([{ path: 'machine.install.disk', keys: [], value: '/dev/sda' }])
+  // The text box adds a setting the typed field knows nothing of.
+  const edited = JSON.stringify({ ...JSON.parse(config), cluster: { clusterName: 'demo' } })
+  const sda = chosen[0]
+  assert.equal(getField(edited, steps(sda.row.path, sda.keys)), '/dev/sda')
+  // The typed field writes again and the text box's setting is still there.
+  const typed = setField(edited, steps(sda.row.path, sda.keys), '/dev/sdb')!
+  assert.deepEqual(JSON.parse(typed), { machine: { install: { disk: '/dev/sdb' } }, cluster: { clusterName: 'demo' } })
+  // Removing the typed field leaves the other one.
+  assert.deepEqual(JSON.parse(removeField(typed, chosen, sda.id).config), { cluster: { clusterName: 'demo' } })
+})

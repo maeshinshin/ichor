@@ -1,6 +1,6 @@
 # 0103. Deploy onto machines that already run Talos
 
-Status: Accepted; built · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
+Status: Accepted; built; amended · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Nodes, Cilium · Builds on: 0014, 0042, 0066, 0075, 0076, 0077, 0099, 0101
 
 Amended by [ADR 0104](0104-a-cluster-with-no-cni-gets-ichors-cilium-before-ichor-and-ichor-is-installable-with-helm.md): a cluster with no CNI is adopted as managed Cilium (Ichor installs it first), not unmanaged `talosCNI: none`; the network-policy gate follows live detection; the "No CNI installed" row of 1.1 and open question 3 are superseded.
 
@@ -322,3 +322,5 @@ Sign-in is the default, because the direction is to remove the open mode and ado
 The `--allow-unauthenticated` of the amendment above is removed (ADR 0094, amendment of the same date): adopt refuses it, and the Ichor adopt installs always gets sign-in, the first administrator and `spec.authentication.ichor`. Someone who cannot take the kube-apiserver restart yet still adopts with the default and runs `ichor rollout config` later; the restart waits for that command (ADR 0080), and adopt itself applies nothing to a node.
 
 Without the flag, an adopter who serves ichor-ui at an https address of their own had no way to set that up through adopt, so adopt takes `--ui-tls-secret`, `--ui-tls-cert`, `--ui-tls-key`, `--kube-api-server-url` and `--kube-api-tls-server-name` with init's meaning. They are checked in the plan, before anything is written, and refused when adopt would not apply them: a Helm-managed Ichor takes them as the chart values `ichorUI.tls.secretName`, `ichorUI.users.kubeAPIServerURL` and `ichorUI.users.kubeAPITLSServerName`, and an ichor-ui whose users are already on is not changed by adopt.
+
+Adopt takes Talos v1.14 and later only, with no escape: the node floor moves from v1.12 to v1.14, for every node adopt reads, a node added with `--add-machine` included, and the refusal says why (sign-in is always on, and only v1.14 carries the issuer) and to upgrade Talos first. The contract probe still renders down to v1.12, so a configuration generated for an older contract and upgraded in place is refused by name, with `--version-contract v1.14` as the way out when the nodes run v1.14. The floor of `ichor upgrade talos`' lists stays at v1.12: a cluster adopted under the old floor can still run it. `ichor init` has a different floor, the release set's pinned Talos, and is not affected.

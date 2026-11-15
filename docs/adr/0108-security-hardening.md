@@ -1,6 +1,6 @@
 # 0108. Security hardening
 
-Status: Accepted; built; the five items it deferred as follow-ups are all built since (ADR 0120 to 0127, see the amendments after "Follow-ups") · Date: 2026-11-02 · Design section: Trust, Deployment, Nodes · Touches: 0011, 0041, 0058, 0063, 0089, 0103, 0105, 0107
+Status: Accepted; built; the five items it deferred as follow-ups are all built since (ADR 0120 to 0127, see the amendments after "Follow-ups"); amended · Date: 2026-11-02 · Design section: Trust, Deployment, Nodes · Touches: 0011, 0041, 0058, 0063, 0089, 0103, 0105, 0107
 
 Decided: Ichor is hardened area by area after five read-only audits (2026-11-02): ichor-ui and its auth, the controller's privileges and admission, workloads and the supply chain, the security of the clusters Ichor creates, and secrets and credentials. Fixes to Ichor itself are made directly. For the clusters Ichor creates, every new hardening is a typed option that is off by default, for new and existing clusters alike; disk encryption stays opt-in (the user's decision, 2026-11-02). Each area below records its decisions and what was built.
 
@@ -340,5 +340,7 @@ The `start` verb on `talosoperations/shutdown`, `ca-rotation`, `key-rotation`, `
 That webhook check is not an independent guard against the ServiceAccount. It asks Kubernetes about whoever wrote the `TalosOperation`, so it passes whatever RBAC grants the writer; of the six, the open mode reached the four that ask only for `start` (the others, a node reset and an etcd restore, also need `override`, which the ServiceAccount never held). The guard is that the ServiceAccount does not hold the verb. A test over the rendered chart under every value set that changes ichor-ui's RBAC, and one that has the kube-apiserver evaluate the generated role, fail when any of the six is granted again, directly or through a wildcard.
 
 `authorizeStart` in the backend no longer leaves the decision to the webhook when there is nobody to ask: a caller with no identity and no credentials of their own is refused for every one of the six, as `authorizeOverride` already refused it. The checks that the settings, Cilium values and reclaim handlers make about the caller (`mayAll`) answer no in the same case; they said yes and left the decision to a webhook that judges the ServiceAccount.
+
+With sign-in forced (ADR 0094, same amendment), `readOnlyProcedures` is removed too: nothing is served to an anonymous caller, and the interceptor without an authenticator refuses every call, so a new RPC cannot be reachable by default.
 
 The ServiceAccount keeps its other write verbs (`create`, `update` and `delete` on `talosoperations`, `update` on `talosmachines` and `ichorinstallations/settings`). They were granted for the same reason, and what ichor-ui serves without a sign-in only reads. Narrowing them is a separate change.

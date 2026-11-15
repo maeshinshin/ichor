@@ -32,33 +32,59 @@ command does. Each item is described where it is listed below.
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
   (Typed configuration).
-- **The open mode is removed.** `--allow-unauthenticated` on `ichor init` and
-  `ichor adopt` (and `ui.allowUnauthenticated` in an init file), on `ichor-ui`
-  (and `ICHOR_ALLOW_UNAUTHENTICATED=true`), and the chart value
-  `ichorUI.allowUnauthenticated` are refused, and none of them is ignored. If you
-  relied on an ichor-ui that anyone who can reach it could change the cluster
-  through, turn sign-in on instead:
+- **The open mode is removed, and an ichor-ui with no sign-in cannot exist.**
+  `--allow-unauthenticated` on `ichor init` and `ichor adopt` (and
+  `ui.allowUnauthenticated` in an init file), on `ichor-ui` (and
+  `ICHOR_ALLOW_UNAUTHENTICATED=true`), and the chart value
+  `ichorUI.allowUnauthenticated` are refused, and none of them is ignored.
+  ichor-ui itself no longer starts with neither Ichor users nor OIDC, and serves
+  nothing to a caller it cannot identify (the read-only calls it served without a
+  sign-in are gone). If you relied on an ichor-ui that anyone who can reach it could
+  read or change the cluster through, turn sign-in on instead:
   - `ichor init` and `ichor adopt`: leave the flag out. Sign-in is on by default,
     at `https://localhost:8443` (reached with `ichor ui`), or at `--ui-url`.
     `ichor adopt` also takes `--ui-tls-secret`, `--ui-tls-cert`, `--ui-tls-key`,
     `--kube-api-server-url` and `--kube-api-tls-server-name`, as `ichor init`
-    does, for an address of your own. Adopt on a cluster below Talos v1.14 has no
-    way around the v1.14 floor any more: upgrade Talos first.
-  - Helm: `helm install` and `helm upgrade` fail while `ichorUI.allowUnauthenticated`
-    is true. Remove it from your values; `helm upgrade --reuse-values` keeps the old
-    value, so add `--set ichorUI.allowUnauthenticated=null` to it or drop
-    `--reuse-values`. Then set `ichorUI.users.enabled=true` with
-    `ichorUI.users.externalURL`, or `ichorUI.oidc`. An explicit `false` is still
-    accepted.
-  - An install made by `ichor init` or `ichor adopt` that still runs ichor-ui with
-    the flag has it dropped at the next `ichor upgrade ichor` (with a `NOTICE`),
-    and then serves read-only calls until users or OIDC are on. An ichor-ui
-    Deployment you wrote yourself and started with the flag stops at startup,
-    with the instruction. Without any sign-in ichor-ui serves read-only calls
-    only; the `ichor` commands with your own kubeconfig still do everything.
+    does, for an address of your own.
+  - `ichor upgrade ichor` on an install whose ichor-ui has no sign-in turns it on
+    first, as `ichor init` does: it asks (`--yes` skips the question), creates the
+    first administrator, switches ichor-ui, sets `spec.authentication.ichor` on
+    each `TalosCluster` on Talos v1.14 or later (that marks its control planes
+    `APIServerRestartRequired`; kube-apiserver restarts only when you run
+    `ichor rollout config`) and prints the generated password once, at the end.
+    Run it from the command line: the installer Job refuses an ichor-ui with no
+    sign-in, so an upgrade started any other way (a hand-written
+    `TalosOperation`, the controller's own patch upgrades) changes nothing and
+    says to use the command. It takes `--ui-url`, `--admin-user`, `--ui-tls-*` and
+    `--kube-api-*`.
+  - Helm: **the chart refuses to render an ichor-ui with no sign-in.** `helm
+    install` and `helm upgrade` fail unless `ichorUI.users.enabled=true` with
+    `ichorUI.users.externalURL`, or `ichorUI.oidc.enabled=true`, is set (or
+    `ichorUI.enabled=false`). The default values no longer render, so `helm lint`
+    and `helm template` of your own wrapper need them too. Before you upgrade a
+    release that ran without a sign-in, set one of them in the values, then create the
+    first administrator with `ichor create user admin --role admin --generate
+    --bootstrap`, set `spec.authentication.ichor` on the `TalosCluster` and run
+    `ichor rollout config` (Users and login). `ichor upgrade ichor` does not touch a
+    Helm install. A render with `ichorUI.allowUnauthenticated` true fails too:
+    remove it; `helm upgrade --reuse-values` keeps the old value, so add
+    `--set ichorUI.allowUnauthenticated=null` to it or drop `--reuse-values`. An
+    explicit `false` is still accepted.
+  - An install with the flag that also has a sign-in has the flag dropped at the
+    next `ichor upgrade ichor` (with a `NOTICE`). An ichor-ui Deployment you wrote
+    yourself and started with the flag, or with no sign-in, stops at startup, with the
+    instruction.
   - ichor-ui's ServiceAccount no longer holds the `start` verbs, so a custom
     binding that relied on it to start a shutdown or a rotation without a user no
     longer works (UI).
+- **`ichor adopt` takes Talos v1.14 and later only, with no way around it.** Every
+  node it reads, a node added with `--add-machine` included, must run Talos v1.14 or
+  later: the floor was v1.12, and `--allow-unauthenticated` was the only way to adopt
+  without Ichor's sign-in, which needs the issuer that v1.14 carries. A cluster below
+  v1.14 has to be upgraded first, with `talosctl upgrade` or your usual tool. The
+  refusal names the reason and writes nothing. `ichor init`'s floor is the release
+  set's Talos and is not affected, and `ichor upgrade talos` still lists from v1.12
+  for a cluster Ichor already manages (Adopt).
 - **`ichor adopt` now turns sign-in on**, as `ichor init` does: it creates the
   first admin, prints its password once, and sets `spec.authentication.ichor`,
   which marks every control plane `APIServerRestartRequired`. kube-apiserver
@@ -70,7 +96,7 @@ command does. Each item is described where it is listed below.
   `custom` CNI, which every release has refused, so no cluster a release
   accepted holds it. `kubectl apply` of a manifest that still sets it is
   refused as an unknown field (Typed configuration).
-- **`ichor adopt` refuses a cluster below Talos v1.14**, and refuses a
+- **`ichor adopt` refuses a node below Talos v1.14** (it was v1.12), and refuses a
   `--namespace` that is not the namespace the controller runs in, before it
   writes anything (Adopt).
 - **`ichor init` now sets up sign-in**, creating the first admin and printing
@@ -279,7 +305,8 @@ command does. Each item is described where it is listed below.
 - **`ichor adopt` takes Talos v1.14 and later.** A version contract below v1.14,
   named with `--version-contract` or chosen by the probe, is refused in the plan
   phase, before anything is written, with the instruction to upgrade Talos.
-  Sign-in is on by default and only v1.14 carries its issuer.
+  Sign-in is always on and only v1.14 carries its issuer. The floor for each node
+  moved from v1.12 to v1.14 with it, and the refusal says why.
 - A rerun after a partial write finishes the job. When the `TalosCluster`
   already exists, adopt now discovers the members again, as a first run does,
   and writes every member that has no `TalosMachine`, which a first run that
@@ -501,10 +528,16 @@ command does. Each item is described where it is listed below.
   checks the settings, Cilium values and reclaim handlers make about the caller
   answer no when there is no caller, where they answered yes.
 - ichor-ui refuses `--allow-unauthenticated` and `ICHOR_ALLOW_UNAUTHENTICATED=true`
-  at startup, and the chart fails a render with `ichorUI.allowUnauthenticated` set
-  to true. The installer drops the flag from a live ichor-ui with a notice. The UI
-  shows its "Read-only" banner when no sign-in is configured and no longer has a
-  second state.
+  at startup, and does not start with neither `--users-enabled` nor `--oidc-issuer`.
+  Its read-only calls for an anonymous caller (`readOnlyProcedures`) are gone: an
+  interceptor with no authenticator refuses every call, and a test sends every
+  method of every service to it. `/auth/config` no longer says `anonymous`, and the
+  UI shows an error, not a "Read-only" banner, when no provider is listed.
+- The chart fails a render with `ichorUI.allowUnauthenticated` set to true, and
+  one of `ichorUI.enabled` with neither `ichorUI.users.enabled` nor
+  `ichorUI.oidc.enabled`, naming what to set. The installer drops the removed
+  flag from a live ichor-ui with a notice and stops at one that has no sign-in,
+  saying to run `ichor upgrade ichor`, which sets it up (see the upgrade notes).
 
 ### Typed configuration
 

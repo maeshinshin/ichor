@@ -111,8 +111,8 @@ command does. Each item is described where it is listed below.
 - **The `all` wipe mode never erased user disks**, although its help said it
   did. To erase them use the new `system-disk-and-user-disks` (Nodes).
 - **Messages changed.** Anything that matches on the text of a condition
-  `message`, an event, or an admission denial stops matching (Nodes, Typed
-  configuration).
+  `message`, an event, or an admission denial stops matching (Nodes, Operations,
+  Typed configuration).
 - **A JSON patch that removes `spec.network` or `spec.cni`** from a stored
   `TalosCluster` is refused, and so is an update that sets the `unmanaged`
   preset without the adoption annotation (Cluster).
@@ -437,6 +437,10 @@ command does. Each item is described where it is listed below.
 
 ### Operations
 
+- A missing cosign signature of the installer image now says what was looked
+  for: the signature referrer, through the referrers API or the
+  `sha256-<hex>` tag of the digest. It used to say only that the image had no
+  signature (`InstallerImageUnverified`, ADR 0122).
 - **A paused operation releases the cluster lock** (ADR 0162). An
   operation paused for a person, by a failed step or by `spec.paused`, used to
   keep the lock, so a node that tried to join was blocked for as long as the

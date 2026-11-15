@@ -47,6 +47,10 @@ import (
 //go:embed trusted_root.json
 var trustedRootJSON []byte
 
+// ErrSignatureNotFound is the registry listing no signature referrer for the digest. It does not say the image
+// was never signed: a registry that does not carry referrers gives the same answer.
+var ErrSignatureNotFound = errors.New("the signature referrer (the referrers API or the sha256-<hex> tag of the digest) was not found")
+
 const (
 	// bundleMediaType is the artifact type of a Sigstore bundle referrer (cosign 3 stores signatures so).
 	bundleMediaType = "application/vnd.dev.sigstore.bundle.v0.3+json"
@@ -147,6 +151,8 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 
 	ref := repo.Digest(img.Digest)
 
+	// A registry without the referrers API answers 404 and remote.Referrers then reads the tag
+	// sha256-<hex> of the digest instead (go-containerregistry v0.22.1, pkg/v1/remote/referrers.go).
 	idx, err := remote.Referrers(ref, s.opts(ctx)...)
 	if err != nil {
 		return fmt.Errorf("listing the signatures of %s@%s: %w", img.Repository, img.Digest, err)
@@ -187,7 +193,7 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 	}
 
 	if len(errs) == 0 {
-		return fmt.Errorf("%s@%s has no cosign signature", img.Repository, img.Digest)
+		return fmt.Errorf("%s@%s has no cosign signature: %w", img.Repository, img.Digest, ErrSignatureNotFound)
 	}
 
 	return fmt.Errorf("%s@%s is not signed by %s: %w", img.Repository, img.Digest, id.SANRegexp, errors.Join(errs...))

@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -280,7 +281,7 @@ func TestVerifyRefusesAnImageWithoutASignature(t *testing.T) {
 	srv, f := newFakeRegistry(t)
 
 	err := verifyAgainst(t, f, srv)
-	if err == nil || !strings.Contains(err.Error(), "has no cosign signature") {
+	if !errors.Is(err, ErrSignatureNotFound) || !strings.Contains(err.Error(), "has no cosign signature") {
 		t.Fatalf("an unsigned image: err = %v", err)
 	}
 }

@@ -242,20 +242,36 @@ func nilIfUser(id Identity) error {
 	return nil
 }
 
-func TestInterceptorDisabledPassesThroughWithoutIdentity(t *testing.T) {
-	wrapped := AuthInterceptor(nil).WrapUnary(func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
-		if _, ok := IdentityFrom(ctx); ok {
-			t.Error("identity set with OIDC disabled")
-		}
+// TestInterceptorWithoutAuthenticatorServesNobody: ichor-ui cannot start without a sign-in, so an interceptor
+// with no authenticator is a wiring mistake, and it refuses every call, the reads that were once served to an
+// anonymous caller included.
+func TestInterceptorWithoutAuthenticatorServesNobody(t *testing.T) {
+	wrapped := AuthInterceptor(nil).WrapUnary(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
+		t.Error("a handler ran for a caller nobody could identify")
 
 		return connect.NewResponse(&emptypb.Empty{}), nil
 	})
 
-	req := &specRequest{AnyRequest: connect.NewRequest(&emptypb.Empty{}), procedure: ichorv1alpha1connect.ClusterServiceListClustersProcedure}
-	if _, err := wrapped(context.Background(), req); err != nil {
-		t.Fatal(err)
+	for _, procedure := range []string{
+		ichorv1alpha1connect.ClusterServiceListClustersProcedure,
+		ichorv1alpha1connect.UserServiceWhoAmIProcedure,
+		ichorv1alpha1connect.OperationServiceCreateOperationProcedure,
+		"/ichor.v1alpha1.FutureService/DoSomething",
+	} {
+		req := &specRequest{AnyRequest: connect.NewRequest(&emptypb.Empty{}), procedure: procedure}
+		if _, err := wrapped(context.Background(), req); connect.CodeOf(err) != connect.CodePermissionDenied {
+			t.Errorf("%s: %v, want PermissionDenied", procedure, err)
+		}
 	}
 }
+
+// specRequest overrides the procedure a connect.Request reports.
+type specRequest struct {
+	connect.AnyRequest
+	procedure string
+}
+
+func (r *specRequest) Spec() connect.Spec { return connect.Spec{Procedure: r.procedure} }
 
 func cmClient(name string) client.Client {
 	cm := &corev1.ConfigMap{Data: map[string]string{"by": name}}

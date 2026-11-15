@@ -51,8 +51,8 @@ func TestAuthConfigProviders(t *testing.T) {
 			if _, ok := got["clientId"]; ok {
 				t.Fatalf("top-level clientId still sent: %v", got["clientId"])
 			}
-			if _, has := got["anonymous"]; has == tc.enabled {
-				t.Fatalf("anonymous = %v with enabled=%v", got["anonymous"], tc.enabled)
+			if _, has := got["anonymous"]; has {
+				t.Fatalf("anonymous = %v: ichor-ui serves no anonymous caller", got["anonymous"])
 			}
 			if got["enabled"] != tc.enabled {
 				t.Fatalf("enabled=%v", got["enabled"])

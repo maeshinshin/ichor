@@ -271,7 +271,8 @@ func (a *Authenticator) authenticateExternal(ctx context.Context, raw string) (I
 // AuthInterceptor requires a valid ID token on every RPC and stores the
 // resulting Identity in the handler's context. One place, like
 // MetricsInterceptor; pass it to every *ServiceHandler. a == nil means no sign-in is
-// configured: only the read-only calls in readOnlyProcedures pass, and nothing writes.
+// configured, which ichor-ui cannot be started in; every call is refused then, so a new caller
+// that forgets the authenticator serves nobody.
 func AuthInterceptor(a *Authenticator) connect.Interceptor {
 	return authInterceptor{a: a}
 }
@@ -299,12 +300,8 @@ var mustChangeAllowed = map[string]bool{
 
 func (i authInterceptor) auth(ctx context.Context, authz, procedure string) (context.Context, error) {
 	if i.a == nil {
-		if readOnlyProcedures[procedure] {
-			return ctx, nil
-		}
-
 		return ctx, connect.NewError(connect.CodePermissionDenied,
-			errors.New("ichor-ui has no sign-in configured and serves read-only calls only; turn sign-in on (Ichor users or OIDC)"))
+			errors.New("ichor-ui has no sign-in configured and serves nobody; turn sign-in on (Ichor users or OIDC)"))
 	}
 
 	id, err := i.a.Authenticate(ctx, authz)

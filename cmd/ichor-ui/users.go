@@ -231,7 +231,7 @@ type authProvider struct {
 
 // authConfig builds the /auth/config answer. providers lists every sign-in
 // choice; enabled stays top-level because the separately-versioned CLI reads it. With no
-// provider, anonymous is "readonly": the server serves reads only, and the UI shows why.
+// provider, there is none to list and ichor-ui does not start; see errNoSignIn.
 func authConfig(oidcIssuer, oidcClientID string, users usersFlags) map[string]any {
 	providers := []authProvider{}
 	if oidcIssuer != "" {
@@ -242,11 +242,5 @@ func authConfig(oidcIssuer, oidcClientID string, users usersFlags) map[string]an
 		providers = append(providers, authProvider{ID: uiapi.SourceIchor, Issuer: users.externalURL, ClientID: ichorauth.ClientUI})
 	}
 
-	out := map[string]any{"enabled": len(providers) > 0, "providers": providers}
-
-	if len(providers) == 0 {
-		out["anonymous"] = "readonly"
-	}
-
-	return out
+	return map[string]any{"enabled": len(providers) > 0, "providers": providers}
 }

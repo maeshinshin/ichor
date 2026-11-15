@@ -129,6 +129,11 @@ func main() {
 		log.Fatal(errOpenModeRemoved)
 	}
 
+	// An ichor-ui with no way to tell callers apart is not a state this binary can be in.
+	if *oidcIssuer == "" && !users.enabled {
+		log.Fatal(errNoSignIn)
+	}
+
 	// certreload's certwatcher logs through controller-runtime's logger, which dumps a stack
 	// trace when none is set; send it to the std logger this binary uses everywhere else.
 	ctrl.SetLogger(stdr.New(log.Default()))
@@ -169,11 +174,8 @@ func main() {
 		Draining:            draining,
 	}
 
-	// OIDC. Off: writes use this pod's ServiceAccount, so anyone who
-	// can reach ichor-ui can write; that is said here and by /auth/config (the UI
-	// shows a banner). On: every RPC needs a verified ID token and the Kubernetes
-	// API is called as that user. Discovery failing is fatal -- never fall back
-	// to open.
+	// OIDC, and below it Ichor's own users: every RPC needs a verified ID token and the Kubernetes
+	// API is called as that user. Discovery failing is fatal.
 	var authn *uiapi.Authenticator
 
 	if *oidcIssuer != "" {
@@ -221,12 +223,7 @@ func main() {
 		log.Printf("ichor-ui: Ichor users enabled (issuer %s)", users.externalURL)
 	}
 
-	if authn != nil {
-		server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
-	} else {
-		log.Print("ichor-ui: no sign-in is configured (no OIDC, no Ichor users): serving read-only calls only; " +
-			"turn sign-in on to make changes")
-	}
+	server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
 
 	server.Settings = liveSettings
 
@@ -295,6 +292,12 @@ func main() {
 var errOpenModeRemoved = errors.New("ichor-ui: --allow-unauthenticated (or ICHOR_ALLOW_UNAUTHENTICATED=true) was removed: " +
 	"ichor-ui no longer serves changes without a sign-in. Remove it and turn sign-in on: Ichor users " +
 	"(chart ichorUI.users.enabled with ichorUI.users.externalURL, or `ichor adopt` / `ichor init`) or OIDC (chart ichorUI.oidc)")
+
+// errNoSignIn is what ichor-ui says when it is started with neither Ichor users nor OIDC. It does not
+// serve read-only calls instead: nothing is served to a caller it cannot identify.
+var errNoSignIn = errors.New("ichor-ui: no sign-in is configured, and ichor-ui does not start without one. " +
+	"Turn on Ichor users (--users-enabled with --external-url; chart ichorUI.users.enabled with ichorUI.users.externalURL) " +
+	"or OIDC (--oidc-issuer and --oidc-client-id; chart ichorUI.oidc). `ichor init`, `ichor adopt` and `ichor upgrade ichor` set Ichor users up")
 
 // envTrue reports whether the environment variable is "true".
 func envTrue(name string) bool { return os.Getenv(name) == "true" }

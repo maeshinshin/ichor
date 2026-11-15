@@ -330,3 +330,15 @@ Amendment 2026-11-06: the controller Deployment's resources and probes. On a 3 c
 ## Amendment 2026-11-15: sign-in is the `ichor init` default
 
 The line above that says making users the `ichor init` default "was left out of scope" is superseded: `ichor init` turns Ichor's own sign-in on by default, with the issuer `https://localhost:8443` unless `--ui-url` gives another, and `--allow-unauthenticated` restores the open mode explicitly. Its warning now says that anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, including resetting nodes. That last part was wrong, since a reset asks for the `override` verb that ichor-ui's ServiceAccount does not hold; the warning now names what the open mode reaches (a CA or key rotation, a shutdown of the cluster or of a node) and says a reset and an etcd restore are not among it. `--ui-url` no longer turns anything on; it only sets the issuer. The issuer is changed afterwards on the TalosCluster's `spec.authentication.ichor.url` (ADR 0094's amendment of the same date). `ichor adopt` turns sign-in on as well (ADR 0103's amendment of the same date).
+
+## Amendment 2026-11-16: ichor-ui's ServiceAccount holds no `start` verb
+
+The "No sign-in (F3)" item above is superseded where it says `--allow-unauthenticated` restores the open mode: the mode is removed (ADR 0094, amendment of the same date). Without a sign-in ichor-ui serves only `readOnlyProcedures`, and nothing turns that off.
+
+The `start` verb on `talosoperations/shutdown`, `ca-rotation`, `key-rotation`, `etcd-restore`, `node-reset` and `node-shutdown` was granted to ichor-ui's ServiceAccount because the ServiceAccount was the caller in the open mode and the verb is what the validating webhook asks about. It is the caller of no write any more: with a sign-in every write is made as the user, and a server with none serves reads. The verb is removed from the role (`rbac_markers.go`, the generated role and the chart's copy of it).
+
+That webhook check is not an independent guard against the ServiceAccount. It asks Kubernetes about whoever wrote the `TalosOperation`, so it passes whatever RBAC grants the writer; of the six, the open mode reached the four that ask only for `start` (the others, a node reset and an etcd restore, also need `override`, which the ServiceAccount never held). The guard is that the ServiceAccount does not hold the verb. A test over the rendered chart under every value set that changes ichor-ui's RBAC, and one that has the kube-apiserver evaluate the generated role, fail when any of the six is granted again, directly or through a wildcard.
+
+`authorizeStart` in the backend no longer leaves the decision to the webhook when there is nobody to ask: a caller with no identity and no credentials of their own is refused for every one of the six, as `authorizeOverride` already refused it.
+
+The ServiceAccount keeps its other write verbs (`create`, `update` and `delete` on `talosoperations`, `update` on `talosmachines` and `ichorinstallations/settings`). They were granted for the same reason, and what ichor-ui serves without a sign-in only reads. Narrowing them is a separate change.

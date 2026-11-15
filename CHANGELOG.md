@@ -4,7 +4,8 @@
 
 The command line is verb first, which breaks every script that calls it, and a
 `TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts, up from
-7. `ichor init` and `ichor adopt` now turn sign-in on unless told not to, `ichor adopt` takes
+7. `ichor init` and `ichor adopt` now always turn sign-in on, and the open mode
+(ichor-ui without a sign-in) is removed everywhere, `ichor adopt` takes
 Talos v1.14 or later only, and an endpoint is `vip` or `node`: a load
 balancer's name or address goes in `node`. The Talos, Kubernetes and Cilium
 versions a first install gets are the same as in v0.2.4. The CRDs gain the 58
@@ -31,11 +32,38 @@ command does. Each item is described where it is listed below.
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
   (Typed configuration).
+- **The open mode is removed.** `--allow-unauthenticated` on `ichor init` and
+  `ichor adopt` (and `ui.allowUnauthenticated` in an init file), on `ichor-ui`
+  (and `ICHOR_ALLOW_UNAUTHENTICATED=true`), and the chart value
+  `ichorUI.allowUnauthenticated` are refused, and none of them is ignored. If you
+  relied on an ichor-ui that anyone who can reach it could change the cluster
+  through, turn sign-in on instead:
+  - `ichor init` and `ichor adopt`: leave the flag out. Sign-in is on by default,
+    at `https://localhost:8443` (reached with `ichor ui`), or at `--ui-url`.
+    `ichor adopt` also takes `--ui-tls-secret`, `--ui-tls-cert`, `--ui-tls-key`,
+    `--kube-api-server-url` and `--kube-api-tls-server-name`, as `ichor init`
+    does, for an address of your own. Adopt on a cluster below Talos v1.14 has no
+    way around the v1.14 floor any more: upgrade Talos first.
+  - Helm: `helm install` and `helm upgrade` fail while `ichorUI.allowUnauthenticated`
+    is true. Remove it from your values; `helm upgrade --reuse-values` keeps the old
+    value, so add `--set ichorUI.allowUnauthenticated=null` to it or drop
+    `--reuse-values`. Then set `ichorUI.users.enabled=true` with
+    `ichorUI.users.externalURL`, or `ichorUI.oidc`. An explicit `false` is still
+    accepted.
+  - An install made by `ichor init` or `ichor adopt` that still runs ichor-ui with
+    the flag has it dropped at the next `ichor upgrade ichor` (with a `NOTICE`),
+    and then serves read-only calls until users or OIDC are on. An ichor-ui
+    Deployment you wrote yourself and started with the flag stops at startup,
+    with the instruction. Without any sign-in ichor-ui serves read-only calls
+    only; the `ichor` commands with your own kubeconfig still do everything.
+  - ichor-ui's ServiceAccount no longer holds the `start` verbs, so a custom
+    binding that relied on it to start a shutdown or a rotation without a user no
+    longer works (UI).
 - **`ichor adopt` now turns sign-in on**, as `ichor init` does: it creates the
   first admin, prints its password once, and sets `spec.authentication.ichor`,
   which marks every control plane `APIServerRestartRequired`. kube-apiserver
   restarts on each control plane only when you run `ichor rollout config`; the
-  consent prompt says so. `--allow-unauthenticated` adopts without it (Adopt).
+  consent prompt says so (Adopt).
 - **A `TalosCluster` that sets `spec.cni.custom.documents`** loses the field:
   the API server no longer serves it from the CRD this release installs, and
   drops it from storage at the object's next write. The field was part of the
@@ -46,8 +74,7 @@ command does. Each item is described where it is listed below.
   `--namespace` that is not the namespace the controller runs in, before it
   writes anything (Adopt).
 - **`ichor init` now sets up sign-in**, creating the first admin and printing
-  its password, unless `--allow-unauthenticated` is given; and it refuses a
-  first node on a Talos release older than the pinned one (CLI).
+  its password; and it refuses a first node on a Talos release older than the pinned one (CLI).
 - **The `all` wipe mode never erased user disks**, although its help said it
   did. To erase them use the new `system-disk-and-user-disks` (Nodes).
 - **Messages changed.** Anything that matches on the text of a condition
@@ -172,8 +199,7 @@ command does. Each item is described where it is listed below.
 - **`ichor init` turns sign-in on by default.** Without `--ui-url` the issuer is
   `https://localhost:8443`, where `ichor ui` reaches ichor-ui, and init creates
   the first admin as before. `--allow-unauthenticated`, or `ui.allowUnauthenticated`
-  in the `-f` file, runs ichor-ui open instead, with a warning that now says
-  what that allows. `--ui-url` is optional and only sets the issuer. A change
+  in the `-f` file, is refused. `--ui-url` is optional and only sets the issuer. A change
   to `spec.authentication.ichor.url` on the cluster reaches ichor-ui and the
   controller at the next install or upgrade, without running init again.
 - `ichor init` reads the first node's Talos version with its identity, and
@@ -240,10 +266,13 @@ command does. Each item is described where it is listed below.
   `APIServerRestartRequired`; kube-apiserver restarts on each control plane, one
   at a time, when you run `ichor rollout config`, and not before. The consent
   prompt names this before anything is written. The generated password is
-  printed once, last before the next steps. `--allow-unauthenticated` leaves
-  ichor-ui with no sign-in, and adopt then prints the same warning as init. Before
-  this, adopt installed ichor-ui open and printed no warning. A Helm-managed Ichor
-  is not touched.
+  printed once, last before the next steps. `--allow-unauthenticated` is refused.
+  Before this, adopt installed ichor-ui open. A Helm-managed Ichor is not touched.
+- **`ichor adopt` takes `ichor init`'s TLS and kubeconfig flags**:
+  `--ui-tls-secret`, `--ui-tls-cert` with `--ui-tls-key`, `--kube-api-server-url`
+  and `--kube-api-tls-server-name`. They are checked in the plan, before anything
+  is written, and refused where adopt would not apply them: a Helm-managed Ichor
+  (use the chart values) and an ichor-ui whose users are already on.
 - **A second `ichor adopt` or `--add-machine` is no longer refused for Ichor's
   own issuer.** The refusal of a node's jwt authenticators now counts only the
   issuers the cluster's own render does not have.
@@ -459,13 +488,21 @@ command does. Each item is described where it is listed below.
   verb before it deletes, which the ServiceAccount does not hold, and with
   sign-in the signed-in user deletes, so the grant was never reachable. The rule
   keeps `get`, `list` and `update`.
-- In open mode (`--allow-unauthenticated`) the ServiceAccount holds `start`,
-  which lets anyone who can reach ichor-ui start a CA rotation, a key rotation,
-  a cluster shutdown and a node shutdown; a node reset and an etcd restore also
-  need the override verb it does not hold. The warning `ichor init` prints, and
-  the `--allow-unauthenticated` help, now say this. They used to say that
-  anyone who can reach ichor-ui can reset nodes, which the missing override
-  verb already refused.
+- ichor-ui's ServiceAccount no longer holds `start` on `talosoperations`
+  (`shutdown`, `ca-rotation`, `key-rotation`, `etcd-restore`, `node-reset`,
+  `node-shutdown`), in the Helm chart's role and in `config/rbac`. Only the open
+  mode used it, and it let anyone who could reach ichor-ui start a CA rotation, a
+  key rotation, a cluster shutdown and a node shutdown. The open mode is gone
+  (see the upgrade notes). The validating webhook asks Kubernetes about whoever
+  wrote the `TalosOperation`, so it passed the ServiceAccount whatever the chart
+  gave it; the grant was the only thing in the way, and a chart test now fails if
+  any of the six is granted again. The backend refuses a start with nobody to ask
+  for all six kinds, where it used to leave the decision to the webhook.
+- ichor-ui refuses `--allow-unauthenticated` and `ICHOR_ALLOW_UNAUTHENTICATED=true`
+  at startup, and the chart fails a render with `ichorUI.allowUnauthenticated` set
+  to true. The installer drops the flag from a live ichor-ui with a notice. The UI
+  shows its "Read-only" banner when no sign-in is configured and no longer has a
+  second state.
 
 ### Typed configuration
 

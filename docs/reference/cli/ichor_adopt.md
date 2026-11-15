@@ -39,8 +39,11 @@ does: it creates the first administrator (its generated password is printed once
 at the end), switches ichor-ui to sign-in, and sets spec.authentication.ichor on
 the TalosCluster. That last step marks every control plane APIServerRestartRequired:
 kube-apiserver restarts on each control plane, one at a time, only when you run
-"ichor rollout config". The consent prompt names it. --allow-unauthenticated leaves
-ichor-ui with no sign-in instead (a Helm-managed Ichor is not touched either way).
+"ichor rollout config". The consent prompt names it. Sign-in cannot be turned off.
+--ui-tls-secret, --ui-tls-cert and --ui-tls-key serve ichor-ui over your own certificate,
+and --kube-api-server-url and --kube-api-tls-server-name set the Kubernetes API address in
+users' kubeconfigs, as in ichor init (a Helm-managed Ichor is not touched, and takes these
+as chart values).
 
 A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
 control plane. adopt probes the version contract from that node (each minor from
@@ -88,28 +91,32 @@ ichor adopt [flags]
 ### Options
 
 ```text
-      --accept-cilium-changes     accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)
-      --accept-cilium-diff        accept the differences between the live Cilium objects and the pinned chart
-      --add-machine stringArray   address of a node that already runs a configuration signed by this cluster's CAs but has no TalosMachine; adds it to the existing cluster instead of adopting the cluster (repeatable)
-      --admin-user string         name of the first administrator (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
-      --allow-unauthenticated     leave ichor-ui with no sign-in: anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, which include starting a CA or key rotation and shutting down the cluster or a node, but not resetting a node or restoring etcd; without it adopt turns Ichor's own sign-in on
-      --bundle-plaintext          store the recovered secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a generated passphrase)
-      --cilium-values string      YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI, or for a Cilium it takes over that has no Helm release record (Ichor-owned keys are refused)
-      --cluster string            name of the TalosCluster to adopt (required)
-      --cni-unmanaged             adopt the cluster with its CNI left exactly as it is: Ichor will not install, upgrade or configure it
-      --context string            context of the talosconfig to use (default: the file's selected context)
-  -h, --help                      help for adopt
-  -n, --namespace string          namespace the TalosCluster and its TalosMachines live in (default "ichor-system")
-      --node string               address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet
-      --plan                      print the plan and write nothing
-      --recover-from string       address of the control plane --recover-secrets reads the machine config from
-      --recover-secrets           rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600
-      --require-ichor             fail when Ichor is not installed (for example with Helm) instead of installing it
-      --secrets-bundle string     path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)
-      --tunnel string             tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards
-      --ui-url string             the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; left out, the issuer is https://localhost:8443, where ichor ui reaches it
-      --version-contract string   use this Talos version contract (v1.14 or later) for the TalosCluster adopt creates, instead of the probed one
-      --wait-timeout duration     how long to wait for Ichor's admission webhooks before giving up (default 15m0s)
+      --accept-cilium-changes             accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)
+      --accept-cilium-diff                accept the differences between the live Cilium objects and the pinned chart
+      --add-machine stringArray           address of a node that already runs a configuration signed by this cluster's CAs but has no TalosMachine; adds it to the existing cluster instead of adopting the cluster (repeatable)
+      --admin-user string                 name of the first administrator (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
+      --bundle-plaintext                  store the recovered secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a generated passphrase)
+      --cilium-values string              YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI, or for a Cilium it takes over that has no Helm release record (Ichor-owned keys are refused)
+      --cluster string                    name of the TalosCluster to adopt (required)
+      --cni-unmanaged                     adopt the cluster with its CNI left exactly as it is: Ichor will not install, upgrade or configure it
+      --context string                    context of the talosconfig to use (default: the file's selected context)
+  -h, --help                              help for adopt
+      --kube-api-server-url string        https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)
+      --kube-api-tls-server-name string   tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
+  -n, --namespace string                  namespace the TalosCluster and its TalosMachines live in (default "ichor-system")
+      --node string                       address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet
+      --plan                              print the plan and write nothing
+      --recover-from string               address of the control plane --recover-secrets reads the machine config from
+      --recover-secrets                   rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600
+      --require-ichor                     fail when Ichor is not installed (for example with Helm) instead of installing it
+      --secrets-bundle string             path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)
+      --tunnel string                     tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards
+      --ui-tls-cert string                PEM certificate file for ichor-ui's TLS; adopt stores it with --ui-tls-key as a Secret
+      --ui-tls-key string                 with --ui-tls-cert: PEM private key file (never printed)
+      --ui-tls-secret string              serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in ichor-system (chart: ichorUI.tls.secretName)
+      --ui-url string                     the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; left out, the issuer is https://localhost:8443, where ichor ui reaches it
+      --version-contract string           use this Talos version contract (v1.14 or later) for the TalosCluster adopt creates, instead of the probed one
+      --wait-timeout duration             how long to wait for Ichor's admission webhooks before giving up (default 15m0s)
 ```
 
 ### Options inherited from parent commands

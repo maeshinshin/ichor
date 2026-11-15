@@ -26,6 +26,10 @@ func resetFlags(t *testing.T, cmd *cobra.Command) {
 // spellings a script has: bare, true, and (a flag that was removed is removed, whatever it was set to)
 // false. Each is refused before anything else, with what to do instead, and not with cobra's "unknown flag".
 func TestInitAndAdoptRefuseTheRemovedOpenMode(t *testing.T) {
+	// A command that were not to refuse would go on to read the cluster: it must find none.
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "none"))
+	t.Setenv("HOME", t.TempDir())
+
 	resetFlags(t, initCmd)
 	resetFlags(t, adoptCmd)
 
@@ -60,6 +64,9 @@ func TestInitAndAdoptRefuseTheRemovedOpenMode(t *testing.T) {
 // TestInitFileThatSetsTheRemovedOpenModeIsRefused: the init file's ui.allowUnauthenticated is the same
 // switch, so a file that still sets it gets the same refusal.
 func TestInitFileThatSetsTheRemovedOpenModeIsRefused(t *testing.T) {
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "none"))
+	t.Setenv("HOME", t.TempDir())
+
 	resetFlags(t, initCmd)
 
 	path := filepath.Join(t.TempDir(), "init.yaml")

@@ -70,7 +70,6 @@ ichor init [flags]
 ```text
       --address strings                    static address of the first node's primary link with prefix length, 192.168.1.10/24 (repeatable); without it the node uses DHCP on that link. Same as approve node --address
       --admin-user string                  with sign-in: name of the first admin (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
-      --allow-unauthenticated              run ichor-ui with no sign-in: anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, which include starting a CA or key rotation and shutting down the cluster or a node, but not resetting a node or restoring etcd; without it init turns Ichor's own sign-in on
       --bundle-plaintext                   store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a passphrase generated on a terminal)
       --cert-san stringArray               extra name or IP address that the Talos API and kube-apiserver certificates both carry (spec.certSANs); repeatable. Each node's own addresses are already in its certificates, and the endpoint is in the kube-apiserver one. Changing the list after init reissues the certificates and reboots every node, so set it now
       --cluster string                     name of the TalosCluster to create (required)

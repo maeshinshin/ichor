@@ -174,7 +174,7 @@ export function AppShell({
   children,
 }: {
   path: string
-  signInNotConfigured: false | 'readonly' | 'open'
+  signInNotConfigured: boolean
   me: WhoAmIResponse | null
   usersEnabled: boolean
   children: ComponentChildren
@@ -206,11 +206,11 @@ export function AppShell({
                     <TooltipTrigger asChild>
                       <SidebarMenuButton>
                         <TriangleAlertIcon />
-                        <span>{t(signInNotConfigured === 'readonly' ? 'app.readOnlyTitle' : 'app.noLoginTitle')}</span>
+                        <span>{t('app.readOnlyTitle')}</span>
                       </SidebarMenuButton>
                     </TooltipTrigger>
                     <TooltipContent side="right" className="max-w-xs">
-                      {t(signInNotConfigured === 'readonly' ? 'app.readOnlyBody' : 'app.noLoginBody')}
+                      {t('app.readOnlyBody')}
                     </TooltipContent>
                   </Tooltip>
                 </SidebarMenuItem>

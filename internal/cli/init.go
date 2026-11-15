@@ -130,7 +130,9 @@ On a terminal, a required setting given by neither is asked for; with no
 terminal init fails as before, naming the missing flag. The first node's
 address can be asked for as a network instead: init scans it for nodes in
 maintenance mode on port 50000 and lists them to pick from, and a single
-address skips the scan.`,
+address skips the scan.
+
+` + skipSignatureNote,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if initPrintTemplate {
 			_, err := fmt.Fprint(cmd.OutOrStdout(), initConfigTemplate)

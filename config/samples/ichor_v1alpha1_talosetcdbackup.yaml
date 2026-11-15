@@ -1,3 +1,7 @@
+# The credentials Secret is read from the controller's namespace (ichor-system), not this object's:
+#   kubectl -n ichor-system create secret generic talosetcdbackup-sample-s3 \
+#     --from-literal=accessKeyID=... --from-literal=secretAccessKey=...
+# 'ichor create etcd-backup' writes both objects. The bucket must already exist, outside the cluster.
 apiVersion: ichor.maesh.dev/v1alpha1
 kind: TalosEtcdBackup
 metadata:
@@ -6,4 +10,15 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: talosetcdbackup-sample
 spec:
-  # TODO(user): Add fields here
+  clusterRef:
+    name: taloscluster-sample
+  schedule: "0 * * * *"
+  retention:
+    keepLast: 24
+  destination:
+    s3:
+      endpoint: https://s3.example.com
+      bucket: ichor-backups
+      prefix: taloscluster-sample
+      credentialsSecretRef:
+        name: talosetcdbackup-sample-s3

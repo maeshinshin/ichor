@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "KernelModuleConfig",
+    "sets": [["name", "br_netfilter"]],
+    "document": { "name": "br_netfilter" }
+  },
+  {
+    "kind": "UserVolumeConfig",
+    "sets": [
+      ["name", "data"],
+      ["volumeType", "partition"],
+      ["provisioning.grow", true],
+      ["provisioning.maxSize", "100GiB"]
+    ],
+    "document": { "name": "data", "volumeType": "partition", "provisioning": { "grow": true, "maxSize": "100GiB" } }
+  },
+  {
+    "kind": "ResolverConfig",
+    "sets": [
+      ["nameservers[].address", "1.1.1.1"],
+      ["nameservers[].protocol", "DoT"],
+      ["hostDNS.enabled", true]
+    ],
+    "document": { "nameservers": [{ "address": "1.1.1.1", "protocol": "DoT" }], "hostDNS": { "enabled": true } }
+  }
+]

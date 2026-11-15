@@ -465,9 +465,8 @@ func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
 	}
 
 	// The controller's Deployment says which namespace it reads the bundle from.
-	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
-		Name: controllerDeploymentName, Namespace: testNamespace, Labels: map[string]string{controllerLabel: controllerLabelValue},
-	}}
+	deploy := &appsv1.Deployment{
+		Name: controllerDeploymentName, Namespace: testNamespace, Labels: map[string]string{controllerLabel: controllerLabelValue}}
 	if err := f.env.k8s.Create(context.Background(), deploy); err != nil {
 		t.Fatal(err)
 	}
@@ -570,10 +569,9 @@ func TestCheckControllerNamespace(t *testing.T) {
 		t.Error("no Ichor, --namespace other: accepted")
 	}
 
-	controller := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
-		Name: controllerDeploymentName, Namespace: "tenant", Labels: map[string]string{controllerLabel: controllerLabelValue},
-	}}
-	helm := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(controller).Build()
+	tenantController := &appsv1.Deployment{
+		Name: controllerDeploymentName, Namespace: "tenant", Labels: map[string]string{controllerLabel: controllerLabelValue}}
+	helm := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(tenantController).Build()
 
 	if err := checkControllerNamespace(ctx, helm, &adoptWriteIchor{}, "tenant"); err != nil {
 		t.Errorf("controller in tenant, --namespace tenant: %v", err)

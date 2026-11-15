@@ -25,17 +25,16 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// ListClusters returns every TalosCluster the backend's own ServiceAccount
-// can list (cluster.proto: "unset ... lists across all clusters the caller
-// can see" -- MachineService's phrasing for the same thing; there is no
-// per-caller RBAC yet, so "can see" is exactly "the backend's own RBAC
-// permits," pending OIDC/impersonation (roadmap phase 9)).
+// ListClusters returns every TalosCluster the caller may list (cluster.proto: "unset ... lists across all
+// clusters the caller can see"). A signed-in caller is checked by Kubernetes RBAC as themselves and a
+// caller without a cluster-wide list grant is answered PermissionDenied; with no sign-in it is the
+// backend's own ServiceAccount.
 func (s *Server) ListClusters(
 	ctx context.Context, _ *connect.Request[pb.ListClustersRequest],
 ) (*connect.Response[pb.ListClustersResponse], error) {
 	var list ichorv1alpha1.TalosClusterList
 	if err := s.List(ctx, &list); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapListError("clusters", err)
 	}
 
 	clusters := make([]*pb.Cluster, len(list.Items))

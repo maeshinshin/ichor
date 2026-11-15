@@ -11,16 +11,16 @@ Upgrade Ichor itself (IchorInstallation.spec.version)
 
 Upgrade Ichor itself (IchorInstallation.spec.version).
 
-Without VERSION it uses the recommended version (see `--list`). It shows which nodes restart
+VERSION is required. It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.
 
 --skip-signature-check does not apply to one run only. It writes spec.installerSignature.mode: skip into the
-IchorInstallation "ichor" and leaves it there. The Job still runs by digest: unless --installer-digest names one, the
-controller resolves the version's tag to it, and the flag clears an earlier pin (spec.installerDigest). While the skip
-stands it also governs the Cilium Helm Job.
-Every `ichor upgrade ichor` writes both settings from its own flags, so the next one without the flag checks the signature again.
-To undo the skip without upgrading, run `kubectl edit ichorinstallation ichor` and delete spec.installerSignature
-(or set mode: required).
+IchorInstallation "ichor" and leaves it there; while the skip stands it also governs the Cilium Helm Job. The next
+`ichor upgrade ichor` without the flag checks the signature again. To undo the skip without upgrading, run
+`kubectl edit ichorinstallation ichor` and delete spec.installerSignature (or set mode: required); that needs the update
+verb on ichorinstallations/version, the right an upgrade needs.
+The Job still runs by digest: an upgrade writes spec.installerDigest from --installer-digest and clears it when the flag
+is not given, and the controller then resolves the version's tag to a digest itself.
 
 The ichor-ui this installs does not start without a sign-in. If yours has none (an install made before
 sign-in became the default), the upgrade first turns Ichor's own sign-in on, as ichor init does: it creates the

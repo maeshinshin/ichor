@@ -18,7 +18,8 @@ move to (`--list`). Without a VERSION they use the recommended one, the release 
 when it is a valid upgrade, else the newest patch of the running minor. With a VERSION they move to it.
 `ichor upgrade ichor` moves Ichor itself and `ichor upgrade cni` moves Cilium to the chart this Ichor ships. Before the installer Job runs, the controller pins the
 installer image to a digest and checks its signature; --skip-signature-check is the opt-out for
-images nobody signs.
+images nobody signs, and it is recorded in the IchorInstallation, not applied to one run only
+(see `ichor upgrade ichor --help`).
 
 Each upgrade changes the version in the spec that names it and then starts the
 operation that rolls it out node by node: control planes one at a time,

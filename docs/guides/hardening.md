@@ -285,7 +285,7 @@ node, for three reasons Talos gives: a GRUB install cannot become UKI, key
 enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
 state (PCR 7). The path, one node at a time, as for disk encryption: set the
 mode (and the confirm annotation for `Required`); take an etcd backup; remove the
-node with a full system-disk wipe, `ichor delete node NODE --wipe-mode system-disk --reboot`
+node with a full system-disk wipe, `ichor delete node NODE --wipe-mode system-disk --reboot --override --confirm MACHINE`
 (or choose "The whole system disk" under "What to wipe" in the UI's Remove node
 dialog); boot the machine
 from the SecureBoot ISO of this cluster's schematic and Talos version
@@ -305,7 +305,9 @@ to the ISO; `--wipe-mode all` erases the same system disk and leaves user disks 
 `--wipe-mode system-disk-and-user-disks` erases the system disk and every user disk (use it only when their
 data is expendable). Keep the ISO attached or first in the boot order before you
 remove the node. Without Ichor's wipe, the same effect comes from
-`talosctl reset --wipe-mode all` through the admin path, or from putting the ISO
+`talosctl reset --wipe-mode system-disk` through the admin path (Ichor's `system-disk`
+sends the same Talos reset mode; do not read Ichor's `all` as `talosctl reset --wipe-mode all`,
+which the Talos documentation does not define beyond its name), or from putting the ISO
 first in the boot order. After the wipe the machine is looked for again every 15
 seconds for 3 minutes, so it shows up as a pending machine soon after it has
 booted. The remove deletes the node's Kubernetes Node object.

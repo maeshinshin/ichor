@@ -1,15 +1,50 @@
 # Changelog
 
-## v0.3.0 (2026-11-13)
+## v0.3.0 (2026-11-15)
 
 The command line is verb first, which breaks every script that calls it, and a
-`TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts,
-up from 7. The Talos, Kubernetes and Cilium versions a first install gets are
-the same as in v0.2.4. The CRDs gain fields, one endpoint type leaves the
-`TalosCluster` enum, and two credential fields leave them (see Cluster and
-Typed configuration). With `--endpoint-type vip`, each control plane now holds
-the endpoint address on its primary link, and `ichor init` takes the first
-node's network for it.
+`TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts, up from
+7. `ichor init` now turns sign-in on unless told not to, `ichor adopt` takes
+Talos v1.14 or later only, and an endpoint is `vip` or `node`: a load
+balancer's name or address goes in `node`. The Talos, Kubernetes and Cilium
+versions a first install gets are the same as in v0.2.4. The CRDs gain the 58
+new document fields and one wipe mode, and lose two credential fields and the
+`dns` endpoint type; `loadBalancer` stays in the endpoint enum only so that a
+stored object still reads, and is refused (see Cluster and Typed
+configuration). With `--endpoint-type vip`, each control plane now holds the
+endpoint address on its primary link, and `ichor init` takes the first node's
+network for it.
+
+### Upgrade notes
+
+What in this release can refuse something that used to work, or change what a
+command does. Each item is described where it is listed below.
+
+- **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
+  flags, and `-o FILE` became `--out FILE` (CLI).
+- **A `TalosCluster` whose endpoint type is `dns`** holds a value the CRD no
+  longer lists, and one whose type is `loadBalancer` is refused on any change to
+  its endpoint. Move both to `node`; the address stays as it is (Cluster).
+- **A `TalosConfigPatch` or `TalosCluster` that sets
+  `machine.registries.config.<host>.tls.clientIdentity` or
+  `cluster.extraManifestHeaders`** loses the field when the API server prunes it
+  (Typed configuration).
+- **`ichor adopt` refuses a cluster below Talos v1.14**, and refuses a
+  `--namespace` that is not the namespace the controller runs in, before it
+  writes anything (Adopt).
+- **`ichor init` now sets up sign-in**, creating the first admin and printing
+  its password, unless `--allow-unauthenticated` is given; and it refuses a
+  first node on a Talos release older than the pinned one (CLI).
+- **The `all` wipe mode never erased user disks**, although its help said it
+  did. To erase them use the new `system-disk-and-user-disks` (Nodes).
+- **Messages changed.** Anything that matches on the text of a condition
+  `message`, an event, or an admission denial stops matching (Nodes, Typed
+  configuration).
+- **A JSON patch that removes `spec.network` or `spec.cni`** from a stored
+  `TalosCluster` is refused, and so is an update that sets the `unmanaged`
+  preset without the adoption annotation (Cluster).
+- **Applying the CRDs yourself** with `kubectl apply` needs `--server-side`;
+  they are too large for client-side apply (Typed configuration).
 
 ### CLI
 
@@ -89,19 +124,49 @@ node's network for it.
   command has an example. The reference pages list the commands in the same
   groups, and a group's usage line reads `ichor get [command]`, since the group
   does nothing without one.
-- With a terminal on standard input, `ichor init` asks for what is missing: the
-  cluster name, the endpoint type and address, the first node's address, and the
-  install disk, picked from the disks the node reports, before anything is
-  written. Without a terminal the flags are required, as before. Esc or Ctrl-C
-  cancels with nothing written. Enter alone does not pick the disk, which is
-  wiped.
+- `ichor init` asks for what is missing when standard input is a terminal: the
+  cluster name, the endpoint type (`vip` or `node`) and address, the first node,
+  its address, and the install disk, picked from the disks the node reports,
+  before anything is written. The first node can be given as a network, which
+  starts as the workstation's own: init scans it for nodes in maintenance mode
+  on port 50000 and lists each one's address, hostname, Talos version, disk and
+  link to pick from. A node that already has a configuration is listed with the
+  reason it cannot be picked. An address in place of a network skips the scan.
+  The node's address is then asked with its prefix length, starting from the
+  address it was found at; an empty answer leaves the node on DHCP. Without a
+  terminal the flags are required, as before. Esc or Ctrl-C cancels with nothing
+  written. Enter alone does not pick the disk, which is wiped, and a disk row
+  never calls a disk the system disk, since device order does not say which one
+  is the install target.
+- `ichor init --dry-run` reads the first node, then prints the settings, the
+  disk and link it would use and each step it would take, and stops. It saves
+  nothing, applies nothing, bootstraps nothing and never dials Kubernetes.
+- **`ichor init` turns sign-in on by default.** Without `--ui-url` the issuer is
+  `https://localhost:8443`, where `ichor ui` reaches ichor-ui, and init creates
+  the first admin as before. `--allow-unauthenticated`, or `ui.allowUnauthenticated`
+  in the `-f` file, runs ichor-ui open instead, with a warning that now says
+  what that allows. `--ui-url` is optional and only sets the issuer. A change
+  to `spec.authentication.ichor.url` on the cluster reaches ichor-ui and the
+  controller at the next install or upgrade, without running init again.
+- `ichor init` reads the first node's Talos version with its identity, and
+  refuses a node older than the pinned release before it writes the secrets
+  bundle, naming both versions and the upgrade or wipe the node needs. Before,
+  such a node rejected a field of the configuration at apply time with a parser
+  error that named no version.
+- `ichor init` names the stock installer image on the first node. It wrote an
+  install disk and no image, which Talos reads as the installer of the booted
+  schematic, so a node booted from anything but an Image Factory asset could
+  not install. Approving a node and setting its install target, in the UI and the
+  API, name the cluster's installer image the same way, the SecureBoot variant
+  when the cluster's SecureBoot mode is not Off; an install target used to be
+  left without an image.
 - `ichor init` takes the first node's network: `--nic`, `--address`, `--gateway`,
   `--dns` and `--vlan`, with the matching keys `firstNode.nic`,
   `firstNode.addresses`, `firstNode.gateway`, `firstNode.dns` and
   `firstNode.vlan` in the `-f` file. `--address` takes a prefix length, such as
-  `192.168.1.10/24`, and may repeat. These apply only with
-  `--endpoint-type vip`: init refuses them with any other type, and outside the
-  VIP pattern the first node takes its address from DHCP.
+  `192.168.1.10/24`, and may repeat. They apply to every endpoint type. Without
+  one the first node keeps Talos's DHCP on every link, and with
+  `--endpoint-type vip` init also picks the node's primary link for the address.
 - `--nic` takes a link name as well as a MAC, on `ichor init` and on
   `ichor approve node`. A name such as `enp1s0` is looked up among the links the
   node reports, and only its permanent MAC is stored and rendered. A name that
@@ -112,6 +177,58 @@ node's network for it.
   certificates both carry. The flag may repeat. Changing the list after init
   reissues the certificates and reboots every node, workers included, so set it
   at init.
+- `ichor init --kube-proxy enabled|replaced`, `--gateway-api`,
+  `--l2-announcements` and `--l2-pool CIDR` (keys under `cluster.network.cni` in
+  the `-f` file) choose the Cilium features at install. `--gateway-api` and
+  `--l2-announcements` need `--kube-proxy replaced` and are refused without it;
+  `--l2-announcements` needs `--l2-pool`, which init refuses when it overlaps an
+  address Ichor owns or lies outside the first node's prefix. The prefix comes
+  from `--address`, so a pool is refused when the first node has no static
+  address. `--gateway-api`
+  applies the seven Gateway API CRDs through the API server under their own
+  field manager, so no Talos configuration carries them and the Cilium
+  hand-over cannot drop them. The `CiliumL2AnnouncementPolicy` and
+  `CiliumLoadBalancerIPPool` are yours to write. These act at init only; an
+  existing cluster is not changed by them.
+- `ichor delete node --wipe-mode system-disk-and-user-disks` erases the whole
+  system disk and every user disk, leaving out CD-ROM drives and read-only
+  disks. The UI's "What to wipe" offers it, and its plan and next steps say that
+  user disks are erased. The existing `all` mode erased the whole system disk
+  only, whatever its help said, and still does.
+- Reclaiming a node: `ichor reclaim node --wait 0` says the reset is not
+  confirmed, instead of reading as a finished one; the encrypted-volume warning
+  says the reset wipes STATE, which holds the salt a `lockToState` key needs; and
+  the refusal for a node that cannot be reinstalled names the missing META
+  partition as the condition.
+
+### Adopt
+
+- **`ichor adopt` takes Talos v1.14 and later.** A version contract below v1.14,
+  named with `--version-contract` or chosen by the probe, is refused in the plan
+  phase, before anything is written, with the instruction to upgrade Talos.
+  Sign-in is on by default and only v1.14 carries its issuer.
+- A rerun after a partial write finishes the job. When the `TalosCluster`
+  already exists, adopt now discovers the members again, as a first run does,
+  and writes every member that has no `TalosMachine`, which a first run that
+  stopped part-way never created and nothing reported. This needs `--node`;
+  without it a rerun keeps the machines already written.
+- **`ichor adopt` refuses a `--namespace` that is not the namespace the
+  controller runs in**, before it writes anything, naming both. The controller
+  reads the secrets bundle Secret from its own namespace, which a Helm install
+  may set to something other than `ichor-system`; adopt used to write the
+  Secret to `--namespace` and report success, and the bundle was never found.
+  When adopt cannot tell the controller's namespace, because it may not list
+  Deployments and Helm release Secrets cluster-wide, the default namespace goes
+  ahead and any other is refused with a message that says adopt could not
+  confirm it, what it tried to read, and what to do. `--add-machine` is not
+  checked.
+- Adopt types every endpoint that is not a virtual IP as `node`, and never
+  claims an address Ichor did not configure.
+- The refusal for a cluster with no CNI says that KubePrism is required on
+  every node in both kube-proxy modes, and that Cilium uses it as its API
+  address only when kube-proxy is replaced. When Ichor takes over an existing Cilium
+  with kube-proxy enabled, a KubePrism address already set on it is no longer
+  reported as a conflict with a value Ichor does not set.
 
 ### Cluster
 
@@ -122,30 +239,41 @@ node's network for it.
   interface being renamed or renumbered across a reboot. Once a control plane of
   a `vip` cluster has a primary link, a control plane approved without one is
   refused, and the refusal names `--nic`.
-- The endpoint address must fit its type: an IP address for `vip` and `node`,
-  either for `loadBalancer`. `ichor init` refuses a mismatch before it creates
-  anything. The webhook refuses one on create, and on an update that changes the
-  type or the address, so an object stored with a mismatched pair stays
-  editable until one of them changes.
+- The endpoint address must fit its type: an IP address for `vip`, an IP
+  address or a DNS host name for `node`. A host name is checked label by label,
+  and one whose last label is all digits is refused, so that a mistyped IP
+  address is not taken for a name. `ichor init` refuses a mismatch before it
+  creates anything. The webhook refuses one on create, and on an update that
+  changes the type or the address, so an object stored with a mismatched pair
+  stays editable until one of them changes.
 - A talosconfig that Ichor hands out names the control planes' addresses as its
   Talos API endpoints, or, when no control plane is left, every machine's. It
   never names the cluster endpoint, whatever its type, because that endpoint
   fronts the Kubernetes API. It is refused, with the reason, when no machine has
   an address.
-- **Breaking: `dns` is no longer an endpoint type.** `spec.endpoint.type`
-  takes `vip`, `loadBalancer` or `node`. A hostname in front of the control
-  planes is a `loadBalancer` endpoint, which takes an IP address or a hostname.
-  A `TalosCluster` that still says `dns` fails validation the next time anything
-  updates it, so move it first. The address stays as it is:
+- **Breaking: `dns` is no longer an endpoint type, and `loadBalancer` is
+  refused.** `spec.endpoint.type` takes `vip` or `node`; the enum keeps
+  `loadBalancer` only so that stored objects still read. A hostname or address
+  in front of the control planes is a `node` endpoint, since only `vip` changes
+  the configuration Ichor renders. A `TalosCluster` that says `dns` holds a
+  value the CRD no longer lists, and one that says `loadBalancer` is refused on
+  create and on any change to its endpoint. Move them before you next edit
+  them. The address stays as it is:
 
   ```
-  kubectl -n NAMESPACE patch talosclusters.ichor.maesh.dev NAME --type=merge -p '{"spec":{"endpoint":{"type":"loadBalancer"}}}'
+  kubectl -n NAMESPACE patch talosclusters.ichor.maesh.dev NAME --type=merge -p '{"spec":{"endpoint":{"type":"node"}}}'
   ```
 
-  Ichor renders the same for `dns` and `loadBalancer`, since only `vip` changes
-  the configuration. `ichor adopt` types a name, or an address that no node
-  has, as `loadBalancer`, and the endpoint prompt of `ichor init` offers no
-  `dns`.
+  `ichor init` offers `vip` and `node` only and refuses `loadBalancer` by name,
+  and `ichor adopt` types every endpoint that is not a virtual IP as `node`.
+- A JSON patch that removes `spec.network` or `spec.cni` from a stored
+  `TalosCluster` is refused. The immutability rules did not run on a field that
+  was absent, so the removal went through. Setting a field that was unset is
+  still allowed.
+- An update that makes `spec.cni.preset` `unmanaged` is refused unless the
+  object carries the adoption annotation, as create already was. A JSON patch
+  could do it to a stored cluster without one, and it stops Ichor's Cilium
+  hand-over for that cluster.
 
 ### Nodes
 
@@ -157,16 +285,111 @@ node's network for it.
   matches on a `type` or a `reason` keeps working. Something that matches on
   the text of a message, a condition's `message` or the words of a denial, does
   not.
-- A node is changed only once it answers as the machine it is named for, by
-  its machine UUID. A reset, an etcd departure, a configuration rollout, a
-  Talos upgrade or another node action is refused when it does not, rather than
-  sent to whichever machine answered.
-- A removal deferred by a held cluster lock or a shutdown retries by itself when
-  the lock frees. A dead control plane's removal is no longer refused after its
-  node has been reset, which kept the finalizer in place.
-- A control plane's drain during removal ends after the rollout's step timeout
-  and is retried later, so a PodDisruptionBudget that allows no disruption no
-  longer holds the cluster lock until the pod restarts.
+- **A failed removal no longer leaves a node that a plain `kubectl delete`
+  would wipe.** A removal arms the `allow-delete` guard and the reset opt-ins
+  to delete the `TalosMachine`. The controller now arms it only immediately
+  before each delete attempt and disarms it when the attempt fails, before the
+  operation pauses, and fails instead of pausing if the disarm fails. ichor-ui's
+  removal puts the guard annotations back when its own delete is refused, and
+  says the guard may still be armed if that restore fails. A process that dies
+  between the arm and the restore still leaves it armed.
+- A removal's reset completes only once the node answers in maintenance mode
+  with its UUID. A Node going NotReady was taken as proof of the wipe, but a
+  machine that rebooted with its disk intact goes NotReady too. After
+  `nodeDownWait` the removal completes and reports the wipe as not confirmed.
+  A removal that powers the machine off afterwards cannot be confirmed that way,
+  so it completes when the Node goes NotReady and records a Normal event that
+  says why the wipe is unconfirmed, instead of waiting out `nodeDownWait` and
+  warning on every default removal.
+- A removal that waits for the cluster lock after Talos accepted its Reset no
+  longer sends the Reset again to the same node, and the accepted Reset stays on
+  the Removal condition. The condition written when Talos accepts the
+  Reset says the wipe is unconfirmed until the node answers in maintenance mode.
+
+### Operations
+
+- **A paused operation releases the cluster lock** (ADR 0162). An
+  operation paused for a person, by a failed step or by `spec.paused`, used to
+  keep the lock, so a node that tried to join was blocked for as long as the
+  pause lasted. It releases the lock when it pauses and takes it again when it
+  resumes, and a retry that finds another holder waits paused on the lock. A
+  pause that resumes by itself keeps the lock.
+- A CA or key rotation blocked on one step for thirty minutes gives up and
+  pauses for a person, freeing the lock, instead of holding it.
+- A Talos upgrade whose node does not come back within 20 minutes of the
+  acknowledged Upgrade fails that node and pauses the operation. It used to wait
+  with no limit and hold the cluster lock.
+- The lock is renewed while an operation's Advance loop runs, every minute and
+  only up to the step's own bound, and during a cluster or node stop pass; a
+  step or pass that is stuck past its bound lets the lease lapse and pauses the
+  operation instead of holding the lock for ever. The Upgrade call can run for
+  ten minutes against a five-minute lease, which could let another operation
+  take the cluster mid-step.
+- The Kubernetes upgrade plan warns that the endpoint is a single control
+  plane's only when the endpoint is the address recorded for one of the
+  approved control planes. It used to warn for every `node` endpoint, so a name
+  in front of several control planes drew it. A name or a virtual IP does not
+  warn now, even a name that resolves to one control plane (ADR 0161).
+- The etcd restore plan and the create that goes through it return the error
+  when they cannot read the operations, instead of reporting that nothing blocks
+  the restore and skipping the CA and key rotation guards. The aggregator CA
+  rotation guard likewise fails on a version contract it cannot parse.
+
+### Etcd backups and restore
+
+- Retention never deletes the snapshot a run just uploaded. It ranks snapshots
+  by the object store's modified time and uses the time in the name only to
+  break ties. Before, it ranked by the name, so a clock that stepped backwards,
+  or one object named for the far future, made the run delete the new snapshot
+  or push every real snapshot out of the retained set.
+- A restore marker is trusted only when it verifies with the current or a
+  retired key. A key derived from `Cluster.Secret`, which every worker's machine
+  configuration holds, no longer verifies one, so someone with a worker's
+  configuration and write access to the bucket cannot forge a marker the
+  controller acts on.
+- A restore waits instead of failing when a node is Unavailable during the
+  upload, when the snapshot download fails or breaks mid-stream, and when the
+  check of the pinned copy after the wipe meets a transport failure. A checksum
+  mismatch, a damaged chunk and a missing object still fail it.
+
+- **A `retry` on a failed etcd restore now resumes it.** A person's `retry` on a
+  paused restore used to be consumed and then pause the restore again at once
+  with the old failure, because the marker in the backup storage kept its
+  failure and its start time. A retry now clears the marker's failure and
+  counts both of the restore's time limits from the retry; the marker's step
+  and which control planes already did their own part are kept, so nothing
+  already done is done again. The marker is written before the retry request is
+  consumed, so a failed write to the backup storage leaves the request in place
+  for the next pass instead of swallowing the retry.
+- A retry that cannot be resumed, because the marker is gone from the backup
+  storage or records a restore by another operation, is consumed and the failure
+  says why and what to do: create a new etcd-restore operation, after the other
+  restore has finished or been cleared. A request left on the object unread
+  would look like one still waiting.
+
+### UI
+
+- The nodes tile badge counts the nodes that are not ready, and the node rows
+  and the node page name a Ready condition's reason, as the list does.
+- An API server restart is not counted as a reboot waiting.
+- A key Ichor owns but does not set in the cluster's mode shows an empty value,
+  where it showed `null`.
+- Approving a node or setting its install target on a cluster ichor-ui cannot
+  read is reported as not found, or as forbidden, with the cluster's name and
+  the way out (`--install-image` names the image yourself), not as an internal
+  error.
+- ichor-ui's ServiceAccount no longer holds `delete` on `talosmachines`, in the
+  Helm chart's role and in `config/rbac`. Removing a node asks for the override
+  verb before it deletes, which the ServiceAccount does not hold, and with
+  sign-in the signed-in user deletes, so the grant was never reachable. The rule
+  keeps `get`, `list` and `update`.
+- In open mode (`--allow-unauthenticated`) the ServiceAccount holds `start`,
+  which lets anyone who can reach ichor-ui start a CA rotation, a key rotation,
+  a cluster shutdown and a node shutdown; a node reset and an etcd restore also
+  need the override verb it does not hold. The warning `ichor init` prints, and
+  the `--allow-unauthenticated` help, now say this. They used to say that
+  anyone who can reach ichor-ui can reset nodes, which the missing override
+  verb already refused.
 
 ### Typed configuration
 
@@ -202,10 +425,12 @@ node's network for it.
   `apiVersion`, `kind`, `metadata` and `spec` of the document, without the
   `status` the kubelet reports. A static pod needs a security context, host
   networking, host paths and capabilities, so its spec is carried whole. The
-  schema is large (about 300 KB of compact JSON in each of the two CRDs that
-  embed the union), so `make install` and `make deploy` apply the CRDs
-  server-side. Client-side apply keeps the whole object in its last-applied
-  annotation, which is limited to 262,144 bytes.
+  schema is large: the two CRDs that embed the union, `TalosCluster` and
+  `TalosConfigPatch`, are about 500 KB and 470 KB as compact JSON. `make
+  install` and `make deploy` therefore apply the CRDs server-side, and so must
+  anyone who applies them with `kubectl apply`: client-side apply keeps the
+  whole object in its last-applied annotation, which is limited to 262,144
+  bytes, and refuses them.
 - `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` carry a subset
   of the upstream configuration: the fields an operator is documented to set on
   a Talos node. The upstream types contain floating point numbers, a quantity
@@ -266,11 +491,15 @@ node's network for it.
 - `THIRD-PARTY-NOTICES` lists the Sigstore public-good trusted root that the
   binary embeds, and the build refuses a dependency under the GPL, LGPL, AGPL,
   SSPL or BUSL.
+- The Gateway API CRDs that `ichor init --gateway-api` applies are embedded with
+  their upstream copyright notice, and `THIRD-PARTY-NOTICES` names them.
 
 ### Docs
 
 - The guides, concepts, getting started, the design document, the diagrams and
-  the README name the verb-first commands.
+  the README name the verb-first commands, and say that `adopt` takes Talos
+  v1.14 and later, that sign-in is the `init` default, and that a load
+  balancer's name or address is a `node` endpoint.
 - `create-the-cluster` is one page per endpoint, the virtual IP first, then the
   single node endpoint, which also covers a load balancer in its own section.
   Each page shows the interactive, `init.yaml` and flag forms as its sections.
@@ -278,10 +507,23 @@ node's network for it.
   page per section.
 - A new page, Certificate names, states what each serving certificate holds by
   default and what changing the names costs.
-- The version banner is in the page's HTML from the start, so the page does not
-  move when the version list loads.
 - The CNI concept page and `ichor bootstrap cni --help` say that Cilium reaches
   the API through KubePrism only when kube-proxy is replaced.
+
+### CI
+
+- `make cluster-gate` runs the full gate as one Kubernetes Job. A second run
+  reuses the cache claim of the first, and stops with a message instead of
+  replacing it when `GATE_STORAGE_CLASS` or `GATE_CACHE_SIZE` differs.
+- The target that embeds the install manifest in the CLI refuses the
+  placeholder images `controller:latest` and `ichor-ui:latest`, naming the
+  variable that is still one, because a binary that embeds them names images no
+  cluster can pull.
+- The release workflow takes the notes from this file, and CI fails if a
+  top-level `changelog:` block returns to the goreleaser configuration, which
+  would make goreleaser ignore them. After a patch release cut from a
+  `release-X.Y` branch, a workflow opens a pull request that brings its notes
+  and README version to `main`. A dependency scan runs on `main` every day.
 
 ## v0.2.4 (2026-11-13)
 

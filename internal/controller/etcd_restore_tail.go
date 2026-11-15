@@ -230,6 +230,13 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 
 	if !j.verified {
 		if _, err := etcdbackup.VerifyObject(ctx, j.store, etcdbackup.PinnedKey(j.prefix), j.passphrase); err != nil {
+			if errors.Is(err, etcdbackup.ErrTransient) {
+				// The check could not read the snapshot, which says nothing about the snapshot: ask again.
+				j.note = j.scrub.clean(fmt.Sprintf("checking the pinned snapshot: %v", err))
+
+				return false, nil
+			}
+
 			return false, fmt.Errorf("the pinned snapshot no longer passes its check, so nothing was uploaded: %s", j.scrub.clean(err.Error()))
 		}
 

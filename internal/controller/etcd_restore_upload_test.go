@@ -97,6 +97,13 @@ func uploadJob(talos TalosClient, store etcdbackup.Store, key etcdbackup.Key) *r
 func sealedSnapshot(t *testing.T, key etcdbackup.Key) []byte {
 	t.Helper()
 
+	return sealedWith(t, key, bytes.Repeat([]byte("etcd"), 64<<10))
+}
+
+// sealedWith is plain sealed with key.
+func sealedWith(t *testing.T, key etcdbackup.Key, plain []byte) []byte {
+	t.Helper()
+
 	var buf bytes.Buffer
 
 	w, err := etcdbackup.Encrypt(&buf, key)
@@ -104,7 +111,7 @@ func sealedSnapshot(t *testing.T, key etcdbackup.Key) []byte {
 		t.Fatal(err)
 	}
 
-	if _, err := w.Write(bytes.Repeat([]byte("etcd"), 64<<10)); err != nil {
+	if _, err := w.Write(plain); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,5 +173,48 @@ func TestUploadStillFailsOnAFinalAnswer(t *testing.T) {
 
 	if _, err := j.recoverTarget(context.Background()); err == nil {
 		t.Fatal("an Internal refusal must stay a final error")
+	}
+}
+
+// TestCheckWaitsWhenTheDownloadBreaks: the connection drops while the pinned copy is checked, after the
+// wipe. That is a wait, not a verdict on the snapshot, and nothing is uploaded. Guard: the ErrTransient arm
+// of recoverTarget's check.
+func TestCheckWaitsWhenTheDownloadBreaks(t *testing.T) {
+	key := etcdbackup.Key{Current: uploadPassphrase}
+	talos := &uploadTalos{}
+	j := uploadJob(talos, &pinnedStore{object: sealedSnapshot(t, key), cut: true}, key)
+	j.verified = false
+
+	done, err := j.recoverTarget(context.Background())
+	if err != nil {
+		t.Fatalf("a dropped connection during the check is a wait, got a final error: %v", err)
+	}
+
+	if done || !strings.Contains(j.note, "connection reset by peer") {
+		t.Fatalf("want a wait naming the read error, got done=%v note=%q", done, j.note)
+	}
+
+	if j.verified || talos.bootstraps != 0 {
+		t.Fatal("the check passed or the node was bootstrapped on a check that did not finish")
+	}
+}
+
+// TestCheckStillFailsOnAChecksumMismatch: a snapshot that streams whole but fails its trailer is the
+// snapshot's own verdict, so it is final and nothing is uploaded. Guard: a check failure that is not
+// ErrTransient still fails the restore.
+func TestCheckStillFailsOnAChecksumMismatch(t *testing.T) {
+	key := etcdbackup.Key{Current: uploadPassphrase}
+	talos := &uploadTalos{}
+	bad := append(bytes.Repeat([]byte("x"), 512), make([]byte, 32)...) // 544 bytes, wrong trailer
+	j := uploadJob(talos, &pinnedStore{object: sealedWith(t, key, bad)}, key)
+	j.verified = false
+
+	_, err := j.recoverTarget(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("a checksum mismatch must be a final error, got %v", err)
+	}
+
+	if talos.bootstraps != 0 {
+		t.Fatal("bootstrapped from a snapshot that failed its check")
 	}
 }

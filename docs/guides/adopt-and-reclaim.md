@@ -45,6 +45,14 @@ blocks the machine and offers the wipe: `ichor reclaim node ADDRESS --cluster NA
   and never sends it to the controller.
 - The cluster's secrets bundle, either as a file or recovered from a control
   plane (below).
+- `--namespace` (`-n`, default `ichor-system`) can only be the namespace Ichor's
+  controller runs in, because the controller reads the secrets bundle Secret from its
+  own namespace. Adopt checks this first, before it reads or writes anything, and
+  refuses any other value naming the right one. When it cannot find the controller's
+  Deployment or Helm release (an operator who may not list them cluster-wide), it
+  cannot confirm the namespace: the default goes ahead and any other value is
+  refused with "could not confirm". `--add-machine` does not make this check, so
+  give it the controller's namespace yourself.
 
 Adopt never applies anything to a node itself. The controller does, in the
 last phase, and only after a zero-drift check.
@@ -164,6 +172,14 @@ Taking over Cilium:
 - A setting Ichor owns (for example `kubeProxyReplacement`) that Ichor would
   change on the running data plane needs `--accept-cilium-changes`. The IPAM
   mode and the tunnel protocol are never accepted.
+- Cilium must be healthy before adopt writes anything: the `cilium` DaemonSet
+  Ready on every node it is scheduled to, the operator Deployment Ready, and
+  KubePrism answering on `127.0.0.1:7445` on every node (Talos's own
+  `KubePrismStatuses` health, read through each node's Talos API; a node that cannot
+  be asked counts as not answering). Taking over restarts the agents, and the
+  `ichor-cni` Job reaches the API through KubePrism meanwhile. The check runs with
+  `--plan`, before the consent question, and a failure refuses with nothing written;
+  repair Cilium or KubePrism and run adopt again.
 - Your Helm values are read from the newest release record. For a Cilium that
   came from a Talos inline manifest (the usual Talos-guide install, made with
   `helm template`) there is no record, so Ichor cannot read your values. Give
@@ -322,7 +338,8 @@ ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.i
 ```
 
 `--add-machine` is repeatable. It needs the `TalosCluster` to exist, in the namespace given
-by `-n` (default `ichor-system`, where `ichor init` creates it, like every other command). The secrets bundle
+by `-n` (default `ichor-system`, where `ichor init` creates it, like every other command; unlike
+a full adoption, this command does not check that `-n` is the namespace the controller runs in). The secrets bundle
 is read from the cluster's own Secret (your kubeconfig must be allowed to read it), unless
 you give `--secrets-bundle` or `--recover-secrets`; while a CA rotation is under way it
 refuses. What it does, in order:

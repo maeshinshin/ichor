@@ -1,6 +1,6 @@
 # Rotating the service-account and secretbox keys
 
-`ichor rotate ca` replaces the Talos API and Kubernetes API certificate
+`ichor rotate ca` replaces, by default, the Talos API and Kubernetes API certificate
 authorities. Two more secrets are worth replacing after a compromise or on a
 schedule, and `ichor rotate keys` does that:
 
@@ -10,7 +10,7 @@ schedule, and `ichor rotate keys` does that:
 - the **secretbox key**: the key kube-apiserver encrypts Secrets with before it
   stores them in etcd.
 
-The etcd CA and the aggregator CA are not rotated by either command.
+`ichor rotate keys` does not rotate the etcd CA or the aggregator CA; `ichor rotate ca --ca etcd`, `--ca kubernetes-aggregator` or `--all` does.
 
 ## What it does
 

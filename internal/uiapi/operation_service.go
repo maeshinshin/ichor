@@ -643,16 +643,16 @@ func notePendingSchematic(p *opPlan, cluster *ichorv1alpha1.TalosCluster, m *ich
 }
 
 // splitControllerMachine takes the machine the controller runs on out of both lists; when that could not be read, the
-// plan's warning says so.
+// plan's warning says so (which machine is last, in the words of last: "rebooted last").
 func (s *Server) splitControllerMachine(
-	ctx context.Context, p *opPlan, machines []ichorv1alpha1.TalosMachine, cluster string, cps, workers []*ichorv1alpha1.TalosMachine,
+	ctx context.Context, p *opPlan, machines []ichorv1alpha1.TalosMachine, cluster, last string, cps, workers []*ichorv1alpha1.TalosMachine,
 ) (outCPs, outWorkers []*ichorv1alpha1.TalosMachine, own *ichorv1alpha1.TalosMachine) {
 	name, unread := s.controllerMachine(ctx, machines, cluster, "")
 	outCPs, outWorkers, own = splitOwnMachine(cps, workers, name)
 
 	if own == nil && unread != "" {
 		p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " This plan could not determine which machine runs Ichor's controller (" +
-			unread + "), so it cannot show which is rebooted last.")
+			unread + "), so it cannot show which is " + last + ".")
 	}
 
 	return outCPs, outWorkers, own
@@ -791,17 +791,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	}
 
 	if p.kind == ichorv1alpha1.TalosOperationKindShutdown {
-		// Workers together first, then every control plane in one burst, each in the executor's order.
-		upgrade.SortByOrder(workers)
-		upgrade.SortByOrder(cps)
-
-		for _, m := range workers {
-			add(m, 1)
-		}
-
-		for _, m := range cps {
-			add(m, 2)
-		}
+		planShutdownOrder(add, cps, workers)
 
 		return nil
 	}
@@ -809,12 +799,18 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	upgrade.SortByOrder(cps)
 	upgrade.SortByOrder(workers)
 
+	if p.kind == ichorv1alpha1.TalosOperationKindKubernetes {
+		s.planKubernetesMachines(ctx, p, list.Items, cluster.Name, cps, workers, maxUnavailable)
+
+		return nil
+	}
+
 	// A config rollout reboots the machine the controller runs on last: the controller applies
 	// the same order, so the plan must list it.
 	var own *ichorv1alpha1.TalosMachine
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
-		cps, workers, own = s.splitControllerMachine(ctx, p, list.Items, cluster.Name, cps, workers)
+		cps, workers, own = s.splitControllerMachine(ctx, p, list.Items, cluster.Name, "rebooted last", cps, workers)
 	}
 
 	step := int32(0)
@@ -837,6 +833,74 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	}
 
 	return nil
+}
+
+// planShutdownOrder lists the workers together first, then every control plane in one burst, each in the executor's order.
+func planShutdownOrder(add func(*ichorv1alpha1.TalosMachine, int32), cps, workers []*ichorv1alpha1.TalosMachine) {
+	upgrade.SortByOrder(workers)
+	upgrade.SortByOrder(cps)
+
+	for _, m := range workers {
+		add(m, 1)
+	}
+
+	for _, m := range cps {
+		add(m, 2)
+	}
+}
+
+// planKubernetesMachines plans a Kubernetes upgrade from cps and workers, already sorted. The first three stages visit
+// every control plane, the controller's own included; the Kubelets stage drains the controller's own machine last.
+func (s *Server) planKubernetesMachines(
+	ctx context.Context, p *opPlan, machines []ichorv1alpha1.TalosMachine, cluster string, cps, workers []*ichorv1alpha1.TalosMachine,
+	maxUnavailable int32,
+) {
+	allCPs := slices.Clone(cps) // splitOwnMachine edits cps in place
+
+	cps, workers, own := s.splitControllerMachine(ctx, p, machines, cluster, "upgraded last", cps, workers)
+
+	var ownMachines []*ichorv1alpha1.TalosMachine
+	if own != nil {
+		ownMachines = []*ichorv1alpha1.TalosMachine{own}
+	}
+
+	planKubernetesOrder(p, upgrade.KubernetesOrder(allCPs, cps, workers, ownMachines, maxUnavailable), own)
+}
+
+// planKubernetesOrder states the order the executor visits the machines in, stage by stage: each stage's line
+// names its machines in order, and the plan's machine list is the Kubelets stage, the one that disrupts workers.
+func planKubernetesOrder(p *opPlan, order []upgrade.KubernetesStageSteps, own *ichorv1alpha1.TalosMachine) {
+	for i := range min(len(order), len(p.resp.Stages)) {
+		var steps []string
+
+		for _, step := range order[i].Steps {
+			names := make([]string, 0, len(step))
+
+			for _, m := range step {
+				if m == own {
+					names = append(names, m.Name+" (where Ichor's controller runs)")
+				} else {
+					names = append(names, m.Name)
+				}
+			}
+
+			if len(names) > 1 {
+				steps = append(steps, "("+strings.Join(names, ", ")+" together)")
+			} else {
+				steps = append(steps, names...)
+			}
+		}
+
+		if len(steps) > 0 {
+			p.resp.Stages[i] += ": " + strings.Join(steps, ", then ")
+		}
+	}
+
+	for i, step := range order[len(order)-1].Steps {
+		for _, m := range step {
+			p.resp.Machines = append(p.resp.Machines, &pb.PlannedMachine{Name: m.Name, Role: m.Spec.Role, Step: int32(i) + 1})
+		}
+	}
 }
 
 func (s *Server) blockedReason(

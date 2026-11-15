@@ -483,7 +483,9 @@ command does. Each item is described where it is listed below.
   because it validates strictly by default; a client that does not ask for
   strict validation has the field removed by the API server without being
   told. The tables of omitted fields in `internal/tools/mirrorgen/omits.go`
-  are the list.
+  are the list. A field the subsets carry cannot be added to them later: a
+  field that leaves the mirror fails a test unless its line is also removed from
+  `pkg/typedconfig/testdata/carried_fields.txt`.
 - `KubeAuditPolicyConfig`, `KubeAuthorizerConfig` and
   `KubeCredentialProviderConfig` carry their payload as the upstream
   Kubernetes type, so nothing it can express is lost.

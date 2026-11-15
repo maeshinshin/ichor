@@ -53,6 +53,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -471,6 +472,17 @@ func dropHandedOverInlineManifest(
 		return e.InlineManifestName == cni.InlineManifestName || (taken != "" && e.InlineManifestName == taken)
 	}
 
+	// spec.config names its inline manifests, so the same two names are the ones to drop there.
+	ordered = rewriteIchorConfigs(ordered,
+		func(c *ichorconfig.Config) bool {
+			return c.Cluster != nil && (c.Cluster.InlineManifests[cni.InlineManifestName] != nil ||
+				(taken != "" && c.Cluster.InlineManifests[taken] != nil))
+		},
+		func(c *ichorconfig.Config) {
+			delete(c.Cluster.InlineManifests, cni.InlineManifestName)
+			delete(c.Cluster.InlineManifests, taken)
+		})
+
 	return rewriteConfigs(ordered,
 		func(c *typedconfig.Config) bool {
 			return c.ClusterConfig != nil && slices.ContainsFunc(c.ClusterConfig.ClusterInlineManifests, isHandedOver)
@@ -490,12 +502,40 @@ func dropTalosAPIAccess(
 		return ordered
 	}
 
+	ordered = rewriteIchorConfigs(ordered,
+		func(c *ichorconfig.Config) bool {
+			return c.Machine != nil && c.Machine.Features != nil && c.Machine.Features.KubernetesTalosAPIAccess != nil
+		},
+		func(c *ichorconfig.Config) { c.Machine.Features.KubernetesTalosAPIAccess = nil })
+
 	return rewriteConfigs(ordered,
 		func(c *typedconfig.Config) bool {
 			return c.MachineConfig != nil && c.MachineConfig.MachineFeatures != nil &&
 				c.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig != nil
 		},
 		func(c *typedconfig.Config) { c.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig = nil })
+}
+
+// rewriteIchorConfigs is rewriteConfigs for spec.config: the same guard, on Ichor's schema before it is
+// converted, so that a setting reaches the nodes through the same checks whichever way it was written.
+func rewriteIchorConfigs(
+	ordered []*ichorv1alpha1.TalosConfigPatch,
+	needs func(*ichorconfig.Config) bool, edit func(*ichorconfig.Config),
+) []*ichorv1alpha1.TalosConfigPatch {
+	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
+
+	for i, p := range ordered {
+		out[i] = p
+
+		if p.Spec.Config == nil || !needs(p.Spec.Config) {
+			continue
+		}
+
+		out[i] = p.DeepCopy()
+		edit(out[i].Spec.Config)
+	}
+
+	return out
 }
 
 // rewriteConfigs returns ordered with edit applied to every Config document for which needs is
@@ -528,6 +568,17 @@ func rewriteConfigs(
 
 const kindResolverConfig = "ResolverConfig"
 
+// patchDocuments returns the Talos documents a patch carries, spec.config converted for a machine that takes
+// the Kubernetes documents. A patch that cannot be converted carries none here; applyPatches reports why.
+func patchDocuments(p *ichorv1alpha1.TalosConfigPatch) []ichorv1alpha1.TalosConfigPatchDocument {
+	docs, err := p.Spec.EffectiveDocuments(true)
+	if err != nil {
+		return nil
+	}
+
+	return docs
+}
+
 // refuseResolverConflict refuses a machine whose spec.network.dnsServers already renders a
 // ResolverConfig while a selected patch carries one too: two writers of the same document would
 // merge by list position, so the result would depend on patch order. Failing here also makes the
@@ -538,7 +589,7 @@ func refuseResolverConflict(m *ichorv1alpha1.TalosMachine, ordered []*ichorv1alp
 	}
 
 	for _, p := range ordered {
-		if slices.ContainsFunc(p.Spec.Documents, func(d ichorv1alpha1.TalosConfigPatchDocument) bool {
+		if slices.ContainsFunc(patchDocuments(p), func(d ichorv1alpha1.TalosConfigPatchDocument) bool {
 			return d.Kind == kindResolverConfig
 		}) {
 			return fmt.Errorf("render: patch %q carries a %s but machine %q sets spec.network.dnsServers; "+
@@ -563,9 +614,14 @@ func applyPatches(
 	patches := make([]configpatcher.Patch, 0, len(ordered))
 
 	for _, p := range ordered {
-		docs := make([]config.Document, 0, len(p.Spec.Documents))
+		pd, err := p.Spec.EffectiveDocuments(contract.MultidocKubernetesConfigSupported())
+		if err != nil {
+			return nil, fmt.Errorf("render: patch %q: %w", p.Name, err)
+		}
 
-		for _, d := range p.Spec.Documents {
+		docs := make([]config.Document, 0, len(pd))
+
+		for _, d := range pd {
 			doc, err := DocumentFromPatch(d)
 			if err != nil {
 				return nil, fmt.Errorf("render: patch %q: %w", p.Name, err)

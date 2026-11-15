@@ -216,7 +216,12 @@ func patchOrigins(
 	for _, p := range ordered {
 		layer := configLayerToPB(p.Spec.Layer)
 
-		for _, d := range p.Spec.Documents {
+		docs, err := p.Spec.EffectiveDocuments(true)
+		if err != nil {
+			return nil, fmt.Errorf("patch %q: %w", p.Name, err)
+		}
+
+		for _, d := range docs {
 			paths, err := documentLeafPaths(d)
 			if err != nil {
 				return nil, fmt.Errorf("patch %q: %w", p.Name, err)

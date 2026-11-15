@@ -68,7 +68,17 @@ func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, ob
 
 // validate runs the kind-to-field rule, the Talos API access rule, then the dry render.
 func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+	// Both spellings in one object are two spellings of one setting: refuse, naming both.
+	if len(p.Spec.Documents) > 0 && p.Spec.Config != nil {
+		return nil, ichorv1alpha1.ErrDocumentsAndConfig
+	}
+
 	if err := validateDocumentKinds(p.Spec.Documents); err != nil {
+		return nil, err
+	}
+
+	// spec.config must convert; a machine on an older Talos version is checked by the dry render below.
+	if _, err := p.Spec.EffectiveDocuments(true); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +106,8 @@ func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, ol
 
 	// The Talos API access rule is for what the update writes: a patch stored before it existed
 	// can still be edited for something else.
-	if apiequality.Semantic.DeepEqual(oldObj.Spec.Documents, newObj.Spec.Documents) {
+	if apiequality.Semantic.DeepEqual(oldObj.Spec.Documents, newObj.Spec.Documents) &&
+		apiequality.Semantic.DeepEqual(oldObj.Spec.Config, newObj.Spec.Config) {
 		return nil, v.dryRender(ctx, newObj)
 	}
 
@@ -109,7 +120,7 @@ func (v *TalosConfigPatchCustomValidator) ValidateDelete(context.Context, *ichor
 }
 
 func (v *TalosConfigPatchCustomValidator) dryRender(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) error {
-	if len(p.Spec.Documents) == 0 {
+	if len(p.Spec.Documents) == 0 && p.Spec.Config == nil {
 		return nil
 	}
 

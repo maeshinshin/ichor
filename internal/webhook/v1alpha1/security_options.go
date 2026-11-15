@@ -386,5 +386,20 @@ func talosAPIAccessWarnings(p *ichorv1alpha1.TalosConfigPatch) admission.Warning
 			"it applies to control planes only", where, a.AccessAllowedRoles, a.AccessAllowedKubernetesNamespaces))
 	}
 
+	if c := p.Spec.Config; c != nil && c.Machine != nil && c.Machine.Features != nil {
+		a := c.Machine.Features.KubernetesTalosAPIAccess
+		if a != nil && a.Enabled != nil && *a.Enabled {
+			where := "spec.config.machine.features.kubernetesTalosAPIAccess"
+
+			if slices.Contains(a.AllowedRoles, roleOSAdmin) {
+				warnings = append(warnings, fmt.Sprintf("%s: allowedRoles contains %s, which gives every pod in %v a Talos administrator "+
+					"(os:reader is enough for most uses)", where, roleOSAdmin, a.AllowedKubernetesNamespaces))
+			}
+
+			warnings = append(warnings, fmt.Sprintf("%s grants Talos API access (%v) to pods in namespaces %v: a pod there can act on the nodes; "+
+				"it applies to control planes only", where, a.AllowedRoles, a.AllowedKubernetesNamespaces))
+		}
+	}
+
 	return warnings
 }

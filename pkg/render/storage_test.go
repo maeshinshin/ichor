@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -77,15 +78,13 @@ func TestRenderStorage(t *testing.T) {
 				ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
 				Layer:      layerMachine,
 				Target:     &ichorv1alpha1.TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: "node-a"}},
-				Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-					Kind: kindUserVolume,
-					UserVolumeConfig: &typedconfig.UserVolumeConfigV1Alpha1{
-						MetaName: "longhorn",
-						ProvisioningSpec: &typedconfig.ProvisioningSpec{
+				Config: &ichorconfig.Config{Machine: &ichorconfig.Machine{Volumes: &ichorconfig.MachineVolumes{
+					User: map[string]*ichorconfig.MachineVolumesUserEntry{
+						"longhorn": {Provisioning: &typedconfig.ProvisioningSpec{
 							DiskSelectorSpec: &typedconfig.DiskSelector{Match: storageDiskSelector}, ProvisioningMaxSize: "50%",
-						},
+						}},
 					},
-				}},
+				}}},
 			},
 		}
 

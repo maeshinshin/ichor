@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -325,6 +327,59 @@ func TestStoredTalosClusterWithCNICustomDocumentsSurvivesTheCRDUpgrade(t *testin
 	got, _, _ := unstructured.NestedMap(obj.Object, kSpec, kCNI, kCustom, "source")
 	if got["repoURL"] != source["repoURL"] {
 		t.Errorf("spec.cni.custom.source did not survive: %v", got)
+	}
+}
+
+// ADR 0152, amended again: spec.documents of a TalosConfigPatch is retired, spec.config being the one place to write
+// Talos configuration. A patch stored under the schema that had it is read without it as soon as the current CRD is
+// installed, and stays writable; the installer's check accepts the removal because the path is on the list.
+func TestStoredTalosConfigPatchWithDocumentsSurvivesTheCRDUpgrade(t *testing.T) {
+	old := loadCRD(t, "testdata/talosconfigpatches-before-removal.yaml")
+	installOldCRD(t, old)
+
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kKind:       "TalosConfigPatch",
+		kMetadata:   map[string]any{kName: "old-patch", "namespace": kDefault},
+		kSpec: map[string]any{
+			"clusterRef": map[string]any{kName: "c"},
+			"layer":      "cluster",
+			"documents": []any{map[string]any{
+				kKind:          "SysctlConfig",
+				"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
+			}},
+		},
+	}}
+
+	createWhenEstablished(t, obj)
+
+	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, "documents"); !found {
+		t.Fatal("the old schema did not keep spec.documents")
+	}
+
+	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml")
+
+	updateUntilPruned(t, types.NamespacedName{Namespace: kDefault, Name: "old-patch"}, obj,
+		[]string{kSpec, "clusterRef", kName}, "c", [][]string{{kSpec, "documents"}})
+}
+
+// Without the entry on the list the installer refuses the upgrade, which is what keeps every other removal a
+// deliberate one.
+func TestInstallerRefusesToDropTalosConfigPatchDocumentsUnlessRetired(t *testing.T) {
+	old := loadCRD(t, "testdata/talosconfigpatches-before-removal.yaml")
+	current := loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml")
+
+	if err := checkAdditive(old, current); err != nil {
+		t.Fatalf("the retired removal was refused: %v", err)
+	}
+
+	saved := retiredFields
+	retiredFields = slices.DeleteFunc(slices.Clone(retiredFields), func(f retiredField) bool { return f.path == "spec.documents" })
+
+	defer func() { retiredFields = saved }()
+
+	if err := checkAdditive(old, current); err == nil || !strings.Contains(err.Error(), "documents") {
+		t.Fatalf("want a refusal naming documents once it is not retired, got %v", err)
 	}
 }
 

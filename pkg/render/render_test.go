@@ -31,6 +31,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -141,24 +142,19 @@ func sysctlPatch(
 			Layer:      layer,
 			Priority:   priority,
 			Target:     target,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{
-				{
-					Kind:         "SysctlConfig",
-					SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{sysctlKey: value}},
-				},
-			},
+			Config:     &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{sysctlKey: value}}},
 		},
 	}
 }
 
-// configPatch is a cluster-layer TalosConfigPatch carrying one Config document.
-func configPatch(name string, cfg *typedconfig.Config) ichorv1alpha1.TalosConfigPatch {
+// configPatch is a cluster-layer TalosConfigPatch carrying cfg in spec.config.
+func configPatch(name string, cfg *ichorconfig.Config) ichorv1alpha1.TalosConfigPatch {
 	return ichorv1alpha1.TalosConfigPatch{
 		Namespace: testNamespace, Name: name,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
 			Layer:      layerCluster,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+			Config:     cfg,
 		},
 	}
 }
@@ -439,16 +435,9 @@ func TestRenderBundleLeak(t *testing.T) {
 		},
 	}, "x")
 
-	unknownKind := configPatch("p2", nil)
-	unknownKind.Spec.Documents[0].Kind = "NotARealKind"
-
-	doc := configPatch("p3", &typedconfig.Config{ConfigVersion: configVersionV1Alpha1})
-	doc.Spec.Documents = append(doc.Spec.Documents, doc.Spec.Documents[0])
-
 	// m is a worker; etcd config is only valid on control plane machines.
-	etcdOnWorker := configPatch("p4", &typedconfig.Config{
-		ConfigVersion: configVersionV1Alpha1,
-		ClusterConfig: &typedconfig.ClusterConfig{EtcdConfig: &typedconfig.EtcdConfig{}},
+	etcdOnWorker := configPatch("p4", &ichorconfig.Config{
+		Cluster: &ichorconfig.Cluster{Etcd: &typedconfig.EtcdConfig{}},
 	})
 
 	for _, tc := range []struct {
@@ -469,8 +458,6 @@ func TestRenderBundleLeak(t *testing.T) {
 		{"unknown machine type", cluster, bundle, testMachine("node-a", "unknown", nil), nil},
 		{"empty kubernetes version", noKubernetes, bundle, m, nil},
 		{"invalid label selector", cluster, bundle, m, &badSelector},
-		{"unknown document kind", cluster, bundle, m, &unknownKind},
-		{"duplicate v1alpha1.Config document in one patch", cluster, bundle, m, &doc},
 		{"etcd config on a worker fails validation", cluster, bundle, m, &etcdOnWorker},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -491,13 +478,10 @@ func TestRenderBundleLeak(t *testing.T) {
 // that dropping the inline manifest entry never disturbs a sibling document
 // in the same patch.
 func inlineManifestPatch(patchName, manifestName string) ichorv1alpha1.TalosConfigPatch {
-	return configPatch(patchName, &typedconfig.Config{
-		ConfigVersion: configVersionV1Alpha1,
-		ClusterConfig: &typedconfig.ClusterConfig{
-			ClusterInlineManifests: []*typedconfig.ClusterInlineManifest{
-				{InlineManifestName: manifestName, InlineManifestContents: "kind: Nothing\n"},
-			},
-			ExtraManifests: []string{"https://example.invalid/unrelated.yaml"},
+	return configPatch(patchName, &ichorconfig.Config{
+		Cluster: &ichorconfig.Cluster{
+			InlineManifests: map[string]*ichorconfig.ClusterInlineManifestsEntry{manifestName: {Manifest: "kind: Nothing\n"}},
+			ExtraManifests:  map[string]*ichorconfig.ClusterExtraManifestsEntry{"unrelated": {Url: "https://example.invalid/unrelated.yaml"}},
 		},
 	})
 }
@@ -560,10 +544,10 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 			t.Fatalf("Render: %v", err)
 		}
 
-		manifests := patch.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests
-		if len(manifests) != len(before.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests) {
+		manifests := patch.Spec.Config.Cluster.InlineManifests
+		if len(manifests) != len(before.Spec.Config.Cluster.InlineManifests) {
 			t.Fatalf("Render mutated the caller's TalosConfigPatch: got %d inline manifests, want %d",
-				len(manifests), len(before.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests))
+				len(manifests), len(before.Spec.Config.Cluster.InlineManifests))
 		}
 	})
 
@@ -585,20 +569,4 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 			t.Fatalf("expected the untouched patch to pass through as the same pointer, got a copy")
 		}
 	})
-}
-
-// TestRenderRefusesADocumentWhoseKindNamesAnUnsetField: the CRD only bounds a document to kind plus one
-// field, so the renderer must not convert one whose kind names a field that is not set.
-func TestRenderRefusesADocumentWhoseKindNamesAnUnsetField(t *testing.T) {
-	p := configPatch("p", &typedconfig.Config{ConfigVersion: configVersionV1Alpha1})
-	p.Spec.Documents[0].Kind = "SysctlConfig"
-
-	m := testMachine("node-a", roleWorker, nil)
-
-	_, _, err := Render(testCluster("true"), m, testBundle(t), []ichorv1alpha1.TalosConfigPatch{p}, nil)
-
-	const want = `kind "SysctlConfig" needs the field sysctlConfig alone, but the document sets config`
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("want the kind/field mismatch, got %v", err)
-	}
 }

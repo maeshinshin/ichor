@@ -17,8 +17,6 @@ limitations under the License.
 package render
 
 import (
-	"reflect"
-
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
@@ -28,7 +26,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // KubeProxyMode is the mode the Talos side of the kube-proxy split renders:
@@ -55,24 +52,11 @@ func kubeProxyOwned(cluster *ichorv1alpha1.TalosCluster) bool {
 // document, deep-copying only the patches that set it. The legacy block cannot coexist with the KubeProxyConfig
 // document a v1.14 contract renders, and the value is owned by injectKubeProxy now.
 func dropProxyDisabled(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
-	ordered = rewriteIchorConfigs(ordered,
+	return rewriteIchorConfigs(ordered,
 		func(c *ichorconfig.Config) bool {
 			return c.Cluster != nil && c.Cluster.Proxy != nil && c.Cluster.Proxy.Disabled != nil
 		},
 		func(c *ichorconfig.Config) { c.Cluster.Proxy.Disabled = nil })
-
-	return rewriteConfigs(ordered,
-		func(c *typedconfig.Config) bool {
-			return c.ClusterConfig != nil && c.ClusterConfig.ProxyConfig != nil && c.ClusterConfig.ProxyConfig.Disabled != nil
-		},
-		func(c *typedconfig.Config) {
-			cc := c.ClusterConfig
-			cc.ProxyConfig.Disabled = nil
-
-			if reflect.DeepEqual(*cc.ProxyConfig, typedconfig.ProxyConfig{}) {
-				cc.ProxyConfig = nil
-			}
-		})
 }
 
 // injectKubeProxy renders the Talos side of the kube-proxy split. "replaced" always renders

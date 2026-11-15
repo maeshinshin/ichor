@@ -77,31 +77,39 @@ func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchC
 	return &TalosConfigPatchCustomValidator{Client: c, SecretNamespace: dryRenderSecretNS}
 }
 
-func configPatch(name string, cfg *typedconfig.Config) *ichorv1alpha1.TalosConfigPatch {
+func configPatch(name string, cfg *ichorconfig.Config) *ichorv1alpha1.TalosConfigPatch {
 	return &ichorv1alpha1.TalosConfigPatch{
 		Name: name, Namespace: dryRenderNS,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: "c"},
 			Layer:      "cluster",
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: cfg}},
+			Config:     cfg,
 		},
 	}
+}
+
+// apiServerArgs is a setting of the API server, which a v1.14 machine takes in the KubeAPIServerConfig document.
+func apiServerArgs(k string) *ichorconfig.Config {
+	return &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{
+		ExtraArgs: map[string][]string{k: {"3"}},
+	}}}
+}
+
+func extraManifest() *ichorconfig.Config {
+	return &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ExtraManifests: map[string]*ichorconfig.ClusterExtraManifestsEntry{
+		"x": {Url: "https://example.invalid/x.yaml"},
+	}}}
 }
 
 func TestTalosConfigPatchDryRender(t *testing.T) {
 	ctx := context.Background()
 	v := dryRenderValidator(t)
 
-	t.Run("a v1alpha1 apiServer block under the multi-document contract is refused with the render error", func(t *testing.T) {
-		p := configPatch("api", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
-				ExtraArgsConfig: map[string][]string{"audit-log-maxage": {"3"}},
-			}},
-		})
+	t.Run("a patch that cannot render on a machine is refused with the render error", func(t *testing.T) {
+		p := configPatch("bad", badSetting())
 
 		_, err := v.ValidateCreate(ctx, p)
-		if err == nil || !strings.Contains(err.Error(), ".cluster.apiServer") || !strings.Contains(err.Error(), `"cp1"`) {
+		if err == nil || !strings.Contains(err.Error(), `"cp1"`) {
 			t.Fatalf("want the render error naming cp1, got %v", err)
 		}
 
@@ -110,24 +118,20 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 		}
 	})
 
-	t.Run("a sparse patch that renders is admitted", func(t *testing.T) {
-		p := configPatch("ok", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
-		})
+	t.Run("a setting of the API server is admitted under the multi-document contract", func(t *testing.T) {
+		if _, err := v.ValidateCreate(ctx, configPatch("api", apiServerArgs("audit-log-maxage"))); err != nil {
+			t.Fatalf("want admitted, got %v", err)
+		}
+	})
 
-		if _, err := v.ValidateCreate(ctx, p); err != nil {
+	t.Run("a sparse patch that renders is admitted", func(t *testing.T) {
+		if _, err := v.ValidateCreate(ctx, configPatch("ok", extraManifest())); err != nil {
 			t.Fatalf("want admitted, got %v", err)
 		}
 	})
 
 	t.Run("a patch that applies to no machine is admitted", func(t *testing.T) {
-		p := configPatch("none", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
-				ExtraArgsConfig: map[string][]string{"x": {"y"}},
-			}},
-		})
+		p := configPatch("none", badSetting())
 		p.Spec.Layer = "role"
 		p.Spec.Target = &ichorv1alpha1.TalosConfigPatchTarget{Role: "worker"}
 
@@ -137,20 +141,9 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 	})
 
 	t.Run("a machine that already fails to render does not block the patch", func(t *testing.T) {
-		broken := configPatch("broken", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
-				ExtraArgsConfig: map[string][]string{"x": {"y"}},
-			}},
-		})
-		v2 := dryRenderValidator(t, broken)
+		v2 := dryRenderValidator(t, configPatch("broken", badSetting()))
 
-		p := configPatch("fix", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
-		})
-
-		if _, err := v2.ValidateCreate(ctx, p); err != nil {
+		if _, err := v2.ValidateCreate(ctx, configPatch("fix", extraManifest())); err != nil {
 			t.Fatalf("want admitted, got %v", err)
 		}
 	})
@@ -159,23 +152,16 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 		v3 := dryRenderValidator(t)
 		v3.SecretNamespace = "elsewhere"
 
-		p := configPatch("nb", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
-				ExtraArgsConfig: map[string][]string{"x": {"y"}},
-			}},
-		})
-
-		if _, err := v3.ValidateCreate(ctx, p); err != nil {
+		if _, err := v3.ValidateCreate(ctx, configPatch("nb", badSetting())); err != nil {
 			t.Fatalf("want admitted, got %v", err)
 		}
 	})
 }
 
 func resolverPatch(name string, addrs ...string) *ichorv1alpha1.TalosConfigPatch {
-	r := &typedconfig.ResolverConfigV1Alpha1{}
+	n := &ichorconfig.MachineNetwork{}
 	for _, a := range addrs {
-		r.ResolverNameservers = append(r.ResolverNameservers, &typedconfig.NameserverConfig{Address: a})
+		n.Nameservers = append(n.Nameservers, &typedconfig.NameserverConfig{Address: a})
 	}
 
 	return &ichorv1alpha1.TalosConfigPatch{
@@ -183,7 +169,7 @@ func resolverPatch(name string, addrs ...string) *ichorv1alpha1.TalosConfigPatch
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: "c"},
 			Layer:      "cluster",
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "ResolverConfig", ResolverConfig: r}},
+			Config:     &ichorconfig.Config{Machine: &ichorconfig.Machine{Network: n}},
 		},
 	}
 }
@@ -223,81 +209,7 @@ func TestTalosConfigPatchResolverConfig(t *testing.T) {
 	})
 }
 
-// The CRD only bounds a document to kind plus one field; the webhook refuses the one whose field is not the
-// field kind names, naming the kind, the field it needs and the field it has.
-func TestTalosConfigPatchDocumentKindNamesItsField(t *testing.T) {
-	ctx := context.Background()
-	v := dryRenderValidator(t)
-
-	ok := ichorv1alpha1.TalosConfigPatchDocument{
-		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
-	}
-
-	for name, tc := range map[string]struct {
-		doc  ichorv1alpha1.TalosConfigPatchDocument
-		want string
-	}{
-		"another field is set": {
-			ichorv1alpha1.TalosConfigPatchDocument{Kind: "SysctlConfig", KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "btrfs"}},
-			`spec.documents[1]: kind "SysctlConfig" needs the field sysctlConfig alone, but the document sets kernelModuleConfig`,
-		},
-		"no field is set": {
-			ichorv1alpha1.TalosConfigPatchDocument{Kind: "KernelModuleConfig"},
-			`spec.documents[1]: kind "KernelModuleConfig" needs the field kernelModuleConfig, but the document sets no field`,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			p := configPatch("p", nil)
-			p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{ok, tc.doc}
-
-			if _, err := v.ValidateCreate(ctx, p); err == nil || err.Error() != tc.want {
-				t.Errorf("create: want %q, got %v", tc.want, err)
-			}
-
-			good := configPatch("p", nil)
-			good.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{ok, ok}
-
-			if _, err := v.ValidateUpdate(ctx, good, p); err == nil || err.Error() != tc.want {
-				t.Errorf("update: want %q, got %v", tc.want, err)
-			}
-		})
-	}
-
-	p := configPatch("p", nil)
-	p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{ok}
-
-	if _, err := v.ValidateCreate(ctx, p); err != nil {
-		t.Errorf("a document whose kind names its field was refused: %v", err)
-	}
-}
-
-// A patch that sets spec.documents and spec.config writes one setting two ways: the webhook refuses it, and
-// the message names both fields.
-func TestTalosConfigPatchRefusesDocumentsAndConfigTogether(t *testing.T) {
-	ctx := context.Background()
-	v := dryRenderValidator(t)
-
-	p := configPatch("p", nil)
-	p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
-		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
-	}}
-	p.Spec.Config = &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.ipv4.ip_forward": "1"}}}
-
-	for name, call := range map[string]func() error{
-		"create": func() error { _, err := v.ValidateCreate(ctx, p); return err },
-		"update": func() error { _, err := v.ValidateUpdate(ctx, configPatch("p", nil), p); return err },
-	} {
-		err := call()
-		if err == nil || !strings.Contains(err.Error(), "spec.documents") || !strings.Contains(err.Error(), "spec.config") {
-			t.Errorf("%s: want a refusal naming spec.documents and spec.config, got %v", name, err)
-		}
-	}
-
-	only := configPatch("p", nil)
-	only.Spec.Documents = nil
-	only.Spec.Config = p.Spec.Config
-
-	if _, err := v.ValidateCreate(ctx, only); err != nil {
-		t.Errorf("a patch with spec.config alone was refused: %v", err)
-	}
+// badSetting is a setting Talos refuses when it validates the rendered configuration.
+func badSetting() *ichorconfig.Config {
+	return &ichorconfig.Config{Machine: &ichorconfig.Machine{Kubelet: &ichorconfig.MachineKubelet{Image: "!!"}}}
 }

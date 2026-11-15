@@ -29,6 +29,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -57,16 +58,16 @@ func newRolloutFixtureFor(role string) *rolloutFixture {
 
 	dhcp := true
 	cfg := skeletonFor(role)
-	cfg.MachineConfig.MachineNetwork = &typedconfig.NetworkConfig{
-		NetworkInterfaces: []*typedconfig.Device{{DeviceInterface: "eth0", DeviceDHCP: &dhcp}},
+	cfg.Machine.Network = &ichorconfig.MachineNetwork{
+		Interfaces: []*typedconfig.Device{{DeviceInterface: "eth0", DeviceDHCP: &dhcp}},
 	}
 
 	return &rolloutFixture{cluster: cluster, bundle: bundle, role: role, desired: newTestPatch(cluster.Name, layerCluster, nil, cfg)}
 }
 
-func skeletonFor(role string) *typedconfig.Config {
+func skeletonFor(role string) *ichorconfig.Config {
 	cfg := minimalConfigSkeleton()
-	cfg.MachineConfig.MachineType = role
+	cfg.Machine.Type = role
 
 	return cfg
 }

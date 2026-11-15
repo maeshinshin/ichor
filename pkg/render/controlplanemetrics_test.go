@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -115,12 +116,9 @@ func TestControlPlaneMetrics(t *testing.T) {
 	})
 
 	t.Run("a Config patch can still override etcd's argument (system layer)", func(t *testing.T) {
-		patch := configPatch("narrow", &typedconfig.Config{
-			ConfigVersion: configVersionV1Alpha1,
-			ClusterConfig: &typedconfig.ClusterConfig{EtcdConfig: &typedconfig.EtcdConfig{
-				EtcdExtraArgs: map[string][]string{"listen-metrics-urls": {"http://127.0.0.1:2381"}},
-			}},
-		})
+		patch := configPatch("narrow", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{Etcd: &typedconfig.EtcdConfig{
+			EtcdExtraArgs: map[string][]string{"listen-metrics-urls": {"http://127.0.0.1:2381"}},
+		}}})
 
 		out := mustRender(t, metricsCluster(true, metricsCIDR), cp, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
 		if !strings.Contains(out, "listen-metrics-urls: http://127.0.0.1:2381") || strings.Contains(out, metricsEtcdArg) {

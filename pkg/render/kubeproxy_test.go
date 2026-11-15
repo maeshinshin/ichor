@@ -23,7 +23,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 // proxyDisabledPatch is what `ichor init` writes for a cluster created with kubeProxy replaced:
@@ -31,10 +31,7 @@ import (
 func proxyDisabledPatch() ichorv1alpha1.TalosConfigPatch {
 	disabled := true
 
-	return configPatch("cni-proxy", &typedconfig.Config{
-		ConfigVersion: configVersionV1Alpha1,
-		ClusterConfig: &typedconfig.ClusterConfig{ProxyConfig: &typedconfig.ProxyConfig{Disabled: &disabled}},
-	})
+	return configPatch("cni-proxy", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{Proxy: &ichorconfig.ClusterProxy{Disabled: &disabled}}})
 }
 
 // TestKubeProxyModeIsRenderedByIchor checks: the Talos side follows status.cni.kubeProxy

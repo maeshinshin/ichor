@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 const (
@@ -329,24 +329,20 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	bundle := testBundle(t)
 	on := true
 
-	patch := configPatch("api-access", &typedconfig.Config{
-		ConfigVersion: configVersionV1Alpha1,
-		MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
-			KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
-				AccessEnabled: &on, AccessAllowedRoles: []string{"os:reader"},
-				AccessAllowedKubernetesNamespaces: []string{"ops"},
-			},
-		}},
-	})
+	patch := configPatch("api-access", &ichorconfig.Config{Machine: &ichorconfig.Machine{Features: &ichorconfig.MachineFeatures{
+		KubernetesTalosAPIAccess: &ichorconfig.MachineFeaturesKubernetesTalosAPIAccess{
+			Enabled: &on, AllowedRoles: []string{"os:reader"}, AllowedKubernetesNamespaces: []string{"ops"},
+		},
+	}}})
 	patches := []ichorv1alpha1.TalosConfigPatch{patch}
 
 	cp := mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, patches)
-	requireAll(t, cp, "kubernetesTalosAPIAccess")
+	requireAll(t, cp, "KubeTalosAPIAccessConfig")
 
 	requireNone(t, mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, patches),
-		"kubernetesTalosAPIAccess")
+		"KubeTalosAPIAccessConfig")
 
-	if patches[0].Spec.Documents[0].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig == nil {
+	if patches[0].Spec.Config.Machine.Features.KubernetesTalosAPIAccess == nil {
 		t.Error("the caller's patch was modified")
 	}
 }

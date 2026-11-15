@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -47,7 +48,9 @@ import (
 // deploy installs rather than a copy that could drift from it.
 var (
 	k8sClient client.Client
-	testEnv   *envtest.Environment
+	// strictClient refuses a field the schema does not have, as kubectl and every Ichor client do.
+	strictClient client.Client
+	testEnv      *envtest.Environment
 )
 
 // admissionPolicyPath is config/admission/kubeproxy-switch-policy.yaml, loaded as-is so this
@@ -146,6 +149,9 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: testScheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	strictClient, err = client.New(cfg, client.Options{Scheme: testScheme, FieldValidation: metav1.FieldValidationStrict})
+	Expect(err).NotTo(HaveOccurred())
 
 	installAdmissionPolicy(k8sClient, admissionPolicyPath)
 	awaitKubeProxyPolicyEnforced()

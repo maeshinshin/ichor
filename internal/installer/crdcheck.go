@@ -55,6 +55,9 @@ var retiredFields = []retiredField{
 	// ADR 0152, amended: TalosClusters embedded the same union in the deprecated spec.cni.custom.documents, a second
 	// copy that nothing rendered; it is retired whole, which covers the two credential paths under it.
 	{crd: talosClustersCRD, path: "spec.cni.custom.documents"},
+	// ADR 0152, amended again: spec.config is the one place a TalosConfigPatch carries Talos configuration, so its
+	// spec.documents is retired.
+	{crd: talosConfigPatchesCRD, path: "spec.documents"},
 }
 
 // checkAdditive refuses a target CRD that would take something away from the live one: a

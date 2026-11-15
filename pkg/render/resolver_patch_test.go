@@ -23,13 +23,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 func resolverPatch(name string, addrs ...string) ichorv1alpha1.TalosConfigPatch {
-	r := &typedconfig.ResolverConfigV1Alpha1{}
+	n := &ichorconfig.MachineNetwork{}
 	for _, a := range addrs {
-		r.ResolverNameservers = append(r.ResolverNameservers, &typedconfig.NameserverConfig{Address: a})
+		n.Nameservers = append(n.Nameservers, &typedconfig.NameserverConfig{Address: a})
 	}
 
 	return ichorv1alpha1.TalosConfigPatch{
@@ -37,7 +38,7 @@ func resolverPatch(name string, addrs ...string) ichorv1alpha1.TalosConfigPatch 
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
 			Layer:      layerCluster,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "ResolverConfig", ResolverConfig: r}},
+			Config:     &ichorconfig.Config{Machine: &ichorconfig.Machine{Network: n}},
 		},
 	}
 }

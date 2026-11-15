@@ -58,8 +58,8 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 	installDiskPatch := func(role string) {
 		wipe := false
 		cfg := minimalConfigSkeleton()
-		cfg.MachineConfig.MachineType = role
-		cfg.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: provDisk, InstallWipe: &wipe}
+		cfg.Machine.Type = role
+		cfg.Machine.Install = &typedconfig.InstallConfig{InstallDisk: provDisk, InstallWipe: &wipe}
 		patch = newTestPatch(cluster.Name, layerCluster, nil, cfg)
 	}
 

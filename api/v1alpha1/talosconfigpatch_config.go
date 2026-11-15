@@ -39,25 +39,16 @@ const ichorTag = "ichor"
 // configKind is the kind of the v1alpha1 document in a TalosConfigPatchDocument.
 const configKind = "Config"
 
-// EffectiveDocuments returns the Talos documents this patch carries: its spec.documents, or spec.config converted. A
-// patch that sets both is refused, because the same setting could then be written twice. multidoc says
+// EffectiveDocuments returns the Talos documents this patch carries: spec.config converted. multidoc says
 // whether the machines the patch applies to take the documents Talos 1.14 added for the Kubernetes
 // components; when they do not, those settings are written into the v1alpha1 document instead.
 func (s *TalosConfigPatchSpec) EffectiveDocuments(multidoc bool) ([]TalosConfigPatchDocument, error) {
-	if len(s.Documents) > 0 && s.Config != nil {
-		return nil, ErrDocumentsAndConfig
-	}
-
 	if s.Config == nil {
-		return s.Documents, nil
+		return nil, nil
 	}
 
 	return ConvertConfig(s.Config, multidoc)
 }
-
-// ErrDocumentsAndConfig is the refusal of a patch that sets spec.documents and spec.config.
-var ErrDocumentsAndConfig = fmt.Errorf("spec.documents and spec.config are both set: a patch sets one of them, because " +
-	"the same setting could be written in both; spec.documents is deprecated, move its settings to spec.config")
 
 type instance struct {
 	kind, name string
@@ -106,7 +97,7 @@ func ConvertConfig(c *ichorconfig.Config, multidoc bool) ([]TalosConfigPatchDocu
 }
 
 // document builds the union entry of one instance by decoding its tree into the mirror type of its kind, the
-// same type a spec.documents entry of that kind is read into, so that nothing the mirror does not carry passes.
+// same type a Talos document of that kind is read into, so that nothing the mirror does not carry passes.
 func (cv *converter) document(k instance) (TalosConfigPatchDocument, error) {
 	key, ok := TalosConfigPatchDocumentFieldKey(k.kind)
 	if !ok {
@@ -168,7 +159,7 @@ func parseSinks(tag string) []sinkOf {
 // choose picks the sinks a setting is written to. A document that spells the setting wins over the v1alpha1
 // document, which cannot hold the same setting as a document of its own: Talos refuses both. Where the machine
 // does not take the Kubernetes documents, the v1alpha1 spelling is the only one.
-func (cv *converter) choose(sinks []sinkOf, where string, v reflect.Value) ([]sinkOf, error) {
+func (cv *converter) choose(sinks []sinkOf, where string, v reflect.Value, switchedOff bool) ([]sinkOf, error) {
 	var docs, cfg, pres []sinkOf
 
 	for _, s := range sinks {
@@ -188,6 +179,11 @@ func (cv *converter) choose(sinks []sinkOf, where string, v reflect.Value) ([]si
 		return pres, nil
 	}
 
+	// A document that is switched off has no document to hold its other settings: the v1alpha1 spelling holds them all.
+	if len(cfg) > 0 && switchedOff {
+		return cfg, nil
+	}
+
 	if len(docs) > 0 {
 		return docs, nil
 	}
@@ -197,6 +193,21 @@ func (cv *converter) choose(sinks []sinkOf, where string, v reflect.Value) ([]si
 	}
 
 	return nil, fmt.Errorf("spec.config.%s needs a machine on a Talos version that takes the %s document (Talos 1.14 and later)", where, sinks[0].kind)
+}
+
+// hasSwitchedOff reports whether an object of the schema sets a presence setting to false.
+func hasSwitchedOff(v reflect.Value) bool {
+	for i := range v.NumField() {
+		if !strings.Contains(v.Type().Field(i).Tag.Get(ichorTag), "+") {
+			continue
+		}
+
+		if f := v.Field(i); !isEmpty(f) && !isTrue(f) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isTrue(v reflect.Value) bool {
@@ -238,6 +249,7 @@ func (cv *converter) walk(v reflect.Value, entries map[string]instance) error {
 
 func (cv *converter) walkAt(v reflect.Value, entries map[string]instance, at string) error {
 	t := v.Type()
+	switchedOff := hasSwitchedOff(v)
 
 	for i := range t.NumField() {
 		f := t.Field(i)
@@ -269,7 +281,7 @@ func (cv *converter) walkAt(v reflect.Value, entries map[string]instance, at str
 				return fmt.Errorf("spec.config.%s has no destination in a Talos document", where)
 			}
 
-			sinks, err := cv.choose(parseSinks(tag), where, fv)
+			sinks, err := cv.choose(parseSinks(tag), where, fv, switchedOff)
 			if err != nil {
 				return err
 			}
@@ -302,7 +314,23 @@ func (cv *converter) entries(coll reflect.Value, kind, where string) error {
 			tree["name"] = name
 		}
 
-		return cv.walkAt(item, map[string]instance{kind: inst}, at)
+		// Where the machine takes no Kubernetes document, the entry is built as its document and moved into
+		// the v1alpha1 document.
+		legacy := !cv.multidoc && TalosConfigPatchDocumentIsKubernetes(kind)
+		if legacy {
+			cv.multidoc = true
+		}
+
+		err := cv.walkAt(item, map[string]instance{kind: inst}, at)
+		if legacy {
+			cv.multidoc = false
+		}
+
+		if err != nil || !legacy {
+			return err
+		}
+
+		return cv.intoConfig(inst, at)
 	}
 
 	if coll.Kind() == reflect.Map {
@@ -328,6 +356,47 @@ func (cv *converter) entries(coll reflect.Value, kind, where string) error {
 	}
 
 	return nil
+}
+
+// intoConfig moves a Kubernetes document the machine cannot take into the v1alpha1 document, for the two
+// kinds that document has a list for; any other kind needs Talos 1.14.
+func (cv *converter) intoConfig(inst instance, where string) error {
+	tree := cv.trees[inst]
+	delete(cv.trees, inst)
+
+	var path string
+
+	var item any
+
+	switch inst.kind {
+	case "KubeInlineManifestConfig":
+		path, item = "cluster.inlineManifests", map[string]any{"name": inst.name, "contents": tree["manifest"]}
+	case "KubeExternalManifestConfig":
+		path, item = "cluster.extraManifests", tree["url"]
+	default:
+		return fmt.Errorf("spec.config.%s needs a machine on a Talos version that takes the %s document (Talos 1.14 and later)", where, inst.kind)
+	}
+
+	cfg := cv.tree(instance{kind: configKind})
+	list, _ := getPath(cfg, path).([]any)
+	setPath(cfg, path, append(list, item))
+
+	return nil
+}
+
+func getPath(tree map[string]any, path string) any {
+	var cur any = tree
+
+	for _, p := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+
+		cur = m[p]
+	}
+
+	return cur
 }
 
 func (cv *converter) tree(i instance) map[string]any {

@@ -29,24 +29,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // Shared literals, hoisted so they aren't repeated across the table entries below (goconst).
 const (
-	testNamespace        = "default"
-	literalCluster       = "cluster"
-	literalControlPlane  = "controlplane"
-	literalWorker        = "worker"
-	literalSecrets       = "secrets"
-	literalConfigVersion = "v1alpha1"
-	literalGenerateName  = "patch-"
-	literalNodeIP        = "10.0.0.10"
-	literalKindKey       = "kind"
-
-	kindSysctlConfig       = "SysctlConfig"
-	kindKernelModuleConfig = "KernelModuleConfig"
-	kindConfig             = "Config"
+	testNamespace       = "default"
+	literalCluster      = "cluster"
+	literalControlPlane = "controlplane"
+	literalWorker       = "worker"
+	literalSecrets      = "secrets"
+	literalGenerateName = "patch-"
+	literalNodeIP       = "10.0.0.10"
+	literalKindKey      = "kind"
 
 	cniPresetFlannel   = "flannel"
 	cniPresetCilium    = "cilium"
@@ -110,19 +106,6 @@ var _ = Describe("TalosConfigPatch", func() {
 	)
 })
 
-// minimalConfig is the smallest typedconfig.Config that satisfies the required fields down the
-// one branch (machine, cluster) the discrimination tests touch.
-func minimalConfig() *typedconfig.Config {
-	return &typedconfig.Config{
-		ConfigVersion: literalConfigVersion,
-		MachineConfig: &typedconfig.MachineConfig{
-			MachineType:     literalControlPlane,
-			MachineCertSANs: []string{literalNodeIP},
-		},
-		ClusterConfig: &typedconfig.ClusterConfig{},
-	}
-}
-
 func minimalSysctlConfig() *typedconfig.SysctlConfigV1Alpha1 {
 	return &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}}
 }
@@ -131,143 +114,111 @@ func minimalKernelModuleConfig() *typedconfig.KernelModuleConfigV1Alpha1 {
 	return &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "btrfs"}
 }
 
-func newConfigPatchWithDocument(doc TalosConfigPatchDocument) *TalosConfigPatch {
+func newConfigPatchWithConfig(c *ichorconfig.Config) *TalosConfigPatch {
 	return &TalosConfigPatch{
 		GenerateName: literalGenerateName,
 		Namespace:    testNamespace,
 		Spec: TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: literalCluster},
 			Layer:      literalCluster,
-			Documents:  []TalosConfigPatchDocument{doc},
+			Config:     c,
 		},
 	}
 }
 
-var _ = Describe("TalosConfigPatchDocument", func() {
-	DescribeTable("accepted documents",
-		func(doc TalosConfigPatchDocument) {
-			Expect(k8sClient.Create(context.Background(), newConfigPatchWithDocument(doc))).To(Succeed())
+// patchWithDocuments is a TalosConfigPatch as it was written before spec.documents was removed.
+func patchWithDocuments() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion":   GroupVersion.String(),
+		literalKindKey: "TalosConfigPatch",
+		"metadata":     map[string]any{"generateName": literalGenerateName, "namespace": testNamespace},
+		"spec": map[string]any{
+			"clusterRef": map[string]any{"name": literalCluster},
+			"layer":      literalCluster,
+			"documents": []any{map[string]any{
+				literalKindKey: "SysctlConfig",
+				"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
+			}},
 		},
-		Entry("SysctlConfig with sysctlConfig populated", TalosConfigPatchDocument{
-			Kind:         kindSysctlConfig,
-			SysctlConfig: minimalSysctlConfig(),
+	}}
+}
+
+var _ = Describe("TalosConfigPatch spec.config", func() {
+	DescribeTable("accepted settings",
+		func(c *ichorconfig.Config) {
+			Expect(k8sClient.Create(context.Background(), newConfigPatchWithConfig(c))).To(Succeed())
+		},
+		Entry("a setting a document of its own spells", &ichorconfig.Config{
+			Machine: &ichorconfig.Machine{Sysctls: minimalSysctlConfig().Params},
 		}),
-		Entry("KernelModuleConfig with kernelModuleConfig populated", TalosConfigPatchDocument{
-			Kind:               kindKernelModuleConfig,
-			KernelModuleConfig: minimalKernelModuleConfig(),
+		Entry("a collection of named documents", &ichorconfig.Config{
+			Machine: &ichorconfig.Machine{Kernel: &ichorconfig.MachineKernel{
+				Modules: map[string]*ichorconfig.MachineKernelModulesEntry{minimalKernelModuleConfig().MetaName: {}},
+			}},
 		}),
-		Entry("Config with config populated", TalosConfigPatchDocument{
-			Kind:   kindConfig,
-			Config: minimalConfig(),
+		Entry("a setting of the v1alpha1 document", &ichorconfig.Config{
+			Machine: &ichorconfig.Machine{Type: literalControlPlane, CertSANs: []string{literalNodeIP}},
 		}),
 	)
 
-	DescribeTable("rejected documents",
-		func(doc TalosConfigPatchDocument) {
-			Expect(k8sClient.Create(context.Background(), newConfigPatchWithDocument(doc))).NotTo(Succeed())
-		},
-		Entry("two fields populated", TalosConfigPatchDocument{
-			Kind:               kindSysctlConfig,
-			SysctlConfig:       minimalSysctlConfig(),
-			KernelModuleConfig: minimalKernelModuleConfig(),
-		}),
-		Entry("no field populated", TalosConfigPatchDocument{
-			Kind: kindSysctlConfig,
-		}),
-		Entry("kind outside the allow-list", TalosConfigPatchDocument{
-			Kind:         "NetworkRuleConfig",
-			SysctlConfig: minimalSysctlConfig(),
-		}),
-	)
+	It("rejects a setting the schema does not have", func() {
+		u := patchWithDocuments()
+		Expect(unstructured.SetNestedMap(u.Object, map[string]any{"machine": map[string]any{"noSuchSetting": "x"}}, "spec", "config")).To(Succeed())
+		delete(u.Object["spec"].(map[string]any), "documents") //nolint:forcetypeassert
 
-	// The schema bounds a document to kind plus one field (minProperties and maxProperties 2); that the
-	// field is the one kind names is Validate's, which the webhook and the renderer call.
-	DescribeTable("a document the schema admits but Validate refuses, naming the kind and the fields",
-		func(doc TalosConfigPatchDocument, kind, populated string) {
-			Expect(k8sClient.Create(context.Background(), newConfigPatchWithDocument(doc))).To(Succeed())
-			Expect(doc.Validate()).To(MatchError(And(ContainSubstring(kind), ContainSubstring(populated))))
-		},
-		Entry("kind SysctlConfig with config populated instead", TalosConfigPatchDocument{
-			Kind:   kindSysctlConfig,
-			Config: minimalConfig(),
-		}, kindSysctlConfig, "config"),
-		Entry("kind KernelModuleConfig with sysctlConfig populated instead", TalosConfigPatchDocument{
-			Kind:         kindKernelModuleConfig,
-			SysctlConfig: minimalSysctlConfig(),
-		}, kindKernelModuleConfig, "sysctlConfig"),
-		Entry("kind Config with kernelModuleConfig populated instead", TalosConfigPatchDocument{
-			Kind:               kindConfig,
-			KernelModuleConfig: minimalKernelModuleConfig(),
-		}, kindConfig, "kernelModuleConfig"),
-	)
+		Expect(strictClient.Create(context.Background(), u)).NotTo(Succeed())
+	})
 
-	It("round-trips a non-trivial Config document through the API server", func() {
-		want := &typedconfig.Config{
-			ConfigVersion: literalConfigVersion,
-			MachineConfig: &typedconfig.MachineConfig{
-				MachineType:     literalControlPlane,
-				MachineCertSANs: []string{literalNodeIP, "203.0.113.10"},
-				// MachineInstall and MachineKubelet are deprecated in favor of multi-document
-				// config kinds outside the phase 2 allow-list; they are still how a
-				// disk selector and extraArgs reach v1alpha1.Config today.
-				MachineInstall: &typedconfig.InstallConfig{
-					InstallDiskSelector: &typedconfig.InstallDiskSelector{
-						Model: "QEMU HARDDISK",
-						Type:  "ssd",
-					},
-					InstallImage: "factory.talos.dev/metal-installer/abc123:latest",
-					InstallWipe:  ptr.To(true),
+	// spec.documents is gone from the CRD. A client that asks for strict field validation, as kubectl does and
+	// as every Ichor client does, is refused; one that does not has the field pruned, and the object keeps no trace of it.
+	It("refuses an object that still sets spec.documents as an unknown field", func() {
+		err := strictClient.Create(context.Background(), patchWithDocuments())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(And(ContainSubstring("spec.documents"), ContainSubstring("unknown field")))
+	})
+
+	It("prunes spec.documents from an object written without strict validation", func() {
+		u := patchWithDocuments()
+		Expect(k8sClient.Create(context.Background(), u)).To(Succeed())
+
+		readBack := &unstructured.Unstructured{}
+		readBack.SetGroupVersionKind(u.GroupVersionKind())
+		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: u.GetName(), Namespace: u.GetNamespace()}, readBack)).To(Succeed())
+
+		_, found, err := unstructured.NestedFieldNoCopy(readBack.Object, "spec", "documents")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeFalse())
+	})
+
+	It("round-trips a non-trivial config through the API server", func() {
+		want := &ichorconfig.Config{
+			Machine: &ichorconfig.Machine{
+				Type:     literalControlPlane,
+				CertSANs: []string{literalNodeIP, "203.0.113.10"},
+				Install: &typedconfig.InstallConfig{
+					InstallDiskSelector: &typedconfig.InstallDiskSelector{Model: "QEMU HARDDISK", Type: "ssd"},
+					InstallImage:        "factory.talos.dev/metal-installer/abc123:latest",
+					InstallWipe:         ptr.To(true),
 				},
-				MachineKubelet: &typedconfig.KubeletConfig{
-					KubeletExtraArgs: map[string][]string{
-						"node-labels": {"foo=bar", "baz=qux"},
-					},
-				},
+				Kubelet: &ichorconfig.MachineKubelet{ExtraArgs: map[string][]string{"node-labels": {"foo=bar", "baz=qux"}}},
+				Sysctls: map[string]string{"net.ipv4.ip_forward": "1"},
 			},
-			ClusterConfig: &typedconfig.ClusterConfig{
-				ClusterName: "test-cluster",
-				ControlPlane: &typedconfig.ControlPlaneConfig{
-					Endpoint:           ptr.To("https://10.0.0.1:6443"),
-					LocalAPIServerPort: 6443,
-				},
-			},
+			Cluster: &ichorconfig.Cluster{ClusterName: "test-cluster"},
 		}
 
-		created := newConfigPatchWithDocument(TalosConfigPatchDocument{Kind: kindConfig, Config: want})
+		created := newConfigPatchWithConfig(want)
 		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
 
 		readBack := &TalosConfigPatch{}
 		key := types.NamespacedName{Name: created.Name, Namespace: created.Namespace}
 		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
 
-		Expect(readBack.Spec.Documents).To(HaveLen(1))
-		Expect(readBack.Spec.Documents[0].Kind).To(Equal(kindConfig))
-
-		wantMachinery, err := want.ToMachinery()
-		Expect(err).NotTo(HaveOccurred())
-
-		gotMachinery, err := readBack.Spec.Documents[0].Config.ToMachinery()
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(gotMachinery).To(Equal(wantMachinery))
+		Expect(readBack.Spec.Config).To(Equal(want))
 	})
 
-	// PENDING: mirrorgen's secretFields table (internal/tools/mirrorgen/main.go)
-	// correctly removes all nine secret-carrying fields from the CRD schema --
-	// verified below by reading the object back and confirming none of the
-	// nine survived. What is NOT yet confirmed is the acceptance criterion as
-	// literally stated ("the API server rejects it, not structural-schema
-	// pruning"): measured against this envtest apiserver, a plain
-	// client.Create with no fieldValidation option set PRUNES unknown fields
-	// (logs "unknown field ..." and a nil error) rather than rejecting the
-	// request. That is a kubectl/client-side opt-in
-	// (metav1.CreateOptions.FieldValidation=Strict), not something a CRD
-	// schema can force on every caller by itself; the standard way to force
-	// rejection server-side is a validating admission webhook, which is
-	// outside this change's scope (internal/webhook/ is excluded). This is
-	// flagged back to the coordinator rather than silently asserted either
-	// way -- see the task report.
-	It("drops all nine secret fields from a Config document, however it arrives", func() {
+	// The secrets bundle generates the values below, and a patch must not be able to overwrite them: the schema has
+	// no field for any of the nine, so they cannot be written however the object arrives.
+	It("drops all nine secret fields, however the object arrives", func() {
 		caPair := map[string]any{"crt": "Y2EtY2VydA==", "key": "Y2Eta2V5"}
 
 		u := &unstructured.Unstructured{
@@ -281,36 +232,30 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 				"spec": map[string]any{
 					"clusterRef": map[string]any{"name": literalCluster},
 					"layer":      literalCluster,
-					"documents": []any{
-						map[string]any{
-							literalKindKey: kindConfig,
-							"config": map[string]any{
-								"version": literalConfigVersion,
-								"machine": map[string]any{
-									"type":     literalControlPlane,
-									"certSANs": []any{literalNodeIP},
-									// The two MachineConfig secret fields.
-									"token": "328hom.uqjzh6jnn2eie9oi",
-									"ca":    caPair,
-								},
-								"cluster": map[string]any{
-									// The six ClusterConfig secret fields, plus
-									// EtcdConfig.RootCA nested under "etcd".
-									"secret":                 "cluster-secret",
-									"token":                  "wlzjyw.bei2zfylhs2by0wd",
-									"aescbcEncryptionSecret": "aescbc-secret",
-									"ca":                     caPair,
-									"aggregatorCA":           caPair,
-									"serviceAccount":         map[string]any{"key": "c2Eta2V5"},
-									"etcd":                   map[string]any{"ca": caPair},
-								},
-							},
+					"config": map[string]any{
+						"machine": map[string]any{
+							"type":     literalControlPlane,
+							"certSANs": []any{literalNodeIP},
+							// The two MachineConfig secret fields.
+							"token": "328hom.uqjzh6jnn2eie9oi",
+							"ca":    caPair,
+						},
+						"cluster": map[string]any{
+							// The six ClusterConfig secret fields, plus EtcdConfig.RootCA nested under "etcd".
+							"secret":                 "cluster-secret",
+							"token":                  "wlzjyw.bei2zfylhs2by0wd",
+							"aescbcEncryptionSecret": "aescbc-secret",
+							"ca":                     caPair,
+							"aggregatorCA":           caPair,
+							"serviceAccount":         map[string]any{"key": "c2Eta2V5"},
+							"etcd":                   map[string]any{"ca": caPair},
 						},
 					},
 				},
 			},
 		}
 
+		Expect(strictClient.Create(context.Background(), u.DeepCopy())).NotTo(Succeed())
 		Expect(k8sClient.Create(context.Background(), u)).To(Succeed())
 
 		readBack := &unstructured.Unstructured{}
@@ -318,19 +263,12 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 		key := types.NamespacedName{Name: u.GetName(), Namespace: u.GetNamespace()}
 		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
 
-		documents, _, err := unstructured.NestedSlice(readBack.Object, "spec", "documents")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(documents).To(HaveLen(1))
-
-		doc, ok := documents[0].(map[string]any) //nolint:forcetypeassert
-		Expect(ok).To(BeTrue())
-
-		machine, _, err := unstructured.NestedMap(doc, "config", "machine")
+		machine, _, err := unstructured.NestedMap(readBack.Object, "spec", "config", "machine")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(machine).NotTo(HaveKey("token"))
 		Expect(machine).NotTo(HaveKey("ca"))
 
-		cluster, _, err := unstructured.NestedMap(doc, "config", "cluster")
+		cluster, _, err := unstructured.NestedMap(readBack.Object, "spec", "config", "cluster")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cluster).NotTo(HaveKey("secret"))
 		Expect(cluster).NotTo(HaveKey("token"))
@@ -338,10 +276,32 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 		Expect(cluster).NotTo(HaveKey("ca"))
 		Expect(cluster).NotTo(HaveKey("aggregatorCA"))
 		Expect(cluster).NotTo(HaveKey("serviceAccount"))
+
 		if etcd, found, _ := unstructured.NestedMap(cluster, "etcd"); found { //nolint:errcheck
 			Expect(etcd).NotTo(HaveKey("ca"))
 		}
 	})
+})
+
+// TalosConfigPatchDocument is no longer a field of the CRD, but the type is what spec.config converts through.
+var _ = Describe("TalosConfigPatchDocument", func() {
+	DescribeTable("a document whose kind and field disagree, naming the kind and the fields",
+		func(doc TalosConfigPatchDocument, kind, populated string) {
+			Expect(doc.Validate()).To(MatchError(And(ContainSubstring(kind), ContainSubstring(populated))))
+		},
+		Entry("kind SysctlConfig with kernelModuleConfig populated instead", TalosConfigPatchDocument{
+			Kind:               "SysctlConfig",
+			KernelModuleConfig: minimalKernelModuleConfig(),
+		}, "SysctlConfig", "kernelModuleConfig"),
+		Entry("kind KernelModuleConfig with sysctlConfig populated instead", TalosConfigPatchDocument{
+			Kind:         "KernelModuleConfig",
+			SysctlConfig: minimalSysctlConfig(),
+		}, "KernelModuleConfig", "sysctlConfig"),
+		Entry("kind Config with kernelModuleConfig populated instead", TalosConfigPatchDocument{
+			Kind:               "Config",
+			KernelModuleConfig: minimalKernelModuleConfig(),
+		}, "Config", "kernelModuleConfig"),
+	)
 })
 
 func newCluster(secretsRef corev1.LocalObjectReference, count int32, schedulable string) *TalosCluster {

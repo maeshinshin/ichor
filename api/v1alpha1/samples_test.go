@@ -31,7 +31,7 @@ import (
 
 // samplesDir is config/samples: not a resource of config/default (CONTRIBUTING.md's chart
 // warning has a cousin here -- nothing applies this directory for real), so it exists purely as
-// copy-pasteable documentation. It is most load-bearing for TalosConfigPatch.spec.documents[],
+// copy-pasteable documentation. It is most load-bearing for TalosConfigPatch.spec.config,
 // the one API in this project hardest to guess the shape of from the CRD schema alone, which is
 // exactly why a kubebuilder-scaffolded "# TODO(user): Add fields here" placeholder here is worse
 // than no sample at all: it fails for the first person who copies it, and the failure looks like
@@ -66,7 +66,8 @@ var _ = Describe("config/samples", func() {
 				obj.SetNamespace(testNamespace)
 			}
 
-			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed(),
+			// Strict, so that a field the schema no longer has is an error and not pruned away.
+			Expect(strictClient.Create(context.Background(), obj)).To(Succeed(),
 				"config/samples/%s must apply as committed -- it is documentation, not a placeholder "+
 					"for the reader to fill in", name)
 		})

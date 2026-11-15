@@ -1681,13 +1681,6 @@ func (in *TalosConfigPatchSpec) DeepCopyInto(out *TalosConfigPatchSpec) {
 		*out = new(TalosConfigPatchTarget)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Documents != nil {
-		in, out := &in.Documents, &out.Documents
-		*out = make([]TalosConfigPatchDocument, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	if in.Config != nil {
 		in, out := &in.Config, &out.Config
 		*out = new(ichorconfig.Config)

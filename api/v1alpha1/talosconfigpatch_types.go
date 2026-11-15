@@ -65,15 +65,9 @@ type TalosConfigPatchSpec struct {
 	// +optional
 	Target *TalosConfigPatchTarget `json:"target,omitempty"`
 
-	// documents holds the Talos config documents this patch applies, restricted to an allow-list of kinds.
-	// Deprecated: write the settings in config, which spells each setting once. A patch sets documents or
-	// config, not both.
-	// +optional
-	Documents []TalosConfigPatchDocument `json:"documents,omitempty"`
-
 	// config holds the settings this patch applies in Ichor's own schema: one object with a machine and a
 	// cluster section, each setting written once. The controller converts it to Talos documents when it
-	// applies it. A patch sets config or documents, not both.
+	// applies it. It is the only place a patch carries Talos configuration.
 	// +optional
 	Config *ichorconfig.Config `json:"config,omitempty"`
 }

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -295,7 +296,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 		disabled := true
 		desired := minimalConfigSkeleton()
-		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+		desired.Cluster.Proxy = &ichorconfig.ClusterProxy{Disabled: &disabled}
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current}
@@ -311,7 +312,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		current := renderWithConfig(cluster, m, bundle, "machine", target, minimalConfigSkeleton())
 		desired := minimalConfigSkeleton()
 		wipe := true
-		desired.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: "/dev/sdb", InstallWipe: &wipe}
+		desired.Machine.Install = &typedconfig.InstallConfig{InstallDisk: "/dev/sdb", InstallWipe: &wipe}
 		newTestPatch(cluster.Name, "machine", target, desired)
 
 		fake := &fakeTalosClient{current: current}
@@ -332,7 +333,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		reconcileOK(r, m)
 
 		drifted := extraArgsConfig()
-		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		drifted.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 
 		res, err := reconcileMachine(r, m)

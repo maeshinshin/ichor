@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 const secNewKubeVersion = "v1.36.6"
@@ -262,14 +262,11 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 	on := true
 
 	patch := func(roles ...string) *ichorv1alpha1.TalosConfigPatch {
-		return configPatch("access", &typedconfig.Config{
-			ConfigVersion: dryRenderVersion,
-			MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
-				KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
-					AccessEnabled: &on, AccessAllowedRoles: roles, AccessAllowedKubernetesNamespaces: []string{"ops"},
-				},
-			}},
-		})
+		return configPatch("access", &ichorconfig.Config{Machine: &ichorconfig.Machine{Features: &ichorconfig.MachineFeatures{
+			KubernetesTalosAPIAccess: &ichorconfig.MachineFeaturesKubernetesTalosAPIAccess{
+				Enabled: &on, AllowedRoles: roles, AllowedKubernetesNamespaces: []string{"ops"},
+			},
+		}}})
 	}
 
 	t.Run("os:admin is admitted with a warning naming it", func(t *testing.T) {
@@ -312,7 +309,7 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 	t.Run("disabled access is silent", func(t *testing.T) {
 		p := patch("os:admin")
 		off := false
-		p.Spec.Documents[0].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig.AccessEnabled = &off
+		p.Spec.Config.Machine.Features.KubernetesTalosAPIAccess.Enabled = &off
 
 		warnings, err := dryRenderValidator(t).ValidateCreate(ctx, p)
 		if err != nil || len(warnings) != 0 {

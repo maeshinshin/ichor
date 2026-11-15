@@ -27,8 +27,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // These exercise changedPaths directly against pkg/render's real output, no
@@ -75,16 +75,16 @@ func diffTestFixtures(t *testing.T, versionContract string) (*ichorv1alpha1.Talo
 func TestChangedPaths_PatchedConfig(t *testing.T) {
 	cluster, m, bundle := diffTestFixtures(t, "v1.14")
 
-	renderWith := func(doc *ichorv1alpha1.TalosConfigPatchDocument) []byte {
+	renderWith := func(c *ichorconfig.Config) []byte {
 		t.Helper()
 
 		var patches []ichorv1alpha1.TalosConfigPatch
-		if doc != nil {
+		if c != nil {
 			patches = []ichorv1alpha1.TalosConfigPatch{{
 				Namespace: tmNamespace, Name: "p",
 				Spec: ichorv1alpha1.TalosConfigPatchSpec{
 					ClusterRef: corev1.LocalObjectReference{Name: "c"}, Layer: layerCluster,
-					Documents: []ichorv1alpha1.TalosConfigPatchDocument{*doc},
+					Config: c,
 				},
 			}}
 		}
@@ -100,21 +100,18 @@ func TestChangedPaths_PatchedConfig(t *testing.T) {
 	before := renderWith(nil)
 
 	for name, tc := range map[string]struct {
-		doc  *ichorv1alpha1.TalosConfigPatchDocument
+		doc  *ichorconfig.Config
 		want string // "" means no difference
 	}{
 		"no difference": {nil, ""},
-		// ExtraArgsConfig is a map, so the diff is reported per key rather than at "extraArgs"
+		// ExtraArgs is a map, so the diff is reported per key rather than at "extraArgs"
 		// itself -- fieldmeta's prefix match still covers it.
-		"legacy field change": {
-			&ichorv1alpha1.TalosConfigPatchDocument{Kind: kindConfig, Config: extraArgsConfig()},
-			"cluster.apiServer.extraArgs.foo",
+		"setting of a document the base configuration has": {
+			extraArgsConfig(),
+			"KubeAPIServerConfig.extraArgs.foo",
 		},
 		"standalone document added": {
-			&ichorv1alpha1.TalosConfigPatchDocument{
-				Kind:         "SysctlConfig",
-				SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
-			},
+			&ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.ipv4.ip_forward": "1"}}},
 			"SysctlConfig.params.net.ipv4.ip_forward",
 		},
 	} {

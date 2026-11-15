@@ -13,35 +13,27 @@ import (
 )
 
 func ichorPatch(name string, c *ichorconfig.Config) ichorv1alpha1.TalosConfigPatch {
-	p := sysctlPatch(name, layerCluster, 0, nil, "")
-	p.Spec.Documents = nil
-	p.Spec.Config = c
-
-	return p
+	return configPatch(name, c)
 }
 
-// A setting written in spec.config reaches the machine exactly as the same setting written as a document.
-func TestSpecConfigRendersLikeTheDocumentItConvertsTo(t *testing.T) {
+// Removing spec.documents from the CRD changed nothing about what reaches a node: a setting written in
+// spec.config is rendered as the Talos document that carries it, the same one spec.documents carried before it was removed.
+func TestSpecConfigRendersAsTheTalosDocumentThatCarriesIt(t *testing.T) {
 	m := testMachine("node-a", roleWorker, nil)
 	bundle := testBundle(t)
 
-	asDocument := mustRender(t, testCluster("true"), m, bundle, []ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")})
-	asConfig := mustRender(t, testCluster("true"), m, bundle, []ichorv1alpha1.TalosConfigPatch{
+	out := mustRender(t, testCluster("true"), m, bundle, []ichorv1alpha1.TalosConfigPatch{
 		ichorPatch("p", &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{sysctlKey: "1"}}}),
 	})
 
-	if asDocument != asConfig {
-		t.Errorf("the rendered configurations differ:\n--- documents\n%s\n--- config\n%s", asDocument, asConfig)
-	}
-
-	if !strings.Contains(asConfig, sysctlKey) {
-		t.Errorf("the setting is not in the rendered configuration:\n%s", asConfig)
+	if want := "kind: SysctlConfig\nparams:\n    " + sysctlKey + ": \"1\"\n"; !strings.Contains(out, want) {
+		t.Errorf("the rendered configuration lacks the SysctlConfig document:\n%s\n--- in\n%s", want, out)
 	}
 }
 
-// The guards on what a patch may write apply to spec.config as to spec.documents: Ichor's own Cilium inline
+// The guards on what a patch may write apply to spec.config: Ichor's own Cilium inline
 // manifest is dropped once the cluster has handed over, and Talos API access is left out of workers.
-func TestSpecConfigPassesTheSameGuardsAsDocuments(t *testing.T) {
+func TestSpecConfigPassesTheGuards(t *testing.T) {
 	bundle := testBundle(t)
 
 	cluster := testCluster("true")
@@ -79,12 +71,16 @@ func TestSpecConfigPassesTheSameGuardsAsDocuments(t *testing.T) {
 	}
 }
 
-func TestRenderRefusesAPatchThatSetsDocumentsAndConfig(t *testing.T) {
-	p := sysctlPatch("both", layerCluster, 0, nil, "1")
-	p.Spec.Config = &ichorconfig.Config{}
+// A cluster-layer patch reaches workers too: what it says about the control plane (here, the API server) applies to
+// control planes and is left out of workers, which Talos would otherwise refuse.
+func TestControlPlaneSettingsOfAClusterPatchAreLeftOutOfWorkers(t *testing.T) {
+	bundle := testBundle(t)
+	patch := ichorPatch("apiserver", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{
+		ExtraArgs: map[string][]string{"audit-log-maxage": {"3"}},
+	}}})
 
-	_, _, err := Render(testCluster("true"), testMachine("node-a", roleWorker, nil), testBundle(t), []ichorv1alpha1.TalosConfigPatch{p}, nil)
-	if err == nil || !strings.Contains(err.Error(), "spec.documents and spec.config are both set") {
-		t.Fatalf("want the refusal naming both, got %v", err)
-	}
+	requireAll(t, mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, []ichorv1alpha1.TalosConfigPatch{patch}),
+		"audit-log-maxage")
+	requireNone(t, mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, []ichorv1alpha1.TalosConfigPatch{patch}),
+		"audit-log-maxage")
 }

@@ -19,17 +19,16 @@ package render
 import (
 	"testing"
 
-	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
-
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 // TestInlineManifestForm: a patch's cluster.inlineManifests entry renders as the KubeInlineManifestConfig
-// document on a v1.14 contract and as the legacy cluster.inlineManifests below it, and the hand-over
+// document on a v1.14 contract and as the v1alpha1 document's cluster.inlineManifests below it, and the hand-over
 // removes the CNI entry from either form while a sibling entry and field survive.
 func TestInlineManifestForm(t *testing.T) {
 	bundle := testBundle(t)
@@ -45,11 +44,7 @@ func TestInlineManifestForm(t *testing.T) {
 	)
 
 	patch := inlineManifestPatch("manifests", cni.InlineManifestName)
-	patch.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests = append(
-		patch.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests,
-		patch.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests[0].DeepCopy(),
-	)
-	patch.Spec.Documents[0].Config.ClusterConfig.ClusterInlineManifests[1].InlineManifestName = "other"
+	patch.Spec.Config.Cluster.InlineManifests["other"] = &ichorconfig.ClusterInlineManifestsEntry{Manifest: "kind: Nothing\n"}
 
 	for _, tc := range []struct {
 		name, contract       string
@@ -87,22 +82,5 @@ func TestInlineManifestForm(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-// A document that carries nothing but inline manifests keeps no empty legacy cluster block.
-//
-//nolint:staticcheck // builds the deprecated legacy field on purpose
-func TestTakeInlineManifestsClearsEmptyCluster(t *testing.T) {
-	c := &mv1alpha1.Config{ClusterConfig: &mv1alpha1.ClusterConfig{
-		ClusterInlineManifests: mv1alpha1.ClusterInlineManifests{{InlineManifestName: "a", InlineManifestContents: "x"}},
-	}}
-
-	if got := takeInlineManifests(c); len(got) != 1 {
-		t.Fatalf("got %d documents, want 1", len(got))
-	}
-
-	if c.ClusterConfig != nil {
-		t.Fatalf("ClusterConfig = %+v, want nil", c.ClusterConfig)
 	}
 }

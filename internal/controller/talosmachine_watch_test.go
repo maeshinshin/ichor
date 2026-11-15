@@ -34,8 +34,8 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/settings"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 )
@@ -96,10 +96,7 @@ var _ = Describe("TalosMachine re-reconcile on render inputs", func() {
 			Spec: ichorv1alpha1.TalosConfigPatchSpec{
 				ClusterRef: corev1.LocalObjectReference{Name: clus.Name},
 				Layer:      layerCluster,
-				Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-					Kind:         kindSysctl,
-					SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.core.somaxconn": "4096"}},
-				}},
+				Config:     &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.core.somaxconn": "4096"}}},
 			},
 		})).To(Succeed())
 

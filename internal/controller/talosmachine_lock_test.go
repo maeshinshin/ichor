@@ -52,8 +52,8 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 
 		wipe := false
 		cfg := minimalConfigSkeleton()
-		cfg.MachineConfig.MachineType = roleControlPlane
-		cfg.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: "/dev/vda", InstallWipe: &wipe}
+		cfg.Machine.Type = roleControlPlane
+		cfg.Machine.Install = &typedconfig.InstallConfig{InstallDisk: "/dev/vda", InstallWipe: &wipe}
 		newTestPatch(cluster.Name, layerCluster, nil, cfg)
 
 		talos = &fakeTalosClient{currentErr: errUnauthenticated, nodeName: "lock-test-node"}

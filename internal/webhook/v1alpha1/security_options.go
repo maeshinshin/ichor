@@ -357,34 +357,13 @@ func (v *TalosClusterCustomValidator) checkDiskEncryptionConfirmed(ctx context.C
 // Talos API roles that must not be handed to pods (docs: Talos role-based access control).
 const roleOSAdmin = "os:admin"
 
-// talosAPIAccessWarnings warns about every Config document of a TalosConfigPatch that enables
+// talosAPIAccessWarnings warns about a TalosConfigPatch that enables
 // machine.features.kubernetesTalosAPIAccess. It is the user's choice for their
 // own cluster, so nothing is refused: os:admin in allowedRoles gets the strongest wording, as it
 // hands a Talos administrator to every pod in the allowed namespaces. The feature renders on
 // control planes only (pkg/render leaves it out of workers).
 func talosAPIAccessWarnings(p *ichorv1alpha1.TalosConfigPatch) admission.Warnings {
 	var warnings admission.Warnings
-
-	for i, d := range p.Spec.Documents {
-		if d.Config == nil || d.Config.MachineConfig == nil || d.Config.MachineConfig.MachineFeatures == nil {
-			continue
-		}
-
-		a := d.Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig
-		if a == nil || a.AccessEnabled == nil || !*a.AccessEnabled {
-			continue
-		}
-
-		where := fmt.Sprintf("spec.documents[%d].config.machine.features.kubernetesTalosAPIAccess", i)
-
-		if slices.Contains(a.AccessAllowedRoles, roleOSAdmin) {
-			warnings = append(warnings, fmt.Sprintf("%s: allowedRoles contains %s, which gives every pod in %v a Talos administrator "+
-				"(os:reader is enough for most uses)", where, roleOSAdmin, a.AccessAllowedKubernetesNamespaces))
-		}
-
-		warnings = append(warnings, fmt.Sprintf("%s grants Talos API access (%v) to pods in namespaces %v: a pod there can act on the nodes; "+
-			"it applies to control planes only", where, a.AccessAllowedRoles, a.AccessAllowedKubernetesNamespaces))
-	}
 
 	if c := p.Spec.Config; c != nil && c.Machine != nil && c.Machine.Features != nil {
 		a := c.Machine.Features.KubernetesTalosAPIAccess

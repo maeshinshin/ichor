@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -148,16 +149,13 @@ func TestRenderRegistries(t *testing.T) {
 	// list-typed config field, not something this feature changes, so it is not what this test
 	// exercises.
 	t.Run("a cluster-layer patch overrides the system layer's username", func(t *testing.T) {
-		patch := configPatch("override-username", &typedconfig.Config{
-			ConfigVersion: configVersionV1Alpha1,
-			MachineConfig: &typedconfig.MachineConfig{
-				MachineRegistries: &typedconfig.RegistriesConfig{
-					RegistryConfig: map[string]*typedconfig.RegistryConfig{
-						registryHost: {RegistryAuth: &typedconfig.RegistryAuthConfig{RegistryUsername: "overridden-user"}},
-					},
+		patch := configPatch("override-username", &ichorconfig.Config{Machine: &ichorconfig.Machine{
+			Registries: &ichorconfig.MachineRegistries{
+				Config: map[string]*typedconfig.RegistryConfig{
+					registryHost: {RegistryAuth: &typedconfig.RegistryAuthConfig{RegistryUsername: "overridden-user"}},
 				},
 			},
-		})
+		}})
 
 		out, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, &SystemInputs{RegistryAuth: auth})
 		if err != nil {

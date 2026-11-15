@@ -40,6 +40,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -448,14 +449,14 @@ func newTestMachineIn(ns, clusterName string, approved bool) *ichorv1alpha1.Talo
 
 // newTestPatch creates a cluster-layer (or, with target set, narrower)
 // TalosConfigPatch carrying a single typed Config document.
-func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPatchTarget, cfg *typedconfig.Config) *ichorv1alpha1.TalosConfigPatch {
+func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPatchTarget, cfg *ichorconfig.Config) *ichorv1alpha1.TalosConfigPatch {
 	p := &ichorv1alpha1.TalosConfigPatch{
 		GenerateName: patchPrefix, Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 			Layer:      layer,
 			Target:     target,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+			Config:     cfg,
 		},
 	}
 	Expect(k8sClient.Create(ctx, p)).To(Succeed())
@@ -469,10 +470,7 @@ func newTestSysctlPatch(clusterName string, params map[string]string) *ichorv1al
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 			Layer:      layerCluster,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind:         kindSysctl,
-				SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: params},
-			}},
+			Config:     &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: params}},
 		},
 	}
 	Expect(k8sClient.Create(ctx, p)).To(Succeed())
@@ -480,39 +478,35 @@ func newTestSysctlPatch(clusterName string, params map[string]string) *ichorv1al
 	return p
 }
 
-// minimalConfigSkeleton is the smallest typedconfig.Config the CRD schema
+// minimalConfigSkeleton is the smallest spec.config the CRD schema
 // accepts: "version" plus the required machine/cluster sub-documents, each
 // with their own required fields filled with throwaway values. Tests build
 // on top of it, and render both "current" and "desired" through the same
 // skeleton, so the only difference changedPaths finds is the one field
 // each test is actually about -- not these required-but-irrelevant values.
-func minimalConfigSkeleton() *typedconfig.Config {
-	return &typedconfig.Config{
-		ConfigVersion: "v1alpha1",
-		MachineConfig: &typedconfig.MachineConfig{
-			MachineType:     roleWorker,
-			MachineCertSANs: []string{"10.0.0.10"},
-		},
-		ClusterConfig: &typedconfig.ClusterConfig{},
+func minimalConfigSkeleton() *ichorconfig.Config {
+	return &ichorconfig.Config{
+		Machine: &ichorconfig.Machine{Type: roleWorker, CertSANs: []string{"10.0.0.10"}},
+		Cluster: &ichorconfig.Cluster{},
 	}
 }
 
 // extraArgsConfig is minimalConfigSkeleton with one extra, safe (pkg/fieldmeta:
 // cluster.apiServer needs no reboot) API server argument set -- the non-reboot
 // change every "applies without a reboot" test reuses.
-func extraArgsConfig() *typedconfig.Config {
+func extraArgsConfig() *ichorconfig.Config {
 	cfg := minimalConfigSkeleton()
-	cfg.ClusterConfig.APIServerConfig = &typedconfig.APIServerConfig{ExtraArgsConfig: map[string][]string{"foo": {"b"}}}
+	cfg.Cluster.ApiServer = &ichorconfig.ClusterApiServer{ExtraArgs: map[string][]string{"foo": {"b"}}}
 
 	return cfg
 }
 
 // proxyDisabledConfig is minimalConfigSkeleton with cluster.proxy.disabled set: deliberately
 // uncovered by pkg/fieldmeta's table (see its own test), so changing it stays reboot-required.
-func proxyDisabledConfig() *typedconfig.Config {
+func proxyDisabledConfig() *ichorconfig.Config {
 	disabled := true
 	cfg := minimalConfigSkeleton()
-	cfg.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+	cfg.Cluster.Proxy = &ichorconfig.ClusterProxy{Disabled: &disabled}
 
 	return cfg
 }
@@ -523,7 +517,7 @@ func proxyDisabledConfig() *typedconfig.Config {
 // state before whatever TalosConfigPatch the test goes on to create.
 func renderWithConfig(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
-	layer string, target *ichorv1alpha1.TalosConfigPatchTarget, cfg *typedconfig.Config,
+	layer string, target *ichorv1alpha1.TalosConfigPatchTarget, cfg *ichorconfig.Config,
 ) []byte {
 	patch := ichorv1alpha1.TalosConfigPatch{
 		Name: "skeleton", Namespace: cluster.Namespace,
@@ -531,7 +525,7 @@ func renderWithConfig(
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Layer:      layer,
 			Target:     target,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+			Config:     cfg,
 		},
 	}
 
@@ -822,7 +816,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		desired := minimalConfigSkeleton()
 		wipe := true
-		desired.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: "/dev/sdb", InstallWipe: &wipe}
+		desired.Machine.Install = &typedconfig.InstallConfig{InstallDisk: "/dev/sdb", InstallWipe: &wipe}
 		newTestPatch(cluster.Name, "machine", target, desired)
 
 		fake := &fakeTalosClient{current: current}
@@ -928,7 +922,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// Ichor's side touched -- cluster, the patch and the machine all
 		// keep the same generation.
 		drifted := extraArgsConfig()
-		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		drifted.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
 		driftedCurrent := renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 		fake.current = driftedCurrent
 
@@ -956,7 +950,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		// The node differs from the render (a first-time mismatch, which would otherwise be applied).
 		other := extraArgsConfig()
-		other.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		other.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, other)}
 		r := newTestReconciler(fake)
@@ -1035,7 +1029,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// The node holds what the previous Ichor rendered, which differs from what this one does,
 		// while no CR generation moved.
 		old := extraArgsConfig()
-		old.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		old.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, old)
 
 		prev := renderVersion
@@ -1063,9 +1057,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		bundle, cluster, m := newTestFixture()
 
 		cfg := minimalConfigSkeleton()
-		cfg.ClusterConfig.ClusterInlineManifests = []*typedconfig.ClusterInlineManifest{
-			{InlineManifestName: cni.InlineManifestName, InlineManifestContents: "kind: List"},
-		}
+		cfg.Cluster.InlineManifests = map[string]*ichorconfig.ClusterInlineManifestsEntry{cni.InlineManifestName: {Manifest: "kind: List"}}
 		patch := newTestPatch(cluster.Name, layerCluster, nil, cfg)
 
 		before, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
@@ -1121,7 +1113,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
 
 		drifted := extraArgsConfig()
-		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
+		drifted.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 
 		reconcileOK(r, m)

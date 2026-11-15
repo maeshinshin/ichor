@@ -35,8 +35,8 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 const (
@@ -250,7 +250,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 	Describe("apply with an unrelated pending change", func() {
 		// renderAs renders m as the node with the old mode and baseline, and the cluster's desired
 		// configuration with cfg added: the pending change is cfg alone, besides the kube-proxy mode.
-		renderAs := func(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, cfg *typedconfig.Config) []byte {
+		renderAs := func(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, cfg *ichorconfig.Config) []byte {
 			bundle, err := loadBundle(ctx, k8sClient, tmNamespace, cluster)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -258,7 +258,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 				Name: "extra", Namespace: tmNamespace,
 				Spec: ichorv1alpha1.TalosConfigPatchSpec{
 					ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Layer: layerCluster,
-					Documents: []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+					Config: cfg,
 				},
 			}
 
@@ -269,18 +269,18 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 			return out
 		}
 
-		run := func(extra func(*typedconfig.Config)) (*fakeTalosClient, error) {
+		run := func(extra func(*ichorconfig.Config)) (*fakeTalosClient, error) {
 			cluster := cniSwitchCluster(modeReplaced)
 			cp := newK8sControlPlane(cluster.Name, "kp-extra")
 
 			old := cluster.DeepCopy()
 			old.Spec.CNI.KubeProxy = modeEnabled
 			base := minimalConfigSkeleton()
-			base.MachineConfig.MachineType = roleControlPlane
+			base.Machine.Type = roleControlPlane
 			current := renderAs(old, cp, base)
 
 			cfg := minimalConfigSkeleton()
-			cfg.MachineConfig.MachineType = roleControlPlane
+			cfg.Machine.Type = roleControlPlane
 			extra(cfg)
 
 			fake := &fakeTalosClient{}
@@ -290,18 +290,16 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		}
 
 		It("applies a safe pending path together with the switch", func() {
-			fake, err := run(func(c *typedconfig.Config) {
-				c.ClusterConfig.ClusterInlineManifests = []*typedconfig.ClusterInlineManifest{
-					{InlineManifestName: "extra", InlineManifestContents: "kind: List"},
-				}
+			fake, err := run(func(c *ichorconfig.Config) {
+				c.Cluster.InlineManifests = map[string]*ichorconfig.ClusterInlineManifestsEntry{"extra": {Manifest: "kind: List"}}
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fake.applyCalls).To(HaveLen(1))
 		})
 
 		It("still refuses a pending reboot-requiring path", func() {
-			fake, err := run(func(c *typedconfig.Config) {
-				c.MachineConfig.MachineEnv = map[string]string{"HTTP_PROXY": "http://proxy.invalid:3128"}
+			fake, err := run(func(c *ichorconfig.Config) {
+				c.Machine.Env = map[string]string{"HTTP_PROXY": "http://proxy.invalid:3128"}
 			})
 			Expect(err).To(MatchError(ContainSubstring("unrelated pending configuration change")))
 			Expect(fake.applyCalls).To(BeEmpty())

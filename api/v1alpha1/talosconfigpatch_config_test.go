@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"encoding/json"
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -31,6 +30,7 @@ import (
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // convert reads Ichor's configuration from JSON, as the API server hands it over, converts it and returns the
@@ -171,18 +171,6 @@ func TestRepeatableNamedThingCanBeWrittenTwice(t *testing.T) {
 	}
 }
 
-func TestPatchWithDocumentsAndConfigIsRefused(t *testing.T) {
-	s := TalosConfigPatchSpec{
-		Documents: []TalosConfigPatchDocument{{Kind: "SysctlConfig"}},
-		Config:    &ichorconfig.Config{},
-	}
-
-	_, err := s.EffectiveDocuments(true)
-	if !errors.Is(err, ErrDocumentsAndConfig) || !strings.Contains(err.Error(), "spec.documents") || !strings.Contains(err.Error(), "spec.config") {
-		t.Errorf("want a refusal naming both, got %v", err)
-	}
-}
-
 func TestKubernetesDocumentsNeedAMachineThatTakesThem(t *testing.T) {
 	// A setting both spell goes to the v1alpha1 document where the machine takes no Kubernetes document.
 	docs := convert(t, `{"cluster": {"network": {"podSubnets": ["10.244.0.0/16"]}}}`, false)
@@ -199,5 +187,100 @@ func TestKubernetesDocumentsNeedAMachineThatTakesThem(t *testing.T) {
 
 	if _, err := ConvertConfig(&c, false); err == nil || !strings.Contains(err.Error(), "Talos 1.14") {
 		t.Errorf("want a refusal that names the Talos version, got %v", err)
+	}
+}
+
+// A machine that takes no Kubernetes documents gets the settings the v1alpha1 document has a list for there, and
+// is refused the ones it has not.
+func TestKubernetesCollectionsOnAMachineThatTakesNoKubernetesDocuments(t *testing.T) {
+	docs := convert(t, `{"cluster": {"inlineManifests": {"b": {"manifest": "kind: B"}, "a": {"manifest": "kind: A"}},
+		"extraManifests": {"x": {"url": "https://example.invalid/x.yaml"}}}}`, false)
+
+	cfg := only[*mv1alpha1.Config](t, docs).ClusterConfig //nolint:staticcheck // the fields are what is being checked
+	if len(docs) != 1 || len(cfg.ClusterInlineManifests) != 2 || cfg.ClusterInlineManifests[0].InlineManifestName != "a" ||
+		len(cfg.ExtraManifests) != 1 {
+		t.Errorf("want one v1alpha1 document holding both manifests, got %d documents, %+v", len(docs), cfg)
+	}
+
+	var c ichorconfig.Config
+
+	if err := json.Unmarshal([]byte(`{"machine": {"staticPods": {"p": {}}}}`), &c); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ConvertConfig(&c, false); err == nil || !strings.Contains(err.Error(), "Talos 1.14") {
+		t.Errorf("want a refusal that names the Talos version, got %v", err)
+	}
+}
+
+func TestSpecWithoutConfigCarriesNoDocuments(t *testing.T) {
+	docs, err := (&TalosConfigPatchSpec{}).EffectiveDocuments(true)
+	if err != nil || len(docs) != 0 {
+		t.Errorf("want no documents, got %v (%v)", docs, err)
+	}
+}
+
+// The documents the CLI and the UI build are written in spec.config, and read back they give the same documents.
+func TestConfigFromDocumentsConvertsBackToTheDocuments(t *testing.T) {
+	want := []TalosConfigPatchDocument{
+		{Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}}},
+		{Kind: "KernelModuleConfig", KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "nbd"}},
+		{Kind: "KernelModuleConfig", KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "br_netfilter", ModuleParameters: []string{"nf_conntrack_helper=1"}}},
+		{Kind: "UserVolumeConfig", UserVolumeConfig: &typedconfig.UserVolumeConfigV1Alpha1{
+			MetaName:         "data",
+			ProvisioningSpec: &typedconfig.ProvisioningSpec{DiskSelectorSpec: &typedconfig.DiskSelector{Match: `disk.wwid == "x"`}, ProvisioningMinSize: "0"},
+		}},
+		{Kind: "Config", Config: &typedconfig.Config{
+			MachineConfig: &typedconfig.MachineConfig{MachineType: "controlplane", MachineCertSANs: []string{"10.0.0.1"}},
+		}},
+	}
+
+	c, err := ConfigFromDocuments(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ConvertConfig(c, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("want %d documents, got %d", len(want), len(got))
+	}
+
+	if c.Machine.Kernel.Modules["br_netfilter"].Parameters[0] != "nf_conntrack_helper=1" || c.Machine.Sysctls["net.ipv4.ip_forward"] != "1" {
+		t.Errorf("settings are not where the schema has them: %+v", c.Machine)
+	}
+}
+
+// A setting the schema does not carry is refused by name, never dropped: a document that spells in the v1alpha1
+// document a setting another document spells is one case.
+func TestConfigFromDocumentsRefusesWhatTheSchemaDoesNotCarry(t *testing.T) {
+	_, err := ConfigFromDocuments([]TalosConfigPatchDocument{{Kind: "Config", Config: &typedconfig.Config{
+		ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
+	}}})
+
+	if err == nil || !strings.Contains(err.Error(), "cluster extraManifests") {
+		t.Fatalf("want a refusal naming cluster extraManifests, got %v", err)
+	}
+
+	if _, err := ConfigFromDocuments([]TalosConfigPatchDocument{{Kind: "NoSuchKind"}}); err == nil {
+		t.Fatal("want an unknown kind refused")
+	}
+}
+
+// A document switched off has no document to hold its other settings: they go to the v1alpha1 document with the
+// switch, so that Talos does not see the one setting in both.
+func TestSwitchedOffDocumentKeepsItsSettingsInTheV1Alpha1Document(t *testing.T) {
+	docs := convert(t, `{"machine": {"features": {"kubernetesTalosAPIAccess": {"enabled": false, "allowedRoles": ["os:reader"]}}}}`, true)
+
+	if len(docs) != 1 {
+		t.Fatalf("want the v1alpha1 document alone, got %d documents", len(docs))
+	}
+
+	access := only[*mv1alpha1.Config](t, docs).MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig //nolint:staticcheck // the field is what is being checked
+	if access.AccessEnabled == nil || *access.AccessEnabled || len(access.AccessAllowedRoles) != 1 {
+		t.Errorf("the v1alpha1 document holds %+v", access)
 	}
 }

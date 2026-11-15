@@ -32,7 +32,6 @@ import (
 	"cmp"
 	"crypto/sha256"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -44,8 +43,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
-	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
-	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,7 +51,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // ConditionCNIHandover is the TalosCluster.status condition type the CNI
@@ -468,12 +464,8 @@ func takenOverInlineManifest(cluster *ichorv1alpha1.TalosCluster) string {
 func dropHandedOverInlineManifest(
 	ordered []*ichorv1alpha1.TalosConfigPatch, taken string,
 ) []*ichorv1alpha1.TalosConfigPatch {
-	isHandedOver := func(e *typedconfig.ClusterInlineManifest) bool {
-		return e.InlineManifestName == cni.InlineManifestName || (taken != "" && e.InlineManifestName == taken)
-	}
-
 	// spec.config names its inline manifests, so the same two names are the ones to drop there.
-	ordered = rewriteIchorConfigs(ordered,
+	return rewriteIchorConfigs(ordered,
 		func(c *ichorconfig.Config) bool {
 			return c.Cluster != nil && (c.Cluster.InlineManifests[cni.InlineManifestName] != nil ||
 				(taken != "" && c.Cluster.InlineManifests[taken] != nil))
@@ -481,15 +473,6 @@ func dropHandedOverInlineManifest(
 		func(c *ichorconfig.Config) {
 			delete(c.Cluster.InlineManifests, cni.InlineManifestName)
 			delete(c.Cluster.InlineManifests, taken)
-		})
-
-	return rewriteConfigs(ordered,
-		func(c *typedconfig.Config) bool {
-			return c.ClusterConfig != nil && slices.ContainsFunc(c.ClusterConfig.ClusterInlineManifests, isHandedOver)
-		},
-		func(c *typedconfig.Config) {
-			// c is rewriteConfigs's deep copy, so the caller's patch keeps its entries.
-			c.ClusterConfig.ClusterInlineManifests = slices.DeleteFunc(c.ClusterConfig.ClusterInlineManifests, isHandedOver)
 		})
 }
 
@@ -502,22 +485,16 @@ func dropTalosAPIAccess(
 		return ordered
 	}
 
-	ordered = rewriteIchorConfigs(ordered,
+	return rewriteIchorConfigs(ordered,
 		func(c *ichorconfig.Config) bool {
 			return c.Machine != nil && c.Machine.Features != nil && c.Machine.Features.KubernetesTalosAPIAccess != nil
 		},
 		func(c *ichorconfig.Config) { c.Machine.Features.KubernetesTalosAPIAccess = nil })
-
-	return rewriteConfigs(ordered,
-		func(c *typedconfig.Config) bool {
-			return c.MachineConfig != nil && c.MachineConfig.MachineFeatures != nil &&
-				c.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig != nil
-		},
-		func(c *typedconfig.Config) { c.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig = nil })
 }
 
-// rewriteIchorConfigs is rewriteConfigs for spec.config: the same guard, on Ichor's schema before it is
-// converted, so that a setting reaches the nodes through the same checks whichever way it was written.
+// rewriteIchorConfigs returns ordered with edit applied to every spec.config for which needs is true, the
+// guards of a setting being on Ichor's schema before it is converted. It deep-copies only the patches it edits;
+// every other patch passes through as the same pointer, and the caller's own objects are never mutated.
 func rewriteIchorConfigs(
 	ordered []*ichorv1alpha1.TalosConfigPatch,
 	needs func(*ichorconfig.Config) bool, edit func(*ichorconfig.Config),
@@ -533,34 +510,6 @@ func rewriteIchorConfigs(
 
 		out[i] = p.DeepCopy()
 		edit(out[i].Spec.Config)
-	}
-
-	return out
-}
-
-// rewriteConfigs returns ordered with edit applied to every Config document for which needs is
-// true. It deep-copies only the patches it edits; every other patch passes through as the same
-// pointer, and the caller's own objects are never mutated.
-func rewriteConfigs(
-	ordered []*ichorv1alpha1.TalosConfigPatch,
-	needs func(*typedconfig.Config) bool, edit func(*typedconfig.Config),
-) []*ichorv1alpha1.TalosConfigPatch {
-	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
-
-	for i, p := range ordered {
-		out[i] = p
-
-		for di, doc := range p.Spec.Documents {
-			if doc.Config == nil || !needs(doc.Config) {
-				continue
-			}
-
-			if out[i] == p {
-				out[i] = p.DeepCopy()
-			}
-
-			edit(out[i].Spec.Documents[di].Config)
-		}
 	}
 
 	return out
@@ -627,11 +576,13 @@ func applyPatches(
 				return nil, fmt.Errorf("render: patch %q: %w", p.Name, err)
 			}
 
-			docs = append(docs, doc)
-
-			if contract.MultidocKubernetesConfigSupported() {
-				docs = append(docs, takeInlineManifests(doc)...)
+			// A cluster-layer patch reaches workers too, and Talos refuses a control plane's document there: what a
+			// patch says about the control plane does not apply to a worker.
+			if _, onlyControlPlane := doc.(container.ControlplaneOnlyConfig); onlyControlPlane && m.Spec.Role != "controlplane" {
+				continue
 			}
+
+			docs = append(docs, doc)
 		}
 
 		if len(docs) == 0 {
@@ -652,36 +603,6 @@ func applyPatches(
 	}
 
 	return out.Config()
-}
-
-// takeInlineManifests moves the cluster.inlineManifests entries of a freshly converted legacy
-// Config document out into KubeInlineManifestConfig documents, the v1.14 form (the legacy field
-// is deprecated there). Patches can only carry the legacy field, so this is the one place a
-// v1.14 contract differs. doc is the caller's own conversion result, never a shared object.
-//
-//nolint:staticcheck // reads the deprecated legacy field on purpose: it is what is being converted
-func takeInlineManifests(doc config.Document) []config.Document {
-	c, ok := doc.(*mv1alpha1.Config) //nolint:staticcheck // the legacy block is what patches carry
-	if !ok || c.ClusterConfig == nil || len(c.ClusterConfig.ClusterInlineManifests) == 0 {
-		return nil
-	}
-
-	out := make([]config.Document, 0, len(c.ClusterConfig.ClusterInlineManifests))
-
-	for _, m := range c.ClusterConfig.ClusterInlineManifests {
-		d := k8s.NewKubeInlineManifestConfigV1Alpha1()
-		d.MetaName = m.InlineManifestName
-		d.ManifestSpec = m.InlineManifestContents
-		out = append(out, d)
-	}
-
-	c.ClusterConfig.ClusterInlineManifests = nil
-
-	if reflect.DeepEqual(*c.ClusterConfig, mv1alpha1.ClusterConfig{}) {
-		c.ClusterConfig = nil
-	}
-
-	return out
 }
 
 // mergeDocument strategic-merges docs into cfg as one patch, the way every system-layer step

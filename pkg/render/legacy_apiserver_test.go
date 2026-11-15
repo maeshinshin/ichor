@@ -1,34 +1,23 @@
 package render
 
 import (
-	"strings"
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
-// A v1alpha1 Config document that sets cluster.apiServer cannot be merged under a multi-document
-// version contract: the base config already carries a KubeAPIServerConfig document.
-func TestLegacyAPIServerPatchFailsRender(t *testing.T) {
+// A setting of the API server written in spec.config reaches the KubeAPIServerConfig document the base
+// configuration already carries: the v1alpha1 spelling, which cannot be merged under a multi-document
+// version contract, is never written.
+func TestAPIServerSettingMergesIntoTheKubeAPIServerDocument(t *testing.T) {
 	cluster := testCluster("false")
 	m := testMachine("cp1", "controlplane", nil)
-	patch := configPatch("apiserver", &typedconfig.Config{
-		ConfigVersion: configVersionV1Alpha1,
-		MachineConfig: &typedconfig.MachineConfig{MachineType: "controlplane", MachineCertSANs: []string{}},
-		ClusterConfig: &typedconfig.ClusterConfig{APIServerConfig: &typedconfig.APIServerConfig{
-			ExtraArgsConfig: map[string][]string{"audit-log-maxage": {"3"}},
-		}},
-	})
+	patch := configPatch("apiserver", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{
+		ExtraArgs: map[string][]string{"audit-log-maxage": {"3"}},
+	}}})
 
-	_, _, err := Render(cluster, m, testBundle(t), []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-	if err == nil {
-		t.Fatal("expected a render error")
-	}
+	out := mustRender(t, cluster, m, testBundle(t), []ichorv1alpha1.TalosConfigPatch{patch})
 
-	t.Log(err)
-
-	if !strings.Contains(err.Error(), "apiServer") {
-		t.Fatalf("error does not name apiServer: %v", err)
-	}
+	requireAll(t, out, "kind: KubeAPIServerConfig", "audit-log-maxage")
 }

@@ -9,8 +9,7 @@ spec:
   clusterRef:
     name: taloscluster-sample
   layer: cluster
-  documents:
-  - kind: SysctlConfig
-    sysctlConfig:
-      params:
+  config:
+    machine:
+      sysctls:
         net.core.somaxconn: "1024"

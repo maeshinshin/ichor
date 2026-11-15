@@ -63,8 +63,8 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 
 		wipe := false
 		cfg := minimalConfigSkeleton()
-		cfg.MachineConfig.MachineType = role
-		cfg.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: provDisk, InstallWipe: &wipe}
+		cfg.Machine.Type = role
+		cfg.Machine.Install = &typedconfig.InstallConfig{InstallDisk: provDisk, InstallWipe: &wipe}
 		newTestPatch(cluster.Name, layerCluster, nil, cfg)
 
 		machine = newTestMachine(cluster.Name, true)

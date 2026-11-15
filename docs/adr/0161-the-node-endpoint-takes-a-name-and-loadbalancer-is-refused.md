@@ -23,5 +23,6 @@ The type was not free, though. The Kubernetes upgrade warned that a `node` endpo
 ## Consequences
 
 - A stored `loadBalancer` cluster migrates by one edit, `spec.endpoint.type: node`. The address and the kubeconfig do not change.
+- Accepted cost: a name that resolves to one control plane alone no longer raises the single-control-plane warning on a Kubernetes upgrade. It is a warning, not a guard, and the check cannot see the name's resolution, so the trade is taken here.
 - The `vip` and `node` types keep their meaning. `node` no longer implies "the first control plane's own address".
 - The alternatives were refused. Removing `loadBalancer` from the enum fails every stored object that carries it, as ADR 0101 and ADR 0099 explain for the removed CNI presets. Accepting any string for `node` would keep the defect the check was added for.

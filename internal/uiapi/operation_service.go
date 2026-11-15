@@ -359,6 +359,11 @@ func normalizeCATargets(kind string, targets []string) ([]string, error) {
 	return out, nil
 }
 
+// EtcdSnapshotAdvice is the advice before an etcd rotation, the same in rotate ca's help and in the plan's
+// warning. `backup etcd` needs an existing TalosEtcdBackup to name, so the create step comes first.
+const EtcdSnapshotAdvice = "Take an etcd snapshot first. Set up a TalosEtcdBackup once with 'ichor create etcd-backup' " +
+	"if there is none, then 'ichor backup etcd NAME' takes one now."
+
 // caRotationWarning is what the user must know before an etcd or aggregator CA is rotated.
 func caRotationWarning(targets []string) string {
 	var parts []string
@@ -366,7 +371,7 @@ func caRotationWarning(targets []string) string {
 	if slices.Contains(targets, ichorv1alpha1.CARotationTargetEtcd) {
 		parts = append(parts, "Every control plane is rebooted once in each of the three stages (three reboots each), one at a time and only "+
 			"while etcd is healthy, because Talos does not restart etcd on a configuration change; with one control plane the Kubernetes "+
-			"API is unavailable during each reboot. Take an etcd snapshot first (ichor backup etcd).")
+			"API is unavailable during each reboot. "+EtcdSnapshotAdvice)
 	}
 
 	if slices.Contains(targets, ichorv1alpha1.CARotationTargetAggregator) {

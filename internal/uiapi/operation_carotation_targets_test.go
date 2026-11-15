@@ -59,7 +59,7 @@ func TestPlanCARotationWithEtcdAndAggregatorWarnsAndStopsTheAPIOfASingleControlP
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"snapshot", "three reboots each", "one at a time", "Extension API servers"} {
+	for _, want := range []string{"snapshot", "ichor create etcd-backup", "three reboots each", "one at a time", "Extension API servers"} {
 		if !strings.Contains(plan.GetWarning(), want) {
 			t.Errorf("the warning does not say %q: %s", want, plan.GetWarning())
 		}

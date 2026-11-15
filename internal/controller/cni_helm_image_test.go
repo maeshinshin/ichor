@@ -30,7 +30,7 @@ func TestCNIJobImageIsADigestTheControllerChecked(t *testing.T) {
 
 	repo := cniTestInstallation().Spec.InstallerRepository
 
-	record := func(version, repository, digest string) *ichorv1alpha1.IchorInstallation {
+	recorded := func(version, repository, digest string) *ichorv1alpha1.IchorInstallation {
 		inst := cniTestInstallation()
 		inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{Version: version, Repository: repository, Digest: digest}
 
@@ -63,19 +63,19 @@ func TestCNIJobImageIsADigestTheControllerChecked(t *testing.T) {
 			inst: cniTestInstallation(), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
 		},
 		"record for this version is used as is": {
-			inst: record("v0.9.0", repo, digest), images: &fakeInstallerImages{digest: other}, want: repo + "@" + digest,
+			inst: recorded("v0.9.0", repo, digest), images: &fakeInstallerImages{digest: other}, want: repo + "@" + digest,
 		},
 		"record of another version: resolved and verified": {
-			inst: record("v0.8.0", repo, other), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
+			inst: recorded("v0.8.0", repo, other), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
 		},
 		"record of another repository: resolved and verified": {
-			inst: record("v0.9.0", mirror, other), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
+			inst: recorded("v0.9.0", mirror, other), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
 		},
 		"record without a digest: resolved and verified": {
-			inst: record("v0.9.0", repo, ""), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
+			inst: recorded("v0.9.0", repo, ""), images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest, wantVerify: 1,
 		},
 		"record that is not the pin: the pin is verified": {
-			inst: pinned(record("v0.9.0", repo, other), digest), images: &fakeInstallerImages{digest: other}, want: repo + "@" + digest, wantVerify: 1,
+			inst: pinned(recorded("v0.9.0", repo, other), digest), images: &fakeInstallerImages{digest: other}, want: repo + "@" + digest, wantVerify: 1,
 		},
 		"skip mode runs the digest without a check": {
 			inst: skipped, images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest,
@@ -144,7 +144,7 @@ func TestCNIJobUnderSkipLeavesATrace(t *testing.T) {
 
 		got := read(c)
 		if got == nil || got.Verification != ichorv1alpha1.InstallerImageSkipped || got.Digest != testInstallerDigest ||
-			got.Version != "v0.9.0" || got.Repository != skipped.Spec.InstallerRepository {
+			got.Version != skipped.Spec.Version || got.Repository != skipped.Spec.InstallerRepository {
 			t.Fatalf("status.installerImage = %+v; want Skipped for %s", got, testInstallerDigest)
 		}
 

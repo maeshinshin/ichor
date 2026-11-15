@@ -47,8 +47,9 @@ const (
 	// reasonNodeNotDeleted is the Event reason when the Node was still Ready after nodeDownWait.
 	reasonNodeNotDeleted = "KubernetesNodeNotDeleted"
 
-	// reasonWipeNotConfirmedPoweredOff is the Normal Event of a power-off removal: the machine cannot answer in
-	// maintenance mode once it is off, so the wipe cannot be confirmed. A limit of the path, not a fault.
+	// reasonWipeNotConfirmedPoweredOff is the Warning Event of a power-off removal: the machine cannot answer in
+	// maintenance mode once it is off, so the wipe cannot be confirmed. Its type matches the other unconfirmed
+	// wipes; the power-off only explains why the removal does not wait.
 	reasonWipeNotConfirmedPoweredOff = "WipeNotConfirmedPoweredOff"
 
 	// nodeWaitInterval is how often the removal looks again at a Node that is still Ready.

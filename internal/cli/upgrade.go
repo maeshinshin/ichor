@@ -82,12 +82,16 @@ func newUpgradeCmd(use, short string, kind pb.OperationKind) *cobra.Command {
 		usage, args = use+" [VERSION]", cobra.MaximumNArgs(1)
 	}
 
+	// Only Talos and Kubernetes have a recommended version and --list; Ichor's VERSION is required.
+	versionHelp := "VERSION is required."
+	if optional {
+		versionHelp = "Without VERSION it uses the recommended version (see `--list`)."
+	}
+
 	return &cobra.Command{
 		Use:   usage,
 		Short: short,
-		Long: short + `.
-
-Without VERSION it uses the recommended version (see ` + "`--list`" + `). It shows which nodes restart
+		Long: short + ".\n\n" + versionHelp + ` It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -230,19 +234,21 @@ var (
 	upgradeIchorCmd      = newUpgradeCmd("ichor", "Upgrade Ichor itself (IchorInstallation.spec.version)", pb.OperationKind_OPERATION_KIND_ICHOR)
 )
 
-// skipSignatureUsage and skipSignatureNote are the help of --skip-signature-check, here and on `ichor init`.
-// The skip is a spec change, not a one-shot bypass, and the help says so.
+// skipSignatureUsage and skipSignatureNote are the help of --skip-signature-check on `ichor upgrade ichor` and
+// `ichor init`; each command adds the note to its own Long. The skip is a spec change, not a one-shot bypass, and
+// the help says so. skipSignatureUpgradeNote is only true of an upgrade, which rewrites the installer settings.
 const (
 	skipSignatureUsage = "run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images); " +
 		"not one-shot: recorded as IchorInstallation spec.installerSignature.mode skip, it stays until an upgrade without the flag"
 
 	skipSignatureNote = "--skip-signature-check does not apply to one run only. It writes spec.installerSignature.mode: skip into the\n" +
-		"IchorInstallation \"ichor\" and leaves it there. The Job still runs by digest: unless --installer-digest names one, the\n" +
-		"controller resolves the version's tag to it, and the flag clears an earlier pin (spec.installerDigest). While the skip\n" +
-		"stands it also governs the Cilium Helm Job.\n" +
-		"Every `ichor upgrade ichor` writes both settings from its own flags, so the next one without the flag checks the signature again.\n" +
-		"To undo the skip without upgrading, run `kubectl edit ichorinstallation ichor` and delete spec.installerSignature\n" +
-		"(or set mode: required)."
+		"IchorInstallation \"ichor\" and leaves it there; while the skip stands it also governs the Cilium Helm Job. The next\n" +
+		"`ichor upgrade ichor` without the flag checks the signature again. To undo the skip without upgrading, run\n" +
+		"`kubectl edit ichorinstallation ichor` and delete spec.installerSignature (or set mode: required); that needs the update\n" +
+		"verb on ichorinstallations/version, the right an upgrade needs."
+
+	skipSignatureUpgradeNote = "The Job still runs by digest: an upgrade writes spec.installerDigest from --installer-digest and clears it when the flag\n" +
+		"is not given, and the controller then resolves the version's tag to a digest itself."
 )
 
 var installerDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
@@ -290,8 +296,7 @@ func init() {
 	upgradeIchorCmd.Flags().StringVar(&upgradeInstallerDigest, "installer-digest", "",
 		"pin the installer image to this digest (sha256:...) instead of resolving the version's tag")
 	upgradeIchorCmd.Flags().BoolVar(&upgradeSkipSignature, "skip-signature-check", false, skipSignatureUsage)
-	upgradeIchorCmd.Long += "\n\n" + skipSignatureNote
-	initCmd.Long += "\n\n" + skipSignatureNote // `ichor init` records the same setting; the note lives with the flag's other command
+	upgradeIchorCmd.Long += "\n\n" + skipSignatureNote + "\n" + skipSignatureUpgradeNote
 
 	f := upgradeIchorCmd.Flags()
 	f.StringVar(&upgradeSignIn.UIURL, "ui-url", "",

@@ -193,12 +193,39 @@ func TestSkipSignatureCheckHelpSaysTheChangePersists(t *testing.T) {
 				t.Errorf("the flag help does not say the skip is recorded: %q", f.Usage)
 			}
 
-			for _, want := range []string{"does not apply to one run only", "spec.installerSignature.mode: skip", "spec.installerDigest",
-				"checks the signature again", "kubectl edit ichorinstallation ichor", "delete spec.installerSignature", "Cilium Helm Job"} {
+			for _, want := range []string{"does not apply to one run only", "spec.installerSignature.mode: skip",
+				"checks the signature again", "kubectl edit ichorinstallation ichor", "delete spec.installerSignature",
+				"ichorinstallations/version", "Cilium Helm Job"} {
 				if !strings.Contains(cmd.Long, want) {
 					t.Errorf("the help does not contain %q", want)
 				}
 			}
 		})
+	}
+}
+
+// An Ichor upgrade rewrites the pin too; `ichor init` has no earlier pin to clear, so only the upgrade says so.
+func TestUpgradeIchorHelpSaysTheFlagClearsThePin(t *testing.T) {
+	if !strings.Contains(upgradeIchorCmd.Long, "clears it when the flag") {
+		t.Errorf("the help of `ichor upgrade ichor` does not say the pin is rewritten: %q", upgradeIchorCmd.Long)
+	}
+
+	if strings.Contains(initCmd.Long, "clears it when the flag") {
+		t.Error("the help of `ichor init` carries the upgrade's sentence about the pin")
+	}
+}
+
+// Only Talos and Kubernetes have a recommended version; an Ichor upgrade has none and no --list.
+func TestUpgradeIchorRequiresAVersion(t *testing.T) {
+	if err := upgradeIchorCmd.Args(upgradeIchorCmd, nil); err == nil {
+		t.Error("`ichor upgrade ichor` accepted no VERSION")
+	}
+
+	if strings.Contains(upgradeIchorCmd.Long, "Without VERSION") || strings.Contains(upgradeIchorCmd.Long, "--list") {
+		t.Errorf("the help of `ichor upgrade ichor` describes a recommended version: %q", upgradeIchorCmd.Long)
+	}
+
+	if !strings.Contains(upgradeTalosCmd.Long, "Without VERSION it uses the recommended version") {
+		t.Errorf("the help of `ichor upgrade talos` lost its recommended-version sentence: %q", upgradeTalosCmd.Long)
 	}
 }

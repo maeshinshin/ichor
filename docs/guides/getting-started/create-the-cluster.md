@@ -14,7 +14,7 @@ is hard to change later. Each pattern below is one endpoint type.
 | --- | --- | --- |
 | [Virtual IP](create-the-cluster/vip.md) | `vip` | the default. The control planes share one layer-2 segment with no router between them. |
 | [Single node endpoint](create-the-cluster/node.md) | `node` | a lab or a single control plane. The node's own address is the endpoint. |
-| [Load balancer endpoint](create-the-cluster/node.md#load-balancer-endpoint) | `loadBalancer` | there is no shared layer-2 segment, or you are in a cloud, or you have a DNS name and no load balancer. You run what answers on that address. |
+| [Load balancer endpoint](create-the-cluster/node.md#load-balancer-endpoint) | `node` | there is no shared layer-2 segment, or you are in a cloud, or you have a DNS name and no load balancer. You run what answers on that address. |
 
 Use the virtual IP unless your network rules it out. Only the VIP changes what
 Ichor renders. For a load balancer or a DNS name, Ichor records the address you

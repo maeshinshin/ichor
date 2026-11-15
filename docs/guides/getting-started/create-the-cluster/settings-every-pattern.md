@@ -45,7 +45,7 @@ discovery addresses.
 
 Ichor does not configure this; Talos adds the endpoint to the certificate it
 issues on each control plane. So `kubectl` verifies against the endpoint with
-every pattern, including a name for `loadBalancer`, and you do not
+every pattern, including a load balancer's DNS name in `node`, and you do not
 need to add the endpoint to any certificate setting.
 
 ## The init.yaml file

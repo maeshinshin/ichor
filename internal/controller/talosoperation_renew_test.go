@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	coordinationv1 "k8s.io/api/coordination/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -30,6 +31,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
 // testLeaseDuration is the lease these specs run under. A Lease records whole seconds, so one second is the
@@ -170,5 +172,68 @@ var _ = Describe("the cluster lock across the Advance loop", func() {
 		Expect(result.RequeueAfter).To(Equal(operationRequeueInterval))
 		Expect(fetchOperation(op).Status.Phase).NotTo(Equal(ichorv1alpha1.TalosOperationPhasePaused),
 			"losing the lock to another holder is contention, not a failed step")
+	})
+})
+
+var _ = Describe("the cluster lock across a storage evacuation longer than one pass", func() {
+	// evacuatingOperation is a Talos upgrade of one node whose storage evacuation (timeout, replicas still
+	// remaining) has begun, reconciled by an operation reconciler that runs the real upgrade step.
+	evacuatingOperation := func(suffix string, timeout time.Duration) (
+		*TalosOperationReconciler, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *ichorv1alpha1.TalosOperation,
+	) {
+		cluster, cp := newUpgradeNode(suffix, true)
+
+		hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+		Expect(err).NotTo(HaveOccurred())
+
+		evacuator := &fakeStorageEvacuator{
+			target:    &evacuationTarget{hook: hook, timeout: timeout, namespace: defaultLonghornNamespace},
+			remaining: 3,
+		}
+		adv := newUpgradeAdvancer(&fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}, evacuator)
+
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
+		op := newOpTestOperation(cluster.Name)
+		mustReconcileOperation(r, op) // begins the evacuation
+
+		return r, cluster, cp, op
+	}
+
+	// evacuatingFor moves the evacuation's clock back, as if it had begun that long ago.
+	evacuatingFor := func(cp *ichorv1alpha1.TalosMachine, ago time.Duration) {
+		got := fetchMachine(cp)
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionStorageEvacuation)
+		Expect(cond).NotTo(BeNil())
+		cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-ago))
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+	}
+
+	It("holds the lock and does not pause past the renewal ceiling while evacuationTimeout is still running", func() {
+		r, cluster, cp, op := evacuatingOperation("renew-evac-held", 2*time.Hour)
+
+		evacuatingFor(cp, operationRenewCeiling+15*time.Minute)
+
+		result, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(operationRequeueInterval))
+		Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+		var lease coordinationv1.Lease
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &lease)).To(Succeed())
+		Expect(ptr.Deref(lease.Spec.HolderIdentity, "")).To(Equal(operationLockIdentity(op)))
+	})
+
+	It("pauses once the evacuation passes its own evacuationTimeout, and the pause releases the lock", func() {
+		r, cluster, cp, op := evacuatingOperation("renew-evac-paused", 2*time.Hour)
+
+		evacuatingFor(cp, 2*time.Hour+time.Minute)
+
+		got := reconcileFetch(r, op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("timed out"))
+
+		var lease coordinationv1.Lease
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &lease))).To(BeTrue(),
+			"a paused operation releases the cluster lock (ADR 0162)")
 	})
 })

@@ -372,11 +372,12 @@ func (r *TalosOperationReconciler) renewEvery() time.Duration {
 // clusterlock.DefaultDuration, so a renewal may be late once and the lock still holds.
 const operationRenewInterval = time.Minute
 
-// operationRenewCeiling bounds the renewal of a step that has no step clock yet: the evacuation, drain and
-// Upgrade call before the node is acknowledged. Each has its own timeout (10 minutes by default), and the
-// ceiling is their sum.
-// shortcut: a TalosStorage evacuationTimeout above its 10m default outlasts this ceiling, so the lease lapses
-// mid-evacuation on such a cluster; drop when the ceiling follows the evacuation's own clock.
+// operationRenewCeiling bounds the renewal of one pass over a step that has no step clock yet. It is per pass:
+// stepRenewUntil is evaluated again on every reconcile, and the Acquire at the top of each one renews the lease. A
+// step that waits across passes (the storage evacuation under its TalosStorage's evacuationTimeout, the drain under
+// drainTimeout, the node's return under the verify timeouts) is therefore bounded by its own clock, which fails the
+// step and pauses the operation, never by this ceiling. What a single pass can block on is a call with its own
+// timeout, the longest being the Upgrade call (upgradeCallTimeout, 10 minutes); the ceiling sits well above that.
 const operationRenewCeiling = 30 * time.Minute
 
 // stepRenewUntil is the last moment the lock is renewed for m's step. A step the node has acknowledged

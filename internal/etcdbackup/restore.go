@@ -33,6 +33,18 @@ import (
 // ErrNotFound is what Store.Get returns, wrapped, for a key that does not exist.
 var ErrNotFound = errors.New("object not found")
 
+// ErrTransient is in the chain of an error that came from the storage or the stream, not from the
+// snapshot: the same object may pass its check and download on a later try. Everything else the recipe
+// returns is final: a checksum mismatch, a damaged chunk, a wrong passphrase, a missing object.
+var ErrTransient = errors.New("transient storage failure")
+
+// transient marks err as ErrTransient. It keeps err's text, so the message reads the same either way.
+type transient struct{ error }
+
+func (t transient) Unwrap() error { return t.error }
+
+func (transient) Is(target error) bool { return target == ErrTransient }
+
 // FetchVerified is the restore recipe: Get, Decrypt, check the etcd checksum trailer. The
 // plaintext is held in memory rather than on disk, since it contains every Secret in the cluster.
 func FetchVerified(ctx context.Context, store Store, key string, passphrase Key) (*bytes.Buffer, error) {
@@ -56,10 +68,14 @@ func VerifyObject(ctx context.Context, store Store, key string, passphrase Key) 
 func Reader(ctx context.Context, store Store, key string, passphrase Key) (io.ReadCloser, error) {
 	rc, err := store.Get(ctx, key)
 	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			err = transient{err}
+		}
+
 		return nil, fmt.Errorf("downloading: %w", err)
 	}
 
-	plain, err := Decrypt(rc, passphrase)
+	plain, err := Decrypt(source{rc}, passphrase)
 	if err != nil {
 		_ = rc.Close()
 
@@ -70,6 +86,19 @@ func Reader(ctx context.Context, store Store, key string, passphrase Key) (io.Re
 		io.Reader
 		io.Closer
 	}{plain, rc}, nil
+}
+
+// source is the object as Decrypt reads it. A read error from the storage is transient; an error the
+// decryption raises itself (a damaged chunk, a truncated end) is not, so it is left unmarked.
+type source struct{ io.Reader }
+
+func (s source) Read(p []byte) (int, error) {
+	n, err := s.Reader.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		err = transient{err}
+	}
+
+	return n, err
 }
 
 // stream downloads and decrypts key, checks the checksum trailer, copies the plaintext to each of sinks

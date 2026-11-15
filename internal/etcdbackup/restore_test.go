@@ -215,6 +215,71 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 	}
 }
 
+// cutStore serves its object, cut halfway through as a dropped connection cuts it. With getErr set, it
+// fails to start the download instead.
+type cutStore struct {
+	memStore
+	cut    bool
+	getErr error
+}
+
+// resetConn is what a dropped connection reads as.
+type resetConn struct{}
+
+func (resetConn) Read([]byte) (int, error) { return 0, errors.New("connection reset by peer") }
+
+func (s cutStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	if s.getErr != nil {
+		return nil, s.getErr
+	}
+
+	rc, err := s.memStore.Get(ctx, key)
+	if err != nil || !s.cut {
+		return rc, err
+	}
+
+	b := s.memStore[key]
+
+	return io.NopCloser(io.MultiReader(bytes.NewReader(b[:len(b)/2]), resetConn{})), nil
+}
+
+// A failure of the storage or the stream is ErrTransient, so the controller waits; a snapshot that is
+// itself bad is final. Guards: the wrap of Get's error, and source's wrap of the stream's read errors.
+func TestVerifyObjectSortsTransportFromFinalFailures(t *testing.T) {
+	ctx := context.Background()
+	pw := Key{Current: "pw"}
+	plain := makeSnapshot(strings.Repeat("etcd", 64<<10)) // large enough that a cut lands after the header
+
+	badSum := append([]byte(nil), plain...)
+	badSum[len(badSum)-1] ^= 0xff
+
+	damaged := sealed(t, plain, pw)
+	damaged[len(damaged)-100] ^= 0xff // a byte of the last chunk's ciphertext
+
+	cases := []struct {
+		name      string
+		store     Store
+		transient bool
+	}{
+		{"download fails to start", cutStore{memStore: memStore{"o": sealed(t, plain, pw)}, getErr: errors.New("dial tcp: i/o timeout")}, true},
+		{"read breaks during the copy", cutStore{memStore: memStore{"o": sealed(t, plain, pw)}, cut: true}, true},
+		{"checksum mismatch", memStore{"o": sealed(t, badSum, pw)}, false},
+		{"damaged ciphertext", memStore{"o": damaged}, false},
+		{"missing object", memStore{}, false},
+	}
+
+	for _, c := range cases {
+		_, err := VerifyObject(ctx, c.store, "o", pw)
+		if err == nil {
+			t.Fatalf("%s: passed", c.name)
+		}
+
+		if got := errors.Is(err, ErrTransient); got != c.transient {
+			t.Fatalf("%s: transient=%v, want %v: %v", c.name, got, c.transient, err)
+		}
+	}
+}
+
 func TestMarkerSignature(t *testing.T) {
 	ctx := context.Background()
 	st := memStore{}

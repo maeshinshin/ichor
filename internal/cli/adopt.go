@@ -55,6 +55,9 @@ var (
 	adoptAcceptDiff      bool
 	adoptWaitTimeout     time.Duration
 	adoptAddMachines     []string
+	adoptUIURL           string
+	adoptAdminUser       string
+	adoptAllowUnauth     bool
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -99,6 +102,14 @@ adopt runs in four phases, and nothing is applied to a node in any of them:
      over as Ichor's Helm release.
   4. Release: lifts the hold one node at a time, control planes first, each
      waiting for Ready, so the first render is applied with zero drift.
+
+Then, in the Ichor adopt installs, it turns Ichor's own sign-in on, as ichor init
+does: it creates the first administrator (its generated password is printed once,
+at the end), switches ichor-ui to sign-in, and sets spec.authentication.ichor on
+the TalosCluster. That last step marks every control plane APIServerRestartRequired:
+kube-apiserver restarts on each control plane, one at a time, only when you run
+"ichor rollout config". The consent prompt names it. --allow-unauthenticated leaves
+ichor-ui with no sign-in instead (a Helm-managed Ichor is not touched either way).
 
 A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
 control plane. adopt probes the version contract from that node (each minor from
@@ -220,12 +231,16 @@ clusters keep the old CAs, but never starts one.`,
 			AcceptCiliumChanges: adoptAcceptChanges,
 			AcceptCiliumDiff:    adoptAcceptDiff,
 
-			PlanOnly:         adoptPlanOnly,
-			WebhookWait:      adoptWaitTimeout,
-			RequireIchor:     adoptRequireIchor,
-			Seed:             cmp.Or(adoptSeed, adoptRecoverFrom),
-			ContractOverride: adoptContract,
-			AddMachines:      adoptAddMachines,
+			PlanOnly:     adoptPlanOnly,
+			WebhookWait:  adoptWaitTimeout,
+			RequireIchor: adoptRequireIchor,
+			UIURL:        adoptUIURL,
+			AdminUser:    adoptAdminUser,
+
+			AllowUnauthenticated: adoptAllowUnauth,
+			Seed:                 cmp.Or(adoptSeed, adoptRecoverFrom),
+			ContractOverride:     adoptContract,
+			AddMachines:          adoptAddMachines,
 			ReadIdentity: func(ctx context.Context, address string) (controller.HardwareIdentity, error) {
 				t, err := dialTalos(ctx, talosconfigPath, adoptContext, address)
 				if err != nil {
@@ -278,6 +293,13 @@ func init() {
 		"fail when Ichor is not installed (for example with Helm) instead of installing it")
 	adoptCmd.Flags().StringVar(&adoptCiliumValues, "cilium-values", "",
 		"YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI, or for a Cilium it takes over that has no Helm release record (Ichor-owned keys are refused)")
+	adoptCmd.Flags().StringVar(&adoptUIURL, "ui-url", "",
+		"the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
+			"left out, the issuer is "+defaultUIURL+", where ichor ui reaches it")
+	adoptCmd.Flags().StringVar(&adoptAdminUser, "admin-user", "",
+		"name of the first administrator (default "+defaultAdminUser+"); its generated password is printed once to stderr and must be changed at the first sign-in")
+	adoptCmd.Flags().BoolVar(&adoptAllowUnauth, "allow-unauthenticated", false,
+		"leave ichor-ui with no sign-in: "+openUIReach+"; without it adopt turns Ichor's own sign-in on")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, adoptFlagNode, "",
 		"address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet")
@@ -308,6 +330,7 @@ const (
 
 var addMachineExcluded = []string{
 	adoptFlagNode, "cni-unmanaged", "tunnel", "cilium-values", "accept-cilium-changes", "accept-cilium-diff", "require-ichor", adoptFlagVersionContract,
+	"ui-url", "admin-user", "allow-unauthenticated",
 }
 
 // checkAddMachineFlags refuses a flag that does not apply to --add-machine, instead of ignoring it.

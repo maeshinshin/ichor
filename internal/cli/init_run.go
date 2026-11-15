@@ -159,7 +159,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	// that receives the configuration.
 	ctx = controller.WithMaintenancePin(ctx, &controller.MaintenancePin{})
 
-	opts, err = prepareInitUsers(opts)
+	opts, err = prepareInitUsers("init", opts)
 	if err != nil {
 		return err
 	}

@@ -84,7 +84,7 @@ and holds the first configuration of a node without SecureBoot under `Required`;
 `spec.security.kernelLockdown` is checked against what each node reports; both
 surface as per-node and cluster conditions, and a node's state is read from its
 `SecurityState`, never changed in place. A reset with `spec.node.wipeMode`
-`system-disk` or `all` (a TalosOperation of kind node, or `ichor delete node --wipe-mode`)
+`system-disk`, `all` (the same whole system disk, user disks left alone) or `system-disk-and-user-disks` (a TalosOperation of kind node, or `ichor delete node --wipe-mode`)
 wipes more than STATE and EPHEMERAL so a node can be installed afresh from the
 SecureBoot ISO.
 `spec.security.kubeletServingCertificates` renders `serverTLSBootstrap` and the

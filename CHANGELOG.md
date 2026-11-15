@@ -443,9 +443,11 @@ command does. Each item is described where it is listed below.
   machine that rebooted with its disk intact goes NotReady too. After
   `nodeDownWait` the removal completes and reports the wipe as not confirmed.
   A removal that powers the machine off afterwards cannot be confirmed that way,
-  so it completes when the Node goes NotReady and records a Normal event that
-  says why the wipe is unconfirmed, instead of waiting out `nodeDownWait` and
-  warning on every default removal.
+  so it completes when the Node goes NotReady, without waiting out
+  `nodeDownWait`, and records a Warning event that says why the wipe is
+  unconfirmed: the same type as the other unconfirmed wipes, since the disk is
+  as unverified. A default removal powers the machine off, so it records that
+  Warning.
 - A removal that waits for the cluster lock after Talos accepted its Reset no
   longer sends the Reset again to the same node, and the accepted Reset stays on
   the Removal condition. The condition written when Talos accepts the

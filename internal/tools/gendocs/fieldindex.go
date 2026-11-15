@@ -39,10 +39,10 @@ type fieldRow struct {
 	Values      []string `json:"values,omitempty"`
 	Description string   `json:"description,omitempty"`
 	// Doc is where the Talos document that spells the setting has it, as "Kind:path" (the path is empty on a
-	// whole document, and name on the key of an entry). The editor writes documents until the wire carries
-	// spec.config, and the description and the allowed values are read from the same place.
-	// shortcut: drop Doc with the editor's documents, when the wire and the editor move to spec.config.
-	Doc string `json:"doc,omitempty"`
+	// whole document, and name on the key of an entry). The index does not carry it: the wire is spec.config and
+	// nothing in the UI needs a document. The generator's tests check each setting is the row of one document
+	// spelling, which is why it is kept in memory.
+	Doc string `json:"-"`
 }
 
 func fieldRows(crdsDir string) ([]fieldRow, error) {
@@ -272,10 +272,10 @@ func suffix(s apiextv1.JSONSchemaProps) string {
 // objectType is the type of a schema that holds properties.
 const objectType = "object"
 
-// generateFieldIndex writes the field index below file: one row for each field of each document kind that
-// spec.config carries, in the path it has in the document, which is what the editor writes. The CRD gives the paths, types, required and format; the description and
-// the allowed values come from the Talos machinery documentation tables (the Doc method of each document
-// type), which the CRD schema does not carry.
+// generateFieldIndex writes the field index below file: one row for each setting of spec.config, by its path
+// there. The CRD gives the paths, types, required and format; the description and the allowed values come from
+// the Talos machinery documentation tables (the Doc method of each document type), which the CRD schema does
+// not carry.
 func generateFieldIndex(crdsDir, file string) error {
 	rows, err := fieldRows(crdsDir)
 	if err != nil {

@@ -178,11 +178,6 @@ func (in *ClusterApiServer) DeepCopyInto(out *ClusterApiServer) {
 			(*out)[key] = val
 		}
 	}
-	if in.CertSANs != nil {
-		in, out := &in.CertSANs, &out.CertSANs
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.DisablePodSecurityPolicy != nil {
 		in, out := &in.DisablePodSecurityPolicy, &out.DisablePodSecurityPolicy
 		*out = new(bool)

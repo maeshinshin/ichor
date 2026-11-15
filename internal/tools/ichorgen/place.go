@@ -50,6 +50,7 @@ var droppedFromConfig = []dropped{
 	{"cluster.inlineManifests", byDoc},
 	{"cluster.extraManifests", byDoc},
 	{"cluster.apiServer.authorizationConfig", byDoc},
+	{"cluster.apiServer.certSANs", byDoc},
 	{"cluster.coreDNS.disabled", byInverted},
 }
 
@@ -73,6 +74,14 @@ var sections = map[string]string{
 }
 
 func coll(kind, path, doc string) row { return row{kind: kind, keyed: path, doc: doc} }
+
+// presence names settings that are a switch for a document: true brings the document of that kind into being,
+// and false (or the v1alpha1 spelling, where the machine takes no such document) is written to the
+// v1alpha1 document. Keyed by the Ichor path of the setting.
+var presence = map[string]string{
+	"machine.features.kubePrism.enabled":                "KubePrismConfig",
+	"machine.features.kubernetesTalosAPIAccess.enabled": "KubeTalosAPIAccessConfig",
+}
 
 var rows = []row{
 	// Settings that were a document of their own in Talos land beside the setting of the same meaning.

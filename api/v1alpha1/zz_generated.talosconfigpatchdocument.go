@@ -787,6 +787,120 @@ func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
 	}
 }
 
+// TalosConfigPatchDocumentKinds lists the kinds a document can name, in the order of the fields.
+func TalosConfigPatchDocumentKinds() []string {
+	return []string{
+		"SysctlConfig",
+		"KernelModuleConfig",
+		"Config",
+		"VolumeConfig",
+		"UserVolumeConfig",
+		"RawVolumeConfig",
+		"ResolverConfig",
+		"BGPInstanceConfig",
+		"BlackholeRouteConfig",
+		"BondConfig",
+		"BridgeConfig",
+		"ContainerConfig",
+		"DHCPv6Config",
+		"DummyLinkConfig",
+		"EnvironmentConfig",
+		"EtcFileConfig",
+		"EthernetConfig",
+		"EventSinkConfig",
+		"ExistingVolumeConfig",
+		"ExtensionServiceConfig",
+		"ExternalVolumeConfig",
+		"FilesystemScrubConfig",
+		"FilesystemTrimConfig",
+		"HTTPProbeConfig",
+		"ImageCacheConfig",
+		"ImageVerificationConfig",
+		"KmsgLogConfig",
+		"KubeAPIServerConfig",
+		"KubeClusterConfig",
+		"KubeControllerManagerConfig",
+		"KubeCoreDNSConfig",
+		"KubeInlineManifestConfig",
+		"KubeNetworkConfig",
+		"KubeNodeConfig",
+		"KubePrismConfig",
+		"KubeSpanConfig",
+		"KubeSpanEndpointsConfig",
+		"KubeTalosAPIAccessConfig",
+		"LVMLogicalVolumeConfig",
+		"LVMVolumeGroupConfig",
+		"Layer2VIPConfig",
+		"OOMConfig",
+		"PCIDriverRebindConfig",
+		"RAIDArrayConfig",
+		"RegistryMirrorConfig",
+		"RoutingRuleConfig",
+		"StaticHostConfig",
+		"SwapVolumeConfig",
+		"SysfsConfig",
+		"TCPProbeConfig",
+		"TimeSyncConfig",
+		"TrustedRootsConfig",
+		"UdevRulesConfig",
+		"VRFConfig",
+		"VethConfig",
+		"WatchdogTimerConfig",
+		"ZswapConfig",
+		"KubeAuditPolicyConfig",
+		"KubeAuthorizerConfig",
+		"KubeCredentialProviderConfig",
+		"KubeExternalManifestConfig",
+		"KubeletConfig",
+		"KubeProxyConfig",
+		"KubeSchedulerConfig",
+		"KubeStaticPodConfig",
+	}
+}
+
+// TalosConfigPatchDocumentIsKubernetes reports whether a kind is one of Talos's documents for the Kubernetes
+// components, which a machine accepts from the Talos version whose contract has MultidocKubernetesConfigSupported.
+func TalosConfigPatchDocumentIsKubernetes(kind string) bool {
+	switch kind {
+	case "KubeAPIServerConfig":
+		return true
+	case "KubeClusterConfig":
+		return true
+	case "KubeControllerManagerConfig":
+		return true
+	case "KubeCoreDNSConfig":
+		return true
+	case "KubeInlineManifestConfig":
+		return true
+	case "KubeNetworkConfig":
+		return true
+	case "KubeNodeConfig":
+		return true
+	case "KubePrismConfig":
+		return true
+	case "KubeTalosAPIAccessConfig":
+		return true
+	case "KubeAuditPolicyConfig":
+		return true
+	case "KubeAuthorizerConfig":
+		return true
+	case "KubeCredentialProviderConfig":
+		return true
+	case "KubeExternalManifestConfig":
+		return true
+	case "KubeletConfig":
+		return true
+	case "KubeProxyConfig":
+		return true
+	case "KubeSchedulerConfig":
+		return true
+	case "KubeStaticPodConfig":
+		return true
+	default:
+		return false
+	}
+}
+
 // Validate returns an error unless exactly the field that kind names is populated, naming the kind and the
 // fields that disagree. The CRD only bounds a document to kind plus one field (minProperties and
 // maxProperties 2, which cost no CEL budget however many kinds ship); that the field is the one kind names

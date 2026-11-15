@@ -44,6 +44,22 @@ func run(src *source) (*gen, error) {
 		}
 	}
 
+	for path, kind := range presence {
+		i := strings.LastIndexByte(path, '.')
+
+		n, err := g.at(path[:i])
+		if err != nil {
+			return nil, fmt.Errorf("presence %s: %w", path, err)
+		}
+
+		f := n.field(path[i+1:])
+		if f == nil {
+			return nil, fmt.Errorf("presence %s: no such setting", path)
+		}
+
+		f.sinks = append(f.sinks, sink{"+" + kind, ""})
+	}
+
 	for path, doc := range sections {
 		if doc == "" {
 			continue
@@ -58,6 +74,10 @@ func run(src *source) (*gen, error) {
 	}
 
 	g.settle(g.root)
+
+	if err := g.check(g.root); err != nil {
+		return nil, err
+	}
 
 	return g, nil
 }
@@ -257,6 +277,27 @@ func (g *gen) placeKeyed(r row, st *srcStruct, skip map[string]bool) error {
 	}
 
 	n.fields = append(n.fields, &field{json: name, t: t, docs: r.kind, list: list, doc: r.doc, sinks: []sink{{r.kind, ""}}})
+
+	return nil
+}
+
+// check refuses a shape the conversion cannot carry: documents merged into the entries of a list or a map that
+// is not a collection of documents, where a setting could not be told which entry it belongs to.
+func (g *gen) check(n *node) error {
+	for _, f := range n.fields {
+		c := n.child(f.t)
+		if c == nil || c.ref != nil {
+			continue
+		}
+
+		if f.docs == "" && f.t.kind != tPtr {
+			return fmt.Errorf("%s: documents were merged into the entries of a list or map; write a row that gives the entries a name", join(n.path, f.json))
+		}
+
+		if err := g.check(c); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

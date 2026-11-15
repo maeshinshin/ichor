@@ -797,6 +797,35 @@ func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
 	}
 }
 
+// TalosConfigPatchDocumentKinds lists the kinds a document can name, in the order of the fields.
+func TalosConfigPatchDocumentKinds() []string {
+	return []string{
+`)
+
+	for _, r := range roots {
+		fmt.Fprintf(&b, "\t\t%q,\n", r.kind)
+	}
+
+	b.WriteString(`	}
+}
+
+// TalosConfigPatchDocumentIsKubernetes reports whether a kind is one of Talos's documents for the Kubernetes
+// components, which a machine accepts from the Talos version whose contract has MultidocKubernetesConfigSupported.
+func TalosConfigPatchDocumentIsKubernetes(kind string) bool {
+	switch kind {
+`)
+
+	for _, r := range roots {
+		if strings.HasSuffix(r.pkgPath, "/types/k8s") {
+			fmt.Fprintf(&b, "\tcase %q:\n\t\treturn true\n", r.kind)
+		}
+	}
+
+	b.WriteString(`	default:
+		return false
+	}
+}
+
 // Validate returns an error unless exactly the field that kind names is populated, naming the kind and the
 // fields that disagree. The CRD only bounds a document to kind plus one field (minProperties and
 // maxProperties 2, which cost no CEL budget however many kinds ship); that the field is the one kind names

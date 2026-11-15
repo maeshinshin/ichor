@@ -475,8 +475,6 @@ type ClusterApiServer struct {
 	// +optional
 	Env map[string]string `json:"env,omitempty" ichor:"Config:cluster.apiServer.env;KubeAPIServerConfig:env"`
 	// +optional
-	CertSANs []string `json:"certSANs,omitempty" ichor:"Config:cluster.apiServer.certSANs"`
-	// +optional
 	DisablePodSecurityPolicy *bool `json:"disablePodSecurityPolicy,omitempty" ichor:"Config:cluster.apiServer.disablePodSecurityPolicy"`
 	// +optional
 	AdmissionControl []*typedconfig.AdmissionPluginConfig `json:"admissionControl,omitempty" ichor:"Config:cluster.apiServer.admissionControl"`
@@ -854,7 +852,7 @@ type MachineRegistriesMirrorsEntry struct {
 // MachineFeaturesKubernetesTalosAPIAccess is the object at machine.features.kubernetesTalosAPIAccess.
 type MachineFeaturesKubernetesTalosAPIAccess struct {
 	// +optional
-	Enabled *bool `json:"enabled,omitempty" ichor:"Config:machine.features.kubernetesTalosAPIAccess.enabled"`
+	Enabled *bool `json:"enabled,omitempty" ichor:"+KubeTalosAPIAccessConfig:;Config:machine.features.kubernetesTalosAPIAccess.enabled"`
 	// +optional
 	AllowedRoles []string `json:"allowedRoles,omitempty" ichor:"Config:machine.features.kubernetesTalosAPIAccess.allowedRoles;KubeTalosAPIAccessConfig:allowedRoles"`
 	// +optional
@@ -864,7 +862,7 @@ type MachineFeaturesKubernetesTalosAPIAccess struct {
 // MachineFeaturesKubePrism is the object at machine.features.kubePrism.
 type MachineFeaturesKubePrism struct {
 	// +optional
-	Enabled *bool `json:"enabled,omitempty" ichor:"Config:machine.features.kubePrism.enabled"`
+	Enabled *bool `json:"enabled,omitempty" ichor:"+KubePrismConfig:;Config:machine.features.kubePrism.enabled"`
 	// +optional
 	Port int `json:"port,omitempty" ichor:"Config:machine.features.kubePrism.port;KubePrismConfig:port"`
 	// +optional

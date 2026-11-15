@@ -52,7 +52,7 @@ Turning users on needs three things:
 
 ## Turn users on
 
-On a new cluster, sign-in is on by default. To reach ichor-ui at an address of your own, pass that URL to `ichor init`:
+On a new cluster, sign-in is on by default, and `ichor adopt` turns it on in the Ichor it installs the same way (same flags; see [Adopt and reclaim](adopt-and-reclaim.md)). To reach ichor-ui at an address of your own, pass that URL to `ichor init`:
 
 ```sh
 ichor init --ui-url https://ichor.example.com --admin-user admin ...

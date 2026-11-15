@@ -34,6 +34,14 @@ adopt runs in four phases, and nothing is applied to a node in any of them:
   4. Release: lifts the hold one node at a time, control planes first, each
      waiting for Ready, so the first render is applied with zero drift.
 
+Then, in the Ichor adopt installs, it turns Ichor's own sign-in on, as ichor init
+does: it creates the first administrator (its generated password is printed once,
+at the end), switches ichor-ui to sign-in, and sets spec.authentication.ichor on
+the TalosCluster. That last step marks every control plane APIServerRestartRequired:
+kube-apiserver restarts on each control plane, one at a time, only when you run
+"ichor rollout config". The consent prompt names it. --allow-unauthenticated leaves
+ichor-ui with no sign-in instead (a Helm-managed Ichor is not touched either way).
+
 A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
 control plane. adopt probes the version contract from that node (each minor from
 v1.12 up to the one it runs, keeping the one that differs least from the live
@@ -83,6 +91,8 @@ ichor adopt [flags]
       --accept-cilium-changes     accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)
       --accept-cilium-diff        accept the differences between the live Cilium objects and the pinned chart
       --add-machine stringArray   address of a node that already runs a configuration signed by this cluster's CAs but has no TalosMachine; adds it to the existing cluster instead of adopting the cluster (repeatable)
+      --admin-user string         name of the first administrator (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
+      --allow-unauthenticated     leave ichor-ui with no sign-in: anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, which include starting a CA or key rotation and shutting down the cluster or a node, but not resetting a node or restoring etcd; without it adopt turns Ichor's own sign-in on
       --bundle-plaintext          store the recovered secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a generated passphrase)
       --cilium-values string      YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI, or for a Cilium it takes over that has no Helm release record (Ichor-owned keys are refused)
       --cluster string            name of the TalosCluster to adopt (required)
@@ -97,6 +107,7 @@ ichor adopt [flags]
       --require-ichor             fail when Ichor is not installed (for example with Helm) instead of installing it
       --secrets-bundle string     path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)
       --tunnel string             tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards
+      --ui-url string             the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; left out, the issuer is https://localhost:8443, where ichor ui reaches it
       --version-contract string   use this Talos version contract (v1.14 or later) for the TalosCluster adopt creates, instead of the probed one
       --wait-timeout duration     how long to wait for Ichor's admission webhooks before giving up (default 15m0s)
 ```

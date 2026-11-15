@@ -107,8 +107,8 @@ func TestChangedPaths_PatchedConfig(t *testing.T) {
 		// ExtraArgs is a map, so the diff is reported per key rather than at "extraArgs"
 		// itself -- fieldmeta's prefix match still covers it.
 		"setting of a document the base configuration has": {
-			extraArgsConfig(),
-			"KubeAPIServerConfig.extraArgs.foo",
+			&ichorconfig.Config{Machine: &ichorconfig.Machine{Kubelet: &ichorconfig.MachineKubelet{ExtraArgs: map[string][]string{"foo": {"b"}}}}},
+			"KubeletConfig.extraArgs.foo",
 		},
 		"standalone document added": {
 			&ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.ipv4.ip_forward": "1"}}},

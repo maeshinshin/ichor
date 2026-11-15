@@ -254,7 +254,15 @@ func documentLeafPaths(d ichorv1alpha1.TalosConfigPatchDocument) (map[string]str
 		return nil, err
 	}
 
-	return encodeLeaves(c)
+	leaves, err := encodeLeaves(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// A field the patch leaves empty (the image of a document whose image the patch does not set) sets nothing.
+	maps.DeleteFunc(leaves, func(_, v string) bool { return v == `""` })
+
+	return leaves, nil
 }
 
 // configLayerToPB converts a TalosConfigPatchSpec.layer value to the wire

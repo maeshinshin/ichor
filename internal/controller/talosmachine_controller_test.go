@@ -492,11 +492,11 @@ func minimalConfigSkeleton() *ichorconfig.Config {
 }
 
 // extraArgsConfig is minimalConfigSkeleton with one extra, safe (pkg/fieldmeta:
-// cluster.apiServer needs no reboot) API server argument set -- the non-reboot
+// a sysctl needs no reboot) setting, one a worker takes -- the non-reboot
 // change every "applies without a reboot" test reuses.
 func extraArgsConfig() *ichorconfig.Config {
 	cfg := minimalConfigSkeleton()
-	cfg.Cluster.ApiServer = &ichorconfig.ClusterApiServer{ExtraArgs: map[string][]string{"foo": {"b"}}}
+	cfg.Machine.Sysctls = map[string]string{"foo": "b"}
 
 	return cfg
 }
@@ -922,7 +922,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// Ichor's side touched -- cluster, the patch and the machine all
 		// keep the same generation.
 		drifted := extraArgsConfig()
-		drifted.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
+		drifted.Machine.Sysctls["foo"] = "c"
 		driftedCurrent := renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 		fake.current = driftedCurrent
 
@@ -934,7 +934,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash), "left at the last known-good hash, not the node's drifted one")
 
 		cond := expectReady(got, metav1.ConditionFalse, reasonNodeDrifted)
-		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
+		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params.foo"))
 		Expect(cond.Message).To(ContainSubstring("warnOnly"))
 	})
 
@@ -950,7 +950,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		// The node differs from the render (a first-time mismatch, which would otherwise be applied).
 		other := extraArgsConfig()
-		other.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
+		other.Machine.Sysctls["foo"] = "c"
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, other)}
 		r := newTestReconciler(fake)
@@ -962,7 +962,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 
 		cond := expectReady(got, metav1.ConditionFalse, reasonAdoptionHeld)
-		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
+		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params.foo"))
 		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionAdoptionHeld)).To(BeTrue())
 
 		// Release the hold: the controller applies the render.
@@ -1029,7 +1029,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// The node holds what the previous Ichor rendered, which differs from what this one does,
 		// while no CR generation moved.
 		old := extraArgsConfig()
-		old.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
+		old.Machine.Sysctls["foo"] = "c"
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, old)
 
 		prev := renderVersion
@@ -1113,7 +1113,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
 
 		drifted := extraArgsConfig()
-		drifted.Cluster.ApiServer.ExtraArgs["foo"] = []string{"c"}
+		drifted.Machine.Sysctls["foo"] = "c"
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 
 		reconcileOK(r, m)

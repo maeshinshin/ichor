@@ -29,6 +29,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -109,16 +110,18 @@ var _ = Describe("the API server restart class", func() {
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 	})
 
-	It("is applied by the machine controller on a worker, which has no API server to restart", func() {
+	It("is left out of a worker, which has no API server to restart", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
 		m := newTestMachine(cluster.Name, true)
-		newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
+		apiServer := minimalConfigSkeleton()
+		apiServer.Cluster.ApiServer = &ichorconfig.ClusterApiServer{ExtraArgs: map[string][]string{"foo": {"b"}}}
+		newTestPatch(cluster.Name, layerCluster, nil, apiServer)
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())}
 		reconcileOK(newTestReconciler(fake), m)
-		Expect(fake.applyCalls).To(HaveLen(1))
+		Expect(fake.applyCalls).To(BeEmpty())
 	})
 
 	It("is applied by the config operation without a drain or reboot, and the step waits for /readyz", func() {

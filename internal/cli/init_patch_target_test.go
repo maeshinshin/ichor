@@ -17,9 +17,11 @@ limitations under the License.
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // The bootstrap patch sets machine.type to the first node's role. At the cluster layer it
@@ -37,5 +39,39 @@ func TestBuildInlineManifestsPatch_OnlyTargetsTheFirstNodesRole(t *testing.T) {
 
 	if p.Spec.Layer != "role" || p.Spec.Target == nil || p.Spec.Target.Role != roleControlPlane {
 		t.Fatalf("layer/target = %q/%+v, want the role layer targeting %q", p.Spec.Layer, p.Spec.Target, roleControlPlane)
+	}
+}
+
+// The bootstrap patch carries the node's role and address and the CNI's manifest in spec.config, and converts to the
+// documents Talos takes.
+func TestBuildInlineManifestsPatch_CarriesTheManifestInSpecConfig(t *testing.T) {
+	cluster, err := buildInitPlan(validInitPlanInput(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	machine := &ichorv1alpha1.TalosMachine{Spec: ichorv1alpha1.TalosMachineSpec{Role: roleControlPlane}}
+	manifest := &typedconfig.ClusterInlineManifest{InlineManifestName: "cni", InlineManifestContents: "kind: List\n"}
+
+	p := buildInlineManifestsPatch(cluster, machine, "10.0.0.10:50000", []*typedconfig.ClusterInlineManifest{manifest})
+
+	c := p.Spec.Config
+	if c.Machine.Type != roleControlPlane || len(c.Machine.CertSANs) != 1 || c.Machine.CertSANs[0] != "10.0.0.10" ||
+		c.Cluster.InlineManifests["cni"].Manifest != "kind: List\n" {
+		t.Fatalf("spec.config = %+v", c)
+	}
+
+	docs, err := p.Spec.EffectiveDocuments(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var kinds []string
+	for _, d := range docs {
+		kinds = append(kinds, d.Kind)
+	}
+
+	if want := "Config KubeInlineManifestConfig"; strings.Join(kinds, " ") != want {
+		t.Errorf("documents = %v, want %s", kinds, want)
 	}
 }

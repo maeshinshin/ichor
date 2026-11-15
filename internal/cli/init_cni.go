@@ -70,20 +70,28 @@ func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string, kube
 	}
 
 	if len(docs) > 0 {
-		config, err := ichorv1alpha1.ConfigFromDocuments(docs)
-		if err != nil {
-			return nil, fmt.Errorf("init: cni Talos patches: %w", err)
-		}
-
-		out.Patch = &ichorv1alpha1.TalosConfigPatch{
-			Name: clusterName + "-cni", Namespace: namespace,
-			Spec: ichorv1alpha1.TalosConfigPatchSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-				Layer:      cniPatchLayer,
-				Config:     config,
-			},
+		if out.Patch, err = cniConfigPatch(docs, clusterName, namespace); err != nil {
+			return nil, err
 		}
 	}
 
 	return out, nil
+}
+
+// cniConfigPatch is the cluster-layer TalosConfigPatch that carries the Talos documents a CNI preset returns, written
+// in spec.config.
+func cniConfigPatch(docs []ichorv1alpha1.TalosConfigPatchDocument, clusterName, namespace string) (*ichorv1alpha1.TalosConfigPatch, error) {
+	config, err := ichorv1alpha1.ConfigFromDocuments(docs)
+	if err != nil {
+		return nil, fmt.Errorf("init: cni Talos patches: %w", err)
+	}
+
+	return &ichorv1alpha1.TalosConfigPatch{
+		Name: clusterName + "-cni", Namespace: namespace,
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
+			Layer:      cniPatchLayer,
+			Config:     config,
+		},
+	}, nil
 }

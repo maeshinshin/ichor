@@ -23,8 +23,10 @@ import (
 
 	sigsyaml "sigs.k8s.io/yaml"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 const tunnelGeneve = "geneve"
@@ -127,5 +129,23 @@ func TestBuildCNIBootstrap_HAOperatorStartsWithOneReplica(t *testing.T) {
 
 	if got := ciliumOperatorReplicas(t, out.InlineManifest.InlineManifestContents); got != 1 {
 		t.Errorf("operator replicas = %d, want 1 for the one node init bootstraps", got)
+	}
+}
+
+// The documents a CNI preset returns are written in spec.config, in a cluster-layer patch of their own.
+func TestCNIConfigPatchWritesThePresetsDocumentsInSpecConfig(t *testing.T) {
+	p, err := cniConfigPatch([]ichorv1alpha1.TalosConfigPatchDocument{{
+		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.conf.all.rp_filter": "0"}},
+	}}, "my-cluster", testNamespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p.Name != "my-cluster-cni" || p.Spec.Layer != cniPatchLayer || p.Spec.Config.Machine.Sysctls["net.ipv4.conf.all.rp_filter"] != "0" {
+		t.Errorf("patch = %+v", p)
+	}
+
+	if _, err := cniConfigPatch([]ichorv1alpha1.TalosConfigPatchDocument{{Kind: "NoSuchKind"}}, "c", testNamespace); err == nil {
+		t.Error("a document the schema does not carry was accepted")
 	}
 }

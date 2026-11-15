@@ -469,3 +469,32 @@ func TestAdoptBlocksOnlyTheAPIServerSANsThatCannotBeCaptured(t *testing.T) {
 		t.Errorf("the plan does not name only the kube-apiserver SANs:\n%s", out)
 	}
 }
+
+// A node that still holds the kube-apiserver's SANs in the v1alpha1 spelling has them captured as the setting of the
+// KubeAPIServerConfig document, which is where Ichor's schema writes it.
+func TestCaptureDocumentsWritesTheAPIServerSANsAsTheKubeAPIServerDocumentSetting(t *testing.T) {
+	cp, _ := classAFixture(t, "v114")
+	cfg := strings.Replace(string(cp), "\ncluster:\n", "\ncluster:\n    apiServer:\n        certSANs:\n            - extra.example.test\n", 1)
+
+	docs, err := captureDocuments([]byte(cfg), false, false, []string{pathAPIServerCertSANs}, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var sans []string
+
+	for _, d := range docs {
+		if d.KubeAPIServerConfig != nil {
+			sans = d.KubeAPIServerConfig.PodCertExtraSANs
+		}
+	}
+
+	if !slices.Equal(sans, []string{"extra.example.test"}) {
+		t.Fatalf("captured documents = %+v", docs)
+	}
+
+	c, err := ichorv1alpha1.ConfigFromDocuments(docs)
+	if err != nil || !slices.Equal(c.Cluster.ApiServer.CertExtraSANs, sans) {
+		t.Fatalf("spec.config = %+v (%v)", c, err)
+	}
+}

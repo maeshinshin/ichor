@@ -345,4 +345,12 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	if patches[0].Spec.Config.Machine.Features.KubernetesTalosAPIAccess == nil {
 		t.Error("the caller's patch was modified")
 	}
+
+	// Before Talos 1.14 the setting is the v1alpha1 document's, which the control-plane rule of the documents does not
+	// reach: the patch is edited, not the document.
+	legacy := testCluster("true")
+	legacy.Spec.VersionContract = contractV112
+
+	requireAll(t, mustRender(t, legacy, testMachine("cp", roleControlPlane, nil), bundle, patches), "kubernetesTalosAPIAccess")
+	requireNone(t, mustRender(t, legacy, testMachine("w", roleWorker, nil), bundle, patches), "kubernetesTalosAPIAccess")
 }

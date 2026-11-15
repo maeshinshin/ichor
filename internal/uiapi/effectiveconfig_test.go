@@ -133,9 +133,9 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 		bundle := newTestBundle()
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name)
-		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-origin"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-origin"), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
 
-		patch := newTestPatch(cluster.Name, layerCluster, nil, 0, extraArgsConfig(roleWorker))
+		patch := newTestPatch(cluster.Name, layerCluster, nil, 0, extraArgsConfig(roleControlPlane))
 
 		s := &Server{Client: k8sClient, ControllerNamespace: testNamespace}
 		resp, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
@@ -147,7 +147,7 @@ var _ = Describe("GetEffectiveConfig masking", func() {
 
 		for _, v := range resp.Msg.GetConfig().GetValues() {
 			switch v.GetPath() {
-			case "cluster.apiServer.extraArgs.foo":
+			case "KubeAPIServerConfig.extraArgs.foo":
 				patched = v
 			case "DiscoveryIdentityConfig.clusterID":
 				// A separate document the "Config"-kind patch above never

@@ -44,7 +44,7 @@ func TestAuthConfigProviders(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := authConfig(tc.oidc, "client", tc.users, false)
+			got := authConfig(tc.oidc, "client", tc.users)
 			if _, ok := got["issuer"]; ok {
 				t.Fatalf("top-level issuer still sent: %v", got["issuer"])
 			}

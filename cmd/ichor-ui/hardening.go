@@ -45,11 +45,11 @@ const (
 )
 
 // mountRPC registers every Connect service on mux behind the metrics, access-log and auth interceptors.
-func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator, allowAnonymous bool) {
+func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
 	opts := func(max int) connect.HandlerOption {
 		return connect.WithHandlerOptions(
 			connect.WithReadMaxBytes(max),
-			connect.WithInterceptors(uiapi.SanitizeErrors(log.Default()), uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn, allowAnonymous)),
+			connect.WithInterceptors(uiapi.SanitizeErrors(log.Default()), uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn)),
 		)
 	}
 	small, big := opts(rpcMaxBytes), opts(rpcMaxBytesUpload)

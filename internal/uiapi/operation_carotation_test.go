@@ -75,8 +75,9 @@ func TestPlanCARotationNamesEveryMachineIncludingHeldTheStagesAndTheStaleBundle(
 
 func TestCreateCARotationWritesAnOperationAndNoSpec(t *testing.T) {
 	srv, k8s := opServer(t, opObjects()...)
+	who := signedInWhoMayDoAnything(srv, k8s)
 
-	res, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CA_ROTATION, ""))
+	res, err := srv.CreateOperation(who, opCreate(pb.OperationKind_OPERATION_KIND_CA_ROTATION, ""))
 	if err != nil {
 		t.Fatal(err)
 	}

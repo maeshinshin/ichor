@@ -99,7 +99,7 @@ func main() {
 	oidcUserPrefix := flag.String("oidc-username-prefix", os.Getenv("ICHOR_OIDC_USERNAME_PREFIX"), "prefix added to the user name")
 	oidcGroupsPrefix := flag.String("oidc-groups-prefix", os.Getenv("ICHOR_OIDC_GROUPS_PREFIX"), "prefix added to each group")
 	allowAnonymous := flag.Bool("allow-unauthenticated", envTrue("ICHOR_ALLOW_UNAUTHENTICATED"),
-		"serve every call without a sign-in, using this pod's ServiceAccount; without it and without OIDC or Ichor users only read-only calls are served")
+		"REMOVED: ichor-ui refuses to start with it; without OIDC or Ichor users only read-only calls are served")
 	// Ichor's own users and issuer; off by default.
 	var users usersFlags
 
@@ -124,6 +124,10 @@ func main() {
 	settingsReadOnly := flag.Bool("settings-read-only", envTrue("ICHOR_SETTINGS_READ_ONLY"), "ignore the runtime settings in the IchorInstallation spec (chart settings.readOnly)")
 
 	flag.Parse()
+
+	if *allowAnonymous {
+		log.Fatal(errOpenModeRemoved)
+	}
 
 	// certreload's certwatcher logs through controller-runtime's logger, which dumps a stack
 	// trace when none is set; send it to the std logger this binary uses everywhere else.
@@ -219,12 +223,9 @@ func main() {
 
 	if authn != nil {
 		server.Impersonate = uiapi.NewImpersonator(restCfg, client.Options{Scheme: scheme, Mapper: c.RESTMapper()})
-	} else if *allowAnonymous {
-		log.Print("ichor-ui: WARNING: --allow-unauthenticated is set and no sign-in is configured; every client that " +
-			"can reach ichor-ui writes with this pod's ServiceAccount permissions and is audited as \"ichor-ui\"")
 	} else {
 		log.Print("ichor-ui: no sign-in is configured (no OIDC, no Ichor users): serving read-only calls only; " +
-			"configure sign-in, or pass --allow-unauthenticated to allow writes without it")
+			"turn sign-in on to make changes")
 	}
 
 	server.Settings = liveSettings
@@ -232,7 +233,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/config", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(authConfig(*oidcIssuer, *oidcClientID, users, *allowAnonymous))
+		_ = json.NewEncoder(w).Encode(authConfig(*oidcIssuer, *oidcClientID, users))
 	})
 
 	if issuer != nil {
@@ -257,7 +258,7 @@ func main() {
 
 	mux.Handle("/metrics", metricsHandler)
 
-	mountRPC(mux, server, authn, *allowAnonymous)
+	mountRPC(mux, server, authn)
 
 	srv := httpsServer(*addr, securityHeaders(http.MaxBytesHandler(mux, bodyBackstop), contentSecurityPolicy(*oidcIssuer != "")), servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))
 
@@ -288,6 +289,12 @@ func main() {
 		_ = internalSrv.Shutdown(shutdownCtx)
 	}
 }
+
+// errOpenModeRemoved is what ichor-ui says when it is started with the removed open mode. Starting
+// anyway, read-only, would hide that an install meant to write without a sign-in no longer can.
+var errOpenModeRemoved = errors.New("ichor-ui: --allow-unauthenticated (or ICHOR_ALLOW_UNAUTHENTICATED=true) was removed: " +
+	"ichor-ui no longer serves changes without a sign-in. Remove it and turn sign-in on: Ichor users " +
+	"(chart ichorUI.users.enabled with ichorUI.users.externalURL, or `ichor adopt` / `ichor init`) or OIDC (chart ichorUI.oidc)")
 
 // envTrue reports whether the environment variable is "true".
 func envTrue(name string) bool { return os.Getenv(name) == "true" }

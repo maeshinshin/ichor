@@ -33,8 +33,8 @@ import (
 // for a hand-written TalosOperation; asking here gives the caller the refusal before anything is
 // written, and before the override questions.
 //
-// With nobody to ask (the backend on its own ServiceAccount, OIDC off) it asks nothing: the webhook
-// then judges the ServiceAccount, which the chart grants the verb.
+// With nobody to ask (the backend on its own ServiceAccount, no sign-in) it refuses: the ServiceAccount
+// holds no start verb, and a start is never made on its authority.
 func (s *Server) authorizeStart(ctx context.Context, spec *ichorv1alpha1.TalosOperationSpec, namespace string) error {
 	sub := spec.StartSubresource()
 	if sub == "" {
@@ -43,7 +43,9 @@ func (s *Server) authorizeStart(ctx context.Context, spec *ichorv1alpha1.TalosOp
 
 	_, signedIn := IdentityFrom(ctx)
 	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
-		return nil
+		return connect.NewError(connect.CodePermissionDenied,
+			fmt.Errorf("you may not start a %s operation: it needs a signed-in user whose own Kubernetes RBAC grants the %q verb on talosoperations/%s",
+				spec.Kind, ichorv1alpha1.OperationStartVerb, sub))
 	}
 
 	allowed, err := s.askAll(ctx, "start: ", authv1.ResourceAttributes{

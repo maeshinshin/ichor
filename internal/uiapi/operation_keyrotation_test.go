@@ -151,8 +151,9 @@ func keyCreate(kr *pb.KeyRotationRequest) *connect.Request[pb.CreateOperationReq
 
 func TestCreateKeyRotationWritesTheSpecOfTheRequestAndNoClusterSpec(t *testing.T) {
 	srv, k8s := opServer(t, keyObjects("v1.14")...)
+	who := signedInWhoMayDoAnything(srv, k8s)
 
-	res, err := srv.CreateOperation(context.Background(), keyCreate(&pb.KeyRotationRequest{
+	res, err := srv.CreateOperation(who, keyCreate(&pb.KeyRotationRequest{
 		Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetServiceAccount}, TokenSettle: "2h", IgnoreLegacyTokens: true,
 	}))
 	if err != nil {
@@ -180,8 +181,9 @@ func TestCreateKeyRotationWritesTheSpecOfTheRequestAndNoClusterSpec(t *testing.T
 
 func TestCreateKeyRotationDefaultsToBothKeysAndTheDefaultSettle(t *testing.T) {
 	srv, k8s := opServer(t, keyObjects("v1.14")...)
+	who := signedInWhoMayDoAnything(srv, k8s)
 
-	if _, err := srv.CreateOperation(context.Background(), keyCreate(nil)); err != nil {
+	if _, err := srv.CreateOperation(who, keyCreate(nil)); err != nil {
 		t.Fatal(err)
 	}
 

@@ -333,16 +333,17 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 	bg := context.Background()
+	signedIn := signedInWhoMayDoAnything(s, k8s)
 
-	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, "not-the-name", true))); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(signedIn, restoreCreateReq(restoreReq(restoreSnap, "not-the-name", true))); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("wrong name: %v", err)
 	}
 
-	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, false))); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(signedIn, restoreCreateReq(restoreReq(restoreSnap, opCluster, false))); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("no override: %v", err)
 	}
 
-	// With no signed-in user nobody can be asked whether they may override.
+	// With no signed-in user nobody can be asked whether they may start or override.
 	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, true))); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("no user: %v", err)
 	}

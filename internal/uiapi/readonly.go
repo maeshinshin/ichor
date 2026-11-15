@@ -18,8 +18,7 @@ package uiapi
 
 import "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 
-// readOnlyProcedures are the calls ichor-ui serves when no sign-in is configured and
-// --allow-unauthenticated is not set: they only read, and they read with
+// readOnlyProcedures are the calls ichor-ui serves when no sign-in is configured: they only read, and they read with
 // the ServiceAccount, which is what the UI showed before there was a login. A procedure
 // not listed here is refused, so a new RPC is closed by default until someone decides it
 // reads only. Downloads (support bundle, etcd snapshot, packet capture, CA credentials)

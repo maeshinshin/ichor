@@ -40,6 +40,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 )
 
 const (
@@ -241,7 +243,7 @@ func nilIfUser(id Identity) error {
 }
 
 func TestInterceptorDisabledPassesThroughWithoutIdentity(t *testing.T) {
-	wrapped := AuthInterceptor(nil, true).WrapUnary(func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+	wrapped := AuthInterceptor(nil).WrapUnary(func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
 		if _, ok := IdentityFrom(ctx); ok {
 			t.Error("identity set with OIDC disabled")
 		}
@@ -249,7 +251,8 @@ func TestInterceptorDisabledPassesThroughWithoutIdentity(t *testing.T) {
 		return connect.NewResponse(&emptypb.Empty{}), nil
 	})
 
-	if _, err := wrapped(context.Background(), connect.NewRequest(&emptypb.Empty{})); err != nil {
+	req := &specRequest{AnyRequest: connect.NewRequest(&emptypb.Empty{}), procedure: ichorv1alpha1connect.ClusterServiceListClustersProcedure}
+	if _, err := wrapped(context.Background(), req); err != nil {
 		t.Fatal(err)
 	}
 }

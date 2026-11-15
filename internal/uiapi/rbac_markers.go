@@ -41,30 +41,24 @@ limitations under the License.
 package uiapi
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;update
-// OperationService. With a sign-in (OIDC or Ichor users) every write below is made as the signed-in
-// user, so the ServiceAccount is the caller only with --allow-unauthenticated, and these verbs are
-// what that open mode runs on.
-// create: the open mode starts the operations that are not destructive (an upgrade, a CNI change) and
-// creates the TalosOperation that carries them.
+// OperationService. Every write below is made as the signed-in user (OIDC or Ichor users): a server
+// with no sign-in serves reads only, so the ServiceAccount is never the caller of a write.
+// create: creates the TalosOperation that carries a start the user made.
 // delete: DeleteOperation removes the record of an operation that may still be abandoned; it stops
 // nothing that was already sent to a machine.
+// There is no start verb here, on purpose: the destructive starts (talosoperations/<kind>) are the
+// signed-in user's own right, asked as the user, and a ServiceAccount that held them would let the
+// validating webhook, which asks whoever wrote the TalosOperation, pass a start nobody signed in for.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;create;update;delete
-// The destructive starts need the verb start on talosoperations/<kind>. With a sign-in the backend asks
-// it as the user. In the open mode the ServiceAccount is the caller and the validating webhook judges
-// it, so this verb is what lets the open mode start a CA rotation, a key rotation, a shutdown and a
-// node shutdown. An etcd restore and a node reset also need the override verb (override_webhook.go),
-// which the ServiceAccount does not hold, so this verb does not start them.
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/shutdown;talosoperations/ca-rotation;talosoperations/key-rotation;talosoperations/etcd-restore;talosoperations/node-reset;talosoperations/node-shutdown,verbs=start
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // SettingsService: with OIDC off the backend is the caller and the settings webhook judges its
 // ServiceAccount, so it holds the settings subresource like it holds update above (never .../version).
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/settings,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
-// update: with --allow-unauthenticated the ServiceAccount rejects a pending node (RejectMachine) and
-// sets the install disk of an approved one before its first install (SetMachineInstall). It cannot
+// update: RejectMachine and SetMachineInstall are made as the signed-in user. The ServiceAccount cannot
 // approve: the webhook asks for approve on talosmachines/approval and fails closed.
 // No delete: the only delete of a TalosMachine is RemoveMachine, which asks for the override verb, so
-// the ServiceAccount never reaches it, and with a sign-in it is the user who deletes.
+// the ServiceAccount never reaches it, and it is the user who deletes.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
 // An etcd restore is planned and chosen from the backups' status: get/list, nothing written.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list;update

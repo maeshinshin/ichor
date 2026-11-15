@@ -31,7 +31,7 @@ import (
 
 func TestRPCBodyLimit(t *testing.T) {
 	mux := http.NewServeMux()
-	mountRPC(mux, &uiapi.Server{}, nil, true)
+	mountRPC(mux, &uiapi.Server{}, nil)
 
 	post := func(path string, n int) int {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"x":"`+strings.Repeat("a", n)+`"}`))

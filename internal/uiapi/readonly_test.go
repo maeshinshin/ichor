@@ -10,9 +10,9 @@ import (
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 )
 
-func TestNoSignInServesReadOnlyCallsUnlessAnonymousIsAllowed(t *testing.T) {
-	call := func(anonymous bool, procedure string) error {
-		h := AuthInterceptor(nil, anonymous).WrapUnary(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
+func TestNoSignInServesReadOnlyCalls(t *testing.T) {
+	call := func(procedure string) error {
+		h := AuthInterceptor(nil).WrapUnary(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
 			return connect.NewResponse(&emptypb.Empty{}), nil
 		})
 		req := connect.NewRequest(&emptypb.Empty{})
@@ -42,17 +42,13 @@ func TestNoSignInServesReadOnlyCallsUnlessAnonymousIsAllowed(t *testing.T) {
 		"/ichor.v1alpha1.FutureService/DoSomething",
 	}
 	for _, p := range writes {
-		if err := call(false, p); connect.CodeOf(err) != connect.CodePermissionDenied {
+		if err := call(p); connect.CodeOf(err) != connect.CodePermissionDenied {
 			t.Errorf("%s without sign-in: %v, want PermissionDenied", p, err)
-		}
-
-		if err := call(true, p); err != nil {
-			t.Errorf("%s with --allow-unauthenticated: %v", p, err)
 		}
 	}
 
 	for p := range readOnlyProcedures {
-		if err := call(false, p); err != nil {
+		if err := call(p); err != nil {
 			t.Errorf("read-only %s refused: %v", p, err)
 		}
 	}

@@ -65,6 +65,16 @@ func testMachine() *ichorv1alpha1.TalosMachine {
 
 const bgUser = "oidc:alice"
 
+// signedInWhoMayDoAnything makes srv's callers a signed-in user to whom Kubernetes RBAC grants every
+// review, and returns the context that user calls with. A destructive start is refused without one.
+func signedInWhoMayDoAnything(srv *Server, k8s client.Client) context.Context {
+	var asked []authv1.ResourceAttributes
+
+	srv.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+
+	return context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+}
+
 func asUser(ctx context.Context) context.Context {
 	return ContextWithIdentity(ctx, Identity{User: testUserBob})
 }

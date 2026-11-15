@@ -136,8 +136,9 @@ func TestPlanCARotationBlocksTheAggregatorOnAnOldVersionContract(t *testing.T) {
 
 func TestCreateCARotationWritesTheTargetsInOrderAndNothingForTheDefault(t *testing.T) {
 	srv, k8s := opServer(t, opObjects()...)
+	who := signedInWhoMayDoAnything(srv, k8s)
 
-	if _, err := srv.CreateOperation(context.Background(), connect.NewRequest(&pb.CreateOperationRequest{
+	if _, err := srv.CreateOperation(who, connect.NewRequest(&pb.CreateOperationRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION,
 		CaTargets: []string{caAggregator, caTalos, caEtcd},
 	})); err != nil {
@@ -151,13 +152,13 @@ func TestCreateCARotationWritesTheTargetsInOrderAndNothingForTheDefault(t *testi
 	}
 
 	for _, o := range ops {
-		if err := k8s.Delete(context.Background(), &o); err != nil {
+		if err := k8s.Delete(who, &o); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// The default pair is the same as no choice: the spec carries no caRotation, as it always did.
-	if _, err := srv.CreateOperation(context.Background(), connect.NewRequest(&pb.CreateOperationRequest{
+	if _, err := srv.CreateOperation(who, connect.NewRequest(&pb.CreateOperationRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, CaTargets: []string{caKubernetes, caTalos},
 	})); err != nil {
 		t.Fatal(err)

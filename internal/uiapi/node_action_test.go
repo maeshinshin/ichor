@@ -231,16 +231,17 @@ func resetReq(confirm string, override bool) *connect.Request[pb.CreateOperation
 func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, opObjects()...)
 	bg := context.Background()
+	signedIn := signedInWhoMayDoAnything(s, k8s)
 
-	if _, err := s.CreateOperation(bg, resetReq("not-the-name", true)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(signedIn, resetReq("not-the-name", true)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("wrong name: %v", err)
 	}
 
-	if _, err := s.CreateOperation(bg, resetReq("w1", false)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(signedIn, resetReq("w1", false)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("no override: %v", err)
 	}
 
-	// With no signed-in user nobody can be asked whether they may override.
+	// With no signed-in user nobody can be asked whether they may start or override.
 	if _, err := s.CreateOperation(bg, resetReq("w1", true)); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("no user: %v", err)
 	}

@@ -33,6 +33,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -180,6 +181,26 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(resp.Msg.GetSupportBundle() || resp.Msg.GetEtcdSnapshot() || resp.Msg.GetPacketCapture() || resp.Msg.GetClusterCredentials()).To(BeFalse())
 
 		Expect(s.emitDownloadEvent(ctx, m, ScopeEtcdSnapshot, "")).To(Succeed())
+	})
+
+	// The destructive starts are the signed-in user's right. The kube-apiserver evaluates the generated
+	// role here, so a marker that grants the verb again fails this spec. The six are written out: they are
+	// what the CRD documents, not what the role or StartSubresource say.
+	It("does not let the ServiceAccount start any destructive operation", func() {
+		may := func(verb, subresource string) bool {
+			review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
+				Namespace: testNamespace, Verb: verb, Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosoperations", Subresource: subresource,
+			}}}
+			Expect(saClient.Create(ctx, review)).To(Succeed())
+
+			return review.Status.Allowed
+		}
+
+		Expect(may("create", "")).To(BeTrue(), "the role is bound: it still creates TalosOperations")
+
+		for _, sub := range []string{"shutdown", "ca-rotation", "key-rotation", "etcd-restore", "node-reset", "node-shutdown"} {
+			Expect(may("start", sub)).To(BeFalse(), sub)
+		}
 	})
 
 	// The ServiceAccount's generated role reads the rotation keys, lists machines, creates the

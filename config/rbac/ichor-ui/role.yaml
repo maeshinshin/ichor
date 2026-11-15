@@ -100,17 +100,6 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosoperations/ca-rotation
-  - talosoperations/etcd-restore
-  - talosoperations/key-rotation
-  - talosoperations/node-reset
-  - talosoperations/node-shutdown
-  - talosoperations/shutdown
-  verbs:
-  - start
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
   - talosstorages
   verbs:
   - list

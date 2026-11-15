@@ -271,11 +271,9 @@ func (a *Authenticator) authenticateExternal(ctx context.Context, raw string) (I
 // AuthInterceptor requires a valid ID token on every RPC and stores the
 // resulting Identity in the handler's context. One place, like
 // MetricsInterceptor; pass it to every *ServiceHandler. a == nil means no sign-in is
-// configured: with allowAnonymous every call passes and runs with the ServiceAccount's
-// permissions (the explicit --allow-unauthenticated mode); without it
-// only the read-only calls in readOnlyProcedures pass.
-func AuthInterceptor(a *Authenticator, allowAnonymous bool) connect.Interceptor {
-	return authInterceptor{a: a, anonymous: allowAnonymous}
+// configured: only the read-only calls in readOnlyProcedures pass, and nothing writes.
+func AuthInterceptor(a *Authenticator) connect.Interceptor {
+	return authInterceptor{a: a}
 }
 
 // serverOnly is the WrapStreamingClient every interceptor here shares: ichor-ui only serves RPCs, it
@@ -289,8 +287,7 @@ func (serverOnly) WrapStreamingClient(next connect.StreamingClientFunc) connect.
 type authInterceptor struct {
 	serverOnly
 
-	a         *Authenticator
-	anonymous bool
+	a *Authenticator
 }
 
 // mustChangeAllowed are the only RPCs a user who must change the password may
@@ -302,12 +299,12 @@ var mustChangeAllowed = map[string]bool{
 
 func (i authInterceptor) auth(ctx context.Context, authz, procedure string) (context.Context, error) {
 	if i.a == nil {
-		if i.anonymous || readOnlyProcedures[procedure] {
+		if readOnlyProcedures[procedure] {
 			return ctx, nil
 		}
 
 		return ctx, connect.NewError(connect.CodePermissionDenied,
-			errors.New("ichor-ui has no sign-in configured and serves read-only calls only; enable Ichor users or OIDC, or start it with --allow-unauthenticated"))
+			errors.New("ichor-ui has no sign-in configured and serves read-only calls only; turn sign-in on (Ichor users or OIDC)"))
 	}
 
 	id, err := i.a.Authenticate(ctx, authz)

@@ -937,7 +937,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash), "left at the last known-good hash, not the node's drifted one")
 
 		cond := expectReady(got, metav1.ConditionFalse, reasonNodeDrifted)
-		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params.foo"))
+		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params." + driftKey))
 		Expect(cond.Message).To(ContainSubstring("warnOnly"))
 	})
 
@@ -965,7 +965,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 
 		cond := expectReady(got, metav1.ConditionFalse, reasonAdoptionHeld)
-		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params.foo"))
+		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params." + driftKey))
 		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionAdoptionHeld)).To(BeTrue())
 
 		// Release the hold: the controller applies the render.

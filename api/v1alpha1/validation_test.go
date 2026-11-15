@@ -44,6 +44,7 @@ const (
 	literalNodeIP       = "10.0.0.10"
 	literalKindKey      = "kind"
 	testSysctlKey       = "net.ipv4.ip_forward"
+	keyName             = "name"
 	kindSysctl          = "SysctlConfig"
 	kindKernelModule    = "KernelModuleConfig"
 
@@ -137,7 +138,7 @@ func patchWithDocuments() *unstructured.Unstructured {
 	u.SetNamespace(testNamespace)
 
 	for path, value := range map[string]any{
-		"clusterRef": corev1.LocalObjectReference{Name: literalCluster},
+		"clusterRef": map[string]any{keyName: literalCluster},
 		"layer":      literalCluster,
 		"documents": []any{map[string]any{
 			literalKindKey: kindSysctl,

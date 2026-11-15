@@ -26,7 +26,7 @@ holds the cluster lock, advances machines as `InProgress`, and ends as
 asked to stop, and the operation waits for you to power them back on. It
 becomes `Completed` once every machine answers on a new boot.
 
-![The phases of a TalosOperation. Pending becomes InProgress when the operation takes the cluster lock, or Paused while another operation holds it. InProgress ends as Completed when all machines are done, or as ShutDown for a shutdown operation, which becomes Completed once every machine answers again. Paused has three causes: waiting for the cluster lock, which lifts by itself; a person pausing it, which keeps the lock and ends with ichor resume; and a failed step, which is never retried by itself and runs again on ichor resume, through the retry annotation.](../images/operation-phases.light.drawio.svg)
+![The phases of a TalosOperation. Pending becomes InProgress when the operation takes the cluster lock, or Paused while another operation holds it. InProgress ends as Completed when all machines are done, or as ShutDown for a shutdown operation, which becomes Completed once every machine answers again. Paused has three causes: waiting for the cluster lock, which lifts by itself; a person pausing it, which releases the lock and ends with ichor resume, which takes it again; and a failed step, which is never retried by itself and runs again on ichor resume, through the retry annotation.](../images/operation-phases.light.drawio.svg)
 
 *The phases of a TalosOperation, and the three causes of Paused.*
 
@@ -71,8 +71,12 @@ takes it too. This holds whoever created the operations, so two written with
 
 An operation that has to wait is `Paused` with the reason `ClusterLockHeld`,
 which names the holder, and starts when the holder finishes. A lock whose
-holder was deleted, completed, or paused on a failed step is taken over. An
-operation that an operator paused keeps its lock.
+holder was deleted or completed is taken over. An operation paused for a
+person (a failed step, or `spec.paused`) releases the lock when it pauses, so
+nothing is blocked by an operation nobody is working on, and takes it again when
+it resumes; if another operation holds it by then, it waits with `ClusterLockHeld`.
+A pause that lifts by itself, such as a rotation blocked on a step, keeps the lock
+(ADR 0162).
 
 ## Pause, resume and retry
 
@@ -80,10 +84,12 @@ There are two reasons an operation is `Paused`, and they are told apart by
 `status.failureReason`.
 
 - **You paused it.** `ichor pause operation NAME` sets `spec.paused`. The
-  operation stops advancing but keeps the cluster lock, so nothing else
-  disruptive starts in the middle of it. `ichor resume operation NAME` lifts it.
+  operation stops advancing and releases the cluster lock, so a machine that is
+  joining is not blocked by it; other disruptive work may start meanwhile.
+  `ichor resume operation NAME` lifts it and takes the lock again.
 - **A step failed.** The operation pauses with a `failureReason` and is never
-  retried by itself, and nothing is rolled back across the cluster. Fix the
+  retried by itself, and nothing is rolled back across the cluster; it releases
+  the cluster lock like a pause of yours. Fix the
   cause, then run `ichor resume operation NAME` (or press Resume in the UI): on
   an operation paused by a failure it asks the controller to run the failed
   step again.

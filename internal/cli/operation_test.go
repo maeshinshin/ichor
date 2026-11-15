@@ -398,3 +398,10 @@ func TestInProcessOperationIsStartedByTheCallersName(t *testing.T) {
 		t.Fatalf("ops = %+v", ops)
 	}
 }
+
+// A paused operation releases the cluster lock (ADR 0162); the help must not say it stays held.
+func TestPauseOperationHelpSaysTheLockIsReleased(t *testing.T) {
+	if s := pauseOperationCmd.Short; !strings.Contains(s, "lock is released") || strings.Contains(s, "stays held") {
+		t.Errorf("pause operation help = %q", s)
+	}
+}

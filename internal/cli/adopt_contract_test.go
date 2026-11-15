@@ -39,7 +39,7 @@ func TestAdoptRefusesAContractBelowV114(t *testing.T) {
 		t.Fatal("adopt accepted version contract v1.13; it must refuse a contract below v1.14")
 	}
 
-	for _, want := range []string{adoptMinContract, "Upgrade Talos", "Nothing was written"} {
+	for _, want := range []string{adoptMinContract, "Upgrade Talos", "talosctl upgrade", "Nothing was written"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal %q does not contain %q", err, want)
 		}
@@ -65,5 +65,18 @@ func TestAdoptRefusesALegacyInstallBeforeWriting(t *testing.T) {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "d1"}, &cluster); !apierrors.IsNotFound(err) {
 		t.Errorf("the refused adopt wrote the TalosCluster: %v", err)
+	}
+}
+
+// The v1.14 floor is the contract's and the v1.12 floor is each node's; the help says which is which.
+func TestAdoptHelpNamesBothFloors(t *testing.T) {
+	for _, want := range []string{"does not manage yet", adoptMinContract, adoptMinTalos} {
+		if !strings.Contains(adoptCmd.Long, want) {
+			t.Errorf("adopt help lacks %q:\n%s", want, adoptCmd.Long)
+		}
+	}
+
+	if u := adoptCmd.Flags().Lookup(adoptFlagVersionContract).Usage; !strings.Contains(u, adoptMinContract) || strings.Contains(u, adoptMinTalos) {
+		t.Errorf("--%s usage = %q", adoptFlagVersionContract, u)
 	}
 }

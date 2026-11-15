@@ -84,8 +84,15 @@ func TestFieldIndexHasEachSettingOnceByItsPathInSpecConfig(t *testing.T) {
 }
 
 // TestASettingHasOnePathInSpecConfig checks no setting of a document is written at two places of the schema,
-// which would be two rows of the search for one setting.
+// and that each spelling of a setting, in any document, is a row of the one path that has it: two rows of the
+// search for one setting is what it is for.
 func TestASettingHasOnePathInSpecConfig(t *testing.T) {
+	byDoc := map[string]string{}
+
+	for path, r := range indexRows(t, filepath.Join(repoRoot, crdDir)) {
+		byDoc[r.Doc] = path
+	}
+
 	seen := map[string]string{}
 
 	var walk func(rt reflect.Type, path string)
@@ -114,6 +121,11 @@ func TestASettingHasOnePathInSpecConfig(t *testing.T) {
 				}
 
 				seen[part] = p
+
+				// The walk of the Go type has no key or element in its paths, a row's has.
+				if row, ok := byDoc[part]; ok && strings.NewReplacer(".<key>", "", "[]", "").Replace(row) != p {
+					t.Errorf("%q is spelled %q, which is also the row %q", p, part, row)
+				}
 			}
 		}
 	}

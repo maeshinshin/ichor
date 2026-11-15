@@ -95,7 +95,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 
 	slices.Sort(cps)
 
-	own := s.controllerMachine(ctx, machines.Items, cluster.Name, opRoleControlPlane)
+	own, unread := s.controllerMachine(ctx, machines.Items, cluster.Name, opRoleControlPlane)
 
 	var taken time.Time
 
@@ -112,7 +112,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 	p.resp.Steps = []string{
 		"Check the snapshot: it is decrypted and its checksum verified, and a copy is kept in the backup storage so that retention cannot remove it.",
 		"Take the cluster lock and write a marker next to the backups. It is how the restore carries on after the Kubernetes API is gone.",
-		wipeStep(cps, own),
+		wipeStep(cps, own, unread),
 		"Upload the snapshot to one control plane and start etcd from it.",
 		"The other control planes rejoin etcd by themselves. Wait until all are members and the Kubernetes API answers.",
 		"Restart kube-proxy on the nodes that were not wiped, ask every node to reconcile again and wait until each is Ready.",
@@ -124,6 +124,11 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		"state, which may differ from what the nodes run, so check each node. If Ichor's controller runs on the only "+
 		"control plane it stops with it and `ichor restore cluster` finishes the restore. That command is also the way out "+
 		"if the restore stops with an error.", whenText(taken))
+
+	if own == "" && unread != "" && len(cps) > 1 {
+		p.resp.Warning += " This plan could not determine which control plane runs Ichor's controller, so it cannot show which is wiped last; " +
+			"the controller decides that itself when the restore starts."
+	}
 
 	// A failed check is the plan's error, not an empty Blocked: an empty one reads as "nothing blocks this restore".
 	blocked, err := s.etcdRestoreBlocked(ctx, p, cluster, &bk, taken, len(cps))
@@ -143,12 +148,20 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 }
 
 // wipeStep is the plan's wipe step. The control plane the controller runs on is wiped last, once etcd is
-// back and the others have rejoined, by the controller itself, which stops with it.
-func wipeStep(cps []string, own string) string {
+// back and the others have rejoined, by the controller itself, which stops with it. unread is what stopped
+// the plan from telling which that is: the step then says so rather than describe an order it did not establish.
+func wipeStep(cps []string, own, unread string) string {
 	const tail = " Their EPHEMERAL partitions are reset and the nodes reboot. STATE stays, so each keeps its configuration."
 
 	if own == "" || len(cps) < 2 {
-		return fmt.Sprintf("Wipe etcd data on every control plane (%s).", strings.Join(cps, ", ")) + tail
+		step := fmt.Sprintf("Wipe etcd data on every control plane (%s).", strings.Join(cps, ", "))
+		if own == "" && unread != "" && len(cps) > 1 {
+			step += fmt.Sprintf(" Which of them runs this controller could not be determined (%s), so the plan cannot say which is wiped last. "+
+				"The controller works that out itself when the restore starts and wipes its own control plane last, "+
+				"once etcd is back and the others have rejoined.", unread)
+		}
+
+		return step + tail
 	}
 
 	rest := make([]string, 0, len(cps))
@@ -162,20 +175,31 @@ func wipeStep(cps []string, own string) string {
 	return fmt.Sprintf("Wipe etcd data on %s, then %s (where this controller runs) once the others have rejoined.", strings.Join(rest, ", "), own) + tail
 }
 
-// controllerMachine is the machine of role (any role when "") the Ichor controller pod runs on, "" when it
-// cannot be told (outside the cluster, or the pod or Node cannot be read): the plan then names nobody.
-func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster, role string) string {
+// controllerMachine is the machine of role (any role when "") the Ichor controller pod runs on. It is "" when
+// none is confirmed; unread then says what could not be read on the way (a pod list or a Node that failed, a pod
+// not yet on a node), and is "" when everything asked answered and no pod runs on such a machine (outside the cluster).
+func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1.TalosMachine, cluster, role string) (own, unread string) {
+	note := func(format string, args ...any) {
+		if unread == "" {
+			unread = fmt.Sprintf(format, args...)
+		}
+	}
+
 	// The namespace Ichor runs in, then the cluster's own, then (the in-process server runs on the caller's
 	// credentials and a CLI process has no POD_NAMESPACE) every namespace: the first that has the pod wins.
 	for _, ns := range s.controllerNamespaces(machines) {
 		var pods corev1.PodList
 		if err := s.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{"control-plane": "controller-manager"}); err != nil {
+			note("the controller's pod could not be listed in namespace %q: %v", ns, err)
+
 			continue
 		}
 
 		for i := range pods.Items {
 			node := pods.Items[i].Spec.NodeName
 			if node == "" {
+				note("the controller's pod %s/%s is not on a node yet", pods.Items[i].Namespace, pods.Items[i].Name)
+
 				continue
 			}
 
@@ -185,14 +209,21 @@ func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1
 					continue
 				}
 
-				if n, err := s.findKubernetesNode(ctx, m); err == nil && n != nil && n.Name == node {
-					return m.Name
+				n, err := s.findKubernetesNode(ctx, m)
+				if err != nil {
+					note("the Kubernetes Node of %s could not be read: %v", m.Name, err)
+
+					continue
+				}
+
+				if n != nil && n.Name == node {
+					return m.Name, ""
 				}
 			}
 		}
 	}
 
-	return ""
+	return "", unread
 }
 
 // controllerNamespaces are the namespaces controllerMachine looks for the controller pod in, in order;

@@ -287,6 +287,12 @@ command does. Each item is described where it is listed below.
   says the reset wipes STATE, which holds the salt a `lockToState` key needs; and
   the refusal for a node that cannot be reinstalled names the missing META
   partition as the condition.
+- `--skip-signature-check` (`ichor upgrade ichor`, `ichor init`) now says in its
+  help, the CLI reference, the UI and the installer-image guide that it is not
+  one-shot: it records `spec.installerSignature.mode: skip` in the
+  `IchorInstallation`, where it stays, for the Cilium Helm Job too, until an
+  upgrade without the flag writes the check back or you delete the field. The
+  help gives the undo. What the flag does is unchanged (ADR 0122).
 
 ### Adopt
 

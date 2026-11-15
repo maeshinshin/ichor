@@ -223,8 +223,9 @@ check-embed-images:
 	  exit 1; \
 	fi
 
+# .WAIT: under make -j, build-installer must not start (and rewrite dist/install.yaml with placeholders) before the refusal has finished.
 .PHONY: build-ichor-embed
-build-ichor-embed: check-embed-images build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
+build-ichor-embed: check-embed-images .WAIT build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
 	cp dist/install.yaml internal/installmanifest/install.yaml
 	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	go build -tags installembed -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor

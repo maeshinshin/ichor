@@ -581,3 +581,48 @@ func TestCheckControllerNamespace(t *testing.T) {
 		t.Error("controller in tenant, default --namespace: accepted")
 	}
 }
+
+// A machine an operator rejected is a TalosMachine like any other: the rerun's discovery keys on
+// its identity, finds it, and leaves it rejected.
+func TestAdoptRerunLeavesARejectedMachineRejected(t *testing.T) {
+	f := newNoCNIFlow(t)
+	rejected := "uuid-" + flowWKAddr
+	fail := true
+
+	f.deps.K8s = interceptor.NewClient(f.env.k8s.(client.WithWatch), interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.CreateOption) error {
+			if _, ok := obj.(*ichorv1alpha1.TalosMachine); ok && obj.GetName() == rejected && fail {
+				return errors.New("injected: the API server went away")
+			}
+
+			return c.Create(ctx, obj, o...)
+		},
+	})
+
+	if err := f.run(t); err == nil {
+		t.Fatal("first run succeeded although the second TalosMachine could not be created")
+	}
+
+	fail = false
+
+	m := newTestMachine(f.env.cluster.Name)
+	m.Name, m.Spec.Role, m.Spec.Endpoint = rejected, testRoleWorker, flowWKAddr
+	m.Spec.Identity.UUID, m.Spec.ApprovalState = rejected, ichorv1alpha1.MachineApprovalStateRejected
+
+	if err := f.env.k8s.Create(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.run(t); err != nil {
+		t.Fatalf("rerun: %v\n%s", err, f.env.stderr.String())
+	}
+
+	var got ichorv1alpha1.TalosMachine
+	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: rejected}, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Spec.ApprovalState != ichorv1alpha1.MachineApprovalStateRejected {
+		t.Errorf("approval state = %q after the rerun, want rejected", got.Spec.ApprovalState)
+	}
+}

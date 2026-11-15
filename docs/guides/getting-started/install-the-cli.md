@@ -36,7 +36,7 @@ The archive also holds LICENSE, NOTICE, THIRD-PARTY-NOTICES, README.md and
 CHANGELOG.md, so they end up beside the binary:
 
 ```sh
-mkdir -p "ichor-${VERSION}"
+mkdir -p "ichor-${VERSION}" ~/.local/bin
 tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" -C "ichor-${VERSION}"
 install -m 0755 "ichor-${VERSION}/ichor" ~/.local/bin/ichor
 ```

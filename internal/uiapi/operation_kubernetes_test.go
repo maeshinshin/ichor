@@ -27,11 +27,17 @@ import (
 // The kubernetes kind's plan: its stages, and the warning for a minor upgrade of
 // a multi-control-plane cluster whose endpoint is one node.
 
+// planKubernetes plans a Kubernetes upgrade. A node endpoint is the first control plane's own address, which is
+// what the warning looks for; any other endpoint is an address in front of the control planes.
 func planKubernetes(t *testing.T, endpointType string, controlPlanes int, target string) *pb.PlanOperationResponse {
 	t.Helper()
 
 	objs := opObjects()
 	objs[0].(*ichorv1alpha1.TalosCluster).Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: endpointType, Address: gatewayIP}
+
+	if endpointType == ichorv1alpha1.EndpointTypeNode {
+		objs[3].(*ichorv1alpha1.TalosMachine).Spec.Endpoint = gatewayIP
+	}
 
 	for i := 2; i <= controlPlanes; i++ {
 		objs = append(objs, opMachine("cp"+string(rune('0'+i)), "controlplane", nil, nil))
@@ -63,14 +69,38 @@ func TestPlanKubernetesWarnsAboutANodeEndpointOnAMinorUpgradeOfSeveralControlPla
 	}
 
 	for name, p := range map[string]*pb.PlanOperationResponse{
-		"a patch upgrade":          planKubernetes(t, "node", 3, "v1.35.9"),
-		"a virtual IP":             planKubernetes(t, "vip", 3, "v1.36.6"),
-		"a single control plane":   planKubernetes(t, "node", 1, "v1.36.6"),
-		"a load balancer endpoint": planKubernetes(t, "loadBalancer", 3, "v1.36.6"),
+		"a patch upgrade":        planKubernetes(t, "node", 3, "v1.35.9"),
+		"a virtual IP":           planKubernetes(t, "vip", 3, "v1.36.6"),
+		"a single control plane": planKubernetes(t, "node", 1, "v1.36.6"),
 	} {
 		if p.GetWarning() != "" {
 			t.Errorf("%s: unexpected warning %q", name, p.GetWarning())
 		}
+	}
+}
+
+// A name in front of several control planes, such as a load balancer, is not one control plane's address: it does
+// not warn, although the same node type with the first control plane's address does.
+func TestPlanKubernetesDoesNotWarnForANameInFrontOfTheControlPlanes(t *testing.T) {
+	objs := opObjects()
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: "node", Address: "kube.example.lan"}
+	objs = append(objs, opMachine("cp2", "controlplane", nil, nil), opMachine("cp3", "controlplane", nil, nil))
+
+	for _, o := range objs {
+		if m, ok := o.(*ichorv1alpha1.TalosMachine); ok && m.Spec.Role == "controlplane" {
+			m.Spec.Endpoint = gatewayIP
+		}
+	}
+
+	srv, _ := opServer(t, objs...)
+
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.36.6")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if w := res.Msg.GetWarning(); w != "" {
+		t.Fatalf("a name warned: %q", w)
 	}
 }
 

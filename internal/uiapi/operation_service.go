@@ -702,6 +702,8 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	var cps, workers []*ichorv1alpha1.TalosMachine
 
 	approvedControlPlanes := 0
+	// The endpoint is the address of one approved control plane, not a name or a virtual IP in front of them.
+	endpointOnControlPlane := false
 
 	for i := range list.Items {
 		m := &list.Items[i]
@@ -711,6 +713,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 
 		if m.Spec.Role == opRoleControlPlane {
 			approvedControlPlanes++
+			endpointOnControlPlane = endpointOnControlPlane || m.Spec.Endpoint == cluster.Spec.Endpoint.Address
 		}
 
 		// A config rollout visits only the machines with a pending change that needs a reboot
@@ -751,8 +754,8 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	// Through a single node's address, every kubelet and controller talks to one API server; while
 	// that node's API server restarts the whole cluster has none.
 	if p.kind == ichorv1alpha1.TalosOperationKindKubernetes && approvedControlPlanes > 1 &&
-		cluster.Spec.Endpoint.Type == "node" && !samePatchLine(p.resp.GetCurrent(), p.resp.GetTarget()) {
-		p.resp.Warning = "The cluster endpoint is the address of a single control plane (type node), so while that node's " +
+		endpointOnControlPlane && !samePatchLine(p.resp.GetCurrent(), p.resp.GetTarget()) {
+		p.resp.Warning = "The cluster endpoint is the address of a single control plane, so while that node's " +
 			"API server is replaced the Kubernetes API is unreachable for every client, although the other control planes " +
 			"are up. Use a virtual IP or a load balancer as the endpoint first."
 	}

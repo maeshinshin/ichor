@@ -67,6 +67,14 @@ Ichor-owned and always `cilium-secrets`. Setting any of them, even to that same
 value, is refused. Without the pin, a value naming `ichor-system` would render
 a Role that lets Cilium's service accounts read Ichor's Secrets.
 
+### The KubePrism address
+
+`k8sServiceHost` and `k8sServicePort` are Ichor-owned only when kube-proxy is
+replaced, because only then does Ichor set them (`localhost` and `7445`). With
+kube-proxy enabled Cilium's API address is the chart's default, and you may set
+both in your layer. Switching such a cluster to `replaced` is refused until you
+remove them.
+
 ## Upgrades and kube-proxy
 
 Cilium moves only to the chart embedded in the running Ichor, and only when

@@ -243,7 +243,10 @@ have pauses the operation with `InstallerImageUnresolved`.
 The CLI and the UI write the installer settings exactly as given, so the next
 `ichor upgrade ichor` without the flag writes the check back. To undo the skip
 without upgrading, edit the object and delete `spec.installerSignature` (or set
-`mode: required`), and set `spec.installerDigest` if you want a pin:
+`mode: required`), and set `spec.installerDigest` if you want a pin. The
+admission webhook accepts the edit from a user who may `update`
+`ichorinstallations/version`, the right an upgrade needs, and refuses it from
+one who may only `update` `ichorinstallations`:
 
 ```sh
 kubectl edit ichorinstallation ichor

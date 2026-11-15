@@ -21,7 +21,8 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 			return
 		}
 
-		for _, want := range []string{"ichorUI.enabled needs a sign-in", usersOn, "ichorUI.oidc.enabled=true", "--bootstrap", uiOffSet} {
+		wants := []string{"ichorUI.enabled needs a sign-in", usersOn, "ichorUI.oidc.enabled=true", "--bootstrap", uiOffSet}
+		for _, want := range wants {
 			if !strings.Contains(string(out), want) {
 				t.Errorf("%s: the refusal does not say %q: %s", name, want, out)
 			}
@@ -47,7 +48,7 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 	for name, sets := range map[string][]string{
 		"users": {usersOn, usersURL},
 		"oidc": {
-			oidcEnabledSet, oidcIssuerSet, oidcClientID, impGroupsSet, "ichorUI.oidc.impersonate.users={alice}",
+			oidcEnabledSet, oidcIssuerSet, oidcClientID, impGroupsSet, impUsersSet,
 		},
 		"no ichor-ui": {uiOffSet},
 	} {

@@ -16,6 +16,7 @@ import (
 const (
 	uiAddr       = "--addr=:8443"
 	argIssuerURL = "--external-url=https://i.example.com"
+	argUsersOn   = "--users-enabled=true"
 )
 
 func uiWith(args []string, env ...corev1.EnvVar) *appsv1.Deployment {
@@ -39,9 +40,9 @@ func TestUpgradeDropsTheOpenMode(t *testing.T) {
 		{"flag", uiWith([]string{uiAddr, argAllowAnonymous}), true},
 		{"variable", uiWith([]string{uiAddr}, open), true},
 		{"flag and variable", uiWith([]string{uiAddr, argAllowAnonymous}, open), true},
-		{"flag beside Ichor users", uiWith([]string{uiAddr, argAllowAnonymous, "--users-enabled=true", argIssuerURL}), true},
+		{"flag beside Ichor users", uiWith([]string{uiAddr, argAllowAnonymous, argUsersOn, argIssuerURL}), true},
 		{"flag beside external OIDC", uiWith([]string{uiAddr, argAllowAnonymous}, corev1.EnvVar{Name: "ICHOR_OIDC_ISSUER", Value: "https://idp"}), true},
-		{"ichor users", uiWith([]string{uiAddr, "--users-enabled=true", argIssuerURL}), false},
+		{"ichor users", uiWith([]string{uiAddr, argUsersOn, argIssuerURL}), false},
 	}
 
 	for _, tc := range cases {
@@ -83,7 +84,7 @@ func TestUpgradeRefusesALiveUIWithNoSignIn(t *testing.T) {
 		"the removed flag":                       {uiWith([]string{uiAddr, argAllowAnonymous}), true},
 		"the removed variable":                   {uiWith([]string{uiAddr}, corev1.EnvVar{Name: envAllowUnauthenticated, Value: "yes"}), true},
 		"an issuer URL (users are what it sets)": {uiWith([]string{uiAddr, argIssuerURL}), false},
-		"Ichor users":                            {uiWith([]string{uiAddr, "--users-enabled=true", argIssuerURL}), false},
+		"Ichor users":                            {uiWith([]string{uiAddr, argUsersOn, argIssuerURL}), false},
 		"OIDC by variable":                       {uiWith([]string{uiAddr}, oidc), false},
 		"OIDC by flag":                           {uiWith([]string{uiAddr, "--oidc-issuer=https://idp"}), false},
 	} {

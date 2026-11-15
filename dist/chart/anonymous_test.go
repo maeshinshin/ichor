@@ -28,7 +28,7 @@ func TestAllowUnauthenticatedIsRefused(t *testing.T) {
 		"beside Ichor users": slices.Concat([]string{allowOpenSet}, users),
 		"beside OIDC": {
 			allowOpenSet, oidcEnabledSet, oidcIssuerSet, oidcClientID,
-			impGroupsSet, "ichorUI.oidc.impersonate.users={alice}",
+			impGroupsSet, impUsersSet,
 		},
 		"with ichor-ui off": {uiOffSet, allowOpenSet},
 		"as a string":       {"ichorUI.allowUnauthenticated=\"true\""},

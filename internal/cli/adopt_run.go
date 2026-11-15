@@ -973,7 +973,8 @@ func refuseOldContract(name, contract, running string) error {
 
 	if semver.Compare(semver.MajorMinor(running), adoptMinContract) < 0 {
 		return fmt.Errorf("adopt: %s runs Talos %s, which takes version contract %s, and adopt takes %s or later: %s. "+
-			"Nothing was written. Upgrade Talos to %s or later first (ichor upgrade talos), then adopt the cluster again",
+			"Nothing was written. Upgrade Talos to %s or later first, outside Ichor with talosctl upgrade or your usual tool "+
+			"(ichor upgrade talos works only on a cluster Ichor already manages), then adopt the cluster again",
 			name, running, contract, adoptMinContract, reason, adoptMinContract)
 	}
 

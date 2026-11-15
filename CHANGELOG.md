@@ -131,6 +131,11 @@ command does. Each item is described where it is listed below.
 - **Messages changed.** Anything that matches on the text of a condition
   `message`, an event, or an admission denial stops matching (Nodes, Operations,
   Typed configuration).
+- **A refused read or write is `PermissionDenied`, not `Internal`.** A client of the
+  ichor-ui API that retried or alerted on `Internal` from `ListClusters`,
+  `ListMachines`, `ListPatches`, `GetEffectiveConfig`, `ApproveMachine`,
+  `RejectMachine` or `SetMachineInstall` no longer sees it for a user whose
+  Kubernetes RBAC forbids the call, and a conflicting write is `Aborted` (UI).
 - **A JSON patch that removes `spec.network` or `spec.cni`** from a stored
   `TalosCluster` is refused, and so is an update that sets the `unmanaged`
   preset without the adoption annotation (Cluster).
@@ -586,6 +591,15 @@ command does. Each item is described where it is listed below.
   `ichorUI.oidc.enabled`, naming what to set. The installer drops the removed
   flag from a live ichor-ui with a notice and stops at one that has no sign-in,
   saying to run `ichor upgrade ichor`, which sets it up (see the upgrade notes).
+- A read or write that Kubernetes RBAC refuses to the signed-in user is answered
+  `PermissionDenied`, where it was `Internal` and so reached the browser as "the
+  server could not complete the request (reference ...)". `ListClusters`,
+  `ListMachines` and `ListPatches` (which list across every namespace, so a user bound
+  in one namespace is refused), the patch list `GetEffectiveConfig` reads, the machine
+  list `ApproveMachine` reads for a VIP cluster, and the `ApproveMachine`,
+  `RejectMachine` and `SetMachineInstall` writes now say so, as `GetMachine` already
+  did. A write that hits a conflict is `Aborted`, one the API server finds invalid is
+  `InvalidArgument`, and a failure of the server's own stays `Internal`.
 
 ### Typed configuration
 

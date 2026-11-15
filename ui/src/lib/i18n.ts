@@ -1228,7 +1228,7 @@ export const en = {
   'ops.picker.nextMinor': 'Next minor',
   'ops.picker.empty': 'No version matches.',
   'ops.dialog.skipSignature': 'Do not check the signature of the installer image',
-  'ops.dialog.skipSignatureHint': 'Only for builds nobody signs, such as development and demo images. The installer holds nearly cluster-admin rights.',
+  'ops.dialog.skipSignatureHint': 'Only for builds nobody signs, such as development and demo images. The installer holds nearly cluster-admin rights. The skip is saved in the Ichor settings and stays until an Ichor upgrade made without it.',
   'ops.dialog.override': 'Override the compatibility check (needs the override permission on the cluster)',
   'ops.dialog.overrideHint': 'Ichor records the override in a Kubernetes Event on the cluster.',
 } as const

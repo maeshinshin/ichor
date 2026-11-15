@@ -99,7 +99,8 @@ before the Job exists the controller resolves `installerRepository:version` to a
 cosign signature offline against an embedded Sigstore root, and runs the Job as
 `repository@digest`; a failure pauses the operation, and the only bypass is a
 recorded `spec.installerSignature: skip` (`--skip-signature-check`) for
-builds nobody signs. The install manifest inside a release's installer names the
+builds nobody signs. The skip stays in the spec until an upgrade without the flag writes
+`required` again, and the Cilium Helm Job honours it meanwhile. The install manifest inside a release's installer names the
 controller and ichor-ui by digest too. The CLI refuses writes when more than one minor
 away from the server. A UI backend response header (`X-Ichor-Version`) that
 would make a stale SPA prompt a reload is not built; the

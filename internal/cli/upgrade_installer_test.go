@@ -194,7 +194,7 @@ func TestSkipSignatureCheckHelpSaysTheChangePersists(t *testing.T) {
 			}
 
 			for _, want := range []string{"does not apply to one run only", "spec.installerSignature.mode: skip", "spec.installerDigest",
-				"checks the signature again", "kubectl edit ichorinstallation ichor", "delete spec.installerSignature"} {
+				"checks the signature again", "kubectl edit ichorinstallation ichor", "delete spec.installerSignature", "Cilium Helm Job"} {
 				if !strings.Contains(cmd.Long, want) {
 					t.Errorf("the help does not contain %q", want)
 				}

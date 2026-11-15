@@ -290,6 +290,9 @@ func refuseHelmManaged(ctx context.Context, c client.Reader) error {
 		return err
 	}
 
-	return fmt.Errorf("ichor is installed by Helm (release %q, namespace %s); upgrade it with `%s`, not with the installer",
+	return fmt.Errorf("ichor is installed by Helm (release %q, namespace %s); upgrade it with `%s`, not with the installer. "+
+		"The chart refuses an ichor-ui with no sign-in, so if yours has none, set ichorUI.users.enabled=true and ichorUI.users.externalURL "+
+		"(or ichorUI.oidc) in the values first, then create the first administrator with `ichor create user admin --role admin --generate --bootstrap` "+
+		"(docs/guides/users-and-login.md)",
 		p.ReleaseName(), p.Namespace(), p.helmUpgradeCommand("VERSION"))
 }

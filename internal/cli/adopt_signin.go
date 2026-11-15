@@ -19,7 +19,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -117,9 +116,6 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 // still shows it.
 func (st *adoptState) turnSignInOn(ctx context.Context, deps adoptDeps, clusterName, namespace string) error {
 	p := st.signIn
-	if p == nil {
-		return nil
-	}
 
 	if p.users {
 		err := deps.run("Ichor users", func(d adoptDeps) (string, error) {
@@ -145,13 +141,38 @@ func (st *adoptState) turnSignInOn(ctx context.Context, deps adoptDeps, clusterN
 	})
 }
 
+// finishSignIn is the end of adopt for sign-in: the step when the holds are all released, a note when they
+// are not (a pending takeover), and the generated password when the step fails after the administrator exists.
+func (st *adoptState) finishSignIn(ctx context.Context, deps adoptDeps, clusterName, namespace string, complete bool) error {
+	if st.signIn == nil {
+		return nil
+	}
+
+	if !complete {
+		deps.say(adoptWarn, "sign-in is not turned on yet: run `ichor adopt` again once the Cilium takeover is done; "+
+			"until then ichor-ui serves read-only calls only")
+
+		return nil
+	}
+
+	if err := st.turnSignInOn(ctx, deps, clusterName, namespace); err != nil {
+		// The administrator may exist by now, and nothing else could show its password.
+		deps.showAdminPassword(st.signIn.opts.AdminUser, st.adminPassword)
+		deps.say(adoptWarn, "adoption stopped before sign-in was on: run the same `ichor adopt` again to continue where it stopped")
+
+		return err
+	}
+
+	return nil
+}
+
 // showAdminPassword prints the generated password once, verbatim, after everything else adopt printed.
 func (d adoptDeps) showAdminPassword(user, password string) {
 	if password == "" {
 		return
 	}
 
-	var w io.Writer = d.Stderr
+	w := d.Stderr
 	if d.Steps != nil {
 		w = d.Steps
 	}

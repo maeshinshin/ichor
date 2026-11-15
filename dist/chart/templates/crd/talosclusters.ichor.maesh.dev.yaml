@@ -15469,15 +15469,17 @@ spec:
                 description: endpoint is the cluster's control-plane endpoint.
                 properties:
                   address:
-                    description: 'address is the endpoint''s address: an IP for vip/node,
-                      or an IP or a hostname for loadBalancer.'
+                    description: |-
+                      address is the endpoint's address: an IP for vip, or an IP or a DNS host name for node, where the name is
+                      the load balancer's when one is in front of the control planes.
                     minLength: 1
                     type: string
                   type:
                     description: |-
                       type is the kind of address the endpoint resolves through. vip is an address Ichor itself puts on every
-                      control plane that has a spec.network, as a shared IP on its primary link; an address something else holds,
-                      such as a hardware load balancer or a VIP the cluster already runs, is loadBalancer.
+                      control plane that has a spec.network, as a shared IP on its primary link. node is any other address: one
+                      control plane's own, or a hardware load balancer's or a DNS name's in front of the control planes, which
+                      Ichor does not configure. loadBalancer is deprecated and refused: use node.
                     enum:
                     - vip
                     - loadBalancer

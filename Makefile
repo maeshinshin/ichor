@@ -140,6 +140,21 @@ test: manifests generate fmt vet setup-envtest build-installer ## Run tests.
 remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the cluster set in hack/remote-gate.sh; logs in remote-gate-out/.
 	hack/remote-gate.sh
 
+# cluster-gate: the gate as one Job in a cluster (hack/cluster-gate.sh). Nothing is hardcoded: the
+# kubeconfig defaults to $KUBECONFIG or ~/.kube/config, the context to the kubeconfig's current one.
+GATE_KUBECONFIG ?= $(or $(KUBECONFIG),$(HOME)/.kube/config)
+GATE_CONTEXT ?=
+GATE_NAMESPACE ?= ichor-e2e
+GATE_REF ?= HEAD
+GATE_IMAGE ?= docker.io/library/golang:1.27.4-bookworm
+GATE_STORAGE_CLASS ?=
+GATE_CACHE_SIZE ?= 20Gi
+export GATE_KUBECONFIG GATE_CONTEXT GATE_NAMESPACE GATE_REF GATE_IMAGE GATE_STORAGE_CLASS GATE_CACHE_SIZE
+
+.PHONY: cluster-gate
+cluster-gate: ## Run the gate (make test, then make lint) for GATE_REF (default HEAD; committed files only, uncommitted changes are not sent) as a Job in GATE_NAMESPACE on GATE_KUBECONFIG/GATE_CONTEXT; exits non-zero if it fails. GATE_RENDER=1 make cluster-gate prints the manifests only.
+	@hack/cluster-gate.sh
+
 .PHONY: test-e2e
 test-e2e: test-e2e-prereqs manifests generate fmt vet ## Run the PR-sized (short) e2e set against the cluster given by KUBECONFIG.
 	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter=short

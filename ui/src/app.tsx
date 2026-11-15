@@ -30,11 +30,10 @@ import { useCanListUsers } from '@/lib/useMyPermissions'
 import { PageSkeleton } from '@/components/PageStates'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
-type LoginState = 'loading' | 'open' | 'choose' | 'ready' | 'error'
+type LoginState = 'loading' | 'choose' | 'ready' | 'error'
 
-// useLogin gates the app on sign-in. 'open' means ichor-ui has no login
-// configured: ichor-ui then serves reads only, and the banner says so. 'choose' shows the
-// one sign-in card (password form and/or the external IdP button); an external IdP that is the only
+// useLogin gates the app on sign-in. ichor-ui does not start without one, so no provider is an
+// error. 'choose' shows the one sign-in card (password form and/or the external IdP button); an external IdP that is the only
 // choice is entered directly, as before.
 function useLogin(): { state: LoginState; error: string; providers: AuthProvider[]; signedIn: () => void } {
   const [state, setState] = useState<LoginState>('loading')
@@ -46,7 +45,7 @@ function useLogin(): { state: LoginState; error: string; providers: AuthProvider
       const cfg = (await (await fetch('/auth/config')).json()) as AuthConfig
       const list = cfg.providers ?? []
       setProviders(list)
-      if (list.length === 0) return setState('open')
+      if (list.length === 0) throw new Error(t('app.noSignIn'))
       if (await finishLogin(list)) return setState('ready')
       // A tab copied from another one (same sessionStorage) must not share its refresh token.
       if (!(await claimSession())) clearToken()
@@ -119,7 +118,6 @@ function Authenticated({ path }: { path: string }) {
   return (
     <AppShell
       path={path}
-      signInNotConfigured={login.state === 'open'}
       me={who.me}
       usersEnabled={usersEnabled && canListUsers}
     >

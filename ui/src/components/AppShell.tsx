@@ -1,7 +1,7 @@
 import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, SettingsIcon, TriangleAlertIcon, UsersIcon } from 'lucide-preact'
+import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, SettingsIcon, UsersIcon } from 'lucide-preact'
 import { AccountMenu } from '@/components/AccountMenu'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { IchorVersion } from '@/components/IchorVersion'
@@ -18,7 +18,6 @@ import { Separator } from '@/components/ui/separator'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -32,7 +31,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { breadcrumbsFor } from '@/lib/breadcrumbs'
 import { usePageTitles } from '@/lib/usePageTitles'
 import { t, type Key } from '@/lib/i18n'
@@ -168,13 +167,11 @@ function Crumbs({ path }: { path: string }) {
 // never gets a horizontal scrollbar.
 export function AppShell({
   path,
-  signInNotConfigured,
   me,
   usersEnabled,
   children,
 }: {
   path: string
-  signInNotConfigured: boolean
   me: WhoAmIResponse | null
   usersEnabled: boolean
   children: ComponentChildren
@@ -198,25 +195,6 @@ export function AppShell({
           <SidebarContent>
             <NavGroups path={path} usersEnabled={usersEnabled} />
           </SidebarContent>
-          <SidebarFooter>
-            <SidebarMenu>
-              {signInNotConfigured && (
-                <SidebarMenuItem>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SidebarMenuButton>
-                        <TriangleAlertIcon />
-                        <span>{t('app.readOnlyTitle')}</span>
-                      </SidebarMenuButton>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs">
-                      {t('app.readOnlyBody')}
-                    </TooltipContent>
-                  </Tooltip>
-                </SidebarMenuItem>
-              )}
-            </SidebarMenu>
-          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
         <SidebarInset className="min-w-0">

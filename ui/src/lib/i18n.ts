@@ -38,9 +38,7 @@ export const en = {
   'app.signingIn': 'Signing in...',
   'app.signInFailed': 'Sign-in failed',
   'app.loginFailed': 'Login failed',
-  'app.readOnlyTitle': 'Read-only: sign-in is not configured',
-  'app.readOnlyBody':
-    'Without sign-in, ichor-ui serves read-only calls and refuses every change. Turn on Ichor users or ichorUI.oidc in the chart to make changes.',
+  'app.noSignIn': 'ichor-ui has no sign-in configured and cannot serve anyone. Turn on Ichor users or ichorUI.oidc in the chart.',
   'app.comingSoon': 'Coming soon.',
 
   'error.notAllowed': 'Not allowed right now',

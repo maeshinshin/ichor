@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -27,43 +26,32 @@ func indexRows(t *testing.T, crds string) map[string]fieldRow {
 	return out
 }
 
-// TestFieldIndexHasEveryDocumentField checks the index against the CRD reference page, which is written by
-// a different walk of the same schema: every field of every document kind there is a row here.
-func TestFieldIndexHasEveryDocumentField(t *testing.T) {
-	page, err := os.ReadFile(filepath.Join(repoRoot, outputDir, "crds", "talosconfigpatch.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
+// TestFieldIndexHasTheFieldsOfEveryDocumentKind checks the index holds the documents the editor writes: the kinds
+// that spec.config converts to, each with its own row and the fields of its settings in their document paths.
+func TestFieldIndexHasTheFieldsOfEveryDocumentKind(t *testing.T) {
 	rows := indexRows(t, filepath.Join(repoRoot, crdDir))
-	byPath := map[string]bool{}
 
-	for _, r := range rows {
-		byPath[r.Path] = true
-	}
-
-	// | `spec.documents[].bondConfig.links[].name` | ...
-	re := regexp.MustCompile("(?m)^\\| `spec\\.documents\\[\\]\\.([A-Za-z0-9]+)\\.([^`]+)`")
-	seen := 0
-
-	for _, m := range re.FindAllStringSubmatch(string(page), -1) {
-		if strings.EqualFold(m[1], "kubeStaticPodConfig") {
-			continue
-		}
-
-		seen++
-
-		if !byPath[m[2]] {
-			t.Errorf("the CRD has %s.%s and the index has no row for it", m[1], m[2])
+	for _, key := range []string{
+		"Config ", "SysctlConfig params", "SysctlConfig ", "KernelModuleConfig name", "KernelModuleConfig parameters",
+		"UserVolumeConfig provisioning.diskSelector.match", "KubeletConfig extraArgs", "Config machine.install.disk",
+		"KubeAPIServerConfig certExtraSANs", "BondConfig bondMode",
+	} {
+		if _, ok := rows[key]; !ok {
+			t.Errorf("the index has no row %q", key)
 		}
 	}
 
-	if seen < 1000 {
-		t.Fatalf("read only %d fields from the CRD reference; the pattern no longer matches", seen)
+	// A setting a document spells is a row of the document, not of the v1alpha1 document that also has it.
+	if _, ok := rows["Config machine.sysctls"]; ok {
+		t.Error("machine.sysctls is a row of the v1alpha1 document as well as SysctlConfig")
+	}
+
+	if len(rows) < 1000 {
+		t.Errorf("the index has only %d rows", len(rows))
 	}
 }
 
-// TestFieldIndexFollowsTheSchema adds a field to one kind's schema and checks it is in the index with no
+// TestFieldIndexFollowsTheSchema changes the format of a setting in the CRD and checks the row has it, with no
 // other change: the index is built from the schema, not from a list kept beside it.
 func TestFieldIndexFollowsTheSchema(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(repoRoot, crdDir, patchCRD))
@@ -76,8 +64,9 @@ func TestFieldIndexFollowsTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	module := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["documents"].Items.Schema.Properties["kernelModuleConfig"]
-	module.Properties["addedByTheTest"] = apiextv1.JSONSchemaProps{Type: "string", Description: "A field the test added."}
+	sysctls := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["machine"].Properties["sysctls"]
+	sysctls.Format = "test-format"
+	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["machine"].Properties["sysctls"] = sysctls
 
 	changed, err := yaml.Marshal(&crd)
 	if err != nil {
@@ -89,12 +78,12 @@ func TestFieldIndexFollowsTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	row, ok := indexRows(t, dir)["KernelModuleConfig addedByTheTest"]
+	row, ok := indexRows(t, dir)["SysctlConfig params"]
 	if !ok {
-		t.Fatal("a field added to the schema has no row")
+		t.Fatal("the setting has no row")
 	}
 
-	if row.Type != "string" || row.Description != "A field the test added." {
+	if row.Format != "test-format" {
 		t.Errorf("row = %+v", row)
 	}
 }

@@ -17,27 +17,30 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"go/types"
+	"maps"
 	"os"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
+
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 // crdPath is the CRD "make manifests" renders for TalosConfigPatch, relative
 // to this package.
 const crdPath = "../../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml"
 
-// TestShippedMatchesCRDEnum checks that shipped (the generator's list) and the CRD's documents[].kind enum
-// name exactly the same kinds. Run "make manifests" before this test; it reads the real generated CRD. A
-// kind dropped from shipped but still in the committed CRD fails here until the CRD is regenerated, and
-// the regenerated CRD then shows the removed enum value in the diff.
-func TestShippedMatchesCRDEnum(t *testing.T) {
+// TestShippedKindsAreTheKindsSpecConfigConvertsTo checks that shipped (the generator's list) and the kinds the
+// tags of Ichor's schema name are exactly the same: a kind dropped from shipped but still written by the schema, or
+// shipped but placed nowhere, fails here until the schema is regenerated.
+func TestShippedKindsAreTheKindsSpecConfigConvertsTo(t *testing.T) {
 	want := make([]string, 0, len(shipped))
 	for _, s := range shipped {
 		want = append(want, ichorName(s.kind))
@@ -45,42 +48,40 @@ func TestShippedMatchesCRDEnum(t *testing.T) {
 
 	slices.Sort(want)
 
-	raw, err := os.ReadFile(crdPath)
-	if err != nil {
-		t.Fatalf("reading generated CRD (run `make manifests` first): %v", err)
+	kinds := map[string]bool{}
+	tagKinds(reflect.TypeFor[ichorconfig.Config](), kinds, map[reflect.Type]bool{})
+
+	got := slices.Sorted(maps.Keys(kinds))
+
+	if !slices.Equal(want, got) {
+		t.Errorf("the schema's tags name %v, mirrorgen ships %v", got, want)
+	}
+}
+
+// tagKinds collects the document kinds named by the ichor tags below t.
+func tagKinds(t reflect.Type, kinds map[string]bool, seen map[reflect.Type]bool) {
+	if seen[t] {
+		return
 	}
 
-	var crd apiextensionsv1.CustomResourceDefinition
-	if err := yaml.Unmarshal(raw, &crd); err != nil {
-		t.Fatalf("parsing CRD: %v", err)
-	}
+	seen[t] = true
 
-	if len(crd.Spec.Versions) == 0 {
-		t.Fatalf("CRD %s declares no versions", crdPath)
-	}
-
-	for _, v := range crd.Spec.Versions {
-		kindSchema := v.Schema.OpenAPIV3Schema.
-			Properties["spec"].
-			Properties["documents"].
-			Items.Schema.
-			Properties["kind"]
-
-		got := make([]string, 0, len(kindSchema.Enum))
-
-		for _, e := range kindSchema.Enum {
-			var s string
-			if err := json.Unmarshal(e.Raw, &s); err != nil {
-				t.Fatalf("version %s: decoding kind enum value %q: %v", v.Name, e.Raw, err)
+	for f := range t.Fields() {
+		for part := range strings.SplitSeq(strings.TrimPrefix(f.Tag.Get("ichor"), "docs="), ";") {
+			if kind, _, ok := strings.Cut(part, ":"); ok {
+				kinds[strings.TrimPrefix(kind, "+")] = true
+			} else if part != "" {
+				kinds[part] = true
 			}
-
-			got = append(got, s)
 		}
 
-		slices.Sort(got)
+		ft := f.Type
+		for ft.Kind() == reflect.Pointer || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Map {
+			ft = ft.Elem()
+		}
 
-		if !slices.Equal(want, got) {
-			t.Errorf("version %s: CRD documents[].kind enum %v does not match mirrorgen's shipped kinds %v", v.Name, got, want)
+		if ft.Kind() == reflect.Struct && ft.PkgPath() == t.PkgPath() {
+			tagKinds(ft, kinds, seen)
 		}
 	}
 }

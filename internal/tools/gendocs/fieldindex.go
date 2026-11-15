@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,9 +16,10 @@ import (
 	"sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
-// patchCRD is the file the index is read from: the documents[] union of TalosConfigPatch.
+// patchCRD is the file the index is read from: the spec.config schema of TalosConfigPatch.
 const patchCRD = "ichor.maesh.dev_talosconfigpatches.yaml"
 
 // noFieldRows lists the kinds the index holds a single row for and no field rows: the static pod is the
@@ -39,8 +41,8 @@ type fieldRow struct {
 	Description string   `json:"description,omitempty"`
 }
 
-// generateFieldIndex writes the field index below file: one row for each field of each document kind in
-// the TalosConfigPatch schema. The CRD gives the paths, types, required and format; the description and
+// generateFieldIndex writes the field index below file: one row for each field of each document kind that
+// spec.config carries, in the path it has in the document, which is what the editor writes. The CRD gives the paths, types, required and format; the description and
 // the allowed values come from the Talos machinery documentation tables (the Doc method of each document
 // type), which the CRD schema does not carry.
 func generateFieldIndex(crdsDir, file string) error {
@@ -89,39 +91,35 @@ func fieldRows(crdsDir string) ([]fieldRow, error) {
 		return nil, fmt.Errorf("%s: %w", patchCRD, err)
 	}
 
-	var docs *apiextv1.JSONSchemaProps
+	var config *apiextv1.JSONSchemaProps
 
 	for _, v := range crd.Spec.Versions {
 		if v.Schema != nil && v.Schema.OpenAPIV3Schema != nil {
-			spec := v.Schema.OpenAPIV3Schema.Properties["spec"]
-			if d, ok := spec.Properties["documents"]; ok && d.Items != nil {
-				docs = d.Items.Schema
+			if c, ok := v.Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"]; ok {
+				config = &c
 			}
 		}
 	}
 
-	if docs == nil {
-		return nil, fmt.Errorf("%s: no spec.documents[] schema", patchCRD)
+	if config == nil {
+		return nil, fmt.Errorf("%s: no spec.config schema", patchCRD)
 	}
+
+	// The schema of each document kind, assembled from where spec.config puts the settings of the kind.
+	docs := map[string]*setting{}
+	collectDocuments(reflect.TypeFor[ichorconfig.Config](), *config, docs)
 
 	var rows []fieldRow
 
-	for _, kindEnum := range docs.Properties["kind"].Enum {
-		kind := strings.Trim(string(kindEnum.Raw), `"`)
-
+	for _, kind := range slices.Sorted(maps.Keys(docs)) {
 		key, ok := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(kind)
 		if !ok {
 			return nil, fmt.Errorf("kind %q has no field in TalosConfigPatchDocument", kind)
 		}
 
-		schema, ok := docs.Properties[key]
-		if !ok {
-			return nil, fmt.Errorf("kind %q: no %q in the schema", kind, key)
-		}
-
+		schema := docs[kind].schema()
 		mt := machineryType(key)
-		root := fieldRow{Kind: kind, Description: kindDescription(mt, schema)}
-		rows = append(rows, root)
+		rows = append(rows, fieldRow{Kind: kind, Description: kindDescription(mt, schema)})
 
 		if slices.Contains(noFieldRows, kind) {
 			continue
@@ -133,6 +131,125 @@ func fieldRows(crdsDir string) ([]fieldRow, error) {
 	}
 
 	return rows, nil
+}
+
+// collectDocuments walks Ichor's schema, the Go type and its CRD schema side by side, and puts each setting where
+// the document that spells it has it. A setting several documents spell is a row of the one the converter writes:
+// a document before the v1alpha1 one. A document kind's schema is the union of its settings, by their path in it.
+func collectDocuments(t reflect.Type, s apiextv1.JSONSchemaProps, docs map[string]*setting) {
+	for f := range t.Fields() {
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+
+		prop, ok := s.Properties[name]
+		if !ok {
+			continue
+		}
+
+		tag := f.Tag.Get("ichor")
+
+		switch {
+		case strings.HasPrefix(tag, "docs="):
+			kind := strings.TrimPrefix(tag, "docs=")
+
+			var entry *apiextv1.JSONSchemaProps
+
+			if prop.AdditionalProperties != nil {
+				entry = prop.AdditionalProperties.Schema
+			} else if prop.Items != nil {
+				entry = prop.Items.Schema
+			}
+
+			if entry != nil {
+				// A document is named by its own field.
+				put(docs, kind, "name", apiextv1.JSONSchemaProps{Type: "string"}, true)
+				collectDocuments(structOf(f.Type), *entry, docs)
+			}
+		case structOf(f.Type).PkgPath() == t.PkgPath():
+			// An object of Ichor's own schema: its tag only says where the whole of it goes in the v1alpha1 document.
+			collectDocuments(structOf(f.Type), prop, docs)
+		default:
+			for _, sink := range documentSinks(tag) {
+				put(docs, sink[0], sink[1], prop, slices.Contains(s.Required, name))
+			}
+		}
+	}
+}
+
+// documentSinks is the "Kind:path" pairs of a setting's tag a row is written for: the documents' before the
+// v1alpha1 document's, and none for a switch, which is the presence of a document and has no field of its own.
+func documentSinks(tag string) [][2]string {
+	var docs, config [][2]string
+
+	for part := range strings.SplitSeq(tag, ";") {
+		kind, path, _ := strings.Cut(part, ":")
+
+		switch {
+		case strings.HasPrefix(kind, "+"):
+		case kind == "Config":
+			config = append(config, [2]string{kind, path})
+		default:
+			docs = append(docs, [2]string{kind, path})
+		}
+	}
+
+	if len(docs) > 0 {
+		return docs
+	}
+
+	return config
+}
+
+// setting is a place in the schema of a document: a setting, or an object holding settings.
+type setting struct {
+	leaf     *apiextv1.JSONSchemaProps
+	required bool
+	kids     map[string]*setting
+}
+
+// put places a setting at path in the document of kind, creating the objects above it.
+func put(docs map[string]*setting, kind, path string, leaf apiextv1.JSONSchemaProps, required bool) {
+	at, ok := docs[kind]
+	if !ok {
+		at = &setting{}
+		docs[kind] = at
+	}
+
+	for p := range strings.SplitSeq(path, ".") {
+		if at.kids == nil {
+			at.kids = map[string]*setting{}
+		}
+
+		next, ok := at.kids[p]
+		if !ok {
+			next = &setting{}
+			at.kids[p] = next
+		}
+
+		at = next
+	}
+
+	at.leaf, at.required = &leaf, required
+}
+
+// schema is the CRD schema of the place: the setting's own, or an object of what is below it.
+func (s *setting) schema() apiextv1.JSONSchemaProps {
+	if s.leaf != nil {
+		return *s.leaf
+	}
+
+	out := apiextv1.JSONSchemaProps{Type: "object", Properties: map[string]apiextv1.JSONSchemaProps{}}
+
+	for name, k := range s.kids {
+		out.Properties[name] = k.schema()
+
+		if k.required {
+			out.Required = append(out.Required, name)
+		}
+	}
+
+	slices.Sort(out.Required)
+
+	return out
 }
 
 // machineryType is the Talos machinery document type behind the field key of TalosConfigPatchDocument: the

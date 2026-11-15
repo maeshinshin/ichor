@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Bootstrap
 
-Decided: The demo cluster's control plane is created by `ichor init` and its worker approved through `ichor approve node --install-disk`, so every node's configuration is rendered by Ichor; images are pushed with `crane` to a `registry:2` Deployment in `ichor-e2e` and reached through an anonymous `spec.registries` mirror of `ghcr.io` that `ichor init --registry-mirror` writes; `init` also gains `--pod-subnets` / `--service-subnets`, waits for the node, the API server and the webhooks, and applies the install manifest before the bundle Secret; the controller's shipped RBAC and cache are made consistent.
+Decided: The demo cluster's control plane is created by `ichor init` and its worker approved through `ichor approve node --install-disk`, so every node's configuration is rendered by Ichor; images are pushed with `crane` to a `registry:2` Deployment in `<e2e-namespace>` and reached through an anonymous `spec.registries` mirror of `ghcr.io` that `ichor init --registry-mirror` writes; `init` also gains `--pod-subnets` / `--service-subnets`, waits for the node, the API server and the webhooks, and applies the install manifest before the bundle Secret; the controller's shipped RBAC and cache are made consistent.
 
 ## Context
 
@@ -13,10 +13,10 @@ have no container runtime and no route to pod IPs.
 ## Decision
 
 1. **Harness.** `up-demo` only creates the two nodes (name prefix from `ICHOR_UI_DEMO_PREFIX`, default `ichor-ui-demo`)
-   and leaves both in maintenance mode. `ichor init` runs from a busybox pod in `ichor-e2e` because the build host may have no route to pod IPs.
+   and leaves both in maintenance mode. `ichor init` runs from a busybox pod in `<e2e-namespace>` because the build host may have no route to pod IPs.
 2. **Images.** `crane` (added to `flake.nix`) appends the statically built `manager` / `ichor-ui` binaries as a layer on
    `gcr.io/distroless/static:nonroot` and pushes them through a `kubectl port-forward` to a `registry:2` Deployment+Service
-   (`<prefix>-registry`, emptyDir, in `ichor-e2e` only). The install manifest is built with `make build-ichor-embed IMG=ghcr.io/maeshinshin/ichor-controller:<tag>
+   (`<prefix>-registry`, emptyDir, in `<e2e-namespace>` only). The install manifest is built with `make build-ichor-embed IMG=ghcr.io/maeshinshin/ichor-controller:<tag>
    IMG_UI=ghcr.io/maeshinshin/ichor-ui:<tag>`, so the image references stay real `ghcr.io` names and the nodes reach the registry
    only through `TalosCluster.spec.registries`: host `ghcr.io`, endpoint `http://<registry ClusterIP>:5000`. containerd tries the mirror
    first and falls back to `ghcr.io` for everything else (Talos's own images). No raw YAML and no patch: the typed field already existed.

@@ -371,7 +371,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
                     ? t('ops.plan.orderCARotation')
                     : kind === 'key-rotation'
                       ? t('ops.plan.orderKeyRotation')
-                      : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
+                      : t(kind === 'kubernetes' ? 'ops.plan.orderKubelets' : 'ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
               </CardDescription>
               <ItemGroup>
                 {steps.map((s, i) => (

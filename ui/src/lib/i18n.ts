@@ -743,6 +743,7 @@ export const en = {
     'The rotation is under way. Your old kubeconfig and talosconfig stop working once the nodes issue from the new CA. The new credentials work with both CAs and after the old one is dropped.',
   'ops.plan.counts': '{total} node(s): {controlPlanes} control plane, {workers} worker.',
   'ops.plan.orderRollout': 'Control planes one at a time, then workers (at most {n} at once):',
+  'ops.plan.orderKubelets': 'The kubelet stage, node by node (the first three stages are listed above): control planes one at a time, then workers (at most {n} at once):',
   'ops.plan.orderShutdown': 'Workers first, stopped together; then the control planes at once:',
   'ops.plan.step': 'Step {n}: {names} ({role})',
   'ops.plan.role.controlplane': 'control plane',

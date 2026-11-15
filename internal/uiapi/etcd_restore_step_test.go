@@ -28,12 +28,12 @@ const (
 )
 
 func TestWipeStepNamesTheControllersNodeAndSaysItGoesLast(t *testing.T) {
-	got := wipeStep([]string{cpA, cpB, cpC}, cpB)
+	got := wipeStep([]string{cpA, cpB, cpC}, cpB, "")
 	if !strings.Contains(got, "Wipe etcd data on "+cpA+", "+cpC+", then "+cpB+" (where this controller runs)") {
 		t.Fatalf("got %q", got)
 	}
 
-	for _, plain := range []string{wipeStep([]string{cpA, cpB}, ""), wipeStep([]string{cpA}, cpA)} {
+	for _, plain := range []string{wipeStep([]string{cpA, cpB}, "", ""), wipeStep([]string{cpA}, cpA, "")} {
 		if strings.Contains(plain, "where this controller runs") {
 			t.Fatalf("named a controller node it should not have: %q", plain)
 		}

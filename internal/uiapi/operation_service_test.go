@@ -905,3 +905,30 @@ func TestMachineActionsAcceptAUniqueNamePrefixAndRefuseAnAmbiguousOne(t *testing
 		}
 	}
 }
+
+// A failed lookup of where the controller runs is not "it runs on no listed machine": the plan says it could not tell.
+func TestPlanConfigSaysWhenItCouldNotTellWhereTheControllerRuns(t *testing.T) {
+	pod := &corev1.Pod{
+		Name: testControllerPodName, Namespace: opNS, Labels: map[string]string{testControllerLabelKey: testControllerLabelVal},
+		Spec: corev1.PodSpec{NodeName: "ctl-node"},
+	}
+	base, _ := opServer(t, append(configObjects(), pod)...)
+	srv := &Server{ControllerNamespace: opNS, Client: interceptor.NewClient(base.Client.(client.WithWatch), interceptor.Funcs{
+		List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, o ...client.ListOption) error {
+			if _, ok := l.(*corev1.PodList); ok {
+				return errors.New("forbidden")
+			}
+
+			return c.List(ctx, l, o...)
+		},
+	})}
+
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CONFIG, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if w := res.Msg.GetWarning(); !strings.Contains(w, "could not determine which machine runs Ichor's controller") || !strings.Contains(w, "forbidden") {
+		t.Fatalf("warning = %q", w)
+	}
+}

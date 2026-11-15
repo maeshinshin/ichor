@@ -793,7 +793,13 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	var own *ichorv1alpha1.TalosMachine
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig {
-		cps, workers, own = splitOwnMachine(cps, workers, s.controllerMachine(ctx, list.Items, cluster.Name, ""))
+		name, unread := s.controllerMachine(ctx, list.Items, cluster.Name, "")
+		cps, workers, own = splitOwnMachine(cps, workers, name)
+
+		if own == nil && unread != "" {
+			p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " This plan could not determine which machine runs Ichor's controller (" +
+				unread + "), so it cannot show which is rebooted last.")
+		}
 	}
 
 	step := int32(0)

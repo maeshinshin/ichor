@@ -159,6 +159,86 @@ func TestEtcdRestorePlanNamesTheControllersNodeWhateverTheAppNameIs(t *testing.T
 	}
 }
 
+// A lookup that failed is not "the controller is on no control plane": the plan says it could not tell, and why.
+func TestEtcdRestorePlanSaysWhenItCouldNotTellWhereTheControllerRuns(t *testing.T) {
+	errForbidden := errors.New("forbidden: cannot list")
+
+	pod := &corev1.Pod{
+		Name: testControllerPodName, Namespace: opNS, Labels: map[string]string{testControllerLabelKey: testControllerLabelVal},
+		Spec: corev1.PodSpec{NodeName: restoreCP2Node},
+	}
+	unscheduled := pod.DeepCopy()
+	unscheduled.Spec.NodeName = ""
+
+	tests := []struct {
+		name  string
+		pod   *corev1.Pod
+		funcs interceptor.Funcs
+		want  string
+	}{
+		{
+			name: "the pod list fails", pod: pod, want: `the controller's pod could not be listed in namespace "` + opNS + `": ` + errForbidden.Error(),
+			funcs: interceptor.Funcs{List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, o ...client.ListOption) error {
+				if _, ok := l.(*corev1.PodList); ok {
+					return errForbidden
+				}
+
+				return c.List(ctx, l, o...)
+			}},
+		},
+		{
+			name: "the Node of a machine cannot be read", pod: pod, want: "the Kubernetes Node of cp1 could not be read: " + errForbidden.Error(),
+			funcs: interceptor.Funcs{List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, o ...client.ListOption) error {
+				if _, ok := l.(*corev1.NodeList); ok {
+					return errForbidden
+				}
+
+				return c.List(ctx, l, o...)
+			}},
+		},
+		{name: "the pod is not on a node yet", pod: unscheduled, want: "is not on a node yet"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			objs := append(opObjects(), restoreBackupObject(), opMachine("cp2", "controlplane", nil, nil), opMachine("cp3", "controlplane", nil, nil), tc.pod)
+			base, _ := opServer(t, objs...)
+			s := &Server{Client: interceptor.NewClient(base.Client.(client.WithWatch), tc.funcs), ControllerNamespace: opNS}
+
+			res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", false)))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			step, warning := res.Msg.GetSteps()[2], res.Msg.GetWarning()
+			for _, want := range []string{"could not be determined", tc.want, "cannot say which is wiped last", "wipes its own control plane last"} {
+				if !strings.Contains(step, want) {
+					t.Errorf("wipe step does not say %q: %s", want, step)
+				}
+			}
+
+			if !strings.Contains(warning, "could not determine which control plane runs Ichor's controller") {
+				t.Errorf("warning does not say the node is unknown: %s", warning)
+			}
+		})
+	}
+}
+
+// No controller pod anywhere, with every read answered, is a controller outside the cluster: nothing was left unread.
+func TestEtcdRestorePlanSaysNothingUnreadWhenNoControllerPodExists(t *testing.T) {
+	s, _ := opServer(t, restoreObjects()...)
+	s.ControllerNamespace = opNS
+
+	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", false)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if step := res.Msg.GetSteps()[2]; strings.Contains(step, "could not be determined") {
+		t.Fatalf("claimed a failed lookup: %s", step)
+	}
+}
+
 func TestEtcdRestorePlanRefusals(t *testing.T) {
 	ctx := context.Background()
 

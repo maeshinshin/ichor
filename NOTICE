@@ -9,6 +9,8 @@ header, is named here. The rest of Ichor is under the Apache License 2.0.
 
 Files covered by MPL-2.0:
 
+pkg/ichorconfig/zz_generated.config.go
+pkg/ichorconfig/zz_generated.deepcopy.go
 pkg/typedconfig/zz_generated.conversion.go
 pkg/typedconfig/zz_generated.deepcopy.go
 pkg/typedconfig/zz_generated.mirror.go

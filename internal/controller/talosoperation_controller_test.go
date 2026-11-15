@@ -274,7 +274,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(msg).NotTo(ContainSubstring(`""`))
 	})
 
-	It("pauses with OperatorPaused and never calls Advance when spec.paused is true, but keeps the lock", func() {
+	It("pauses with OperatorPaused and never calls Advance when spec.paused is true, and releases the lock", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "pz-cp1")
 		op := newOpTestOperation(cluster.Name)
@@ -290,10 +290,67 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		expectPausedBecause(got, reasonOperationPaused)
 
-		lock := opTestLock(cluster)
-		_, held, err := lock.Holder(ctx)
+		_, held, err := opTestLock(cluster).Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeTrue(), "spec.paused halts progress but must not release the cluster lock")
+		Expect(held).To(BeFalse(), "a paused operation waits for a person and must not hold the cluster lock")
+	})
+
+	It("releases the cluster lock when a step failure pauses the operation", func() {
+		cluster := newOpTestCluster()
+		cp := newOpTestMachine(cluster.Name, "controlplane", "release-cp1")
+		op := newOpTestOperation(cluster.Name)
+
+		r, _ := newOpTestReconciler(map[string]advanceOutcome{cp.Name: {err: errors.New("drain blocked")}})
+
+		mustReconcileOperation(r, op)
+
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("drain blocked"))
+
+		_, held, err := opTestLock(cluster).Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeFalse(), "a failed step pauses for a person, so the operation must not keep the cluster lock")
+	})
+
+	It("does not take the cluster lock back on a later pass while it is paused by a failure", func() {
+		cluster := newOpTestCluster()
+		cp := newOpTestMachine(cluster.Name, "controlplane", "stay-cp1")
+		op := newOpTestOperation(cluster.Name)
+
+		r, fake := newOpTestReconciler(map[string]advanceOutcome{cp.Name: {err: errors.New("drain blocked")}})
+		mustReconcileOperation(r, op)
+
+		callsBefore := len(fake.calls)
+		for range 3 {
+			mustReconcileOperation(r, op)
+		}
+
+		Expect(fake.calls).To(HaveLen(callsBefore), "a paused operation must not be advanced")
+		_, held, err := opTestLock(cluster).Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeFalse(), "a later pass of a paused operation must not renew the lock it released")
+	})
+
+	It("waits, paused on the lock, when a retry finds another holder of the cluster lock", func() {
+		cluster := newOpTestCluster()
+		cp := newOpTestMachine(cluster.Name, "controlplane", "wait-cp1")
+		op := newOpTestOperation(cluster.Name)
+
+		r, fake := newOpTestReconciler(map[string]advanceOutcome{cp.Name: {err: errors.New("drain blocked")}})
+		mustReconcileOperation(r, op)
+
+		Expect(opTestLock(cluster).Acquire(ctx, "someone-else")).To(Succeed())
+
+		got := fetchOperation(op)
+		got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		callsBefore := len(fake.calls)
+		mustReconcileOperation(r, op)
+
+		Expect(fake.calls).To(HaveLen(callsBefore), "a retry that cannot take the lock must not run the step")
+		expectPausedBecause(fetchOperation(op), reasonOperationLockHeld)
 	})
 
 	It("advances control planes one at a time before touching any worker, respects maxUnavailable, excludes a held machine, and completes", func() {

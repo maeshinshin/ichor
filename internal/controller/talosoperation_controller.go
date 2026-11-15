@@ -231,11 +231,9 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.advanceEtcdRestore(ctx, &op, &cluster)
 	}
 
-	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
-	if err != nil {
-		return r.lockUnavailable(ctx, &op, err)
-	}
-
+	// A paused operation waits for a person and holds no lock: setPhase released it when the pause was
+	// entered, so the pause is decided here, before acquireDisruptiveLock, which would take the lock
+	// back and renew it on every pass.
 	if op.Spec.Paused {
 		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
 			reasonOperationPaused, "spec.paused is true")
@@ -248,6 +246,11 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if retried, err := r.consumeRetry(ctx, &op); err != nil || !retried {
 			return ctrl.Result{}, err
 		}
+	}
+
+	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
+	if err != nil {
+		return r.lockUnavailable(ctx, &op, err)
 	}
 
 	if res, handled, err := r.advanceOwnStateMachine(ctx, &op, &cluster, lock); handled {
@@ -702,7 +705,22 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 
 	r.phaseEvent(op, previous, previousPauseReason, phase, reason, message)
 
+	// A pause that waits for a person frees the cluster lock, so a machine that is trying to join is not
+	// blocked by an operation nobody is working on. Its resume takes the lock again (acquireDisruptiveLock).
+	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused) {
+		return r.releaseLock(ctx, op)
+	}
+
 	return nil
+}
+
+// releaseLock frees the cluster lock if op holds it. Release changes nothing when another holder has it,
+// so a paused operation can call it without ever freeing someone else's lock.
+func (r *TalosOperationReconciler) releaseLock(ctx context.Context, op *ichorv1alpha1.TalosOperation) error {
+	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.ClusterRef.Name}, r.lockDuration).
+		WithReader(r.APIReader)
+
+	return lock.Release(ctx, operationLockIdentity(op))
 }
 
 // isStepFailure is true for the pause reasons that mean "a step failed, never retry automatically": they set

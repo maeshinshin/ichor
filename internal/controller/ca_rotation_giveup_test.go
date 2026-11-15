@@ -64,15 +64,9 @@ var _ = Describe("a CA rotation whose step keeps failing", func() {
 		Expect(op.Status.FailureReason).To(ContainSubstring("connection refused"))
 		Expect(drainEvents(f.recorder)).To(ContainElement(ContainSubstring("Warning StepFailed")))
 
-		// The holder is stopped, so the next holder takes the lock over instead of waiting out the lease.
+		// The give-up paused the rotation, which releases the lock: the next holder takes it at once, with no lease to wait out.
 		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name},
 			clusterlock.DefaultDuration)
-		err := lock.Acquire(ctx, "ichor-controller/test/next-holder")
-		Expect(err).To(HaveOccurred())
-
-		retry, err := releaseIfHolderStopped(ctx, k8sClient, lock, err)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(retry).To(BeTrue())
 		Expect(lock.Acquire(ctx, "ichor-controller/test/next-holder")).To(Succeed())
 		Expect(lock.Release(ctx, "ichor-controller/test/next-holder")).To(Succeed())
 

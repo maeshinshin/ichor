@@ -55,12 +55,10 @@ maintenance mode on port 50000 and lists them to pick from, and a single
 address skips the scan.
 
 --skip-signature-check does not apply to one run only. It writes spec.installerSignature.mode: skip into the
-IchorInstallation "ichor" and leaves it there. The Job still runs by digest: unless --installer-digest names one, the
-controller resolves the version's tag to it, and the flag clears an earlier pin (spec.installerDigest). While the skip
-stands it also governs the Cilium Helm Job.
-Every `ichor upgrade ichor` writes both settings from its own flags, so the next one without the flag checks the signature again.
-To undo the skip without upgrading, run `kubectl edit ichorinstallation ichor` and delete spec.installerSignature
-(or set mode: required).
+IchorInstallation "ichor" and leaves it there; while the skip stands it also governs the Cilium Helm Job. The next
+`ichor upgrade ichor` without the flag checks the signature again. To undo the skip without upgrading, run
+`kubectl edit ichorinstallation ichor` and delete spec.installerSignature (or set mode: required); that needs the update
+verb on ichorinstallations/version, the right an upgrade needs.
 
 ```sh
 ichor init [flags]

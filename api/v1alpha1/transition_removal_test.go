@@ -151,6 +151,14 @@ var _ = Describe("Transition rules and removal", func() {
 				Expect(patch(obj, `[{"op":"replace","path":"/spec/clusterRef","value":{"name":"other"}}]`)).To(MatchError(ContainSubstring("clusterRef cannot change after creation")))
 			})
 
+			It("refuses to null spec.clusterRef", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec/clusterRef","value":null}]`)).To(MatchError(ContainSubstring("spec.clusterRef: Required value")))
+			})
+
+			It("refuses to empty spec.clusterRef", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec/clusterRef","value":{}}]`)).To(MatchError(ContainSubstring("clusterRef.name is required")))
+			})
+
 			It("refuses to remove spec", func() {
 				Expect(patch(obj, `[{"op":"remove","path":"/spec"}]`)).To(MatchError(ContainSubstring("spec: Required value")))
 			})
@@ -185,6 +193,18 @@ var _ = Describe("Transition rules and removal", func() {
 				Expect(patch(obj, `[{"op":"replace","path":"/spec/kind","value":"kubernetes"}]`)).To(MatchError(ContainSubstring("kind cannot change after creation")))
 			})
 
+			It("refuses to null spec.kind", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec/kind","value":null}]`)).To(MatchError(ContainSubstring("spec.kind: Required value")))
+			})
+
+			It("refuses to empty spec.kind", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec/kind","value":""}]`)).To(MatchError(ContainSubstring("spec.kind: Unsupported value")))
+			})
+
+			It("refuses to null spec.clusterRef", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec/clusterRef","value":null}]`)).To(MatchError(ContainSubstring("spec.clusterRef: Required value")))
+			})
+
 			It("refuses to remove spec", func() {
 				Expect(patch(obj, `[{"op":"remove","path":"/spec"}]`)).To(MatchError(ContainSubstring("spec: Required value")))
 			})
@@ -217,6 +237,14 @@ var _ = Describe("Transition rules and removal", func() {
 
 			It("refuses to change spec.purpose", func() {
 				Expect(patch(obj, `[{"op":"replace","path":"/spec/purpose","value":"node-reader"}]`)).To(MatchError(ContainSubstring("a credential request cannot change")))
+			})
+
+			It("refuses to null spec", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec","value":null}]`)).To(MatchError(ContainSubstring("spec: Required value")))
+			})
+
+			It("refuses to empty spec", func() {
+				Expect(patch(obj, `[{"op":"replace","path":"/spec","value":{}}]`)).To(MatchError(ContainSubstring("spec.clusterRef: Required value")))
 			})
 		})
 

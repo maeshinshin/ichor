@@ -396,6 +396,17 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
+- The Configuration page has a field search. Search fields opens a dialog over
+  every field of every Talos document kind, by name, path or description; a row
+  shows the path, kind, type and Talos's description, and choosing it puts the
+  field in the patch, in a new document of its kind if there is none. Each chosen
+  field is edited with an `Input`, a `Switch`, a `Select` where Talos lists the
+  allowed values of a string field, or a JSON `Textarea` for an object, array or
+  map. The document's own JSON `Textarea` and the kind `Select` still work, and
+  the kind `Select` now shows a kind the search added. The index is built
+  by the UI's make targets (`make ui-fieldindex`) and ships in the UI bundle: ichor-ui's role and the
+  CRDs are unchanged. `KubeStaticPodConfig` has one row and none for the fields
+  of the `Pod` inside it.
 - The nodes tile badge counts the nodes that are not ready, and the node rows
   and the node page name a Ready condition's reason, as the list does.
 - An API server restart is not counted as a reboot waiting.

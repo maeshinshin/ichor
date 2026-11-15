@@ -184,3 +184,50 @@ machine reference) already have one (`Select`, `Input`); label selector is
 the one case complex enough that a bespoke structured editor and the
 opaque-JSON pattern are close in cost, and only one of those two patterns
 is worth maintaining in this codebase.
+
+## Amendment: a field search in front of the Textarea (2026-11-15)
+
+ADR 0039 said to revisit the schema question if the JSON `Textarea` proved too
+coarse. The request to look a field up in a search box and fill in its value is
+that condition arriving, and ADR 0165 sized the options. The decision keeps the
+rule that the browser reads no schema and the server alone validates, and adds
+the search without either.
+
+- **A generated index, not a schema read.** `make ui-fieldindex` (gendocs)
+  writes `ui/src/gen/fieldindex.json`: one row for each field of each document
+  kind in the `TalosConfigPatch` schema, and one row for each kind. It ships in
+  the UI bundle as a lazily loaded chunk. ichor-ui's role is unchanged, and the
+  Helm release record does not grow, because nothing is added to a CRD. A field
+  added to a kind appears in it without a list being edited, and a gendocs test
+  adds a field to a copy of the schema to hold that.
+- **The index is built, not committed.** It holds Talos's own field
+  descriptions, and the repository holds none of Talos's prose
+  (`TestNoUpstreamProse`), so the file is ignored by git and every UI target
+  that reads it (`ui-typecheck`, `ui-test`, `ui-build`, and so `ui-ci` and the
+  images) writes it first. It cannot go stale for that reason. Committing it
+  means naming it in NOTICE and exempting it from that test, which is a licence
+  decision, not an implementation one.
+- **The CRD gives the shape, Talos's tables give the words.** Paths, types,
+  `required` and `format` come from the schema. A description and the allowed
+  values come from the `Doc` method of the machinery type that the mirror's
+  `ToMachinery` returns, matched by the YAML name down the path. The schema's
+  own description is the fallback, which is how fields of the Kubernetes types
+  (kubelet, kube-proxy, kube-scheduler, audit policy) keep theirs.
+- **Allowed values are used for a string field only.** A boolean's values are
+  its spellings, a switch covers them. A map's or an array's are examples, not
+  a closed set. An integer enumeration such as a bond's `mode` lists names in
+  Talos's table while the CRD takes the number, so offering the names in a
+  `Select` would write a value the API server refuses.
+- **The static pod is not in the index.** `KubeStaticPodConfig` is the whole of
+  `core/v1` `Pod`: 1,075 of the 2,281 rows, and half of the index's compressed
+  size, and each of them would answer a search for `name`, `image` or `ports`.
+  The kind has one row of its own, so a search for it adds the document, which
+  is then edited as JSON.
+- **A row below an array element writes the first element, and one below a map
+  value edits the map.** More elements and map keys are the JSON `Textarea`'s
+  job.
+- **Only the CRD is the validator.** An input holds no rule of its own: a
+  required field missing, or a value out of range, is refused when the patch is
+  saved. Where Talos documents a field with an empty table entry (the
+  v1alpha1 `Config` has many), the row has no description and the search still
+  finds it by its path.

@@ -262,6 +262,27 @@ func removedPreset(c *ichorv1alpha1.TalosCluster) bool {
 // presetUnmanaged is spec.cni.preset for an adopted cluster whose CNI Ichor leaves alone.
 const presetUnmanaged = "unmanaged"
 
+// unmanagedNeedsAdoption is the refusal for the unmanaged preset on an object without the adoption annotation.
+func unmanagedNeedsAdoption() error {
+	return fmt.Errorf("spec.cni.preset %q is only for clusters brought in by `ichor adopt`: "+
+		"the object must carry the annotation %s=\"true\"", presetUnmanaged, ichorv1alpha1.TalosClusterAdoptedAnnotation)
+}
+
+// validateUnmanagedAdoption refuses an update that makes a cluster unmanaged without the adoption annotation,
+// as create does. A stored object with no spec.cni reaches the preset only through an update, so the create
+// check never covers it.
+func validateUnmanagedAdoption(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	if oldObj.Spec.CNI.Preset == presetUnmanaged || newObj.Spec.CNI.Preset != presetUnmanaged {
+		return nil
+	}
+
+	if newObj.GetAnnotations()[ichorv1alpha1.TalosClusterAdoptedAnnotation] == annotationTrue {
+		return nil
+	}
+
+	return unmanagedNeedsAdoption()
+}
+
 // validateCNICreate refuses a new cluster that asks for a removed CNI: preset flannel
 // or custom, or spec.cni.custom.
 func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
@@ -269,8 +290,7 @@ func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
 	case removedPreset(c):
 		return fmt.Errorf(presetRemovedMessage, cni.Preset)
 	case cni.Preset == presetUnmanaged && c.GetAnnotations()[ichorv1alpha1.TalosClusterAdoptedAnnotation] != annotationTrue:
-		return fmt.Errorf("spec.cni.preset %q is only for clusters brought in by `ichor adopt`: "+
-			"the object must carry the annotation %s=\"true\"", presetUnmanaged, ichorv1alpha1.TalosClusterAdoptedAnnotation)
+		return unmanagedNeedsAdoption()
 	case cni.Custom != nil:
 		return errors.New("spec.cni.custom is deprecated and unused: Cilium is the only CNI")
 	}
@@ -318,6 +338,10 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	}
 
 	if err := validateNotRemoved(oldObj, newObj); err != nil {
+		return nil, err
+	}
+
+	if err := validateUnmanagedAdoption(oldObj, newObj); err != nil {
 		return nil, err
 	}
 

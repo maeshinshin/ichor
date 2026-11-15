@@ -192,5 +192,9 @@ var _ = Describe("TalosCluster Webhook: spec.cni through the API server", func()
 			Expect(patch(`[{"op":"add","path":"/spec/cni","value":{}}]`)).To(Succeed())
 			Expect(presetOf()).To(Equal(ciliumPreset))
 		})
+
+		It("refuses a JSON patch that adds spec.cni as unmanaged without the adoption annotation", func() {
+			Expect(patch(`[{"op":"add","path":"/spec/cni","value":{"preset":"unmanaged"}}]`)).To(MatchError(ContainSubstring("only for clusters brought in by")))
+		})
 	})
 })

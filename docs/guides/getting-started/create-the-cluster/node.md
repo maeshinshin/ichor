@@ -99,10 +99,12 @@ planes, and give the first node's own address as `--node-endpoint`.
 > half the answer, and it is the half that is easy to see. Ichor's
 > `spec.certSANs` is written into the Talos API certificate of every node and
 > into the kube-apiserver serving certificate, so listing the load balancer's
-> address or name there makes the API server's certificate valid for it. Under
-> `loadBalancer` the endpoint's own hostname is put on the kube-apiserver
-> certificate by Talos, so you list nothing. What you do not get by listing it
-> under `node` is the rest:
+> address or name there makes the API server's certificate valid for it. On
+> Talos v1.14 the endpoint's own hostname goes onto the kube-apiserver
+> certificate by Talos itself, so under `loadBalancer` you do not need
+> `certSANs` for the endpoint at all. Under `node` nothing adds the load
+> balancer's address for you. What listing it in `certSANs` does not give you is
+> the rest:
 >
 > - **The kubeconfig still names the node.** The kubeconfig's server is the
 >   cluster endpoint, `https://ADDRESS:6443`, and under `node` that is the
@@ -113,17 +115,19 @@ planes, and give the first node's own address as `--node-endpoint`.
 > - **Failover is yours either way.** Ichor creates no load balancer, no DNS
 >   record and no health check, and does not tell you when what is in front of
 >   the control planes is down.
-> - **A hostname is refused for `node`.** `CheckAddress` takes an IP address for
->   `vip` and `node`, and refuses a name for either, when `init` plans the
+> - **A hostname is refused for `node`, and `loadBalancer` is not checked.**
+>   `CheckAddress` refuses a name for `vip` and `node`, when `init` plans the
 >   cluster and when the webhook admits a TalosCluster whose endpoint changes.
->   `loadBalancer` takes a name, such as `kube.example.lan`.
+>   For `loadBalancer` it checks nothing: any string is accepted, and the CRD
+>   only requires a non-empty value. A mistyped address is not caught by Ichor,
+>   so check it against the name or address your load balancer answers on.
 > - **The controller's egress allowance follows the endpoint.** The controller's
 >   egress policy is built from `spec.endpoint.address`, and the API server port
 >   it allows (the endpoint's `/readyz` check) names that address. Under `node`
 >   that is the node, not the load balancer. A hostname goes in by name.
-> - **`adopt` chooses it for you.** `ichor adopt` types the endpoint `node` only
->   when the address is one node's own. Any other address, including a load
->   balancer's, becomes `loadBalancer`, and `adopt` never chooses `vip`.
+> - **`adopt` defaults to it.** `ichor adopt` types the endpoint `loadBalancer`
+>   by default, and `node` only when the address matches a node's own endpoint.
+>   It never chooses `vip`.
 
 Init prints a warning for this type that a VIP is recommended. The reason is on
 the [Virtual IP](vip.md) page: changing the endpoint later re-issues every

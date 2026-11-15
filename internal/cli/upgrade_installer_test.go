@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -175,5 +176,29 @@ func TestVersionShowsAnUncheckedInstallerImageLoudly(t *testing.T) {
 
 	if out := renderVersion(t, info, outputHuman); strings.Contains(out, "installer image") {
 		t.Errorf("no upgrade yet:\n%s", out)
+	}
+}
+
+// --skip-signature-check is not a one-shot bypass: it writes spec.installerSignature into the IchorInstallation.
+// The help of every command that takes it has to say so, and how to undo it.
+func TestSkipSignatureCheckHelpSaysTheChangePersists(t *testing.T) {
+	for name, cmd := range map[string]*cobra.Command{"upgrade_ichor": upgradeIchorCmd, "init": initCmd} {
+		t.Run(name, func(t *testing.T) {
+			f := cmd.Flags().Lookup("skip-signature-check")
+			if f == nil {
+				t.Fatalf("ichor %s has no --skip-signature-check", name)
+			}
+
+			if !strings.Contains(f.Usage, "not one-shot") || !strings.Contains(f.Usage, "spec.installerSignature") {
+				t.Errorf("the flag help does not say the skip is recorded: %q", f.Usage)
+			}
+
+			for _, want := range []string{"does not apply to one run only", "spec.installerSignature.mode: skip", "spec.installerDigest",
+				"checks the signature again", "kubectl edit ichorinstallation ichor", "delete spec.installerSignature"} {
+				if !strings.Contains(cmd.Long, want) {
+					t.Errorf("the help does not contain %q", want)
+				}
+			}
+		})
 	}
 }

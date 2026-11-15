@@ -354,8 +354,7 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.StringVar(&o.InstallerDigest, "installer-digest", "",
 		"pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; "+
 			"for a cluster whose controller cannot reach the registry (a demo behind a mirror)")
-	flags.BoolVar(&o.SkipSignatureCheck, "skip-signature-check", false,
-		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
+	flags.BoolVar(&o.SkipSignatureCheck, "skip-signature-check", false, skipSignatureUsage)
 	flags.StringVar(&o.NIC, flagNIC, "",
 		"the first node's primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff), "+
 			"the link its addressing goes on (a vip is announced on it too); like approve node --nic. A name is looked up among the links the node reports and only "+

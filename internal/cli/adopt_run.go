@@ -183,15 +183,9 @@ func checkAdoptCompat(say adoptSay, talos, kubernetes string, ichorInstallsCiliu
 	return nil
 }
 
-func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
-	if deps.Output == outputHuman && deps.Steps == nil {
-		deps.Steps = newProgress(deps.Stderr)
-	}
-
-	if deps.Steps != nil {
-		deps.Steps.Header("Ichor adopt · "+clusterName, adoptSummary(deps, namespace))
-	}
-
+// checkAdoptIchor is the first thing adopt does, before anything is read or written: the controller that
+// will reconcile what adopt creates is present, and the namespace is the one it reads.
+func checkAdoptIchor(ctx context.Context, namespace string, deps adoptDeps) error {
 	// shortcut: --add-machine sets no Ichor, so it skips the namespace check below; it writes no bundle
 	// Secret (it reads the controller's), but a --namespace that is not the controller's still
 	// misplaces its TalosMachines. Drop when --add-machine reads the namespace from ichorPresence too.
@@ -204,6 +198,22 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		if err := checkControllerNamespace(ctx, deps.K8s, deps.Ichor, namespace); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
+	if deps.Output == outputHuman && deps.Steps == nil {
+		deps.Steps = newProgress(deps.Stderr)
+	}
+
+	if deps.Steps != nil {
+		deps.Steps.Header("Ichor adopt · "+clusterName, adoptSummary(deps, namespace))
+	}
+
+	if err := checkAdoptIchor(ctx, namespace, deps); err != nil {
+		return err
 	}
 
 	var st *adoptState

@@ -140,6 +140,10 @@ type adoptWriteIchor struct {
 	Manifest        []byte
 	NetworkPolicies []byte
 
+	// AllowUnauthenticated installs ichor-ui open (--allow-unauthenticated); otherwise it starts
+	// read-only and the sign-in step switches it.
+	AllowUnauthenticated bool
+
 	// DetectedCNI and PolicyCRDPresent are the two inputs of the network-policy gate
 	// (installer.IncludeCiliumPolicies). The gate alone decides;
 	// the cluster's CNI preset does not veto it.
@@ -269,7 +273,7 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return nil
 	}
 
-	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr, ichor.DetectedCNI == cniCilium, true); err != nil {
+	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr, ichor.DetectedCNI == cniCilium, ichor.AllowUnauthenticated); err != nil {
 		return err
 	}
 

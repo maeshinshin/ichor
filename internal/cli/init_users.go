@@ -80,28 +80,29 @@ func (o initOptions) uiSettings() installer.UISettings {
 func (o initOptions) signInOn() bool { return !o.AllowUnauthenticated }
 
 // prepareInitUsers fills in the sign-in defaults and then validates them. It runs before anything
-// irreversible, so a bad URL or an old contract costs nothing.
-func prepareInitUsers(opts initOptions) (initOptions, error) {
+// irreversible, so a bad URL or an old contract costs nothing. cmd ("init" or "adopt") prefixes the
+// refusals: both commands set sign-in up through these functions, so the two cannot drift.
+func prepareInitUsers(cmd string, opts initOptions) (initOptions, error) {
 	if opts.signInOn() {
 		opts.UIURL = cmp.Or(opts.UIURL, defaultUIURL)
 		opts.AdminUser = cmp.Or(opts.AdminUser, defaultAdminUser)
 	}
 
-	return opts, validateInitUsers(opts)
+	return opts, validateInitUsers(cmd, opts)
 }
 
-func validateInitUsers(opts initOptions) error {
+func validateInitUsers(cmd string, opts initOptions) error {
 	if err := validateInitUIExtras(opts); err != nil {
 		return err
 	}
 
 	if !opts.signInOn() {
 		if opts.UIURL != "" {
-			return errors.New("init: --ui-url turns sign-in on and --allow-unauthenticated turns it off; give one of them")
+			return fmt.Errorf("%s: --ui-url turns sign-in on and --allow-unauthenticated turns it off; give one of them", cmd)
 		}
 
 		if opts.AdminUser != "" {
-			return errors.New("init: --admin-user needs sign-in, and --allow-unauthenticated turns it off (it creates no admin)")
+			return fmt.Errorf("%s: --admin-user needs sign-in, and --allow-unauthenticated turns it off (it creates no admin)", cmd)
 		}
 
 		return nil
@@ -109,12 +110,13 @@ func validateInitUsers(opts initOptions) error {
 
 	u, err := url.Parse(opts.UIURL)
 	if err != nil || u.Scheme != schemeHTTPS || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
-		return fmt.Errorf("init: --ui-url %q must be the https URL of ichor-ui, without query, fragment or credentials", opts.UIURL)
+		return fmt.Errorf("%s: --ui-url %q must be the https URL of ichor-ui, without query, fragment or credentials", cmd, opts.UIURL)
 	}
 
 	if semver.Compare(opts.VersionContract, initUsersMinContract) < 0 {
-		return fmt.Errorf("init: sign-in is on by default and needs --version-contract %s or later (the kube-apiserver can trust Ichor's issuer "+
-			"only through Talos's KubeAuthenticationConfig); %s is older. Pass --allow-unauthenticated to init without sign-in", initUsersMinContract, opts.VersionContract)
+		return fmt.Errorf("%s: sign-in is on by default and needs version contract %s or later (the kube-apiserver can trust Ichor's issuer "+
+			"only through Talos's KubeAuthenticationConfig); %s is older. Pass --allow-unauthenticated to %s without sign-in",
+			cmd, initUsersMinContract, opts.VersionContract, cmd)
 	}
 
 	return errors.Join(ichorauth.ValidateUserName(opts.AdminUser))
@@ -131,7 +133,7 @@ func ensureCredentialsSecret(ctx context.Context, k client.Client, ns string, pr
 
 	err := createRetrying(ctx, k, sec, progress)
 	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("init: creating the credentials Secret: %w", err)
+		return fmt.Errorf("sign-in: creating the credentials Secret: %w", err)
 	}
 
 	return nil
@@ -153,11 +155,11 @@ type uiTargets struct {
 func findDeploymentByLabel(ctx context.Context, k client.Reader, ns, key, value string) (*appsv1.Deployment, error) {
 	var list appsv1.DeploymentList
 	if err := k.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{key: value}); err != nil {
-		return nil, fmt.Errorf("init: listing Deployments labelled %s=%s in %s: %w", key, value, ns, err)
+		return nil, fmt.Errorf("sign-in: listing Deployments labelled %s=%s in %s: %w", key, value, ns, err)
 	}
 
 	if len(list.Items) == 0 {
-		return nil, fmt.Errorf("init: no Deployment labelled %s=%s in namespace %s", key, value, ns)
+		return nil, fmt.Errorf("sign-in: no Deployment labelled %s=%s in namespace %s", key, value, ns)
 	}
 
 	return &list.Items[0], nil
@@ -179,7 +181,7 @@ func prepareUITargets(ctx context.Context, k client.Client, ns string, s install
 
 	svc, err := findUIService(ctx, k, ns)
 	if err != nil {
-		return nil, fmt.Errorf("init: %w", err)
+		return nil, fmt.Errorf("sign-in: %w", err)
 	}
 
 	t := &uiTargets{ui: ui, controller: mgr, svc: svc}
@@ -202,15 +204,15 @@ func prepareUITargets(ctx context.Context, k client.Client, ns string, s install
 
 func (t *uiTargets) apply(ctx context.Context, k client.Client, progress io.Writer) error {
 	if err := updateRetrying(ctx, k, t.ui, t.uiMut, progress); err != nil {
-		return fmt.Errorf("init: updating the ichor-ui Deployment: %w", err)
+		return fmt.Errorf("sign-in: updating the ichor-ui Deployment: %w", err)
 	}
 
 	if err := updateRetrying(ctx, k, t.svc, t.svcMut, progress); err != nil {
-		return fmt.Errorf("init: updating the ichor-ui Service: %w", err)
+		return fmt.Errorf("sign-in: updating the ichor-ui Service: %w", err)
 	}
 
 	if err := updateRetrying(ctx, k, t.controller, t.ctrlMut, progress); err != nil {
-		return fmt.Errorf("init: updating the controller Deployment: %w", err)
+		return fmt.Errorf("sign-in: updating the controller Deployment: %w", err)
 	}
 
 	return nil
@@ -239,7 +241,7 @@ func setClusterAuthentication(
 
 	err = retryInit(ctx, progress, func() error { return k.Patch(ctx, cluster, client.RawPatch(types.MergePatchType, patch)) })
 	if err != nil {
-		return fmt.Errorf("init: setting spec.authentication.ichor on TalosCluster %q: %w", cluster.Name, err)
+		return fmt.Errorf("sign-in: setting spec.authentication.ichor on TalosCluster %q: %w", cluster.Name, err)
 	}
 
 	return nil
@@ -273,21 +275,36 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 
 	password, err = ichorauth.GeneratePassword()
 	if err != nil {
-		return "", fmt.Errorf("init: generating the admin password: %w", err)
+		return "", fmt.Errorf("sign-in: generating the admin password: %w", err)
 	}
 
 	spec := userSpec{Name: opts.AdminUser, DisplayName: opts.AdminUser, Roles: []string{ichorauth.RoleAdmin}}
 	if err := createUserWithPassword(ctx, k, spec, password, time.Now(), errw); err != nil {
-		return "", fmt.Errorf("init: creating the first admin: %w", err)
+		return "", fmt.Errorf("sign-in: creating the first admin: %w", err)
 	}
 
 	if err := targets.apply(ctx, k, errw); err != nil {
 		return password, err
 	}
 
-	_, _ = fmt.Fprintf(errw, "init: users are on in ichor-ui (issuer %s); first admin %q created\n", opts.UIURL, opts.AdminUser)
+	_, _ = fmt.Fprintf(errw, "sign-in: users are on in ichor-ui (issuer %s); first admin %q created\n", opts.UIURL, opts.AdminUser)
 
 	return password, nil
+}
+
+// openUIWarning is what init and adopt say when ichor-ui is left with no sign-in.
+const openUIWarning = "ichor-ui has no sign-in (--allow-unauthenticated): " + openUIReach + ". Sign-in is the default; leave the flag out."
+
+// authRolloutNotice is what init and adopt say once spec.authentication.ichor is set: the restart
+// is not automatic, it waits for the operator's rollout.
+const authRolloutNotice = "spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
+	"config next. Applying it restarts kube-apiserver on each control plane, so nodes report APIServerRestartRequired " +
+	"until you run `ichor rollout config` (or Apply in the Overview page's attention list), which rolls one control plane at a time"
+
+// uiReachNotice asks for the https address the issuer URL names: Ichor installs nothing at it.
+func uiReachNotice(uiURL string) string {
+	return fmt.Sprintf("make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
+		"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", uiURL, uiComponentLabel, uiComponentValue)
 }
 
 // initEpilogue ends init's output: on success how long it took, then what the operator has to do
@@ -304,16 +321,14 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 	}
 
 	if !opts.signInOn() {
-		p.Warn("ichor-ui has no sign-in (--allow-unauthenticated): " + openUIReach + ". Sign-in is the default; leave the flag out.")
+		p.Warn(openUIWarning)
 	} else {
 		p.Info(fmt.Sprintf("Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s", opts.UIURL))
 		if opts.UIURL != defaultUIURL {
-			p.Warn(fmt.Sprintf("make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
-				"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", opts.UIURL, uiComponentLabel, uiComponentValue))
+			p.Warn(uiReachNotice(opts.UIURL))
 		}
-		p.Warn("spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
-			"config next. Applying it restarts kube-apiserver on each control plane, so nodes report APIServerRestartRequired " +
-			"until you run `ichor rollout config` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
+
+		p.Warn(authRolloutNotice)
 
 		if password != "" {
 			printGeneratedPassword(p, opts.AdminUser, password)

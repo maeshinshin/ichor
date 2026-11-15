@@ -108,6 +108,8 @@ func adoptDetail(msg string) string {
 type adoptEnd struct {
 	complete bool
 	blocked  []string
+	// st carries the sign-in outcome; nil on a run that wrote nothing.
+	st *adoptState
 }
 
 // epilogue ends a run that did not fail: how long it took, what was left out, the advice to rotate
@@ -115,6 +117,10 @@ type adoptEnd struct {
 func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 	if d.Steps != nil {
 		d.Steps.Done()
+	}
+
+	if e.st != nil && e.st.openUI {
+		d.say(adoptWarn, "%s", openUIWarning)
 	}
 
 	if !e.complete {
@@ -131,6 +137,10 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 	}
 
 	d.say(adoptInfo, "the nodes are now managed by Ichor: change their configuration through Ichor (a TalosConfigPatch, or `ichor rollout config`), not on the node")
+
+	if e.st != nil {
+		d.signInEpilogue(e.st)
+	}
 
 	if d.Steps == nil {
 		return

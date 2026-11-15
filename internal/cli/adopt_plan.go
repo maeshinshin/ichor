@@ -150,13 +150,13 @@ func buildAdoptPlan(
 	sys *render.SystemInputs,
 	own ownership,
 ) (*adoptPlan, error) {
-	if err := refuseJWTAuthenticators(m.Name, currentCfg); err != nil {
-		return nil, err
-	}
-
 	baseline, _, err := render.Render(cluster, m, bundle, existing, sys)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: rendering node %q's baseline: %w", m.Name, err)
+	}
+
+	if err := refuseJWTAuthenticators(m.Name, currentCfg, baseline); err != nil {
+		return nil, err
 	}
 
 	paths, err := controller.ChangedPaths(currentCfg, baseline)
@@ -240,28 +240,61 @@ func buildAdoptPlan(
 	return plan, nil
 }
 
-// refuseJWTAuthenticators refuses a machine whose KubeAuthenticationConfig already carries jwt
-// entries: the render would replace them (the document is merge:replace), which would
-// silently lock out whoever signs in through them. Refused, not dropped; the external provider
-// belongs in spec.authentication.external.
-func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
-	provider, err := configloader.NewFromBytes(currentCfg)
+// refuseJWTAuthenticators refuses a machine whose KubeAuthenticationConfig carries a jwt entry
+// the fresh render (baseline) does not: the render would replace it (the document is
+// merge:replace), which would silently lock out whoever signs in through it. Refused, not
+// dropped; the external provider belongs in spec.authentication.external. An issuer the cluster's own
+// spec renders, Ichor's after an earlier adopt turned sign-in on, is not foreign.
+func refuseJWTAuthenticators(machine string, currentCfg, baseline []byte) error {
+	have, err := jwtIssuers(machine, currentCfg)
 	if err != nil {
-		return fmt.Errorf("adopt: decoding node %q's current configuration: %w", machine, err)
+		return err
+	}
+
+	own, err := jwtIssuers(machine, baseline)
+	if err != nil {
+		return err
+	}
+
+	foreign := 0
+
+	for _, url := range have {
+		if !slices.Contains(own, url) {
+			foreign++
+		}
+	}
+
+	if foreign > 0 {
+		return fmt.Errorf("adopt: node %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
+			"when it renders the node; move the identity provider into spec.authentication.external of the TalosCluster and adopt again",
+			machine, foreign)
+	}
+
+	return nil
+}
+
+// jwtIssuers is the issuer URL of every jwt authenticator in cfg's KubeAuthenticationConfig.
+func jwtIssuers(machine string, cfg []byte) ([]string, error) {
+	provider, err := configloader.NewFromBytes(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("adopt: decoding node %q's current configuration: %w", machine, err)
 	}
 
 	auth := provider.K8sAuthenticationConfig()
 	if auth == nil {
-		return nil
+		return nil, nil
 	}
 
-	if jwt, _ := auth.Configuration()["jwt"].([]any); len(jwt) > 0 {
-		return fmt.Errorf("adopt: node %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
-			"when it renders the node; move the identity provider into spec.authentication.external of the TalosCluster and adopt again",
-			machine, len(jwt))
+	var urls []string
+
+	jwt, _ := auth.Configuration()["jwt"].([]any)
+	for _, j := range jwt {
+		issuer, _ := j.(map[string]any)["issuer"].(map[string]any)
+		url, _ := issuer["url"].(string)
+		urls = append(urls, url)
 	}
 
-	return nil
+	return urls, nil
 }
 
 // groupChangedPaths partitions ChangedPaths' output by which

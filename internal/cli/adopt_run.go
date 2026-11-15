@@ -111,6 +111,11 @@ type adoptDeps struct {
 	// RequireIchor is --require-ichor: a cluster without Ichor is an error, not an install.
 	RequireIchor bool
 
+	// UIURL and AdminUser are --ui-url and --admin-user (init's defaults when empty);
+	// AllowUnauthenticated is --allow-unauthenticated: ichor-ui is left with no sign-in.
+	UIURL, AdminUser     string
+	AllowUnauthenticated bool
+
 	// Steps renders adopt's steps for a person (Output unset); nil on -o yaml|json, where the
 	// "adopt: ..." lines on Stderr stay as they were. runAdopt makes one on Stderr when it is nil.
 	Steps *progress
@@ -137,6 +142,12 @@ type adoptState struct {
 
 	// readBack is what Ichor's own Cilium release was installed with.
 	readBack *cilium.ReadBack
+
+	// signIn is what adopt does to turn sign-in on, nil when it does nothing. openUI: adopt leaves ichor-ui
+	// with no sign-in (--allow-unauthenticated). adminPassword is the generated one, shown once.
+	signIn        *signInPlan
+	openUI        bool
+	adminPassword string
 }
 
 // own is the class B definition for one node.
@@ -260,7 +271,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 	err = deps.run("Plan", func(d adoptDeps) (string, error) {
 		var err error
 
-		pl, err = st.planPhase(d)
+		pl, err = st.planPhase(ctx, d)
 		if err != nil {
 			return "", err
 		}
@@ -355,7 +366,23 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return err
 	}
 
-	deps.epilogue(clusterName, namespace, adoptEnd{complete: complete, blocked: pl.blocked})
+	if complete {
+		if err := st.turnSignInOn(ctx, deps, clusterName, namespace); err != nil {
+			// The administrator may exist by now, and nothing else could show its password.
+			if st.signIn != nil {
+				deps.showAdminPassword(st.signIn.opts.AdminUser, st.adminPassword)
+			}
+
+			deps.say(adoptWarn, "adoption stopped before sign-in was on: run the same `ichor adopt` again to continue where it stopped")
+
+			return err
+		}
+	} else if st.signIn != nil {
+		deps.say(adoptWarn, "sign-in is not turned on yet: run `ichor adopt` again once the Cilium takeover is done; "+
+			"until then ichor-ui serves read-only calls only")
+	}
+
+	deps.epilogue(clusterName, namespace, adoptEnd{complete: complete, blocked: pl.blocked, st: st})
 
 	return nil
 }
@@ -372,8 +399,13 @@ type adoptPlanned struct {
 
 // planPhase is Phase 1's second half: the version contract, each machine's three-class plan and its
 // report. With nothing to adopt it says so and sets nothing.
-func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
+func (st *adoptState) planPhase(ctx context.Context, deps adoptDeps) (*adoptPlanned, error) {
 	if err := st.chooseContract(deps); err != nil {
+		return nil, err
+	}
+
+	// After the contract: sign-in needs v1.14. Before anything is written.
+	if err := st.planSignIn(ctx, deps); err != nil {
 		return nil, err
 	}
 
@@ -399,7 +431,7 @@ func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
 		return nil, fmt.Errorf("adopt: every node is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
 	}
 
-	if !st.fresh && len(toCreate) == 0 && len(pl.held) == 0 {
+	if !st.fresh && len(toCreate) == 0 && len(pl.held) == 0 && st.signIn == nil {
 		if len(pl.blocked) > 0 {
 			deps.say(adoptWarn, "nothing to adopt: %s blocked by configuration Ichor cannot represent (see above)", strings.Join(pl.blocked, ", "))
 		} else {
@@ -1310,6 +1342,10 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 		what += ", and delete the foreign Cilium Helm record(s)"
 	}
 
+	if st.signIn != nil {
+		what += ", and " + st.signIn.describe()
+	}
+
 	return confirmOrAbort(deps.Stdin, deps.Stderr, "adopt", what+"? [y/N]: ", "aborted, nothing was created")
 }
 
@@ -1383,6 +1419,7 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 			detected = cniCilium // installed by adopt before this point
 		}
 
+		ichor.AllowUnauthenticated = deps.AllowUnauthenticated
 		ichor.DetectedCNI = detected
 		ichor.PolicyCRDPresent = ciliumPolicyCRDPresent(ctx, deps.Target)
 		in.Ichor = &ichor

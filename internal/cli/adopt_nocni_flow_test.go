@@ -143,6 +143,7 @@ func newNoCNIFlow(t *testing.T) *noCNIFlow {
 	d.ReadIdentity = func(_ context.Context, address string) (controller.HardwareIdentity, error) {
 		return controller.HardwareIdentity{UUID: "uuid-" + address, Serial: "s"}, nil
 	}
+	d.AllowUnauthenticated = true // these tests are about the order of Cilium, Ichor and the CRs, not sign-in
 	d.Ichor = &adoptWriteIchor{Namespace: testNamespace, Manifest: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ichor-install-marker\n  namespace: default\n")}
 	d.BootstrapCilium = func(_ context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
 		f.mu.Lock()

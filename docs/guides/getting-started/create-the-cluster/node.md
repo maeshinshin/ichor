@@ -20,23 +20,50 @@ pattern.
 
 Run `ichor init --preset single` and answer what it asks for. On a terminal the
 required settings can be left out, and `ichor init` asks for each one that was
-not given: the cluster name, the endpoint type, the endpoint address and the
-node address. Settings given as flags are not asked for again.
+not given, in this order:
+
+- **Cluster name**
+- **Endpoint type:** pick `node` from the list.
+- **Endpoint address:** for this pattern, the node's own IP address.
+- **First node:** a network such as `192.168.1.0/24` (your own network is the
+  default) to scan on port 50000 for nodes in maintenance mode, which are listed
+  to pick from; or the node's address, which skips the scan.
+- **Node address:** see below. Unlike the others, this one is asked even when
+  every other setting came from flags or a file.
+- **Install disk:** from the disks the node reports.
+
+Settings given as flags or in the file are not asked for again; for **Node
+address** that means `--address` or `firstNode.addresses`.
 
 ```console
 $ ichor init --preset single
   Cluster name       demo
-  Endpoint type      node (an IP address)
+  Endpoint type      node
 › Endpoint address   192.168.1.50▏
-  an IP address is expected here
+  an IP address or a hostname is expected here
 
   enter confirm · esc cancel
 ```
 
-The endpoint type is a list: typing narrows it, the arrow keys move, Enter
-selects. Text fields check the answer as you type and say what is wrong. The
+The endpoint type is a list whose entries read `vip (an IP address)` and `node
+(an IP address or a hostname)`: typing narrows it, the arrow keys move, Enter
+selects. Once answered, a line shows the value you chose (`node`), not the
+list entry. Text fields check the answer as you type and say what is wrong. The
 install disk is asked from the disks the node reports, and a node with one disk
 has it chosen and named. Esc or Ctrl-C cancels and nothing is written.
+
+**Node address** is asked whenever `--address` is not given, and it starts
+filled in with the node's address, without a prefix length:
+
+```console
+› Node address   192.168.1.50▏
+  the node's own address with its prefix length, such as 192.168.0.201/16; empty keeps DHCP on the link
+```
+
+Pressing Enter on that value as it stands is refused, because the answer must
+be an IPv4 address with its prefix length, such as `192.168.1.50/24`. Add the
+prefix length to give the node that static address. To leave the node on DHCP
+instead, clear the field and press Enter.
 
 With no terminal (in CI, or from a pod) there is no prompt: a missing setting
 fails with the same "required flag" error as always, so scripts are
@@ -61,6 +88,9 @@ firstNode:
 ```
 
 The file is read as described on [Settings every pattern shares](settings-every-pattern.md#the-inityaml-file).
+This file has no `firstNode.addresses`, so on a terminal `ichor init -f
+init.yaml` still asks for **Node address** (see [Interactive](#interactive)):
+clear the field to keep DHCP, or add `addresses` to the file.
 
 ## Flags
 
@@ -77,7 +107,13 @@ ichor init \
   required. `--node-endpoint` is the node's Talos API (`host:port`); the install
   disk can also be `wwid:ID`, `serial:SERIAL` or a `/dev/disk/by-id/` path.
 - `--endpoint-type node` takes the node's own IP address as `--endpoint-address`.
-- With this pattern Ichor configures no network for the first node unless you give its network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`); then Talos's default applies: a DHCP client on every physical network interface.
+- With no terminal, Ichor configures no network for the first node unless you
+  give its network flags (`--nic`, `--address`, `--gateway`, `--dns`,
+  `--vlan`); without them Talos's default applies: a DHCP client on every
+  physical network interface. On a terminal, init asks for **Node address**
+  when `--address` is not given, even with every other flag set: clear the
+  field to get that default (see [Interactive](#interactive)), or pass
+  `--address` to answer it up front.
 - `--preset single` makes the node one schedulable control plane. There is
   nothing to approve afterwards, so skip the approve step of the guide.
 - Sign-in is on by default: init creates the first admin and prints its

@@ -137,7 +137,12 @@ var shaSites = map[string]string{
 	"test/harness/ui-demo/README.md": "the demo version: TestDemoVersionIsSemverForANumericSha",
 }
 
-var shaDerivation = regexp.MustCompile(`rev-parse.*--short|--short.*rev-parse|\$\{[A-Za-z_]*:0:[0-9]+\}|--abbrev`)
+// shaDerivation is the usual ways to shorten a sha: rev-parse --short, ${X:0:7}, --abbrev, git log --format=%h and
+// cut -c1-7. It does not catch every spelling (head -c7, awk substr, a Go slice in a script's generator): when a
+// new way to shorten a sha lands, widen it.
+var shaDerivation = regexp.MustCompile(
+	`rev-parse.*--short|--short.*rev-parse|\$\{[A-Za-z_]*:0:[0-9]+\}|--abbrev|` +
+		`--(?:format|pretty)[= ]['"]?%h|\bcut +-c *[0-9]*-[0-9]+`)
 
 func TestEveryShaSiteIsCovered(t *testing.T) {
 	ls := exec.Command("git", "ls-files", "-z")

@@ -449,6 +449,46 @@ func renewLockWhile(
 	return func() { close(done) }
 }
 
+// leasedPass runs pass under the cluster lock, renewing it for as long as pass runs, and gives pass at most
+// bound. A pass that fails past its bound is stuck, not slow: it pauses the operation for a person, which stops
+// the requeue, and the renewal stops at the bound so the lease lapses. A pass that returns cleanly past the bound
+// is accepted, since whatever it did is already in status.
+func (r *TalosOperationReconciler) leasedPass(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, lock *clusterlock.Lock, bound time.Duration, what string,
+	pass func(context.Context) (ctrl.Result, error),
+) (ctrl.Result, error) {
+	identity := operationLockIdentity(op)
+	if err := lock.Renew(ctx, identity); err != nil {
+		return renewRefusal(ctx, err)
+	}
+
+	passCtx, cancelPass := context.WithTimeout(ctx, bound)
+	defer cancelPass()
+
+	loopCtx, cancelLoop := context.WithCancelCause(passCtx)
+	defer cancelLoop(nil)
+
+	var until atomic.Int64
+
+	deadline, _ := passCtx.Deadline()
+	until.Store(deadline.UnixNano())
+
+	stop := renewLockWhile(loopCtx, cancelLoop, lock, identity, r.renewEvery(), &until)
+	defer stop()
+
+	res, err := pass(loopCtx)
+	if held := lockLost(loopCtx); held != nil {
+		return renewRefusal(ctx, held)
+	}
+
+	if err != nil && errors.Is(passCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed,
+			fmt.Sprintf("%s did not finish within %s: %v", what, bound, err))
+	}
+
+	return res, err
+}
+
 // consumeRetry acts on a retry request (OperationRetryAnnotation set to "true") for a failed
 // operation: it records the request in status.lastRetry, clears failureReason and puts the operation
 // back to InProgress, so the caller runs the failed machine's step again (that machine is still

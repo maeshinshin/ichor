@@ -84,6 +84,17 @@ var shutdownDrainStall = 15 * time.Minute
 // shutdownNow is the clock of the window; a variable for tests.
 var shutdownNow = time.Now
 
+// shutdownPassSlack is the allowance a stop pass gets on top of its Talos calls, for its own API writes.
+// shortcut: a fixed minute, not the writes' measured time; drop if a pass's writes ever come close to it.
+var shutdownPassSlack = time.Minute
+
+// shutdownPassBound is the longest one stop pass can take. Each worker is probed, asked and probed again
+// (three calls) and each control plane is probed and asked (two), and every call is bounded by etcdDialTimeout.
+// Past it a pass is stuck, not slow: leasedPass fails it.
+func shutdownPassBound(workers, controlPlanes int) time.Duration {
+	return time.Duration(3*workers+2*controlPlanes)*etcdDialTimeout + shutdownPassSlack
+}
+
 // shutdownUnreachableSince holds, per operation UID and machine, when the machine was first seen
 // unreachable. shortcut: in memory only; a restarted controller starts the window again, which can
 // only make a stop count later, never earlier.
@@ -436,10 +447,19 @@ func (r *TalosOperationReconciler) advanceShutdown(
 		return ctrl.Result{}, err
 	}
 
-	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
-		return renewRefusal(ctx, err)
-	}
+	// A pass makes its Talos calls one after another, each up to etcdDialTimeout, so it can outlast the lease
+	// one renewal at the top gives it. leasedPass renews for the pass and stops at shutdownPassBound.
+	return r.leasedPass(ctx, op, lock, shutdownPassBound(len(workers), len(last)), "stopping the cluster",
+		func(ctx context.Context) (ctrl.Result, error) {
+			return r.shutdownPass(ctx, op, cluster, lock, bundle, workers, last)
+		})
+}
 
+// shutdownPass is one pass of advanceShutdown under the cluster lock: stages 1 and 2.
+func (r *TalosOperationReconciler) shutdownPass(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
+	bundle *secrets.Bundle, workers, last []*ichorv1alpha1.TalosMachine,
+) (ctrl.Result, error) {
 	// Stage 1: drain and stop the workers; wait until they are down.
 	if err := r.requestStop(ctx, op, cluster, bundle, workers, false); err != nil {
 		return ctrl.Result{}, err

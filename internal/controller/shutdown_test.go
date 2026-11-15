@@ -354,3 +354,105 @@ var _ = Describe("TalosOperation shutdown", func() {
 		Expect(got.Status.Machines).To(BeEmpty())
 	})
 })
+
+// slowShutdownTalos is a fake Talos client whose calls each take delay, the way a stop pass that visits
+// several nodes runs long. honourCtx makes a call give up at its context, as gRPC does; without it a call
+// sleeps regardless, and a Shutdown then reports that the node did not answer, which is what a stuck call looks like.
+type slowShutdownTalos struct {
+	*orderedFake
+	delay     time.Duration
+	honourCtx bool
+}
+
+func (s *slowShutdownTalos) BootID(ctx context.Context) (string, error) {
+	if err := s.wait(ctx); err != nil {
+		return "", err
+	}
+
+	return s.orderedFake.BootID(ctx)
+}
+
+func (s *slowShutdownTalos) Shutdown(ctx context.Context, force bool) error {
+	if err := s.wait(ctx); err != nil {
+		return err
+	}
+
+	if !s.honourCtx {
+		return errors.New("the node did not answer in time")
+	}
+
+	return s.orderedFake.Shutdown(ctx, force)
+}
+
+func (s *slowShutdownTalos) wait(ctx context.Context) error {
+	if !s.honourCtx {
+		time.Sleep(s.delay)
+
+		return nil
+	}
+
+	select {
+	case <-time.After(s.delay):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// slowStopFixture is the shutdown fixture with a short lease and every Talos call slowed by delay.
+func slowStopFixture(delay time.Duration, honourCtx bool) *shutdownFixture {
+	f := newShutdownFixture()
+	f.r.lockDuration, f.r.renewInterval = testLeaseDuration, testRenewEvery
+	f.r.TalosClient = func(_ context.Context, _ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *secrets.Bundle) (TalosClient, error) {
+		return &slowShutdownTalos{
+			orderedFake: &orderedFake{fakeTalosClient: f.fakes[m.Name], name: m.Name, log: &f.log},
+			delay:       delay, honourCtx: honourCtx,
+		}, nil
+	}
+
+	return f
+}
+
+var _ = Describe("a stop pass that outlasts the cluster lease", func() {
+	It("keeps the cluster lock for as long as the pass runs", func() {
+		// Six Talos calls at 400ms each take about 2.4s, past the one-second lease the top-of-reconcile renewal gives.
+		f := slowStopFixture(400*time.Millisecond, true)
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(done)
+
+			f.reconcile(op)
+		}()
+
+		// Steal only once the pass holds the lock, so the window is the pass's and not the start-up race.
+		Eventually(func() string {
+			holder, _, _ := opTestLock(f.cluster).Holder(ctx)
+
+			return holder
+		}, lockWaitBound, testRenewEvery).Should(Equal(operationLockIdentity(op)))
+
+		stolen := tryStealLock(f.cluster, stealWindow)
+		Eventually(done, lockWaitBound).Should(BeClosed())
+		Expect(stolen).To(BeFalse(), "the stop pass must renew the lock while it runs, so another operation cannot take it mid-stop")
+	})
+
+	It("pauses a stop pass that runs past its bound, because it is stuck rather than slow", func() {
+		DeferCleanup(func(saved time.Duration) { etcdDialTimeout = saved }, etcdDialTimeout)
+		DeferCleanup(func(saved time.Duration) { shutdownPassSlack = saved }, shutdownPassSlack)
+		// The bound is (3*2+2*3) calls at 50ms each, with no slack: 600ms. The stuck Shutdown returns after one second.
+		etcdDialTimeout, shutdownPassSlack = 50*time.Millisecond, 0
+		f := slowStopFixture(time.Second, false)
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+
+		got := f.reconcile(op)
+
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("stopping the cluster did not finish within"))
+		_, held, err := opTestLock(f.cluster).Holder(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(held).To(BeFalse(), "a stuck stop pass pauses and must not keep the cluster lock")
+	})
+})

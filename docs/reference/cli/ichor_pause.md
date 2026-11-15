@@ -36,5 +36,5 @@ ichor pause [command]
 ### SEE ALSO
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
-* [ichor pause operation](ichor_pause_operation.md)	 - Stop the operation from advancing any further node (the cluster lock stays held, nothing is undone)
+* [ichor pause operation](ichor_pause_operation.md)	 - Stop the operation from advancing any further node (nothing is undone; the cluster lock is released while it waits, and a resume takes it again, or waits if another operation holds it)
 

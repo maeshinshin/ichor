@@ -50,11 +50,11 @@ var retiredFields = []retiredField{
 	// The only management mode is ichor, so the field is gone.
 	{crd: ichorInstallationsCRD, path: "spec.managementMode"},
 	// ADR 0152: credential-bearing fields of the mirrored legacy v1alpha1 document, retired.
-	// The mirror is embedded in both CRDs (TalosClusters through the deprecated spec.cni.custom).
 	{crd: talosConfigPatchesCRD, path: "spec.documents[].config.cluster.extraManifestHeaders"},
 	{crd: talosConfigPatchesCRD, path: "spec.documents[].config.machine.registries.config{}.tls.clientIdentity"},
-	{crd: talosClustersCRD, path: "spec.cni.custom.documents[].config.cluster.extraManifestHeaders"},
-	{crd: talosClustersCRD, path: "spec.cni.custom.documents[].config.machine.registries.config{}.tls.clientIdentity"},
+	// ADR 0152, amended: TalosClusters embedded the same union in the deprecated spec.cni.custom.documents, a second
+	// copy that nothing rendered; it is retired whole, which covers the two credential paths under it.
+	{crd: talosClustersCRD, path: "spec.cni.custom.documents"},
 }
 
 // checkAdditive refuses a target CRD that would take something away from the live one: a

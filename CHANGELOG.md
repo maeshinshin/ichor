@@ -497,7 +497,9 @@ command does. Each item is described where it is listed below.
   wrote the `TalosOperation`, so it passed the ServiceAccount whatever the chart
   gave it; the grant was the only thing in the way, and a chart test now fails if
   any of the six is granted again. The backend refuses a start with nobody to ask
-  for all six kinds, where it used to leave the decision to the webhook.
+  for all six kinds, where it used to leave the decision to the webhook, and the
+  checks the settings, Cilium values and reclaim handlers make about the caller
+  answer no when there is no caller, where they answered yes.
 - ichor-ui refuses `--allow-unauthenticated` and `ICHOR_ALLOW_UNAUTHENTICATED=true`
   at startup, and the chart fails a render with `ichorUI.allowUnauthenticated` set
   to true. The installer drops the flag from a live ichor-ui with a notice. The UI

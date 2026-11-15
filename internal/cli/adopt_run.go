@@ -366,20 +366,8 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return err
 	}
 
-	if complete {
-		if err := st.turnSignInOn(ctx, deps, clusterName, namespace); err != nil {
-			// The administrator may exist by now, and nothing else could show its password.
-			if st.signIn != nil {
-				deps.showAdminPassword(st.signIn.opts.AdminUser, st.adminPassword)
-			}
-
-			deps.say(adoptWarn, "adoption stopped before sign-in was on: run the same `ichor adopt` again to continue where it stopped")
-
-			return err
-		}
-	} else if st.signIn != nil {
-		deps.say(adoptWarn, "sign-in is not turned on yet: run `ichor adopt` again once the Cilium takeover is done; "+
-			"until then ichor-ui serves read-only calls only")
+	if err := st.finishSignIn(ctx, deps, clusterName, namespace, complete); err != nil {
+		return err
 	}
 
 	deps.epilogue(clusterName, namespace, adoptEnd{complete: complete, blocked: pl.blocked, st: st})

@@ -243,7 +243,7 @@ func TestAdoptSignIn_AllowUnauthenticatedStillSaysWhatOpenMeans(t *testing.T) {
 // open flag, stops the plan with nothing written.
 func TestAdoptSignIn_FlagsAreCheckedBeforeAnythingIsWritten(t *testing.T) {
 	for name, mutate := range map[string]func(*adoptDeps){
-		"http url":              func(d *adoptDeps) { d.UIURL = "http://ichor.example.com" },
+		"http url":              func(d *adoptDeps) { d.UIURL = strings.Replace(testUIURL, "https", "http", 1) },
 		"ui-url with open flag": func(d *adoptDeps) { d.UIURL, d.AllowUnauthenticated = testUIURL, true },
 		"admin with open flag":  func(d *adoptDeps) { d.AdminUser, d.AllowUnauthenticated = "root", true },
 		"bad admin user name":   func(d *adoptDeps) { d.AdminUser = "Root User" },

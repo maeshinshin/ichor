@@ -229,9 +229,25 @@ The plan prints a warning before you confirm, the controller emits a Warning
 Event `InstallerSignatureSkipped`, `status.installerImage.verification` becomes
 `Skipped`, `ichor version` says "signature NOT checked", and the
 UI shows an "Installer not verified" badge on every page and an alert on the
-cluster page. The skip is never inherited: the next `ichor upgrade ichor`
-without the flag checks again (the CLI and the UI write the setting exactly as
-given). There is no controller flag or chart value that turns the check off.
+cluster page. There is no controller flag or chart value that turns the check off.
+
+**The flag is not one-shot.** `--skip-signature-check` (on `ichor upgrade ichor`
+and `ichor init`) writes `spec.installerSignature.mode: skip` into the
+`IchorInstallation` `ichor`, and the skip stays there after the upgrade has
+finished. While it stands, the check is off for the next Ichor upgrade and for
+the Cilium Helm Job too. The Job still runs by digest: unless you also pass
+`--installer-digest`, the flag clears `spec.installerDigest` and the controller
+resolves the version's tag to a digest itself, so a tag the registry does not
+have pauses the operation with `InstallerImageUnresolved`.
+
+The CLI and the UI write the installer settings exactly as given, so the next
+`ichor upgrade ichor` without the flag writes the check back. To undo the skip
+without upgrading, edit the object and delete `spec.installerSignature` (or set
+`mode: required`), and set `spec.installerDigest` if you want a pin:
+
+```sh
+kubectl edit ichorinstallation ichor
+```
 A fork that signs its own images has no way to name its own signer yet; it
 skips the check the same way.
 

@@ -31,11 +31,11 @@ The two CRDs that carry the union are `TalosConfigPatch` (`spec.documents[]`) an
 |---|---|---|
 | Today | 991,560 | 57,016 |
 | `KubeStaticPodConfig` removed from both CRDs | 452,972 | 595,604 |
-| The unused union in `TalosCluster.spec.cni.custom.documents` removed | 598,916 | 449,660 |
+| The unused union in `TalosCluster.spec.cni.custom.documents` removed | 598,888 | 449,688 |
 
-ADR 0152 records 598,888 bytes for this same removal (a 392,672-byte reduction from 991,560), which differs from the 598,916 above by 28 bytes. This record does not say which figure is right.
+The removal is 598,888 bytes, the value ADR 0152 records: that is what the tree from the retirement commit `0dfa6e550` onwards gives (`6720301b2`, `origin/main` at the time, among them), by the method of ADR 0158, and `0dfa6e550^` gives 991,560. The 598,916 this record first gave for the same removal was a projection, and the table and the text below now use 598,888.
 
-So `KubeStaticPodConfig` (the core v1 `Pod`) is 538,588 bytes of the record, 54%. Its schema is 302,765 of the 461,397 bytes of per-kind schema in JSON, against 53,254 for the whole v1alpha1 `Config`. The unused copy in `TalosCluster` is 392,644 bytes, 40%. Any design that touches the other 64 kinds works on the remaining part, which is about 158,632 bytes of JSON per copy.
+So `KubeStaticPodConfig` (the core v1 `Pod`) is 538,588 bytes of the record, 54%. Its schema is 302,765 of the 461,397 bytes of per-kind schema in JSON, against 53,254 for the whole v1alpha1 `Config`. The unused copy in `TalosCluster` is 392,672 bytes, 40%. Any design that touches the other 64 kinds works on the remaining part, which is about 158,632 bytes of JSON per copy.
 
 ### 2. How large the union is
 
@@ -56,7 +56,7 @@ The union is smaller than the per-kind schema, because a repeated field is writt
 | The same, with the static pod kept whole under `staticPod` | 1,352,660 | -304,084 |
 | The same, with the unused `TalosCluster` copy removed | 958,756 | 89,820 |
 
-A unified CRD beside the existing ones costs 360,496 bytes against 57,016 free: it does not fit. It fits only if something else frees at least 303,480 bytes first, and the unused `TalosCluster` copy (392,644) is the one candidate that does.
+A unified CRD beside the existing ones costs 360,496 bytes against 57,016 free: it does not fit. It fits only if something else frees at least 303,480 bytes first, and the unused `TalosCluster` copy (392,672) is the one candidate that does.
 
 The omit tables of the three subset kinds (`internal/tools/mirrorgen/omits.go`) hold 105 rows plus one for the pod's `status`: 86 unused, 11 protected by Talos, 7 whose type cannot be written as a CRD schema, 1 free-form `RawExtension`, and `Pod.status`. The 86 unused rows cost about 5.7 KB of record to widen, from a regeneration with those rows dropped; the figure is quoted, not re-derived here. Widening and a unified CRD together fit in 57,016 bytes only if the `TalosCluster` copy goes. The 8 fields that cannot be represented (kubelet `logging` and `memoryThrottlingFactor`; kube-proxy `clientConnection` and `logging`; scheduler `leaderElection`, `clientConnection`, `extenders` and `profiles[].pluginConfig`) are an obstacle to the generator and to the typed-only rule, not to the union's shape: a flat CRD meets the same wall, so "covers everything" means "everything representable" in either shape.
 
@@ -105,7 +105,7 @@ None of this depends on the CRD shape. With the unified CRD the same index would
 
 - **A. Keep the per-kind union; build the search.** No schema change, no record growth. The search is the build of finding 5.
 - **B. Add a unified flat CRD beside the existing one.** The record grows by 360,496 bytes and does not fit in 57,016. It needs the discriminator, instance keys and mapping layer of findings 3 and 4, and it leaves two ways to say the same thing for ever, since the old fields cannot be removed.
-- **C. Retire the unused union in `TalosCluster.spec.cni.custom.documents`.** Frees 392,644 bytes (the record goes to 598,916). ADR 0152 is the precedent for retiring a field as an exception to append-only; the webhook and controller already refuse `custom`. It decides nothing about the shape, and it makes both B and the 5.7 KB widening fit. It needs the maintainer's decision and a look at whether any installed object holds the field.
+- **C. Retire the unused union in `TalosCluster.spec.cni.custom.documents`.** Frees 392,672 bytes (the record goes to 598,888). ADR 0152 is the precedent for retiring a field as an exception to append-only; the webhook and controller already refuse `custom`. It decides nothing about the shape, and it makes both B and the 5.7 KB widening fit. It needs the maintainer's decision and a look at whether any installed object holds the field.
 - **D. Move the CRDs to their own chart and release.** Helm's own guidance names this as the way to template CRDs outside the main chart. The CRDs are 92% of the record, so a CRD-only release is 965,140 bytes (83,436 free): 26 KB more room, and a second install step. Putting the CRDs in `crds/` instead frees about 341,000 bytes (650,500 total) and stays off the table: Helm installs `crds/` content only on install, never on upgrade or rollback, and ADR 0104 section 4.6 chose `templates/` so that CRDs upgrade with the chart.
 
 ## Proposed decision

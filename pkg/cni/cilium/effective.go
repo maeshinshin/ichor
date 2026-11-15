@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -30,15 +31,16 @@ import (
 )
 
 // OwnedKeys are the Cilium Helm values Ichor sets itself; a user value for one is a validation error. Each maps to
-// the reason.
+// the reason. It is every mode's keys together: the KubePrism address is Ichor's only when kube-proxy is
+// replaced (ADR 0159), so what a user is refused is OwnedKeysFor(mode).
 var OwnedKeys = map[string]string{
 	keyIPAMMode: "Talos needs Kubernetes host-scope IPAM",
 	"securityContext.capabilities.ciliumAgent":      "the Talos guide fixes the capability set Cilium runs with",
 	"securityContext.capabilities.cleanCiliumState": "the Talos guide fixes the capability set Cilium runs with",
 	"cgroup.autoMount.enabled":                      "Talos mounts cgroup2 itself, so Cilium must not",
 	"cgroup.hostRoot":                               "Talos mounts cgroup2 at /sys/fs/cgroup",
-	"k8sServiceHost":                                "KubePrism address, set only when spec.cni.kubeProxy is replaced",
-	"k8sServicePort":                                "KubePrism port, set only when spec.cni.kubeProxy is replaced",
+	keyServiceHost:                                  "the KubePrism address, because spec.cni.kubeProxy is replaced" + kubePrismEnabledNote,
+	keyServicePort:                                  "the KubePrism port, because spec.cni.kubeProxy is replaced" + kubePrismEnabledNote,
 	"kubeProxyReplacement":                          "owned by the kube-proxy switch, spec.cni.kubeProxy",
 	"tunnelProtocol":                                "owned by spec.cni.tunnel, which is immutable",
 
@@ -54,10 +56,27 @@ var OwnedKeys = map[string]string{
 	keySecretsBackend:  clusterWideSecretsReason,
 }
 
+const kubePrismEnabledNote = "; with kube-proxy enabled Ichor does not set it and you may"
+
 const clusterWideSecretsReason = "the Cilium agent, a privileged pod on every node, may read Secrets only in " +
 	"cilium-secrets, not cluster-wide"
 
 const secretsNamespaceReason = "Cilium may read Secrets only in its own namespace, cilium-secrets"
+
+// OwnedKeysFor is OwnedKeys for a kube-proxy mode. With kube-proxy enabled Ichor sets no KubePrism address, so
+// the operator may (ADR 0159); in every other mode, replaced included, every key is Ichor's.
+// shortcut: the two KubePrism keys are the only mode-dependent ones; a third makes this a per-key mode set.
+func OwnedKeysFor(mode cni.KubeProxyMode) map[string]string {
+	if mode != cni.KubeProxyEnabled {
+		return OwnedKeys
+	}
+
+	keys := maps.Clone(OwnedKeys)
+	delete(keys, keyServiceHost)
+	delete(keys, keyServicePort)
+
+	return keys
+}
 
 var loadChart = sync.OnceValues(freshChart)
 
@@ -72,7 +91,7 @@ var compiledSchema = sync.OnceValues(func() (*jsonschema.Schema, error) {
 	return values.CompileSchema(ch)
 })
 
-func valuesSpec() (values.Spec, error) {
+func valuesSpec(mode cni.KubeProxyMode) (values.Spec, error) {
 	ch, err := loadChart()
 	if err != nil {
 		return values.Spec{}, err
@@ -83,7 +102,7 @@ func valuesSpec() (values.Spec, error) {
 		return values.Spec{}, err
 	}
 
-	return values.Spec{Chart: ch, Owned: OwnedKeys, Schema: schema}, nil
+	return values.Spec{Chart: ch, Owned: OwnedKeysFor(mode), Schema: schema}, nil
 }
 
 // WithValues returns a copy of p whose bootstrap manifest also applies the
@@ -124,7 +143,7 @@ func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
 		return nil, err
 	}
 
-	spec, err := valuesSpec()
+	spec, err := valuesSpec(kubeProxy)
 	if err != nil {
 		return nil, err
 	}

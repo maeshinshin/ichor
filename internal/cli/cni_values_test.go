@@ -120,12 +120,12 @@ func TestCniValuesSetPrintsEveryProblemAndWritesNothing(t *testing.T) {
 
 	var errw bytes.Buffer
 
-	err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "", "ipam:\n  mode: x\nk8sServicePort: 1\n")
+	err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "", "ipam:\n  mode: x\ntunnelProtocol: vxlan\n")
 	if err == nil || !strings.Contains(err.Error(), "2 problem(s)") {
 		t.Fatalf("want 2 problems, got %v", err)
 	}
 
-	for _, want := range []string{"ipam.mode", "k8sServicePort"} {
+	for _, want := range []string{"ipam.mode", "tunnelProtocol"} {
 		if !strings.Contains(errw.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, errw.String())
 		}

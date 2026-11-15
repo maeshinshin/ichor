@@ -63,7 +63,7 @@ func ValidateValues(user map[string]any, c ValidationContext) error {
 		return err
 	}
 
-	spec, err := valuesSpec()
+	spec, err := valuesSpec(c.KubeProxy)
 	if err != nil {
 		return err
 	}

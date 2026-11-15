@@ -165,10 +165,18 @@ func TestAdoptSignIn_ConsentNamesTheAPIServerRestartBeforeAnythingIsWritten(t *t
 		t.Fatalf("runAdopt = %v, want the abort", err)
 	}
 
-	out := f.env.stderr.String()
+	// The plan already says it; the question that is answered must say it too.
+	var prompt string
+
+	for l := range strings.SplitSeq(f.env.stderr.String(), "\n") {
+		if strings.Contains(l, "[y/N]") {
+			prompt = l
+		}
+	}
+
 	for _, want := range []string{"turn Ichor's sign-in on", "APIServerRestartRequired", "kube-apiserver restarts on each control plane", "ichor rollout config"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("the prompt lacks %q:\n%s", want, out)
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the prompt lacks %q:\n%s", want, prompt)
 		}
 	}
 

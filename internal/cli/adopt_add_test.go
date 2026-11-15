@@ -139,15 +139,16 @@ func TestAdoptAddMachineTakesATalosBelowTheAdoptFloor(t *testing.T) {
 
 	deps := env.addDeps(t)
 	deps.DialTalos = func(_ context.Context, endpoint string) (talosConfigReader, error) {
-		return &versionedReader{fakeTalosReader: fakeTalosReader{current: env.live[endpoint]}, version: opOldVersion}, nil
+		return &versionedReader{current: env.live[endpoint], version: opOldVersion}, nil
 	}
 
 	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err != nil {
 		t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())
 	}
 
-	if _, ok := env.machine(t, "uuid-"+addAddr); !ok {
-		t.Fatalf("the TalosMachine was not created\n%s", env.stderr.String())
+	var added ichorv1alpha1.TalosMachine
+	if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "uuid-" + addAddr}, &added); err != nil {
+		t.Fatalf("the TalosMachine was not created: %v\n%s", err, env.stderr.String())
 	}
 
 	// Below v1.12 it is refused, with nothing written.
@@ -156,14 +157,14 @@ func TestAdoptAddMachineTakesATalosBelowTheAdoptFloor(t *testing.T) {
 
 	deps = old.addDeps(t)
 	deps.DialTalos = func(_ context.Context, endpoint string) (talosConfigReader, error) {
-		return &versionedReader{fakeTalosReader: fakeTalosReader{current: old.live[endpoint]}, version: "v1.11.5"}, nil
+		return &versionedReader{current: old.live[endpoint], version: "v1.11.5"}, nil
 	}
 
 	if err := runAdopt(context.Background(), old.cluster.Name, testNamespace, deps); !errors.Is(err, ErrTalosTooOld) {
 		t.Fatalf("runAdopt = %v, want ErrTalosTooOld", err)
 	}
 
-	if _, ok := old.machine(t, "uuid-"+addAddr); ok {
+	if err := old.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "uuid-" + addAddr}, &added); err == nil {
 		t.Error("the refused node was registered")
 	}
 }

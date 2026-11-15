@@ -48,7 +48,8 @@ as chart values).
 adopt takes Talos v1.14 or later only: sign-in cannot be turned off, and the
 kube-apiserver can trust Ichor's issuer only through the KubeAuthenticationConfig
 that Talos v1.14 carries. Every node adopt reads, in a new cluster or an existing
-one, must run Talos v1.14 or later, and a cluster Ichor does not manage yet gets the
+one, must run Talos v1.14 or later (a node added with --add-machine to a cluster
+adopted before needs only v1.12: its sign-in and issuer exist already), and a cluster Ichor does not manage yet gets the
 version contract adopt probes from its first control plane (each minor from v1.14
 up to the one it runs, keeping the one that differs least from the live
 configuration, so a configuration generated for an older contract is refused

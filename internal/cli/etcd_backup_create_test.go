@@ -44,11 +44,11 @@ func ebEnv(k string) string {
 }
 
 func ebFlags() etcdbackup.NewBackup {
-	return etcdbackup.NewBackup{Cluster: "adopt-cluster", Endpoint: "https://s3.example.com", Bucket: "ichor-backups"}
+	return etcdbackup.NewBackup{Cluster: opTestCluster, Endpoint: "https://s3.example.com", Bucket: "ichor-backups"}
 }
 
 func TestCreateEtcdBackupWritesTheSecretInTheControllerNamespaceAndTheBackup(t *testing.T) {
-	o, creds, err := planEtcdBackup("nightly", testNamespace, ebFlags(), "", ebEnv, os.ReadFile)
+	o, creds, err := planEtcdBackup(liveBackup, testNamespace, ebFlags(), "", ebEnv, os.ReadFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +71,12 @@ func TestCreateEtcdBackupWritesTheSecretInTheControllerNamespaceAndTheBackup(t *
 	}
 
 	var bk ichorv1alpha1.TalosEtcdBackup
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "nightly"}, &bk); err != nil {
+	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: liveBackup}, &bk); err != nil {
 		t.Fatal(err)
 	}
 
 	s3 := bk.Spec.Destination.S3
-	if bk.Spec.ClusterRef.Name != "adopt-cluster" || s3.CredentialsSecretRef.Name != "nightly-s3" || s3.Prefix != "adopt-cluster" || s3.Bucket != "ichor-backups" {
+	if bk.Spec.ClusterRef.Name != opTestCluster || s3.CredentialsSecretRef.Name != "nightly-s3" || s3.Prefix != opTestCluster || s3.Bucket != "ichor-backups" {
 		t.Fatalf("spec = %+v", bk.Spec)
 	}
 
@@ -91,7 +91,7 @@ func TestCreateEtcdBackupWritesTheSecretInTheControllerNamespaceAndTheBackup(t *
 }
 
 func TestCreateEtcdBackupOfAnUnknownClusterWritesNoSecret(t *testing.T) {
-	o, creds, err := planEtcdBackup("nightly", testNamespace, ebFlags(), "", ebEnv, os.ReadFile)
+	o, creds, err := planEtcdBackup(liveBackup, testNamespace, ebFlags(), "", ebEnv, os.ReadFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestCreateEtcdBackupOfAnUnknownClusterWritesNoSecret(t *testing.T) {
 }
 
 func TestCreateEtcdBackupRemovesTheSecretWhenTheBackupIsRefused(t *testing.T) {
-	o, creds, err := planEtcdBackup("nightly", testNamespace, ebFlags(), "", ebEnv, os.ReadFile)
+	o, creds, err := planEtcdBackup(liveBackup, testNamespace, ebFlags(), "", ebEnv, os.ReadFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestCreateEtcdBackupRefusesBeforeTouchingTheCluster(t *testing.T) {
 			o := ebFlags()
 			tc.mutate(&o)
 
-			_, _, err := planEtcdBackup("nightly", testNamespace, o, "", ebEnv, os.ReadFile)
+			_, _, err := planEtcdBackup(liveBackup, testNamespace, o, "", ebEnv, os.ReadFile)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want it to mention %q", err, tc.want)
 			}
@@ -167,11 +167,11 @@ func TestCreateEtcdBackupRefusesBeforeTouchingTheCluster(t *testing.T) {
 	o.Endpoint = "http://minio.example.com:9000"
 	o.Insecure = true
 
-	if _, _, err := planEtcdBackup("nightly", testNamespace, o, "", ebEnv, os.ReadFile); err != nil {
+	if _, _, err := planEtcdBackup(liveBackup, testNamespace, o, "", ebEnv, os.ReadFile); err != nil {
 		t.Fatalf("http with insecure: %v", err)
 	}
 
-	if _, _, err := planEtcdBackup("nightly", testNamespace, ebFlags(), "", func(string) string { return "" }, os.ReadFile); err == nil ||
+	if _, _, err := planEtcdBackup(liveBackup, testNamespace, ebFlags(), "", func(string) string { return "" }, os.ReadFile); err == nil ||
 		!strings.Contains(err.Error(), "ICHOR_S3_ACCESS_KEY_ID") {
 		t.Fatalf("no credentials: %v", err)
 	}

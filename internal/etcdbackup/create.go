@@ -24,7 +24,6 @@ import (
 
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -97,7 +96,7 @@ func (n NewBackup) Validate() error {
 // Backup is the TalosEtcdBackup for n.
 func (n NewBackup) Backup() *ichorv1alpha1.TalosEtcdBackup {
 	return &ichorv1alpha1.TalosEtcdBackup{
-		ObjectMeta: metav1.ObjectMeta{Name: n.Name, Namespace: n.Namespace},
+		Name: n.Name, Namespace: n.Namespace,
 		Spec: ichorv1alpha1.TalosEtcdBackupSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: n.Cluster},
 			Schedule:   n.Schedule,
@@ -125,5 +124,5 @@ func CredentialsSecret(namespace, name string, c S3Config) *corev1.Secret {
 		data[S3KeyCA] = c.CAPEM
 	}
 
-	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}, Type: corev1.SecretTypeOpaque, Data: data}
+	return &corev1.Secret{Name: name, Namespace: namespace, Type: corev1.SecretTypeOpaque, Data: data}
 }

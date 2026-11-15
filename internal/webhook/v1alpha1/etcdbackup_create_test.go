@@ -31,19 +31,21 @@ import (
 var _ = Describe("The objects of ichor create etcd-backup", func() {
 	const (
 		creator    = "ebcreate-admin"
+		ebEndpoint = "https://s3.example.org"
+		ebResource = "talosetcdbackups"
 		controller = "ichor-system"
 	)
 
 	newObjects := func(name string) etcdbackup.NewBackup {
 		return etcdbackup.NewBackup{
 			Name: name, Namespace: testNamespace, Cluster: testClusterName,
-			Endpoint: "https://s3.example.org", Bucket: "ichor-backups", Prefix: testClusterName, SecretName: name + "-s3",
+			Endpoint: ebEndpoint, Bucket: "ichor-backups", Prefix: testClusterName, SecretName: name + "-s3",
 		}
 	}
 
 	BeforeEach(func() {
 		bindRole("ebcreate-admin", creator, rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosetcdbackups"}, Verbs: []string{verbGet, verbCreate},
+			APIGroups: []string{ichorGroup}, Resources: []string{ebResource}, Verbs: []string{verbGet, verbCreate},
 		}, rbacv1.PolicyRule{
 			APIGroups: []string{ichorGroup}, Resources: []string{"talosetcdbackups/secret-references"}, Verbs: []string{SecretReferencesVerb},
 		})
@@ -76,7 +78,7 @@ var _ = Describe("The objects of ichor create etcd-backup", func() {
 
 	It("needs the secret-references verb: an operator with only create is refused", func() {
 		bindRole("ebcreate-operator", "ebcreate-operator", rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosetcdbackups"}, Verbs: []string{verbGet, verbCreate},
+			APIGroups: []string{ichorGroup}, Resources: []string{ebResource}, Verbs: []string{verbGet, verbCreate},
 		})
 
 		err := asUser("ebcreate-operator").Create(ctx, newObjects("eb-no-verb").Backup())

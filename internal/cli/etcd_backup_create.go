@@ -149,7 +149,7 @@ func runCreateEtcdBackup(ctx context.Context, k8s ctrlclient.Client, out, errw i
 	sec := etcdbackup.CredentialsSecret(ichorNamespace, o.SecretName, creds)
 	if err := k8s.Create(ctx, sec); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			return fmt.Errorf("Secret %q already exists in namespace %q; it is not overwritten (pick another with --credentials-secret)", o.SecretName, ichorNamespace)
+			return fmt.Errorf("the Secret %q already exists in namespace %q; it is not overwritten (pick another with --credentials-secret)", o.SecretName, ichorNamespace)
 		}
 
 		return fmt.Errorf("creating the credentials Secret %q in namespace %q: %w", o.SecretName, ichorNamespace, err)

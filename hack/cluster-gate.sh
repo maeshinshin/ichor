@@ -130,7 +130,7 @@ active=$(kc get jobs -l app.kubernetes.io/name=ichor-gate -o jsonpath='{range .i
 # An existing claim is reused as it is: its spec is immutable, and replacing it would drop the cache. A
 # different storage class or size is refused, not applied or replaced. An unset GATE_STORAGE_CLASS means
 # whatever class the claim was bound with, since that is the cluster default the first run got.
-# shortcut: sizes are compared as written, so 20G and 20Gi differ; drop when they are compared as quantities.
+# shortcut: sizes are compared as strings, so 20G and 20Gi count as a mismatch; parse them as quantities once someone sets GATE_CACHE_SIZE in another unit.
 claim=$(kc get pvc "$PVC" --ignore-not-found -o jsonpath='{.spec.storageClassName}/{.spec.resources.requests.storage}')
 if [ -n "$claim" ]; then
   have_sc=${claim%%/*} have_size=${claim#*/}

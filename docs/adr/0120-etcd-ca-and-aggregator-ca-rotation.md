@@ -1,6 +1,6 @@
 # 0120. The CA rotation also replaces the etcd CA and the Kubernetes aggregator CA
 
-Status: Accepted; built; amended 2026-11-05, 2026-11-15 and 2026-11-16 · Date: 2026-11-04 · Design section: Backup, recovery, certificates · Touches: 0063, 0091, 0093, 0108
+Status: Accepted; built; amended · Date: 2026-11-04 · Design section: Backup, recovery, certificates · Touches: 0063, 0091, 0093, 0108
 
 Decided: the `ca-rotation` operation can also replace the etcd CA and the Kubernetes aggregator (front-proxy) CA, chosen with the new, optional `spec.caRotation.targets` (`talos`, `kubernetes`, `etcd`, `kubernetes-aggregator`; absent means `talos` and `kubernetes`, as before). It is the same state machine, lock, pause/continue and finalizer, with the same three passes. The aggregator CA uses Talos's own accepted-CA list (`KubeAggregatorCAConfig`, `acceptedCAs`). Talos has no accepted-CA list for etcd, so Ichor puts both etcd CA certificates into `cluster.etcd.ca.crt` (a PEM bundle, the new key signing from Issuing on) and restarts the etcd members one at a time after each pass; the credential hand-off (AwaitingCredentials) happens only when the Talos or Kubernetes CA is among the targets. The etcd backup key does not change.
 

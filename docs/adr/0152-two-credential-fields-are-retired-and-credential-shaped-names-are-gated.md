@@ -1,8 +1,8 @@
 # 0152. Two credential fields are retired and credential-shaped names are gated
 
-Status: Accepted · Date: 2026-11-12 · Design section: Typed configuration · Builds on: 0003, 0012, 0101
+Status: Accepted · Date: 2026-11-12 · Amended: 2026-11-15 · Design section: Typed configuration · Builds on: 0003, 0012, 0099, 0101
 
-Decided: the registry client identity (`machine.registries.config.<host>.tls.clientIdentity`, a certificate and a PEM private key) and `cluster.extraManifestHeaders` (HTTP headers, usually `Authorization`) are dropped from the legacy `v1alpha1` document mirror and retired from the `TalosConfigPatch` and `TalosCluster` CRDs through the installer's retired-field list, as an exception to the append-only rule; and the generator's suspicious-name scan is now a test that fails on any credential-shaped field that is neither dropped nor on a reviewed list with a reason.
+Decided: the registry client identity (`machine.registries.config.<host>.tls.clientIdentity`, a certificate and a PEM private key) and `cluster.extraManifestHeaders` (HTTP headers, usually `Authorization`) are dropped from the legacy `v1alpha1` document mirror and retired from the `TalosConfigPatch` and `TalosCluster` CRDs through the installer's retired-field list, as an exception to the append-only rule; and the generator's suspicious-name scan is now a test that fails on any credential-shaped field that is neither dropped nor on a reviewed list with a reason. Amended 2026-11-15: `TalosCluster.spec.cni.custom.documents`, the deprecated and unused second copy of the document union, is retired whole by the same exception; `spec.cni.custom` and `spec.cni.custom.source` stay.
 
 ## Context
 
@@ -30,3 +30,17 @@ The generator already printed `PEMEncodedCertificateAndKey.Key` among its "suspi
 ## Consequences
 
 Anyone using a registry client certificate or manifest headers in a patch must move them out of the CR before upgrading; they are applied to the nodes outside Ichor until a reference form exists. A Talos bump that adds a credential-shaped field fails `go test ./internal/tools/mirrorgen` until a maintainer drops it or lists it with a reason.
+
+## Amendment (2026-11-15): spec.cni.custom.documents is retired
+
+Decided by the maintainer: `TalosCluster.spec.cni.custom.documents` is retired as a second exception to the append-only rule. This extends this ADR rather than opening a new one because the rule, the mechanism (an entry in `retiredFields`) and the consequence for stored objects are the ones above; only the reason differs. Here the field is not a hole but dead weight.
+
+**Why.** ADR 0099 decision 8 and ADR 0101 deprecated `spec.cni.custom` and kept it only because CRD fields are append-only. Its `documents` member is the whole `TalosConfigPatchDocument` union a second time, and nothing renders it. In the chart's Helm release record (ADR 0158's method) the field and the words about it in the doc comment of `custom` take 392,672 bytes, 40% of the record: the record goes from 991,560 to 598,888 bytes, leaving 449,688 of the 1,048,576 free instead of 57,016. ADR 0165 sets out what that room is needed for.
+
+**Why only `documents`.** The rest of `custom`, which is `source` (`repoURL`, `chart`, `path`, `targetRevision`), takes 1,256 bytes of the record. Removing it too would save that and lose three things. The webhook's refusal ("spec.cni.custom is deprecated and unused: Cilium is the only CNI") would be replaced by the API server's unknown-field error, because strict field validation answers before admission runs. The CEL rule `custom must be set when, and only when, preset is custom` names `custom` and would have to change. A stored object would lose `source` as well as `documents`. An empty `custom` object would serve nothing, so `custom.source` stays as the deprecated, refused field it was.
+
+**Can a stored object hold it?** `spec.cni.custom` can only be set together with `preset: custom` (the CEL rule above), `preset` cannot change after create, and the webhook has refused `preset: custom` and a populated `spec.cni.custom` on create since 2026-10-29 (7291ee156). Every tagged release, from v0.1.0 on, is later than that. The webhook also refuses any spec change to a stored `flannel` or `custom` cluster. So the field could be stored only by an object created between 2026-10-25, when `spec.cni` was added, and 2026-10-29, or by a create that bypassed the webhook. The maintainer's cluster `homelab` holds one `TalosCluster`, with `preset: cilium` and no `custom`; the kind cluster `ichor-local` holds none; the repository ships no manifest, sample, fixture or example that sets it.
+
+**Stored objects.** The API server prunes a field that is no longer in the schema when it decodes an object from storage as well as when it writes one (`schemaCoercingDecoder` wraps the storage codec in `k8s.io/apiextensions-apiserver` v0.36.6), so a stored object stops serving `documents` as soon as the new CRD is established, and the bytes in etcd lose it at the object's next write. Nothing used it, so no node changes. `kubectl apply` of a manifest that still carries `documents` is refused by its default strict field validation. The installer's additive check (`retiredFields`) now lists `spec.cni.custom.documents` once, which also covers the two credential paths this ADR first listed under it.
+
+**Consequences.** There is no replacement and none is needed: a custom CNI is not an Ichor feature. A manifest or script that sets `spec.cni.custom.documents` must stop; the cluster it describes was already refused.

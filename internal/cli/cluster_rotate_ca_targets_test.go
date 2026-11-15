@@ -109,6 +109,15 @@ func reviewAs(allowed bool, base client.WithWatch) client.WithWatch {
 	})
 }
 
+// The help names the create step, for an operator with no TalosEtcdBackup yet, next to the backup command.
+func TestRotateCAHelpNamesTheCreateStepBeforeBackupEtcd(t *testing.T) {
+	for _, want := range []string{"ichor create etcd-backup", "ichor backup etcd NAME"} {
+		if !strings.Contains(rotateCACmd.Long, want) {
+			t.Errorf("rotate ca's help lacks %q:\n%s", want, rotateCACmd.Long)
+		}
+	}
+}
+
 func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(t *testing.T) {
 	setAPITestFlags(t, false)
 
@@ -124,7 +133,7 @@ func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(
 
 	for _, want := range []string{
 		"Rotate the etcd certificate authorities", "no credential hand-off", "rebooted once in each of the three stages",
-		"the control planes REBOOT in each pass", "ichor backup etcd", "ichor export bundle " + opTestCluster,
+		"the control planes REBOOT in each pass", "ichor create etcd-backup", "ichor backup etcd NAME", "ichor export bundle " + opTestCluster,
 	} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())

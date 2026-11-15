@@ -20,8 +20,7 @@ replaced. The etcd CA is replaced by rebooting every control plane, one at a tim
 three passes (Talos neither restarts etcd on a configuration change nor lets an API call do it): each
 node is cordoned and drained, hands etcd leadership over, reboots, and the next one waits until it is
 back, Ready and etcd is healthy; with one control plane the Kubernetes API is unavailable during each
-reboot. That is three reboots of every control plane. Take an etcd snapshot first ('ichor backup
-etcd NAME'). Deleting the operation before the new CA issues abandons the rotation (the old
+reboot. That is three reboots of every control plane. Take an etcd snapshot first. Set up a TalosEtcdBackup once with 'ichor create etcd-backup' if there is none, then 'ichor backup etcd NAME' takes one now. Deleting the operation before the new CA issues abandons the rotation (the old
 configuration is rendered again); 'ichor rollout config' then drops what the nodes still accept. The
 aggregator CA needs the extension API servers (metrics-server, for one) to load the new CA: Ichor
 waits for kube-apiserver to publish it and restarts none of them. A rotation of etcd and the

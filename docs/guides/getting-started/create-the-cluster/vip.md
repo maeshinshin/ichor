@@ -20,8 +20,9 @@ answering for it.
 > states the same requirement: the switch, with no router in between.
 
 Pick a free address on that segment for the VIP. The first node keeps its own
-address, which the node endpoint (`--node-endpoint`) uses. With `--preset
-single` a VIP works for one node too, and it is still recommended.
+address, which the node endpoint (`--node-endpoint`) uses. The examples on this
+page pass `--preset single`, one node; a VIP works for one node too, and it is
+still recommended.
 
 The VIP is the endpoint for the set of control planes, which is what kubectl and
 the kubeconfig use. Do not use the VIP as a Talos API endpoint: `talosctl` and
@@ -78,16 +79,21 @@ the address it had.
 
 ## Interactive
 
-Run `ichor init` with the settings you know. On a terminal, init asks for each
+Run `ichor init --preset single` with the settings you know. On a terminal, init asks for each
 required setting you did not give, in this order:
 
+- **Cluster name**
 - **Endpoint type:** pick `vip` from the list.
 - **Endpoint address:** the free address, an IP address.
 - **First node:** a network such as `192.168.1.0/24` (your own network is the
   default) to scan on port 50000 for nodes in maintenance mode, which are listed
   to pick from; or the node's address, which skips the scan.
 - **Node address:** the first node's address with its prefix length, such as
-  `192.168.1.50/24`. Leave it empty to keep DHCP on the link.
+  `192.168.1.50/24`. Asked whenever `--address` is not given, even when every
+  other setting came from flags or a file. It starts filled in with the node's
+  address without a prefix length, and Enter on that is refused (the answer
+  must be an IPv4 address with its prefix length). Clear the field to keep DHCP
+  on the link.
 - **Install disk:** from the disks the node reports.
 - **Primary link:** the first node's network link. The picker lists each link
   as `enp1s0 <84:47:09:5c:ed:49>`, the name followed by the MAC address.
@@ -105,7 +111,7 @@ apiVersion: ichor.maesh.dev/v1alpha1
 kind: InitConfig
 cluster:
   name: demo
-  preset: standard
+  preset: single
   endpoint:
     type: vip
     address: 192.168.1.40
@@ -130,7 +136,8 @@ ichor init --cluster demo \
   --endpoint-type vip --endpoint-address 192.168.1.40 \
   --install-disk /dev/sda \
   --nic enp1s0 --address 192.168.1.50/24 \
-  --gateway 192.168.1.1 --dns 192.168.1.1
+  --gateway 192.168.1.1 --dns 192.168.1.1 \
+  --preset single
 ```
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
@@ -155,9 +162,10 @@ can change between boots, and the MAC does not. So `net0` in a machine
 configuration is the link you named with `--nic`, and the MAC address init
 printed for it is the one it means.
 
-The standard preset has two more control planes. Find each one with `ichor
-discovery add`, then approve it as a control plane with the same network flags
-for its own link and address:
+`--preset single` makes one node. The default preset, `standard`, has two more
+control planes: leave out `--preset single` (or set `preset: standard` in the
+file), find each further one with `ichor discovery add`, then approve it as a
+control plane with the same network flags for its own link and address:
 
 ```sh
 ichor discovery add 192.168.1.51 --cluster demo

@@ -6,6 +6,7 @@
 # The Job's own status decides the result: exit 0 only if it completed, so both steps passed. A dropped
 # log stream is not a failure. The log lands in bin/cluster-gate/<job>.log.
 # The PersistentVolumeClaim ichor-gate-cache keeps the module cache, the build cache and bin/ between runs.
+# A run reuses an existing claim and refuses one whose storage class or size differs from the request.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -126,6 +127,18 @@ kc() { kubectl --kubeconfig="$KUBECONFIG_FILE" ${GATE_CONTEXT:+--context="$GATE_
 active=$(kc get jobs -l app.kubernetes.io/name=ichor-gate -o jsonpath='{range .items[?(@.status.active>0)]}{.metadata.name}{" "}{end}')
 [ -z "$active" ] || { echo "cluster-gate: gate Jobs still active in $NS: $active; wait for them, they share $PVC" >&2; exit 1; }
 
+# An existing claim is reused as it is: its spec is immutable, and replacing it would drop the cache. A
+# different storage class or size is refused, not applied or replaced. An unset GATE_STORAGE_CLASS means
+# whatever class the claim was bound with, since that is the cluster default the first run got.
+# shortcut: sizes are compared as written, so 20G and 20Gi differ; drop when they are compared as quantities.
+claim=$(kc get pvc "$PVC" --ignore-not-found -o jsonpath='{.spec.storageClassName}/{.spec.resources.requests.storage}')
+if [ -n "$claim" ]; then
+  have_sc=${claim%%/*} have_size=${claim#*/}
+  [ -z "$SC" ] || [ "$have_sc" = "$SC" ] || { echo "cluster-gate: claim $PVC has storage class $have_sc, GATE_STORAGE_CLASS asks for $SC; delete the claim by hand to change it (this drops the cache)" >&2; exit 1; }
+  [ "$have_size" = "$CACHE_SIZE" ] || { echo "cluster-gate: claim $PVC is $have_size, GATE_CACHE_SIZE asks for $CACHE_SIZE; delete the claim by hand to resize it (this drops the cache)" >&2; exit 1; }
+  echo "cluster-gate: reusing claim $PVC ($have_size, storage class ${have_sc:-default})"
+fi
+
 mkdir -p bin/cluster-gate
 LOG=bin/cluster-gate/$JOB.log
 ARCHIVE=bin/cluster-gate/$JOB.tgz
@@ -140,7 +153,11 @@ trap 'exit 130' INT TERM
 
 git archive --format=tar "$SHA" | gzip -1 >"$ARCHIVE"
 created=1
-manifest | kc apply -f - >/dev/null
+if [ -z "$claim" ]; then
+  manifest | kc apply -f - >/dev/null
+else
+  job_manifest | kc apply -f - >/dev/null
+fi
 
 POD=
 t0=$(date +%s)

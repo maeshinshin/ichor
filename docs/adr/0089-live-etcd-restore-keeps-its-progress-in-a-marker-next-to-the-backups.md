@@ -109,6 +109,9 @@ nothing and a failure pauses the operation with "nothing was changed".
 Time limits: wipe and recovery 60 minutes from the marker's start, the whole restore 150 minutes; past either, the
 operation pauses with the reason. A final error pauses the operation (`failureReason`, also written to the marker)
 and is never retried by itself, as everywhere (ADR 0026).
+A person's retry (the annotation of ADR 0095) is the exception: the controller clears the marker's `failure`, sets its
+start to the time of the retry so that both limits count from there, and runs the step again from the marker's step. What
+the marker records as done (the step, `ownWipeAt`, `ownDone`) is not repeated.
 
 **Resume design.** Where each piece of state lives, and who reads it after each kind of interruption:
 

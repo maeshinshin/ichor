@@ -532,9 +532,12 @@ func (run *restoreRun) ensureTail(ctx context.Context, m *etcdbackup.RestoreMark
 func (r *TalosOperationReconciler) advanceEtcdRestore(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster,
 ) (ctrl.Result, error) {
+	retried := false
+
 	if op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
 		// a failed step is never retried by itself, only by an explicit request
-		if retried, err := r.consumeRetry(ctx, op); err != nil || !retried {
+		var err error
+		if retried, err = r.consumeRetry(ctx, op); err != nil || !retried {
 			return ctrl.Result{}, err
 		}
 	}
@@ -573,6 +576,15 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 	// Rejoining): the marker only moves forward.
 	if etcdRestoreStepRank(st.Step) > etcdRestoreStepRank(marker.Step) {
 		marker.Step = ichorv1alpha1.EtcdRestoreStepRejoining
+		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, marker); err != nil {
+			return r.restoreWait(ctx, op, "waiting for the backup storage: "+run.clean(err)), nil
+		}
+	}
+
+	if retried {
+		// The retry runs the failed step again: the old failure and the old start are not reasons to refuse
+		// it. The marker's step and OwnDone/OwnWipeAt stay, so nothing already done is done again.
+		marker.Failure, marker.StartedAt = "", time.Now().UTC()
 		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, marker); err != nil {
 			return r.restoreWait(ctx, op, "waiting for the backup storage: "+run.clean(err)), nil
 		}

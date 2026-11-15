@@ -693,6 +693,81 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(f.targetFake().bootstrapRecoverCalls).To(Equal(1))
 		})
 
+		It("a retry of a failed restore starts its overall time again and resumes the wipe", func() {
+			f := newRestoreFixture("")
+			f.wipeHooks()
+			op := f.newOp(nil)
+			f.reconcile(op)
+
+			f.targetFake().resetEtcdErr = errors.New("permission denied")
+
+			job := f.lastJob()
+			_, err := job.step(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			job.fail(ctx, errors.New("wiping etcd data: permission denied"))
+
+			m := f.marker()
+			m.StartedAt = time.Now().Add(-etcdRestoreOverallTimeout - time.Minute)
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), m)).To(Succeed())
+
+			got := f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(got.Status.FailureReason).To(ContainSubstring("permission denied"))
+
+			f.targetFake().resetEtcdErr = nil
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			f.jobs = nil
+			got = f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+			Expect(got.Status.FailureReason).To(BeEmpty())
+			Expect(f.marker().Failure).To(BeEmpty())
+			Expect(f.marker().StartedAt).To(BeTemporally("~", time.Now(), time.Minute), "the overall time counts from the retry")
+			Expect(f.jobs).To(HaveLen(1), "the wipe and recovery run again")
+			Expect(f.runOK(f.lastJob(), 4)).To(BeTrue())
+		})
+
+		It("a retry does not repeat a wipe, an upload or a bootstrap the marker says were done", func() {
+			f := newRestoreFixture("")
+			f.wipeHooks()
+			op := f.newOp(nil)
+			f.reconcile(op)
+
+			job := f.lastJob()
+			f.runOK(job, 2)
+			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRecovering))
+			job.fail(ctx, errors.New("the job stopped after the bootstrap"))
+
+			target := f.targetFake()
+			Expect(target.recovered).To(HaveLen(1))
+			Expect(target.bootstrapRecoverCalls).To(Equal(1))
+
+			resets := map[string]int{}
+			for name, fk := range f.fakes {
+				resets[name] = fk.resetEtcdCalls
+			}
+
+			got := f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			f.jobs = nil
+			got = f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+			Expect(f.jobs).To(HaveLen(1))
+			Expect(f.runOK(f.lastJob(), 2)).To(BeTrue())
+
+			Expect(target.recovered).To(HaveLen(1), "the snapshot is not uploaded twice")
+			Expect(target.bootstrapRecoverCalls).To(Equal(1))
+
+			for name, fk := range f.fakes {
+				Expect(fk.resetEtcdCalls).To(Equal(resets[name]), "no wipe after the recovery began")
+			}
+		})
+
 		It("a node that is not ready for recovery yet is waited for, not failed", func() {
 			f := newRestoreFixture("")
 			f.wipeHooks()

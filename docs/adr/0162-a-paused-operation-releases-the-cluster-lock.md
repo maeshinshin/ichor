@@ -1,6 +1,6 @@
 # 0162. A paused operation releases the cluster lock
 
-Status: Proposed · Date: 2026-11-15 · Design section: Upgrades · Extends: 0026, 0095, 0120
+Status: Accepted · Date: 2026-11-15 · Design section: Upgrades · Extends: 0026, 0095, 0120
 
 Decided: an operation that is paused to wait for a person releases the cluster lock when it enters that pause, does not take it back while it is paused, and takes it again only when it resumes; a resume that cannot take the lock waits. A paused operation has no expiry: it stays until a person retries or deletes it.
 

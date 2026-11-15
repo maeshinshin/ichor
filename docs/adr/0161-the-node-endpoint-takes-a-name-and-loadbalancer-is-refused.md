@@ -1,6 +1,6 @@
 # 0161. The node endpoint takes a name, and loadBalancer is refused
 
-Status: Proposed · Date: 2026-11-15 · Design section: API · Touches: 0099, 0101, 0128
+Status: Accepted · Date: 2026-11-15 · Design section: API · Touches: 0099, 0101, 0128
 
 Decided: The `node` endpoint type takes an IP address or a DNS host name, so a load balancer's name or address goes in `node`; `loadBalancer` stays in the enum, deprecated, and the webhook refuses an endpoint of that type when it is written, with a message that says to use `node`.
 

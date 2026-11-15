@@ -475,6 +475,12 @@ command does. Each item is described where it is listed below.
 
 ### Operations
 
+- **The Kubernetes upgrade's plan states the order the run follows, stage by stage**
+  (ADR 0087). When the controller runs on one of the cluster's nodes, the plan listed
+  that node at its sorted place; the run visits it there in the first three stages and
+  holds it back to last only in the kubelet stage. Each stage now names its machines in
+  order, with the controller's node marked, and the machine list is the kubelet stage's.
+  The plan of a config operation is unchanged.
 - A missing cosign signature of the installer image now says what was looked
   for: the signature referrer, through the referrers API or the
   `sha256-<hex>` tag of the digest. It used to say only that the image had no

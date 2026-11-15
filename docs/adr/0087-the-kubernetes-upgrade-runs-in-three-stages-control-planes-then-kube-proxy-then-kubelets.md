@@ -1,6 +1,6 @@
 # 0087. The Kubernetes upgrade runs in three stages: control-plane components, then kube-proxy, then kubelets
 
-Status: Accepted · Date: 2026-10-27 · Design section: Upgrades
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Upgrades
 
 Decided: the `kubernetes` executor visits the machines in four stages, recorded in `status.kubernetes.stage`: (1) `APIServers` — each control plane, one at a time, gets kube-apiserver at the target with controller-manager, scheduler, kubelet and kube-proxy pinned to the version its node runs; (2) `ControlPlaneComponents` — each control plane gets controller-manager and scheduler at the target; (3) `KubeProxy` — each control plane gets kube-proxy at the target, then the bootstrap manifests are synced and the DaemonSet's rollout awaited; (4) `Kubelets` — control planes, then workers within `maxUnavailable`, get the full rendered configuration, which is the cluster's desired state; `pkg/render` takes the pins as a system-layer input (`SystemInputs.Staged`) that only the executor sets, nothing is written to `spec`, `status.machines` is cleared at each stage change, an operation with no recorded stage starts at `APIServers`, and the plan names the stages and warns (does not refuse) about a minor upgrade of several control planes behind an endpoint of type `node`
 
@@ -65,3 +65,9 @@ So at no step is a controller-manager, scheduler or kubelet newer than any apise
 **Order.** The apply order is `APIServers` cp1 cp2 cp3, `ControlPlaneComponents` cp1 cp2 cp3, `KubeProxy`, `Kubelets`; after every apply no controller-manager, scheduler or kubelet is newer than any apiserver.
 
 No compatibility with pre-release stage layouts: Ichor had no release, so the `ControlPlanes` stage and the unstaged-operation rule are gone; an operation with no recorded stage starts at `APIServers`.
+
+## Amendment (2026-11-16): the plan states each stage's order
+
+The plan listed the control planes and then the workers as one sequence, with the machine the controller runs on at its sorted place. The executor does not visit them that way. Stages 1 to 3 (`APIServers`, `ControlPlaneComponents`, `KubeProxy`) visit every control plane, the controller's own included, one at a time in the upgrade order. Only `Kubelets` holds the controller's own machine back and visits it last, after the control planes and the workers, because its node is drained and the controller restarts. A plan that named the Kubelets order for every stage, or the sorted order for all of them, would state an order that does not happen.
+
+`pkg/upgrade.KubernetesOrder` is the order, as data: for each stage, the machines of each step. `PlanOperation` builds its `stages` from it, each stage's line followed by the machines in order, the controller's own marked "where Ichor's controller runs"; and its `machines` are the `Kubelets` stage's steps, which is the only stage that has workers and `maxUnavailable`. The executor's `kubernetesBatch` does not call it, because it decides one batch at a time from the status; a test in `internal/controller` walks `kubernetesBatch` to the end and requires the same stages, steps and machines as `KubernetesOrder`, so a change to either side fails there. When the controller's machine cannot be determined the plan says it cannot show which machine is upgraded last, and lists every stage in the sorted order.

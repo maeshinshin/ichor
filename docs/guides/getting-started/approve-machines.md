@@ -34,13 +34,17 @@ address and extra disk roles; see `ichor approve node --help`. A machine
 with a weak identity (no UUID, serial or permanent MAC) is refused. After
 approval the controller renders and applies the configuration; the node
 installs Talos, reboots and joins. With the `single` preset there is nothing
-to approve, so skip this step.
+to approve, so skip this step. With the default `standard` preset, approve the
+two further control planes first, with `--role controlplane` (see
+[Virtual IP](create-the-cluster/vip.md#flags)); workers follow, as above.
 
-If you turned sign-in on, the first of these commands prints this line on
-stderr, and so do the commands in [step 4](check-the-cluster.md):
+Unless you ran init with `--allow-unauthenticated`, sign-in is on, so the first
+of these commands prints this line on stderr, and so do the commands in
+[step 4](check-the-cluster.md). The address after `--issuer` is your
+cluster's issuer, which is `https://localhost:8443` when you gave no `--ui-url`:
 
 ```text
-ichor: ichor-ui requires OIDC and there is no usable ichor-ui login; using your own kubeconfig and RBAC in this process instead (to use ichor-ui, run ichor auth login --issuer https://… --audience ichor-ui)
+ichor: ichor-ui requires OIDC and there is no usable ichor-ui login; using your own kubeconfig and RBAC in this process instead (to use ichor-ui, run `ichor auth login --issuer https://localhost:8443 --audience ichor-ui`)
 ```
 
 It means the CLI could not reach ichor-ui through a login, so it runs the

@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -362,6 +364,37 @@ func TestRenderInspectionEncryptedWarningNamesLockToState(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, encryptedVolumeWarning) || strings.Contains(got, "may depend on STATE") {
 		t.Fatalf("the encrypted-volume warning must name lockToState only:\n%s", got)
+	}
+}
+
+// The encrypted-volume wording drifted into four copies (the CLI, the guide, the API comment and the CRD
+// description), and two of them said the keys are lost, which the reset does not do. This fails when any
+// tracked text file says so again, so a copy cannot come back unnoticed. Ignored build output is not read.
+func TestNoRepositoryFileSaysEncryptedKeysAreLost(t *testing.T) {
+	banned := []string{"lose their key", "keys are gone", "may depend on STATE"}
+	textExt := map[string]bool{".go": true, ".md": true, ".yaml": true, ".yml": true, ".json": true, ".ts": true, ".tsx": true, ".html": true}
+
+	listed, err := exec.Command("git", "-C", "../..", "ls-files", "-z").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name := range strings.SplitSeq(string(listed), "\x00") {
+		// Test files hold the phrases as negative checks, so they are not scanned.
+		if !textExt[filepath.Ext(name)] || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		raw, err := os.ReadFile(filepath.Join("../..", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, phrase := range banned {
+			if bytes.Contains(raw, []byte(phrase)) {
+				t.Errorf("%s says %q; the reset erases the first MiB of STATE, see encryptedVolumeWarning", name, phrase)
+			}
+		}
 	}
 }
 

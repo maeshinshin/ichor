@@ -327,10 +327,10 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 			"geneve for virtualised networks that pass geneve but not vxlan")
 	flags.BoolVar(&o.GatewayAPI, "gateway-api", false,
 		"turn on Cilium's Gateway API and put its CRDs in the bootstrap; init only, an existing cluster is not changed by it; "+
-			"needs kube-proxy replacement, which init does not build yet, so it is refused for now")
+			"needs --kube-proxy replaced")
 	flags.BoolVar(&o.L2Announcements, "l2-announcements", false,
 		"turn on Cilium's L2 announcements, which answer ARP for LoadBalancer addresses on the LAN; init only, an existing cluster is not changed by it; "+
-			"needs --l2-pool and kube-proxy replacement, which init does not build yet, so it is refused for now")
+			"needs --l2-pool and --kube-proxy replaced")
 	flags.StringVar(&o.L2Pool, "l2-pool", "",
 		"with --l2-announcements: the IPv4 CIDR that LoadBalancer addresses come from; init checks it against the node and the endpoint "+
 			"and does not write the CiliumLoadBalancerIPPool, which you create yourself")

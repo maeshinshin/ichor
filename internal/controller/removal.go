@@ -643,7 +643,7 @@ func (r *TalosMachineReconciler) warnAfterReset(m *ichorv1alpha1.TalosMachine, s
 	}
 
 	if step.poweredOff {
-		r.Recorder.Eventf(m, corev1.EventTypeNormal, reasonWipeNotConfirmedPoweredOff,
+		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonWipeNotConfirmedPoweredOff,
 			"%s %q: the wipe is not confirmed, because the reset powers the machine off, and a machine that is powered off cannot answer in maintenance mode",
 			m.Spec.Role, m.Name)
 	}

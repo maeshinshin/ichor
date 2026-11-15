@@ -259,8 +259,29 @@ var _ = Describe("removal: reset, then delete the Kubernetes Node", func() {
 			events = append(events, <-recorder.Events)
 		}
 		Expect(events).To(ContainElement(And(
-			ContainSubstring("Normal "+reasonWipeNotConfirmedPoweredOff), ContainSubstring("powered off"))))
-		Expect(events).NotTo(ContainElement(ContainSubstring("Warning")))
+			ContainSubstring("Warning "+reasonWipeNotConfirmedPoweredOff), ContainSubstring("powered off"))))
+	})
+
+	It("records every unconfirmed wipe as a Warning, however the machine stopped", func() {
+		recorder := record.NewFakeRecorder(10)
+		r := &TalosMachineReconciler{Recorder: recorder}
+		m := &ichorv1alpha1.TalosMachine{}
+		m.Name = "rmnode-types"
+
+		// The three unconfirmed-wipe Events of warnAfterReset: the node did not answer, the reboot was not
+		// confirmed in maintenance mode, and the machine was powered off.
+		r.warnAfterReset(m, nodeStep{unwiped: "the node did not answer"})
+		r.warnAfterReset(m, nodeStep{unconfirmed: true})
+		r.warnAfterReset(m, nodeStep{poweredOff: true})
+
+		var events []string
+		for len(recorder.Events) > 0 {
+			events = append(events, <-recorder.Events)
+		}
+		Expect(events).To(HaveLen(3))
+		for _, event := range events {
+			Expect(event).To(HavePrefix("Warning "), event)
+		}
 	})
 
 	It("sends Reset once when another operation takes the cluster lock while the removal waits for its Node", func() {

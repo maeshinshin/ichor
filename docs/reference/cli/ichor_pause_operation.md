@@ -1,11 +1,11 @@
 ---
 title: "ichor pause operation"
-description: "Stop the operation from advancing any further node (the cluster lock stays held, nothing is undone)"
+description: "Stop the operation from advancing any further node (nothing is undone; the cluster lock is released while it waits, and a resume takes it again, or waits if another operation holds it)"
 ---
 
 ## ichor pause operation
 
-Stop the operation from advancing any further node (the cluster lock stays held, nothing is undone)
+Stop the operation from advancing any further node (nothing is undone; the cluster lock is released while it waits, and a resume takes it again, or waits if another operation holds it)
 
 ```sh
 ichor pause operation NAME [flags]

@@ -34,8 +34,14 @@ adopt runs in four phases, and nothing is applied to a node in any of them:
   4. Release: lifts the hold one node at a time, control planes first, each
      waiting for Ready, so the first render is applied with zero drift.
 
-Every node must run Talos v1.12 or later; older ones are refused and nothing is
-written. The cluster's secrets are required: pass --secrets-bundle FILE, or
+A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
+control plane. adopt probes the version contract from that node (each minor from
+v1.12 up to the one it runs, keeping the one that differs least from the live
+configuration) and refuses a contract below v1.14, probed or named with
+--version-contract. Every node adopt reads, in a new cluster or an existing one,
+must also run Talos v1.12 or later. Either refusal writes nothing.
+
+The cluster's secrets are required: pass --secrets-bundle FILE, or
 --recover-secrets with --recover-from ADDRESS to read them from a control
 plane's machine config (not both).
 
@@ -91,7 +97,7 @@ ichor adopt [flags]
       --require-ichor             fail when Ichor is not installed (for example with Helm) instead of installing it
       --secrets-bundle string     path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)
       --tunnel string             tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards
-      --version-contract string   use this Talos version contract (v1.12 to the running minor) instead of the probed one
+      --version-contract string   use this Talos version contract (v1.14 or later) for the TalosCluster adopt creates, instead of the probed one
       --wait-timeout duration     how long to wait for Ichor's admission webhooks before giving up (default 15m0s)
 ```
 

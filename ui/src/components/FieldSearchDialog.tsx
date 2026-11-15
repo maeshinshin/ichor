@@ -16,6 +16,11 @@ export function FieldSearchDialog({ open, onOpenChange, onSelect }: { open: bool
     if (open) loadFieldIndex().then(setRows, () => setFailed(true))
   }, [open])
 
+  // A search that has been used starts the next one empty.
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
   const hits = useMemo(() => searchFields(rows, query), [rows, query])
 
   return (

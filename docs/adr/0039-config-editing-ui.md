@@ -264,3 +264,42 @@ index follows it.
   either way saves the same. `doc` and the kind `Select` go when the wire and
   the editor move to `spec.config`, which is the change after this one; nothing
   in the index is needed for it but the path.
+
+## Amendment: the wire and the editor carry spec.config, and there is no kind to pick (2026-11-16)
+
+The two amendments before this one left the editor writing Talos documents, with a
+kind `Select` over six hand-written kinds, because the wire carried
+`PatchDocument`. A person had to name a kind before the search could help, and a
+chosen setting went into the one document of its kind, so a patch could not hold
+two volumes or two bonds from the search. `spec.config` is the only place a patch
+carries Talos configuration (ADR 0165), so the wire and the editor move to it.
+
+- **`Patch.config` is `spec.config` as JSON, and `PatchService` stops converting.**
+  `patchToPB` writes the object out and `applyPatchSpec` reads it back as itself;
+  no document is built on the way. `Patch.documents` and `PatchDocument` stay in
+  `patch.proto`, deprecated and never set, as `UpdatePatchRequest.override` does, so
+  the wire format is unchanged and a generated client still compiles.
+- **An older client is refused, not misread.** Reading `config` from a request that
+  sets `documents` or leaves `config` out would turn an older client's save into an
+  empty patch and clear it. A create, update or preview of that kind is refused, and
+  the message names `config`. A patch that sets nothing is `{}`.
+- **A setting `spec.config` does not carry is refused by its path.** The request's
+  `config` is decoded strictly, because the API server would prune an unknown field
+  without a word. The 23 leaves of `pkg/ichorconfig/testdata/not_carried.txt` are
+  settings of the `v1alpha1` document that a document of its own spells; one that has
+  no field at its path in `spec.config` is refused naming that path, and one whose
+  path is also a field of `spec.config` in another shape is refused as the wrong type,
+  naming it, when the shape differs.
+- **The kind `Select` is gone, and the search is the way in.** A patch is one
+  `spec.config`, edited as a JSON `Textarea` and by the settings chosen in the
+  search, each with its own control over that same text. A setting in a map asks for
+  its key, and each of its keys is taken when the field is left or Enter is pressed,
+  so the entry is not moved on every letter. Choosing a row again adds another entry.
+  Another row of a collection starts under the key of the latest entry chosen in it.
+  Naming an entry anew moves it with what is in it, and refuses a key another entry
+  has. A setting below an array writes its first element, as before; more elements are
+  the `Textarea`'s job.
+- **The index drops `doc`.** Nothing needs a document once the wire carries paths. The
+  description and the allowed values are still read from the Talos tables by the
+  generator, which keeps the document in memory for its own tests. The search no
+  longer matches a document's kind name.

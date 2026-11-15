@@ -461,7 +461,7 @@ export const en = {
   'patch.chooseCluster': 'Choose a cluster first.',
   'patch.newTitle': 'New patch',
   'patch.intro':
-    'A patch sets Talos machine config. It holds typed Talos config documents, and the controller applies them to the nodes it selects: all nodes of a cluster, or narrower by role, label selector or single node. When several patches set the same value, the higher layer wins, then the higher priority. Preview the impact before you save.',
+    'A patch sets Talos machine config. It holds settings, and the controller applies them to the nodes it selects: all nodes of a cluster, or narrower by role, label selector or single node. When several patches set the same value, the higher layer wins, then the higher priority. Preview the impact before you save.',
   'patch.basics': 'Where it applies',
   'patch.nameHelp': 'A unique name. It cannot be changed later.',
   'patch.layer': 'Layer',

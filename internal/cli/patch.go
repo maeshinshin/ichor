@@ -277,7 +277,7 @@ namespace and replaces its spec when one does. It shows the impact first (a rebo
 reinstall for install-time-only fields, fields too new for the cluster's Talos) and asks for confirmation
 when there is any, unless --yes. - reads the manifest from stdin.
 
-The manifest is a typed TalosConfigPatch: spec.documents[] holds Talos machine configuration documents.
+The manifest is a typed TalosConfigPatch: spec.config holds the Talos machine configuration, each setting once.
 
 apply cni-values writes your layer of Cilium's Helm values instead.`
 	applyCmd.Example = `  ichor apply -f ingress-sysctls.yaml

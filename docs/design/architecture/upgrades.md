@@ -40,8 +40,10 @@ Every operation takes the cluster lock under its own identity
 (`ichor-controller/op/<namespace>/<name>`), a control-plane join or removal under the
 machine's own, and the Cilium Helm Job under `ichor-controller/cni-helm`, so two disruptive pieces of
 work never run together, whoever created them; the one that waits pauses with
-`ClusterLockHeld` naming the holder, and a lease whose holder is gone, completed or
-paused on a failed step is taken over.
+`ClusterLockHeld` naming the holder, and a lease whose holder is gone or completed is
+taken over. An operation paused to wait for a person (a failed step, or `spec.paused`)
+releases its lease when it pauses and takes the lock again only when it resumes
+(ADR 0162).
 
 All three upgrade kinds share the lock, the status-held state machine, pause-
 on-failure (no automatic cluster-wide rollback), `paused`, `maxUnavailable`

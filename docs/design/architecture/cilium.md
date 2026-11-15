@@ -17,7 +17,7 @@ cluster-admin-equivalent rights, so the controller does not run Helm itself.
 Values. Cilium's live values are Ichor defaults, then the user's layer in
 `spec.cni.cilium.values`, then Ichor-owned keys (the Talos-required ones, the
 KubePrism address, `kubeProxyReplacement`, `tunnelProtocol`). They are edited
-in the UI (Cilium page) or with `ichor get cni-values|set|edit|diff`, validated
+in the UI (Cilium page) or with `ichor get|apply|edit|diff cni-values`, validated
 by one function in the webhook, the backend and the controller, and applied by
 the Job. Changing the layer needs `update` on `talosclusters/cilium-values`, held
 by `ichor-admin` only (the chart can run privileged pods on every node), and the

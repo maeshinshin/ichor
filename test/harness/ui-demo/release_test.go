@@ -140,7 +140,8 @@ func TestChartPinsItsDefaultImages(t *testing.T) {
 		t.Fatalf("make helm-package: %v\n%s", err, out)
 	}
 
-	out, err := run(t, root, "helm", "template", "ichor", filepath.Join(packed, "ichor-0.1.0.tgz"))
+	out, err := run(t, root, "helm", "template", "ichor", filepath.Join(packed, "ichor-0.1.0.tgz"),
+		"--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443")
 	if err != nil {
 		t.Fatalf("helm template: %v\n%s", err, out)
 	}

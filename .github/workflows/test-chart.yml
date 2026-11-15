@@ -61,14 +61,14 @@ jobs:
 
       - name: Lint Helm Chart
         run: |
-          helm lint ./dist/chart
+          helm lint ./dist/chart --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443
 
       # No cert-manager install step: it is off by default, the
       # webhook serving certificate is generated in-process by cert-controller.
 
       - name: Deploy manager via Helm
         run: |
-          make helm-deploy HELM_EXTRA_ARGS="--set ichorUI.image.repository=${IMG_UI%:*} --set ichorUI.image.tag=${IMG_UI##*:}"
+          make helm-deploy HELM_EXTRA_ARGS="--set ichorUI.image.repository=${IMG_UI%:*} --set ichorUI.image.tag=${IMG_UI##*:} --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443"
 
       - name: Check Helm release status
         run: |

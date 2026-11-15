@@ -83,14 +83,14 @@ func TestF5HelmTemplateNoCNI(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
 	before := cniPaths(t, c)
 	chart := packagedChart(t)
-	if out, err := local(t, 2*time.Minute, "helm", "template", "ichor", chart, "-n", crNS); err != nil || strings.Contains(out, "this cluster has no CNI") {
+	if out, err := local(t, 2*time.Minute, "helm", "template", "ichor", chart, "-n", crNS, "--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443"); err != nil || strings.Contains(out, "this cluster has no CNI") {
 		t.Errorf("helm template failed or tripped the preflight: %v", err)
 	}
-	if out, err := local(t, 2*time.Minute, "helm", "install", "ichor", chart, "--dry-run", "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace"); err != nil || strings.Contains(out, "this cluster has no CNI") {
+	if out, err := local(t, 2*time.Minute, "helm", "install", "ichor", chart, "--dry-run", "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace", "--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443"); err != nil || strings.Contains(out, "this cluster has no CNI") {
 		t.Errorf("helm install --dry-run failed or tripped the preflight: %v", err)
 	}
 	// shortcut: a server-side dry run does lookups; its outcome is recorded, not asserted.
-	_, _ = local(t, 2*time.Minute, "helm", "install", "ichor", chart, "--dry-run=server", "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace")
+	_, _ = local(t, 2*time.Minute, "helm", "install", "ichor", chart, "--dry-run=server", "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace", "--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443")
 	noCNINothingWritten(t, c, before)
 
 	out, err := adopt(t, c, "--require-ichor")

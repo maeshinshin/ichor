@@ -14,6 +14,14 @@ Upgrade Ichor itself (IchorInstallation.spec.version).
 Without VERSION it uses the recommended version (see `--list`). It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.
 
+--skip-signature-check does not apply to one run only. It writes spec.installerSignature.mode: skip into the
+IchorInstallation "ichor" and leaves it there. The Job still runs by digest: unless --installer-digest names one, the
+controller resolves the version's tag to it, and the flag clears an earlier pin (spec.installerDigest). While the skip
+stands it also governs the Cilium Helm Job.
+Every `ichor upgrade ichor` writes both settings from its own flags, so the next one without the flag checks the signature again.
+To undo the skip without upgrading, run `kubectl edit ichorinstallation ichor` and delete spec.installerSignature
+(or set mode: required).
+
 The ichor-ui this installs does not start without a sign-in. If yours has none (an install made before
 sign-in became the default), the upgrade first turns Ichor's own sign-in on, as ichor init does: it creates the
 first administrator, switches ichor-ui to sign-in at --ui-url (default https://localhost:8443) and sets
@@ -43,7 +51,7 @@ ichor upgrade ichor VERSION [flags]
       --kube-api-server-url string        if ichor-ui has no sign-in yet: https URL of the Kubernetes API put in users' kubeconfigs
       --kube-api-tls-server-name string   if ichor-ui has no sign-in yet: tls-server-name in users' kubeconfigs
       --max-unavailable int32             workers handled at once (default 1)
-      --skip-signature-check              run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)
+      --skip-signature-check              run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images); not one-shot: recorded as IchorInstallation spec.installerSignature.mode skip, it stays until an upgrade without the flag
       --ui-tls-cert string                if ichor-ui has no sign-in yet: PEM certificate file for its TLS; stored with --ui-tls-key as a Secret
       --ui-tls-key string                 with --ui-tls-cert: PEM private key file (never printed)
       --ui-tls-secret string              if ichor-ui has no sign-in yet: serve it over TLS with this existing kubernetes.io/tls Secret

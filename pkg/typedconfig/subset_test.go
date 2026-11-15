@@ -88,7 +88,8 @@ func TestSubsetRefusesWhatItOmits(t *testing.T) {
 		"a kube-proxy field with no schema": {
 			proxy(object{"clientConnection": object{"burst": 1}}), `"clientConnection"`,
 		},
-		"kube-proxy enabled": {proxyEnabled, "KubeProxyConfigV1Alpha1.enabled"},
+		"kube-proxy enabled":                   {proxyEnabled, "KubeProxyConfigV1Alpha1.enabled"},
+		"a scheduler field the subset carries": {scheduler(object{"percentageOfNodesToScore": 50}), ""},
 		"a scheduler profile": {
 			scheduler(object{"profiles": []any{object{"schedulerName": "x"}}}), "",
 		},

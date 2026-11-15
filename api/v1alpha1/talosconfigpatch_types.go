@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -65,8 +66,16 @@ type TalosConfigPatchSpec struct {
 	Target *TalosConfigPatchTarget `json:"target,omitempty"`
 
 	// documents holds the Talos config documents this patch applies, restricted to an allow-list of kinds.
+	// Deprecated: write the settings in config, which spells each setting once. A patch sets documents or
+	// config, not both.
 	// +optional
 	Documents []TalosConfigPatchDocument `json:"documents,omitempty"`
+
+	// config holds the settings this patch applies in Ichor's own schema: one object with a machine and a
+	// cluster section, each setting written once. The controller converts it to Talos documents when it
+	// applies it. A patch sets config or documents, not both.
+	// +optional
+	Config *ichorconfig.Config `json:"config,omitempty"`
 }
 
 // TalosConfigPatchStatus defines the observed state of TalosConfigPatch.

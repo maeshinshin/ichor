@@ -23,4 +23,5 @@ limitations under the License.
 // +kubebuilder:object:generate=true
 //
 //go:generate go run ../../internal/tools/mirrorgen
+//go:generate go run ../../internal/tools/ichorgen
 package typedconfig

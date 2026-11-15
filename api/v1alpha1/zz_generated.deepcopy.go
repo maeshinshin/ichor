@@ -21,6 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1686,6 +1687,11 @@ func (in *TalosConfigPatchSpec) DeepCopyInto(out *TalosConfigPatchSpec) {
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = new(ichorconfig.Config)
+		(*in).DeepCopyInto(*out)
 	}
 }
 

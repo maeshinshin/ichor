@@ -16,6 +16,7 @@ import { patchClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import { notifyDone } from '@/lib/notify'
 import { matchesQuery } from '@/lib/filter'
+import { configSections } from '@/lib/patchDocs'
 import { targetKindOf } from '@/lib/patchTarget'
 import { useCluster } from '@/lib/useCluster'
 import { useList } from '@/lib/useList'
@@ -38,7 +39,7 @@ export function PatchList() {
   if (!patches) return <PageSkeleton label={t('patches.loading')} />
 
   const rows = patches.filter((p) =>
-    matchesQuery(query, p.ref?.name, enumLabel(ConfigLayer, p.layer), p.documents.map((d) => d.kind).join(' ')),
+    matchesQuery(query, p.ref?.name, enumLabel(ConfigLayer, p.layer), configSections(p.config).join(' ')),
   )
 
   // The Actions column only exists when the caller may edit or delete a patch.
@@ -71,7 +72,7 @@ export function PatchList() {
                 <TableHead className="hidden md:table-cell">{t('patches.colPriority')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('patches.colTarget')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('patches.colMachines')}</TableHead>
-                <TableHead className="hidden md:table-cell">{t('patches.colDocuments')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('patches.colConfig')}</TableHead>
                 {rowActions && <TableHead>{t('col.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
@@ -89,7 +90,7 @@ export function PatchList() {
                     <div class="text-muted-foreground md:hidden">
                       {enumLabel(ConfigLayer, p.layer)} · {t('patches.colPriority')} {p.priority}
                     </div>
-                    <div class="text-muted-foreground md:hidden">{t('patches.docCount', { count: p.documents.length })}</div>
+                    <div class="text-muted-foreground md:hidden">{configSections(p.config).join(', ') || '-'}</div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <Badge variant="outline">{enumLabel(ConfigLayer, p.layer)}</Badge>
@@ -98,14 +99,13 @@ export function PatchList() {
                   <TableCell className="hidden md:table-cell">{targetSummary(p)}</TableCell>
                   <TableCell className="hidden md:table-cell">{machinesSummary(p)}</TableCell>
                   <TableCell className="hidden md:table-cell">
-                    {p.documents.length === 0 ? (
+                    {configSections(p.config).length === 0 ? (
                       '-'
                     ) : (
                       <div class="flex flex-wrap items-center gap-1">
-                        <span>{t('patches.docCount', { count: p.documents.length })}</span>
-                        {p.documents.map((d, i) => (
-                          <Badge key={i} variant="outline">
-                            {d.kind}
+                        {configSections(p.config).map((section) => (
+                          <Badge key={section} variant="outline">
+                            {section}
                           </Badge>
                         ))}
                       </div>

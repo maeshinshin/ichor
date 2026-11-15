@@ -614,10 +614,10 @@ command does. Each item is described where it is listed below.
   whole object in its last-applied annotation, which is limited to 262,144
   bytes, and refuses them.
 - `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` carry a subset
-  of the upstream configuration: the fields an operator is documented to set on
-  a Talos node. The upstream types contain floating point numbers, a quantity
-  type and a list with no list type, which a CRD schema cannot express, and
-  the scheduler's is large. A Talos document that sets a field the subset does
+  of the upstream configuration: every field a CRD schema can express and Talos
+  accepts, which is all but a handful. The upstream types contain floating point
+  numbers, a quantity type and a list with no list type, which a CRD schema
+  cannot express, and the scheduler's is large. A Talos document that sets a field the subset does
   not carry is refused, at any depth, naming the field, and so is one that
   sets a field Talos protects in the kubelet (`authentication`,
   `authorization`, `cgroupRoot`, `port`, `resolvConf`, `staticPodPath` and
@@ -629,7 +629,7 @@ command does. Each item is described where it is listed below.
   because it validates strictly by default; a client that does not ask for
   strict validation has the field removed by the API server without being
   told. The tables of omitted fields in `internal/tools/mirrorgen/omits.go`
-  are the list. A field the subsets carry cannot be added to them later: a
+  are the list. A field the subsets carry cannot be taken back: a
   field that leaves the mirror fails a test unless its line is also removed from
   `pkg/typedconfig/testdata/carried_fields.txt`.
 - `KubeAuditPolicyConfig`, `KubeAuthorizerConfig` and
@@ -653,7 +653,7 @@ command does. Each item is described where it is listed below.
   what the schema holds, and it took the chart's Helm release record to 950,492
   of the 1,048,576 bytes allowed while both were there. It is retired as a third
   exception to the append-only rule (ADR 0152), and the record with `spec.config`
-  alone is 575,308 bytes, 473,268 free. `kubectl apply` of a manifest that still
+  alone is 578,416 bytes, 470,160 free. `kubectl apply` of a manifest that still
   sets `documents` is refused as an unknown field; a client that does not ask for
   strict validation has it pruned. `ichor patch apply` names `spec.config` in its
   refusal.

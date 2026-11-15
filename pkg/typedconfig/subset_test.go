@@ -77,7 +77,9 @@ func TestSubsetRefusesWhatItOmits(t *testing.T) {
 		"a kubelet field with no schema": {
 			kubelet("", object{"logging": object{"format": "text"}}), `"logging"`,
 		},
-		"a kubelet field nobody is documented to set": {kubelet("", object{"enableServer": true}), `"enableServer"`},
+		"a kubelet field no documentation has an operator set": {kubelet("", object{"enableServer": true}), ""},
+		"a kube-proxy field the same":                          {proxy(object{"bindAddress": "0.0.0.0"}), ""},
+		"a scheduler field the same":                           {scheduler(object{"parallelism": 8}), ""},
 		"a nested kubelet field the subset lacks": {
 			kubelet("", object{"memorySwap": object{"nope": 1}}), `"nope"`,
 		},

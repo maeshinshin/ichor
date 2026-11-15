@@ -707,14 +707,15 @@ spec:
                         properties:
                           config:
                             description: KubeProxyConfigurationSubset mirrors k8s.io/kube-proxy/config/v1alpha1.KubeProxyConfiguration.
-                              Ichor does not carry bindAddress, clientConnection,
-                              configSyncPeriod, enableProfiling, healthzBindAddress,
-                              hostnameOverride, logging, mode, portRange, showHiddenMetricsForVersion,
-                              windowsRunAsService, winkernel.
+                              Ichor does not carry clientConnection, logging.
                             properties:
+                              bindAddress:
+                                type: string
                               bindAddressHardFail:
                                 type: boolean
                               clusterCIDR:
+                                type: string
+                              configSyncPeriod:
                                 type: string
                               conntrack:
                                 description: |-
@@ -795,10 +796,16 @@ spec:
                                 description: LocalMode represents modes to detect
                                   local traffic from the node
                                 type: string
+                              enableProfiling:
+                                type: boolean
                               featureGates:
                                 additionalProperties:
                                   type: boolean
                                 type: object
+                              healthzBindAddress:
+                                type: string
+                              hostnameOverride:
+                                type: string
                               iptables:
                                 description: |-
                                   KubeProxyIPTablesConfiguration contains iptables-related configuration
@@ -902,6 +909,18 @@ spec:
                                 type: object
                               metricsBindAddress:
                                 type: string
+                              mode:
+                                description: |-
+                                  ProxyMode represents modes used by the Kubernetes proxy server.
+
+                                  Three modes of proxy are available on Linux platforms: `iptables`, `ipvs`, and
+                                  `nftables`. One mode of proxy is available on Windows platforms: `kernelspace`.
+
+                                  If the proxy mode is unspecified, a default proxy mode will be used (currently this
+                                  is `iptables` on Linux and `kernelspace` on Windows). If the selected proxy mode cannot be
+                                  used (due to lack of kernel support, missing userspace components, etc) then kube-proxy
+                                  will exit with an error.
+                                type: string
                               nftables:
                                 description: |-
                                   KubeProxyNFTablesConfiguration contains nftables-related configuration
@@ -943,6 +962,49 @@ spec:
                               oomScoreAdj:
                                 format: int32
                                 type: integer
+                              portRange:
+                                type: string
+                              showHiddenMetricsForVersion:
+                                type: string
+                              windowsRunAsService:
+                                type: boolean
+                              winkernel:
+                                description: |-
+                                  KubeProxyWinkernelConfiguration contains Windows/HNS settings for
+                                  the Kubernetes proxy server.
+                                properties:
+                                  enableDSR:
+                                    description: |-
+                                      enableDSR tells kube-proxy whether HNS policies should be created
+                                      with DSR
+                                    type: boolean
+                                  forwardHealthCheckVip:
+                                    description: |-
+                                      forwardHealthCheckVip forwards service VIP for health check port on
+                                      Windows
+                                    type: boolean
+                                  networkName:
+                                    description: |-
+                                      networkName is the name of the network kube-proxy will use
+                                      to create endpoints and policies
+                                    type: string
+                                  rootHnsEndpointName:
+                                    description: |-
+                                      rootHnsEndpointName is the name of hnsendpoint that is attached to
+                                      l2bridge for root network namespace
+                                    type: string
+                                  sourceVip:
+                                    description: |-
+                                      sourceVip is the IP address of the source VIP endpoint used for
+                                      NAT when loadbalancing
+                                    type: string
+                                required:
+                                - enableDSR
+                                - forwardHealthCheckVip
+                                - networkName
+                                - rootHnsEndpointName
+                                - sourceVip
+                                type: object
                             type: object
                           disabled:
                             type: boolean
@@ -988,11 +1050,21 @@ spec:
                             description: KubeSchedulerConfigurationSubset mirrors
                               k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration.
                               Ichor does not carry DebuggingConfiguration, clientConnection,
-                              delayCacheUntilActive, extenders, leaderElection, parallelism,
-                              podInitialBackoffSeconds, podMaxBackoffSeconds.
+                              extenders, leaderElection.
                             properties:
+                              delayCacheUntilActive:
+                                type: boolean
+                              parallelism:
+                                format: int32
+                                type: integer
                               percentageOfNodesToScore:
                                 format: int32
+                                type: integer
+                              podInitialBackoffSeconds:
+                                format: int64
+                                type: integer
+                              podMaxBackoffSeconds:
+                                format: int64
                                 type: integer
                               profiles:
                                 items:
@@ -2449,38 +2521,31 @@ spec:
                             type: array
                           config:
                             description: KubeletConfigurationSubset mirrors k8s.io/kubelet/config/v1beta1.KubeletConfiguration.
-                              Ichor does not carry address, authentication, authorization,
-                              cgroupDriver, cgroupRoot, cgroupsPerQOS, clusterDNS,
-                              configMapAndSecretChangeDetectionStrategy, containerRuntimeEndpoint,
-                              contentType, cpuCFSQuota, cpuCFSQuotaPeriod, crashLoopBackOff,
-                              enableContentionProfiling, enableControllerAttachDetach,
-                              enableDebugFlagsHandler, enableDebuggingHandlers, enableProfilingHandler,
-                              enableServer, enableSystemLogHandler, enableSystemLogQuery,
-                              enforceNodeAllocatable, eventBurst, eventRecordQPS,
-                              failCgroupV1, fileCheckFrequency, hairpinMode, healthzBindAddress,
-                              healthzPort, httpCheckFrequency, imagePullCredentialsVerificationPolicy,
-                              imageServiceEndpoint, iptablesDropBit, iptablesMasqueradeBit,
-                              kernelMemcgNotification, kubeAPIBurst, kubeAPIQPS, kubeReservedCgroup,
-                              kubeletCgroups, localStorageCapacityIsolation, logging,
-                              makeIPTablesUtilChains, maxOpenFiles, memoryReservationPolicy,
-                              memoryThrottlingFactor, nodeLeaseDurationSeconds, nodeStatusMaxImages,
-                              nodeStatusReportFrequency, nodeStatusUpdateFrequency,
-                              oomScoreAdj, podCIDR, podLogsDir, podsPerCore, port,
-                              preloadedImagesVerificationAllowlist, protectKernelDefaults,
-                              providerID, qosReserved, readOnlyPort, registerNode,
-                              registryBurst, registryPullQPS, reservedSystemCPUs,
-                              resolvConf, rotateCertificates, runOnce, runtimeRequestTimeout,
-                              seccompDefault, showHiddenMetricsForVersion, singleProcessOOMKill,
-                              staticPodPath, staticPodURL, staticPodURLHeader, streamingConnectionIdleTimeout,
-                              syncFrequency, systemCgroups, systemReservedCgroup,
-                              tlsCertFile, tlsCipherSuites, tlsCurvePreferences, tlsMinVersion,
-                              tlsPrivateKeyFile, volumePluginDir, volumeStatsAggPeriod.
+                              Ichor does not carry authentication, authorization,
+                              cgroupRoot, kubeletCgroups, logging, memoryThrottlingFactor,
+                              port, protectKernelDefaults, resolvConf, rotateCertificates,
+                              seccompDefault, staticPodPath, systemCgroups.
                             properties:
+                              address:
+                                type: string
                               allowedUnsafeSysctls:
                                 items:
                                   type: string
                                 type: array
+                              cgroupDriver:
+                                type: string
+                              cgroupsPerQOS:
+                                type: boolean
+                              clusterDNS:
+                                items:
+                                  type: string
+                                type: array
                               clusterDomain:
+                                type: string
+                              configMapAndSecretChangeDetectionStrategy:
+                                description: |-
+                                  ResourceChangeDetectionStrategy denotes a mode in which internal
+                                  managers (secret, configmap) are discovering object changes.
                                 type: string
                               containerLogMaxFiles:
                                 format: int32
@@ -2492,6 +2557,14 @@ spec:
                                 type: integer
                               containerLogMonitorInterval:
                                 type: string
+                              containerRuntimeEndpoint:
+                                type: string
+                              contentType:
+                                type: string
+                              cpuCFSQuota:
+                                type: boolean
+                              cpuCFSQuotaPeriod:
+                                type: string
                               cpuManagerPolicy:
                                 type: string
                               cpuManagerPolicyOptions:
@@ -2500,6 +2573,41 @@ spec:
                                 type: object
                               cpuManagerReconcilePeriod:
                                 type: string
+                              crashLoopBackOff:
+                                properties:
+                                  maxContainerRestartPeriod:
+                                    description: |-
+                                      maxContainerRestartPeriod is the maximum duration the backoff delay can accrue
+                                      to for container restarts, minimum 1 second, maximum 300 seconds. If not set,
+                                      defaults to the internal crashloopbackoff maximum (300s).
+                                    type: string
+                                type: object
+                              enableContentionProfiling:
+                                type: boolean
+                              enableControllerAttachDetach:
+                                type: boolean
+                              enableDebugFlagsHandler:
+                                type: boolean
+                              enableDebuggingHandlers:
+                                type: boolean
+                              enableProfilingHandler:
+                                type: boolean
+                              enableServer:
+                                type: boolean
+                              enableSystemLogHandler:
+                                type: boolean
+                              enableSystemLogQuery:
+                                type: boolean
+                              enforceNodeAllocatable:
+                                items:
+                                  type: string
+                                type: array
+                              eventBurst:
+                                format: int32
+                                type: integer
+                              eventRecordQPS:
+                                format: int32
+                                type: integer
                               evictionHard:
                                 additionalProperties:
                                   type: string
@@ -2521,12 +2629,25 @@ spec:
                                 additionalProperties:
                                   type: string
                                 type: object
+                              failCgroupV1:
+                                type: boolean
                               failSwapOn:
                                 type: boolean
                               featureGates:
                                 additionalProperties:
                                   type: boolean
                                 type: object
+                              fileCheckFrequency:
+                                type: string
+                              hairpinMode:
+                                type: string
+                              healthzBindAddress:
+                                type: string
+                              healthzPort:
+                                format: int32
+                                type: integer
+                              httpCheckFrequency:
+                                type: string
                               imageGCHighThresholdPercent:
                                 format: int32
                                 type: integer
@@ -2537,10 +2658,40 @@ spec:
                                 type: string
                               imageMinimumGCAge:
                                 type: string
+                              imagePullCredentialsVerificationPolicy:
+                                description: |-
+                                  ImagePullCredentialsVerificationPolicy is an enum for the policy that is enforced
+                                  when pod is requesting an image that appears on the system
+                                type: string
+                              imageServiceEndpoint:
+                                type: string
+                              iptablesDropBit:
+                                format: int32
+                                type: integer
+                              iptablesMasqueradeBit:
+                                format: int32
+                                type: integer
+                              kernelMemcgNotification:
+                                type: boolean
+                              kubeAPIBurst:
+                                format: int32
+                                type: integer
+                              kubeAPIQPS:
+                                format: int32
+                                type: integer
                               kubeReserved:
                                 additionalProperties:
                                   type: string
                                 type: object
+                              kubeReservedCgroup:
+                                type: string
+                              localStorageCapacityIsolation:
+                                type: boolean
+                              makeIPTablesUtilChains:
+                                type: boolean
+                              maxOpenFiles:
+                                format: int64
+                                type: integer
                               maxParallelImagePulls:
                                 format: int32
                                 type: integer
@@ -2548,6 +2699,10 @@ spec:
                                 format: int32
                                 type: integer
                               memoryManagerPolicy:
+                                type: string
+                              memoryReservationPolicy:
+                                description: MemoryReservationPolicy defines how the
+                                  kubelet applies cgroup v2 memory protection.
                                 type: string
                               memorySwap:
                                 properties:
@@ -2560,9 +2715,44 @@ spec:
                                 type: object
                               mergeDefaultEvictionSettings:
                                 type: boolean
+                              nodeLeaseDurationSeconds:
+                                format: int32
+                                type: integer
+                              nodeStatusMaxImages:
+                                format: int32
+                                type: integer
+                              nodeStatusReportFrequency:
+                                type: string
+                              nodeStatusUpdateFrequency:
+                                type: string
+                              oomScoreAdj:
+                                format: int32
+                                type: integer
+                              podCIDR:
+                                type: string
+                              podLogsDir:
+                                type: string
                               podPidsLimit:
                                 format: int64
                                 type: integer
+                              podsPerCore:
+                                format: int32
+                                type: integer
+                              preloadedImagesVerificationAllowlist:
+                                items:
+                                  type: string
+                                type: array
+                              providerID:
+                                type: string
+                              qosReserved:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              readOnlyPort:
+                                format: int32
+                                type: integer
+                              registerNode:
+                                type: boolean
                               registerWithTaints:
                                 items:
                                   description: |-
@@ -2593,6 +2783,12 @@ spec:
                                   - key
                                   type: object
                                 type: array
+                              registryBurst:
+                                format: int32
+                                type: integer
+                              registryPullQPS:
+                                format: int32
+                                type: integer
                               reservedMemory:
                                 items:
                                   description: MemoryReservation specifies the memory
@@ -2616,10 +2812,18 @@ spec:
                                   - numaNode
                                   type: object
                                 type: array
+                              reservedSystemCPUs:
+                                type: string
+                              runOnce:
+                                type: boolean
+                              runtimeRequestTimeout:
+                                type: string
                               serializeImagePulls:
                                 type: boolean
                               serverTLSBootstrap:
                                 type: boolean
+                              showHiddenMetricsForVersion:
+                                type: string
                               shutdownGracePeriod:
                                 type: string
                               shutdownGracePeriodByPodPriority:
@@ -2645,10 +2849,41 @@ spec:
                                 type: array
                               shutdownGracePeriodCriticalPods:
                                 type: string
+                              singleProcessOOMKill:
+                                type: boolean
+                              staticPodURL:
+                                type: string
+                              staticPodURLHeader:
+                                additionalProperties:
+                                  items:
+                                    type: string
+                                  type: array
+                                type: object
+                              streamingConnectionIdleTimeout:
+                                type: string
+                              syncFrequency:
+                                type: string
                               systemReserved:
                                 additionalProperties:
                                   type: string
                                 type: object
+                              systemReservedCgroup:
+                                type: string
+                              tlsCertFile:
+                                type: string
+                              tlsCipherSuites:
+                                items:
+                                  type: string
+                                type: array
+                              tlsCurvePreferences:
+                                items:
+                                  format: int32
+                                  type: integer
+                                type: array
+                              tlsMinVersion:
+                                type: string
+                              tlsPrivateKeyFile:
+                                type: string
                               topologyManagerPolicy:
                                 type: string
                               topologyManagerPolicyOptions:
@@ -2691,6 +2926,10 @@ spec:
                                     format: int64
                                     type: integer
                                 type: object
+                              volumePluginDir:
+                                type: string
+                              volumeStatsAggPeriod:
+                                type: string
                             type: object
                           credentialProviderConfig:
                             description: |-

@@ -36,7 +36,8 @@ The Helm release record is the encoding of `encodeRelease` (JSON, gzip at best c
 | A throwaway union of every kind merged by path, in the patches CRD | 937,660 | 110,916 |
 | The same without `KubeStaticPodConfig` | 687,780 | 360,796 |
 | `spec.config` as built, beside `documents[]`, one version (`017be3a79`, no longer on the branch) | 950,492 | 98,084 |
-| **`spec.config` alone, `documents[]` removed** | **575,308** | **473,268** |
+| `spec.config` alone, `documents[]` removed | 575,308 | 473,268 |
+| **The same, with every representable field of the kubelet, kube-proxy and kube-scheduler subsets** | **578,416** | **470,160** |
 
 598,916, the figure the first version of this ADR gave for the tree after the retirement, was a projection of a tree that still held a doc comment the retirement removed; the tree itself is 598,888. The patches CRD as compact JSON is 902,068 bytes (472,817 before). The static pod is 249,880 of the throwaway union's 338,772 added bytes, 74%: the core v1 `Pod` is in the schema once in `documents[]` and once in `spec.config.machine.staticPods`, and no merge can shrink it.
 
@@ -174,7 +175,7 @@ If the maintainer still wants B, it supersedes ADR 0003's union shape (its mirro
 
 Decided by the maintainer: `TalosConfigPatch.spec.documents` is removed from the CRD in `v1alpha1`, with no second API version and no conversion webhook. `spec.config` is the only way to write Talos configuration, so there is one place to write every setting, in Ichor's own shape. This is the third exception to the append-only rule, recorded in ADR 0152.
 
-**Why.** Two spellings of one setting in one CRD is the ambiguity `spec.config` was built to remove, and `documents[]` was kept only because CRD fields are append-only. Keeping it also kept the schema twice: the patches CRD held the union and `spec.config`, 950,492 bytes of the record with 98,084 free. With `documents[]` gone the record is 575,308 bytes, 473,268 free of 1,048,576, by the method above. Removing it costs the stored objects that set it (below); the maintainer accepted that.
+**Why.** Two spellings of one setting in one CRD is the ambiguity `spec.config` was built to remove, and `documents[]` was kept only because CRD fields are append-only. Keeping it also kept the schema twice: the patches CRD held the union and `spec.config`, 950,492 bytes of the record with 98,084 free. With `documents[]` gone the record is 575,308 bytes, 473,268 free of 1,048,576, by the method above, and 578,416 (470,160 free) once the subsets of ADR 0158 carry every representable field. Removing it costs the stored objects that set it (below); the maintainer accepted that.
 
 **What stays.** The Go type `TalosConfigPatchDocument` and its generated conversion to and from the machinery types stay: the conversion of `spec.config` decodes into it, validates with it and calls `.Document()`, so a setting still reaches a node through the same mirror and machinery types. Only the CRD field goes. The `ichorgen` schema and the `ichor` struct tag are unchanged, and `ConfigFromDocuments`, the inverse of the conversion, writes the settings of documents in `spec.config` for what builds documents (`ichor init` and `ichor adopt` for their patches, the web UI's editor). It refuses a setting the schema does not carry, by name, and gives back the same documents or an error.
 

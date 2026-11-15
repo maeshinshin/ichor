@@ -142,9 +142,11 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.cluster.network.podSubnets` | `[]string` | no |  |
 | `spec.config.cluster.network.serviceSubnets` | `[]string` | no |  |
 | `spec.config.cluster.proxy` | `object` | no | ClusterProxy is the object at cluster.proxy. |
-| `spec.config.cluster.proxy.config` | `object` | no | KubeProxyConfigurationSubset mirrors k8s.io/kube-proxy/config/v1alpha1.KubeProxyConfiguration. Ichor does not carry bindAddress, clientConnection, configSyncPeriod, enableProfiling, healthzBindAddress, hostnameOverride, logging, mode, portRange, showHiddenMetricsForVersion, windowsRunAsService, winkernel. |
+| `spec.config.cluster.proxy.config` | `object` | no | KubeProxyConfigurationSubset mirrors k8s.io/kube-proxy/config/v1alpha1.KubeProxyConfiguration. Ichor does not carry clientConnection, logging. |
+| `spec.config.cluster.proxy.config.bindAddress` | `string` | no |  |
 | `spec.config.cluster.proxy.config.bindAddressHardFail` | `boolean` | no |  |
 | `spec.config.cluster.proxy.config.clusterCIDR` | `string` | no |  |
+| `spec.config.cluster.proxy.config.configSyncPeriod` | `string` | no |  |
 | `spec.config.cluster.proxy.config.conntrack` | `object` | no | KubeProxyConntrackConfiguration contains conntrack settings for the Kubernetes proxy server. |
 | `spec.config.cluster.proxy.config.conntrack.maxPerCore` | `integer` | yes | maxPerCore is the maximum number of NAT connections to track per CPU core (0 to leave the limit as-is and ignore min). |
 | `spec.config.cluster.proxy.config.conntrack.min` | `integer` | yes | min is the minimum value of connect-tracking records to allocate, regardless of maxPerCore (set maxPerCore=0 to leave the limit as-is). |
@@ -157,7 +159,10 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.cluster.proxy.config.detectLocal.bridgeInterface` | `string` | yes | bridgeInterface is a bridge interface name. When DetectLocalMode is set to LocalModeBridgeInterface, kube-proxy will consider traffic to be local if it originates from this bridge. |
 | `spec.config.cluster.proxy.config.detectLocal.interfaceNamePrefix` | `string` | yes | interfaceNamePrefix is an interface name prefix. When DetectLocalMode is set to LocalModeInterfaceNamePrefix, kube-proxy will consider traffic to be local if it originates from any interface whose name begins with this prefix. |
 | `spec.config.cluster.proxy.config.detectLocalMode` | `string` | no | LocalMode represents modes to detect local traffic from the node |
+| `spec.config.cluster.proxy.config.enableProfiling` | `boolean` | no |  |
 | `spec.config.cluster.proxy.config.featureGates` | `map[string]boolean` | no |  |
+| `spec.config.cluster.proxy.config.healthzBindAddress` | `string` | no |  |
+| `spec.config.cluster.proxy.config.hostnameOverride` | `string` | no |  |
 | `spec.config.cluster.proxy.config.iptables` | `object` | no | KubeProxyIPTablesConfiguration contains iptables-related configuration details for the Kubernetes proxy server. |
 | `spec.config.cluster.proxy.config.iptables.localhostNodePorts` | `boolean` | yes | localhostNodePorts, if false, tells kube-proxy to disable the legacy behavior of allowing NodePort services to be accessed via localhost. (Applies only to iptables mode and IPv4; localhost NodePorts are never allowed with other proxy modes or with IPv6.) |
 | `spec.config.cluster.proxy.config.iptables.masqueradeAll` | `boolean` | yes | masqueradeAll tells kube-proxy to SNAT all traffic sent to Service cluster IPs, when using the iptables or ipvs proxy mode. This may be required with some CNI plugins. |
@@ -174,6 +179,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.cluster.proxy.config.ipvs.tcpTimeout` | `string` | yes | tcpTimeout is the timeout value used for idle IPVS TCP sessions. The default value is 0, which preserves the current timeout value on the system. |
 | `spec.config.cluster.proxy.config.ipvs.udpTimeout` | `string` | yes | udpTimeout is the timeout value used for IPVS UDP packets. The default value is 0, which preserves the current timeout value on the system. |
 | `spec.config.cluster.proxy.config.metricsBindAddress` | `string` | no |  |
+| `spec.config.cluster.proxy.config.mode` | `string` | no | ProxyMode represents modes used by the Kubernetes proxy server. Three modes of proxy are available on Linux platforms: `iptables`, `ipvs`, and `nftables`. One mode of proxy is available on Windows platforms: `kernelspace`. If the proxy mode is unspecified, a default proxy mode will be used (currently this is `iptables` on Linux and `kernelspace` on Windows). If the selected proxy mode cannot be used (due to lack of kernel support, missing userspace components, etc) then kube-proxy will exit with an error. |
 | `spec.config.cluster.proxy.config.nftables` | `object` | no | KubeProxyNFTablesConfiguration contains nftables-related configuration details for the Kubernetes proxy server. |
 | `spec.config.cluster.proxy.config.nftables.masqueradeAll` | `boolean` | yes | masqueradeAll tells kube-proxy to SNAT all traffic sent to Service cluster IPs, when using the nftables mode. This may be required with some CNI plugins. |
 | `spec.config.cluster.proxy.config.nftables.masqueradeBit` | `integer` | yes | masqueradeBit is the bit of the iptables fwmark space to use for SNAT if using the nftables proxy mode. Values must be within the range [0, 31]. |
@@ -181,6 +187,15 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.cluster.proxy.config.nftables.syncPeriod` | `string` | yes | syncPeriod is an interval (e.g. '5s', '1m', '2h22m') indicating how frequently various re-synchronizing and cleanup operations are performed. Must be greater than 0. |
 | `spec.config.cluster.proxy.config.nodePortAddresses` | `[]string` | no |  |
 | `spec.config.cluster.proxy.config.oomScoreAdj` | `integer` | no |  |
+| `spec.config.cluster.proxy.config.portRange` | `string` | no |  |
+| `spec.config.cluster.proxy.config.showHiddenMetricsForVersion` | `string` | no |  |
+| `spec.config.cluster.proxy.config.windowsRunAsService` | `boolean` | no |  |
+| `spec.config.cluster.proxy.config.winkernel` | `object` | no | KubeProxyWinkernelConfiguration contains Windows/HNS settings for the Kubernetes proxy server. |
+| `spec.config.cluster.proxy.config.winkernel.enableDSR` | `boolean` | yes | enableDSR tells kube-proxy whether HNS policies should be created with DSR |
+| `spec.config.cluster.proxy.config.winkernel.forwardHealthCheckVip` | `boolean` | yes | forwardHealthCheckVip forwards service VIP for health check port on Windows |
+| `spec.config.cluster.proxy.config.winkernel.networkName` | `string` | yes | networkName is the name of the network kube-proxy will use to create endpoints and policies |
+| `spec.config.cluster.proxy.config.winkernel.rootHnsEndpointName` | `string` | yes | rootHnsEndpointName is the name of hnsendpoint that is attached to l2bridge for root network namespace |
+| `spec.config.cluster.proxy.config.winkernel.sourceVip` | `string` | yes | sourceVip is the IP address of the source VIP endpoint used for NAT when loadbalancing |
 | `spec.config.cluster.proxy.disabled` | `boolean` | no |  |
 | `spec.config.cluster.proxy.extraArgs` | `map[string][]string` | no |  |
 | `spec.config.cluster.proxy.image` | `string` | no |  |
@@ -189,8 +204,12 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.cluster.proxy.resources.limits` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
 | `spec.config.cluster.proxy.resources.requests` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
 | `spec.config.cluster.scheduler` | `object` | no | ClusterScheduler is the object at cluster.scheduler. |
-| `spec.config.cluster.scheduler.config` | `object` | no | KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry DebuggingConfiguration, clientConnection, delayCacheUntilActive, extenders, leaderElection, parallelism, podInitialBackoffSeconds, podMaxBackoffSeconds. |
+| `spec.config.cluster.scheduler.config` | `object` | no | KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry DebuggingConfiguration, clientConnection, extenders, leaderElection. |
+| `spec.config.cluster.scheduler.config.delayCacheUntilActive` | `boolean` | no |  |
+| `spec.config.cluster.scheduler.config.parallelism` | `integer` | no |  |
 | `spec.config.cluster.scheduler.config.percentageOfNodesToScore` | `integer` | no |  |
+| `spec.config.cluster.scheduler.config.podInitialBackoffSeconds` | `integer` | no |  |
+| `spec.config.cluster.scheduler.config.podMaxBackoffSeconds` | `integer` | no |  |
 | `spec.config.cluster.scheduler.config.profiles` | `[]object` | no |  |
 | `spec.config.cluster.scheduler.config.profiles[].percentageOfNodesToScore` | `integer` | no |  |
 | `spec.config.cluster.scheduler.config.profiles[].plugins` | `object` | no | Plugins include multiple extension points. When specified, the list of plugins for a particular extension point are the only ones enabled. If an extension point is omitted from the config, then the default set of plugins is used for that extension point. Enabled plugins are called in the order specified here, after default plugins. If they need to be invoked before default plugins, default plugins must be disabled and re-enabled here in desired order. |
@@ -433,52 +452,122 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.machine.kernel.modules.<key>.parameters` | `[]string` | no |  |
 | `spec.config.machine.kubelet` | `object` | no | MachineKubelet is the object at machine.kubelet. |
 | `spec.config.machine.kubelet.clusterDNS` | `[]string` | no |  |
-| `spec.config.machine.kubelet.config` | `object` | no | KubeletConfigurationSubset mirrors k8s.io/kubelet/config/v1beta1.KubeletConfiguration. Ichor does not carry address, authentication, authorization, cgroupDriver, cgroupRoot, cgroupsPerQOS, clusterDNS, configMapAndSecretChangeDetectionStrategy, containerRuntimeEndpoint, contentType, cpuCFSQuota, cpuCFSQuotaPeriod, crashLoopBackOff, enableContentionProfiling, enableControllerAttachDetach, enableDebugFlagsHandler, enableDebuggingHandlers, enableProfilingHandler, enableServer, enableSystemLogHandler, enableSystemLogQuery, enforceNodeAllocatable, eventBurst, eventRecordQPS, failCgroupV1, fileCheckFrequency, hairpinMode, healthzBindAddress, healthzPort, httpCheckFrequency, imagePullCredentialsVerificationPolicy, imageServiceEndpoint, iptablesDropBit, iptablesMasqueradeBit, kernelMemcgNotification, kubeAPIBurst, kubeAPIQPS, kubeReservedCgroup, kubeletCgroups, localStorageCapacityIsolation, logging, makeIPTablesUtilChains, maxOpenFiles, memoryReservationPolicy, memoryThrottlingFactor, nodeLeaseDurationSeconds, nodeStatusMaxImages, nodeStatusReportFrequency, nodeStatusUpdateFrequency, oomScoreAdj, podCIDR, podLogsDir, podsPerCore, port, preloadedImagesVerificationAllowlist, protectKernelDefaults, providerID, qosReserved, readOnlyPort, registerNode, registryBurst, registryPullQPS, reservedSystemCPUs, resolvConf, rotateCertificates, runOnce, runtimeRequestTimeout, seccompDefault, showHiddenMetricsForVersion, singleProcessOOMKill, staticPodPath, staticPodURL, staticPodURLHeader, streamingConnectionIdleTimeout, syncFrequency, systemCgroups, systemReservedCgroup, tlsCertFile, tlsCipherSuites, tlsCurvePreferences, tlsMinVersion, tlsPrivateKeyFile, volumePluginDir, volumeStatsAggPeriod. |
+| `spec.config.machine.kubelet.config` | `object` | no | KubeletConfigurationSubset mirrors k8s.io/kubelet/config/v1beta1.KubeletConfiguration. Ichor does not carry authentication, authorization, cgroupRoot, kubeletCgroups, logging, memoryThrottlingFactor, port, protectKernelDefaults, resolvConf, rotateCertificates, seccompDefault, staticPodPath, systemCgroups. |
+| `spec.config.machine.kubelet.config.address` | `string` | no |  |
 | `spec.config.machine.kubelet.config.allowedUnsafeSysctls` | `[]string` | no |  |
+| `spec.config.machine.kubelet.config.cgroupDriver` | `string` | no |  |
+| `spec.config.machine.kubelet.config.cgroupsPerQOS` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.clusterDNS` | `[]string` | no |  |
 | `spec.config.machine.kubelet.config.clusterDomain` | `string` | no |  |
+| `spec.config.machine.kubelet.config.configMapAndSecretChangeDetectionStrategy` | `string` | no | ResourceChangeDetectionStrategy denotes a mode in which internal managers (secret, configmap) are discovering object changes. |
 | `spec.config.machine.kubelet.config.containerLogMaxFiles` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.containerLogMaxSize` | `string` | no |  |
 | `spec.config.machine.kubelet.config.containerLogMaxWorkers` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.containerLogMonitorInterval` | `string` | no |  |
+| `spec.config.machine.kubelet.config.containerRuntimeEndpoint` | `string` | no |  |
+| `spec.config.machine.kubelet.config.contentType` | `string` | no |  |
+| `spec.config.machine.kubelet.config.cpuCFSQuota` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.cpuCFSQuotaPeriod` | `string` | no |  |
 | `spec.config.machine.kubelet.config.cpuManagerPolicy` | `string` | no |  |
 | `spec.config.machine.kubelet.config.cpuManagerPolicyOptions` | `map[string]string` | no |  |
 | `spec.config.machine.kubelet.config.cpuManagerReconcilePeriod` | `string` | no |  |
+| `spec.config.machine.kubelet.config.crashLoopBackOff` | `object` | no |  |
+| `spec.config.machine.kubelet.config.crashLoopBackOff.maxContainerRestartPeriod` | `string` | no | maxContainerRestartPeriod is the maximum duration the backoff delay can accrue to for container restarts, minimum 1 second, maximum 300 seconds. If not set, defaults to the internal crashloopbackoff maximum (300s). |
+| `spec.config.machine.kubelet.config.enableContentionProfiling` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableControllerAttachDetach` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableDebugFlagsHandler` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableDebuggingHandlers` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableProfilingHandler` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableServer` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableSystemLogHandler` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enableSystemLogQuery` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.enforceNodeAllocatable` | `[]string` | no |  |
+| `spec.config.machine.kubelet.config.eventBurst` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.eventRecordQPS` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.evictionHard` | `map[string]string` | no |  |
 | `spec.config.machine.kubelet.config.evictionMaxPodGracePeriod` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.evictionMinimumReclaim` | `map[string]string` | no |  |
 | `spec.config.machine.kubelet.config.evictionPressureTransitionPeriod` | `string` | no |  |
 | `spec.config.machine.kubelet.config.evictionSoft` | `map[string]string` | no |  |
 | `spec.config.machine.kubelet.config.evictionSoftGracePeriod` | `map[string]string` | no |  |
+| `spec.config.machine.kubelet.config.failCgroupV1` | `boolean` | no |  |
 | `spec.config.machine.kubelet.config.failSwapOn` | `boolean` | no |  |
 | `spec.config.machine.kubelet.config.featureGates` | `map[string]boolean` | no |  |
+| `spec.config.machine.kubelet.config.fileCheckFrequency` | `string` | no |  |
+| `spec.config.machine.kubelet.config.hairpinMode` | `string` | no |  |
+| `spec.config.machine.kubelet.config.healthzBindAddress` | `string` | no |  |
+| `spec.config.machine.kubelet.config.healthzPort` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.httpCheckFrequency` | `string` | no |  |
 | `spec.config.machine.kubelet.config.imageGCHighThresholdPercent` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.imageGCLowThresholdPercent` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.imageMaximumGCAge` | `string` | no |  |
 | `spec.config.machine.kubelet.config.imageMinimumGCAge` | `string` | no |  |
+| `spec.config.machine.kubelet.config.imagePullCredentialsVerificationPolicy` | `string` | no | ImagePullCredentialsVerificationPolicy is an enum for the policy that is enforced when pod is requesting an image that appears on the system |
+| `spec.config.machine.kubelet.config.imageServiceEndpoint` | `string` | no |  |
+| `spec.config.machine.kubelet.config.iptablesDropBit` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.iptablesMasqueradeBit` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.kernelMemcgNotification` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.kubeAPIBurst` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.kubeAPIQPS` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.kubeReserved` | `map[string]string` | no |  |
+| `spec.config.machine.kubelet.config.kubeReservedCgroup` | `string` | no |  |
+| `spec.config.machine.kubelet.config.localStorageCapacityIsolation` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.makeIPTablesUtilChains` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.maxOpenFiles` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.maxParallelImagePulls` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.maxPods` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.memoryManagerPolicy` | `string` | no |  |
+| `spec.config.machine.kubelet.config.memoryReservationPolicy` | `string` | no | MemoryReservationPolicy defines how the kubelet applies cgroup v2 memory protection. |
 | `spec.config.machine.kubelet.config.memorySwap` | `object` | no |  |
 | `spec.config.machine.kubelet.config.memorySwap.swapBehavior` | `string` | no | swapBehavior configures swap memory available to container workloads. May be one of "", "NoSwap": workloads can not use swap, default option. "LimitedSwap": workload swap usage is limited. The swap limit is proportionate to the container's memory request. |
 | `spec.config.machine.kubelet.config.mergeDefaultEvictionSettings` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.nodeLeaseDurationSeconds` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.nodeStatusMaxImages` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.nodeStatusReportFrequency` | `string` | no |  |
+| `spec.config.machine.kubelet.config.nodeStatusUpdateFrequency` | `string` | no |  |
+| `spec.config.machine.kubelet.config.oomScoreAdj` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.podCIDR` | `string` | no |  |
+| `spec.config.machine.kubelet.config.podLogsDir` | `string` | no |  |
 | `spec.config.machine.kubelet.config.podPidsLimit` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.podsPerCore` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.preloadedImagesVerificationAllowlist` | `[]string` | no |  |
+| `spec.config.machine.kubelet.config.providerID` | `string` | no |  |
+| `spec.config.machine.kubelet.config.qosReserved` | `map[string]string` | no |  |
+| `spec.config.machine.kubelet.config.readOnlyPort` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.registerNode` | `boolean` | no |  |
 | `spec.config.machine.kubelet.config.registerWithTaints` | `[]object` | no |  |
 | `spec.config.machine.kubelet.config.registerWithTaints[].effect` | `string` | yes | Required. The effect of the taint on pods that do not tolerate the taint. Valid effects are NoSchedule, PreferNoSchedule and NoExecute. |
 | `spec.config.machine.kubelet.config.registerWithTaints[].key` | `string` | yes | Required. The taint key to be applied to a node. |
 | `spec.config.machine.kubelet.config.registerWithTaints[].timeAdded` | `string (date-time)` | no | TimeAdded represents the time at which the taint was added. |
 | `spec.config.machine.kubelet.config.registerWithTaints[].value` | `string` | no | The taint value corresponding to the taint key. |
+| `spec.config.machine.kubelet.config.registryBurst` | `integer` | no |  |
+| `spec.config.machine.kubelet.config.registryPullQPS` | `integer` | no |  |
 | `spec.config.machine.kubelet.config.reservedMemory` | `[]object` | no |  |
 | `spec.config.machine.kubelet.config.reservedMemory[].limits` | `map[string]integer or string` | yes | ResourceList is a set of (resource name, quantity) pairs. |
 | `spec.config.machine.kubelet.config.reservedMemory[].numaNode` | `integer` | yes |  |
+| `spec.config.machine.kubelet.config.reservedSystemCPUs` | `string` | no |  |
+| `spec.config.machine.kubelet.config.runOnce` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.runtimeRequestTimeout` | `string` | no |  |
 | `spec.config.machine.kubelet.config.serializeImagePulls` | `boolean` | no |  |
 | `spec.config.machine.kubelet.config.serverTLSBootstrap` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.showHiddenMetricsForVersion` | `string` | no |  |
 | `spec.config.machine.kubelet.config.shutdownGracePeriod` | `string` | no |  |
 | `spec.config.machine.kubelet.config.shutdownGracePeriodByPodPriority` | `[]object` | no |  |
 | `spec.config.machine.kubelet.config.shutdownGracePeriodByPodPriority[].priority` | `integer` | yes | priority is the priority value associated with the shutdown grace period |
 | `spec.config.machine.kubelet.config.shutdownGracePeriodByPodPriority[].shutdownGracePeriodSeconds` | `integer` | yes | shutdownGracePeriodSeconds is the shutdown grace period in seconds |
 | `spec.config.machine.kubelet.config.shutdownGracePeriodCriticalPods` | `string` | no |  |
+| `spec.config.machine.kubelet.config.singleProcessOOMKill` | `boolean` | no |  |
+| `spec.config.machine.kubelet.config.staticPodURL` | `string` | no |  |
+| `spec.config.machine.kubelet.config.staticPodURLHeader` | `map[string][]string` | no |  |
+| `spec.config.machine.kubelet.config.streamingConnectionIdleTimeout` | `string` | no |  |
+| `spec.config.machine.kubelet.config.syncFrequency` | `string` | no |  |
 | `spec.config.machine.kubelet.config.systemReserved` | `map[string]string` | no |  |
+| `spec.config.machine.kubelet.config.systemReservedCgroup` | `string` | no |  |
+| `spec.config.machine.kubelet.config.tlsCertFile` | `string` | no |  |
+| `spec.config.machine.kubelet.config.tlsCipherSuites` | `[]string` | no |  |
+| `spec.config.machine.kubelet.config.tlsCurvePreferences` | `[]integer` | no |  |
+| `spec.config.machine.kubelet.config.tlsMinVersion` | `string` | no |  |
+| `spec.config.machine.kubelet.config.tlsPrivateKeyFile` | `string` | no |  |
 | `spec.config.machine.kubelet.config.topologyManagerPolicy` | `string` | no |  |
 | `spec.config.machine.kubelet.config.topologyManagerPolicyOptions` | `map[string]string` | no |  |
 | `spec.config.machine.kubelet.config.topologyManagerScope` | `string` | no |  |
@@ -487,6 +576,8 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.machine.kubelet.config.tracing.samplingRatePerMillion` | `integer` | no | SamplingRatePerMillion is the number of samples to collect per million spans. Recommended is unset. If unset, sampler respects its parent span's sampling rate, but otherwise never samples. |
 | `spec.config.machine.kubelet.config.userNamespaces` | `object` | no | UserNamespaces contains User Namespace configurations. |
 | `spec.config.machine.kubelet.config.userNamespaces.idsPerPod` | `integer` | no | IDsPerPod is the mapping length of UIDs and GIDs. The length must be a multiple of 65536, and must be less than 1\<\<32. On non-linux such as windows, only null / absent is allowed. Changing the value may require recreating all containers on the node. Default: 65536 |
+| `spec.config.machine.kubelet.config.volumePluginDir` | `string` | no |  |
+| `spec.config.machine.kubelet.config.volumeStatsAggPeriod` | `string` | no |  |
 | `spec.config.machine.kubelet.credentialProviderConfig` | `object` | no | CredentialProviderConfig is the configuration containing information about each exec credential provider. Kubelet reads this configuration from disk and enables each provider as specified by the CredentialProvider type. |
 | `spec.config.machine.kubelet.credentialProviderConfig.apiVersion` | `string` | no | APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |
 | `spec.config.machine.kubelet.credentialProviderConfig.kind` | `string` | no | Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |

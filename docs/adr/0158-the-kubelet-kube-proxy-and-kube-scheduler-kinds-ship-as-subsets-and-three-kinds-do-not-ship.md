@@ -1,6 +1,6 @@
 # 0158. The kubelet, kube-proxy and kube-scheduler kinds ship as subsets, and the kinds that do not ship are named in the decision
 
-Status: Accepted · Date: 2026-11-13 · Design section: Typed configuration · Amends: 0155, 0157
+Status: Accepted · Date: 2026-11-13 · Amended · Design section: Typed configuration · Amends: 0155, 0157
 
 Decided: `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` are added to the union (fields `kubeletConfig`, `kubeProxyConfig`, `kubeSchedulerConfig`). Each carries its `config` payload as a local subset of the upstream Kubernetes configuration type: the fields an operator is documented to set on a Talos node, with every field left out named in a table and refused when a Talos document sets it. `KubeAuthenticationConfig` is reclassified as Ichor-owned, `KubeAdmissionControlConfig` as unstructured, and `KubeStaticPodConfig` is in the union with its pod carried as the core v1 `Pod` without its `status`, its CRDs applied with server-side apply. Of 65 accepted kinds, all 65 are in the union.
 
@@ -32,3 +32,8 @@ ADR 0155 held back nine kinds whose payload is a free-form field, ADR 0157 shipp
 ## Consequences
 
 An operator who needs a setting outside a subset cannot set it through these kinds until its omit row is deleted and a release carries it; the omit tables are the list. Plugin arguments of the scheduler stay unreachable. `TalosCluster` embeds the union, so each subset is paid twice in CRD size; the scheduler's `plugins` block is the largest part of that.
+
+## Amendment (2026-11-16): the fields nobody had asked for are carried
+
+Decided by the maintainer, with ADR 0165: the three subsets carry every field of the upstream configuration that a CRD schema can express and Talos accepts. Of the 86 rows of the omit tables whose reason was that no documentation has an operator set the field (71 of the kubelet's, 10 of kube-proxy's, 5 of the scheduler's), 85 are deleted, and their paths are appended to `pkg/typedconfig/testdata/carried_fields.txt`. Decision 7's "a doubtful field stays omitted until someone needs it" no longer holds: `spec.config` is the one place to write every setting, and a subset of it would be a setting that cannot be written there. What stays out is what the reasons say: the fields Talos protects, the types a CRD schema cannot express, the free-form `pluginConfig`, the pod's status, and the scheduler's embedded `DebuggingConfiguration`, the 86th of those rows, which a subset does not flatten: it is not a field of its own, and its row now says so. The patches CRD grows by 3,108 bytes of the Helm release record, which is 578,416 of the 1,048,576 allowed with `documents[]` gone.
+

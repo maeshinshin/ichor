@@ -307,7 +307,7 @@ outer-cluster `kubectl` call in the harness therefore goes through
 `test/internal/kube.Command`, which always adds
 `--context $ICHOR_E2E_KUBE_CONTEXT` and builds a command that fails to start
 when the variable is unset. Deletes are additionally refused unless they carry
-`-n ichor-e2e` and name their objects (no `-A`, `--all`, `-l`, `-f`). Inner
+`-n <e2e-namespace>` and name their objects (no `-A`, `--all`, `-l`, `-f`). Inner
 cluster calls use `kube.InnerCommand(<kubeconfig>, ...)` and never delete.
 `talosctl` runs only in pods; `test/internal/talosctl` refuses a call with no
 explicit `--nodes`, or one that addresses a protected node (a fixed list of real

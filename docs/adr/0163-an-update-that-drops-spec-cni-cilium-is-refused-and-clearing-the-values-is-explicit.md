@@ -17,10 +17,11 @@ A validating webhook sees the object after defaulting, so `cni: {}` and `cni: {p
 - The webhook refuses an update when the stored object has Cilium values and the new one has no `spec.cni.cilium`. The message says that the update would drop them and how to clear them on purpose.
 - `spec.cni.cilium: {}` is the explicit clear, and it is what the UI and `ichor apply cni-values` already write when the layer is emptied, so neither changes.
 - Refusing was chosen over keeping the values. Keeping would need a mutating webhook on update, which the defaulter deliberately is not (an existing spec is never touched), and it would make a stanza that reads as empty hold values. Refusing also leaves an operator who does mean to reset the values a one-line way to say so.
-- No schema change: the rule is in the webhook beside the existing `spec.cni` removal check.
+- The rule sits in the override webhook, after the check for the `cilium-values` verb (ADR 0131), not in the TalosCluster validator. The two webhooks run side by side and either denial may come back first, so a rule in the validator made the message depend on timing. In this order a caller without the verb is told which verb they need, and a caller with it is told to write `cilium: {}`.
+- No schema change.
 
 ## Consequences
 
 - A GitOps repository that removes the `cilium` block to drop the values must write `cilium: {}` instead; the refusal names it.
 - An update that keeps the values, or does not touch `spec.cni`, is unaffected, and a cluster with no values is unaffected, so the existing admission of `cni: {}` for such a cluster stands.
-- Changing the values still needs the admin verb (ADR 0131); this rule is about the omission, not who may change them.
+- Changing the values still needs the admin verb (ADR 0131), and a caller without it is refused for that first; this rule is about the omission, not who may change them.

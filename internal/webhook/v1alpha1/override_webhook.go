@@ -390,6 +390,14 @@ func (h *OverrideHandler) handleCluster(ctx context.Context, req admission.Reque
 		}
 
 		overridelog.Info("spec.cni.cilium.values changed", "user", req.UserInfo.Username, "cluster", req.Name)
+
+		// After the verb is held, so a caller who lacks it is told about the verb and a caller who has it is told
+		// to say so. A whole-object write that omits spec.cni.cilium, or sends cni as {}, reads the same after
+		// defaulting as one that means to keep the values; clearing is spec.cni.cilium as {}.
+		if stored, _ := ciliumUserValues(&old); len(stored) != 0 && updated.Spec.CNI.Cilium == nil {
+			return admission.Denied("this update would drop spec.cni.cilium and the Cilium values in it; keep spec.cni.cilium.values, " +
+				"or set spec.cni.cilium to {} (`ichor apply cni-values` with an empty file) to clear them on purpose")
+		}
 	}
 
 	if reflect.DeepEqual(old.Spec.Authentication, updated.Spec.Authentication) {

@@ -313,7 +313,7 @@ func validateEndpoint(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	return nil
 }
 
-// validateNotRemoved refuses to drop spec.network, spec.cni or spec.cni.cilium (when it holds values) once set. Their CEL transition rules
+// validateNotRemoved refuses to drop spec.network or spec.cni once it is set. Their CEL transition rules
 // compare oldSelf with self, and CEL does not run when the field is absent, so a JSON patch that removes
 // the field would pass them. Setting a field that was unset stays allowed.
 func validateNotRemoved(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
@@ -324,14 +324,6 @@ func validateNotRemoved(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	if !apiequality.Semantic.DeepEqual(oldObj.Spec.CNI, ichorv1alpha1.TalosClusterCNI{}) &&
 		apiequality.Semantic.DeepEqual(newObj.Spec.CNI, ichorv1alpha1.TalosClusterCNI{}) {
 		return errors.New("spec.cni is fixed once the cluster exists and cannot be removed")
-	}
-
-	// A whole-object write that omits spec.cni.cilium, or sends cni as {}, reads the same after
-	// defaulting as one that means to keep the values, so the omission is refused and clearing
-	// stays explicit: spec.cni.cilium as {} (what `ichor apply cni-values` with an empty file writes).
-	if stored, _ := ciliumUserValues(oldObj); len(stored) != 0 && newObj.Spec.CNI.Cilium == nil {
-		return errors.New("this update would drop spec.cni.cilium and the Cilium values in it; keep spec.cni.cilium.values, " +
-			"or set spec.cni.cilium to {} (`ichor apply cni-values` with an empty file) to clear them on purpose")
 	}
 
 	return nil

@@ -59,21 +59,6 @@ var _ = Describe("TalosCluster Webhook: removing an immutable field", func() {
 		Expect(err).To(MatchError(ContainSubstring("spec.cni is fixed once the cluster exists")))
 	})
 
-	It("refuses an update that drops spec.cni.cilium while it holds values, and allows clearing it as {}", func() {
-		old := withNetworkAndCNI()
-		old.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{"hubble":{"enabled":true}}`)}}
-
-		dropped := old.DeepCopy()
-		dropped.Spec.CNI.Cilium = nil
-		_, err := v.ValidateUpdate(ctx, old, dropped)
-		Expect(err).To(MatchError(ContainSubstring("would drop spec.cni.cilium")))
-
-		cleared := old.DeepCopy()
-		cleared.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{}
-		_, err = v.ValidateUpdate(ctx, old, cleared)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
 	It("allows setting spec.network or spec.cni on a cluster that had neither", func() {
 		_, err := v.ValidateUpdate(ctx, newTestCluster(), withNetworkAndCNI())
 		Expect(err).NotTo(HaveOccurred())

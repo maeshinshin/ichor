@@ -111,6 +111,16 @@ var _ = Describe("Cilium values gate on TalosCluster", func() {
 			Expect(err).To(MatchError(ContainSubstring("talosclusters/cilium-values")))
 		})
 
+		It("refuses a holder of the verb who drops spec.cni.cilium, and tells them to write {}", func() {
+			err := edit(valueAdmin, func(c *ichorv1alpha1.TalosCluster) { c.Spec.CNI.Cilium = nil })
+			Expect(err).To(MatchError(ContainSubstring("would drop spec.cni.cilium")))
+			Expect(err).NotTo(MatchError(ContainSubstring("talosclusters/cilium-values")))
+		})
+
+		It("admits a holder of the verb who clears the values with spec.cni.cilium as {}", func() {
+			Expect(edit(valueAdmin, func(c *ichorv1alpha1.TalosCluster) { c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{} })).To(Succeed())
+		})
+
 		It("admits an unrelated edit by an operator when the values are unchanged", func() {
 			Expect(edit(operator, func(c *ichorv1alpha1.TalosCluster) { c.Labels = map[string]string{"a": "b"} })).To(Succeed())
 		})

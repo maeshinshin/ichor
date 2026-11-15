@@ -45,6 +45,14 @@ command does. Each item is described where it is listed below.
   component settings in it need machines on Talos 1.14 or later. A patch you
   wrote for a bond, bridge or other link is the exception to "once each": see
   Typed configuration.
+- **A client older than this release cannot write a patch through `PatchService`.**
+  `Patch.documents` is deprecated and never set; `Patch.config` is the patch's
+  `spec.config` as JSON. A create, update or preview that sets `documents`, or that
+  leaves `config` out, is refused with a message that names `config`, so an older
+  browser tab or CLI can no longer save over a patch and clear it: reload the page, or
+  update the CLI. An older client that only reads gets patches with no documents.
+  A newer ichor-ui serves its own page, so only a tab left open across the upgrade
+  is affected, and `ichor` is installed with the release it talks to.
 - **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
   flags, and `-o FILE` became `--out FILE` (CLI).
 - **A `TalosCluster` whose endpoint type is `dns` or `loadBalancer`** still
@@ -518,19 +526,27 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
-- The Configuration page has a field search. Search fields opens a dialog over
-  every setting of a patch's `spec.config`, by name, path or description; a row
-  shows the setting's path in `spec.config`, its type and Talos's description, and
-  choosing it puts the setting in the patch, in a new document of its kind if there is
-  none. A setting that more than one Talos document spells is one row, not one for
-  each spelling. Each chosen setting is edited with an `Input`, a `Switch`, a
-  `Select` where Talos lists the allowed values of a string field, or a JSON
-  `Textarea` for an object, array or map. The document's own JSON `Textarea` and the
-  kind `Select` still work, and the kind `Select` now shows a kind the search added.
-  The index is built by the UI's make targets (`make ui-fieldindex`) and ships in
-  the UI bundle: ichor-ui's role and the CRDs are unchanged. `KubeStaticPodConfig`
-  has a row for the collection and one for its key, and none for the fields of the
-  `Pod` inside it.
+- The Configuration page edits a patch's `spec.config` through a field search, with no
+  document kind to pick. Search settings opens a dialog over every setting of
+  `spec.config`, by name, path or description; a row shows the setting's path, its type
+  and Talos's description. Choosing one puts it in the patch, and a setting in a map
+  asks for the key it is under (the volume's name, the module's name); choosing the
+  same row again adds another entry, so a patch can hold two user volumes or two kernel
+  modules. A setting is edited with an `Input`, a `Switch`, a `Select` where Talos
+  lists the allowed values of a string field, or a JSON `Textarea` for an object,
+  array or map, and the whole `spec.config` is one JSON `Textarea` under them that
+  edits the same object. A setting `spec.config` does not carry is refused by its path
+  when you save. The kind `Select`, the six hand-written kinds and the sysctl rows are
+  gone. The search no longer matches a Talos document's kind name, since a row has no
+  document. The index is built by the UI's make targets (`make ui-fieldindex`) and
+  ships in the UI bundle, 1,197 rows and no longer carrying the document of a row:
+  ichor-ui's role and the CRDs are unchanged. `KubeStaticPodConfig` has a row for the
+  collection and one for its key, and none for the fields of the `Pod` inside it.
+  The Config column of the patch list shows the sections a patch sets.
+- `PatchService` carries a patch's `spec.config` as JSON in `Patch.config`, and no
+  longer converts to and from Talos documents. `Patch.documents` is deprecated and
+  never set (see the upgrade notes). `ichor get patches` lists the sections of a patch's
+  config and `ichor describe patch` prints it.
 - The nodes tile badge counts the nodes that are not ready, and the node rows
   and the node page name a Ready condition's reason, as the list does.
 - An API server restart is not counted as a reboot waiting.

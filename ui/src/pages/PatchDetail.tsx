@@ -2,7 +2,7 @@ import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EyeIcon, FileCogIcon, InfoIcon, LoaderCircleIcon, PlusIcon, SearchIcon } from 'lucide-preact'
+import { EyeIcon, FileCogIcon, InfoIcon, LoaderCircleIcon, SearchIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -24,11 +24,10 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
 import { t, type Key } from '@/lib/i18n'
-import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
-import { defaultDocument, previewKey } from '@/lib/patchDocs'
+import { FieldInput } from '@/components/FieldInput'
+import { previewKey } from '@/lib/patchDocs'
 import { FieldSearchDialog } from '@/components/FieldSearchDialog'
-import { loadFieldIndex } from '@/lib/fieldIndex'
-import { pickField, requiredFields, rowKind, type FieldRow } from '@/lib/fieldSearch'
+import { pickField, removeField, renameKey, settle, type Chosen, type FieldRow } from '@/lib/fieldSearch'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
@@ -67,7 +66,7 @@ function layerKeyOf(layer: ConfigLayer): LayerKey {
   }
 }
 
-let nextDocId = 1
+let nextChosenId = 1
 
 // PatchDetail is both the create form (/config/new, name
 // undefined) and the edit form (/config/:name) for a
@@ -91,7 +90,9 @@ export function PatchDetail({ name }: { name?: string }) {
   const [role, setRole] = useState('')
   const [labelSelectorText, setLabelSelectorText] = useState(stringifyLabelSelector(undefined))
   const [machineRef, setMachineRef] = useState('')
-  const [documents, setDocuments] = useState<DocItem[]>([])
+  // spec.config as JSON text, and the settings chosen in the search, each edited over that same text.
+  const [config, setConfig] = useState('{}')
+  const [chosen, setChosen] = useState<Chosen[]>([])
   const [searching, setSearching] = useState(false)
 
   const [saveError, setSaveError] = useState<ErrorShape | null>(null)
@@ -134,7 +135,7 @@ export function PatchDetail({ name }: { name?: string }) {
         setLayer(p.layer)
         setPriority(p.priority)
         applyTargetFields(targetFieldsFor(layerKeyOf(p.layer), p.target))
-        setDocuments(p.documents.map((d) => ({ id: nextDocId++, kind: d.kind, document: d.document })))
+        setConfig(prettyConfig(p.config))
         setLoaded(true)
       },
       (err) => {
@@ -183,7 +184,7 @@ export function PatchDetail({ name }: { name?: string }) {
       layer,
       priority,
       target,
-      documents: documents.map((d) => ({ kind: d.kind, document: d.document })),
+      config,
     }
   }
 
@@ -226,19 +227,21 @@ export function PatchDetail({ name }: { name?: string }) {
     }
   }
 
-  function addDocument() {
-    setDocuments((prev) => [...prev, { id: nextDocId++, kind: 'SysctlConfig', document: defaultDocument('SysctlConfig'), fresh: true }])
+  // Choosing a search row puts its setting among the chosen ones; a setting in a map asks for its key.
+  function addFromSearch(row: FieldRow) {
+    const next = pickField(chosen, row, nextChosenId++)
+    setChosen(next)
+    setConfig(settle(config, next))
   }
-  // Choosing a search row puts its field in the patch, in a new document of its kind if there is none.
-  async function addFromSearch(row: FieldRow) {
-    const rows = await loadFieldIndex()
-    setDocuments((prev) => pickField(prev, row, requiredFields(rows, rowKind(row)), () => nextDocId++))
+  function nameKey(id: number, i: number, key: string) {
+    const next = renameKey(config, chosen, id, i, key)
+    setChosen(next.chosen)
+    setConfig(next.config)
   }
-  function removeDocument(id: number) {
-    setDocuments((prev) => prev.filter((d) => d.id !== id))
-  }
-  function updateDocument(id: number, next: Partial<DocItem>) {
-    setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, ...next } : d)))
+  function removeChosen(id: number) {
+    const next = removeField(config, chosen, id)
+    setChosen(next.chosen)
+    setConfig(next.config)
   }
 
   const currentKey = previewKey({
@@ -246,7 +249,7 @@ export function PatchDetail({ name }: { name?: string }) {
     layer,
     priority,
     target: `${role}|${machineRef}|${labelSelectorText}`,
-    documents,
+    config,
   })
   const previewFresh = previewedKey === currentKey
 
@@ -378,32 +381,36 @@ export function PatchDetail({ name }: { name?: string }) {
           </CardContent>
         </Card>
 
-        <Card id="documents" className="scroll-mt-section">
+        <Card id="config" className="scroll-mt-section">
           <CardHeader>
-            <CardTitle>{t('patch.documents')}</CardTitle>
-            <CardDescription>{t('patch.documentsHelp')}</CardDescription>
-            <CardAction className="flex gap-2">
+            <CardTitle>{t('patch.config')}</CardTitle>
+            <CardDescription>{t('patch.configHelp')}</CardDescription>
+            <CardAction>
               <Button size="sm" variant="outline" onClick={() => setSearching(true)}>
                 <SearchIcon data-icon="inline-start" aria-hidden="true" />
                 {t('patch.searchFields')}
               </Button>
-              <Button size="sm" variant="outline" onClick={addDocument}>
-                <PlusIcon data-icon="inline-start" aria-hidden="true" />
-                {t('patch.addDocument')}
-              </Button>
             </CardAction>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {documents.length === 0 && <EmptyNote icon={FileCogIcon}>{t('patch.noDocuments')}</EmptyNote>}
-            {documents.map((d) => (
-              <PatchDocumentCard
-                key={d.id}
-                doc={d}
-                startEditing={!!d.fresh}
-                onChange={(next) => updateDocument(d.id, next)}
-                onRemove={() => removeDocument(d.id)}
-              />
-            ))}
+          <CardContent>
+            <FieldGroup>
+              {chosen.length === 0 && config.trim() === '{}' && <EmptyNote icon={FileCogIcon}>{t('patch.noSettings')}</EmptyNote>}
+              {chosen.map((c) => (
+                <FieldInput
+                  key={c.id}
+                  chosen={c}
+                  config={config}
+                  onChange={setConfig}
+                  onKey={(i, key) => nameKey(c.id, i, key)}
+                  onRemove={() => removeChosen(c.id)}
+                />
+              ))}
+              <Field>
+                <FieldLabel htmlFor="patch-config-json">{t('patch.jsonLabel')}</FieldLabel>
+                <Textarea id="patch-config-json" rows={10} value={config} onInput={(e) => setConfig((e.target as HTMLTextAreaElement).value)} />
+                <FieldDescription>{t('patch.jsonHelp')}</FieldDescription>
+              </Field>
+            </FieldGroup>
           </CardContent>
         </Card>
 
@@ -511,6 +518,15 @@ export function PatchDetail({ name }: { name?: string }) {
       </div>
     </>
   )
+}
+
+// The config a patch comes with, laid out for the text box: the wire's JSON is one line.
+function prettyConfig(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
 }
 
 function DeleteButton({ namespace, name }: { namespace: string; name: string }) {

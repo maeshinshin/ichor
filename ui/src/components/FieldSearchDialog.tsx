@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { Badge } from '@/components/ui/badge'
 import { Command, CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { loadFieldIndex } from '@/lib/fieldIndex'
-import { rowDocPath, searchFields, type FieldRow } from '@/lib/fieldSearch'
+import { searchFields, type FieldRow } from '@/lib/fieldSearch'
 import { t } from '@/lib/i18n'
 
 // A search over every setting of a patch's config, by its path there. The query is
@@ -39,7 +38,6 @@ export function FieldSearchDialog({ open, onOpenChange, onSelect }: { open: bool
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex items-center gap-2">
                     <span className="truncate font-medium">{h.path}</span>
-                    {!rowDocPath(h) && <Badge variant="outline">{t('patch.searchKindRow')}</Badge>}
                     {h.type && <span className="text-xs text-muted-foreground">{h.type}</span>}
                   </span>
                   {h.description && <span className="line-clamp-2 text-xs text-muted-foreground">{h.description}</span>}

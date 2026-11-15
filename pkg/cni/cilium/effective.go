@@ -39,8 +39,8 @@ var OwnedKeys = map[string]string{
 	"securityContext.capabilities.cleanCiliumState": "the Talos guide fixes the capability set Cilium runs with",
 	"cgroup.autoMount.enabled":                      "Talos mounts cgroup2 itself, so Cilium must not",
 	"cgroup.hostRoot":                               "Talos mounts cgroup2 at /sys/fs/cgroup",
-	keyServiceHost:                                  "the KubePrism address, because spec.cni.kubeProxy is replaced" + kubePrismEnabledNote,
-	keyServicePort:                                  "the KubePrism port, because spec.cni.kubeProxy is replaced" + kubePrismEnabledNote,
+	keyServiceHost:                                  "the KubePrism address" + kubePrismWhy,
+	keyServicePort:                                  "the KubePrism port" + kubePrismWhy,
 	"kubeProxyReplacement":                          "owned by the kube-proxy switch, spec.cni.kubeProxy",
 	"tunnelProtocol":                                "owned by spec.cni.tunnel, which is immutable",
 
@@ -56,7 +56,8 @@ var OwnedKeys = map[string]string{
 	keySecretsBackend:  clusterWideSecretsReason,
 }
 
-const kubePrismEnabledNote = "; with kube-proxy enabled Ichor does not set it and you may"
+const kubePrismWhy = ", because spec.cni.kubeProxy is replaced; " +
+	"with kube-proxy enabled Ichor does not set it and you may"
 
 const clusterWideSecretsReason = "the Cilium agent, a privileged pod on every node, may read Secrets only in " +
 	"cilium-secrets, not cluster-wide"

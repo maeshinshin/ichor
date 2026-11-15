@@ -252,8 +252,8 @@ func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 	user := map[string]any{
 		keyIPAM:                map[string]any{keyMode: modeKubernetes},
 		"kubeProxyReplacement": "true",
-		"k8sServiceHost":       valLocalhost,
-		"k8sServicePort":       "7445", // a string, as a CLI --set would store it
+		keyServiceHost:         valLocalhost,
+		keyServicePort:         "7445", // a string, as a CLI --set would store it
 	}
 
 	live, err := LiveValuesFromUser(user)
@@ -282,7 +282,7 @@ func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 // With kube-proxy enabled Ichor sets no KubePrism address (ADR 0159), so a live one has no Ichor value to
 // conflict with. The takeover still removes it, which TestDiffLive_EnabledTakeoverRemovesKubePrismEnv pins.
 func TestOwnedKeyConflicts_EnabledModeKubePrismHasNoIchorValue(t *testing.T) {
-	live, err := LiveValuesFromUser(map[string]any{keyServiceHost: "10.0.0.1", keyServicePort: "6443"})
+	live, err := LiveValuesFromUser(map[string]any{keyServiceHost: apiHost, keyServicePort: "6443"})
 	if err != nil {
 		t.Fatal(err)
 	}

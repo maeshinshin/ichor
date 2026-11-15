@@ -28,10 +28,10 @@ split_test() {
   local d=$1 k=$2 n=$3 funcs suites files re=''
   suites=$(awk '/^func Test/{f=$2;sub(/\(.*/,"",f)} /RunSpecs\(/{print f}' "$d"/*_test.go | sort -u)
   funcs=$(grep -h '^func Test' "$d"/*_test.go | sed -E 's/^func (Test[A-Za-z0-9_]*)\(.*/\1/' |
-    sort | grep -vxF -e TestMain ${suites:+-e "$suites"} | awk -v k="$k" -v n="$n" 'NR%n==k' || true)
+    sort | grep -vxF -e TestMain ${suites:+-e "$suites"} | awk -v k="$k" -v n="$n" 'NR%n==k' || true) # a package with no plain Test funcs leaves grep nothing to print
   # shellcheck disable=SC2012
   mapfile -t sorted < <(ls -S "$d"/*_test.go)
-  files=$(grep -l '^var _ = Describe' "${sorted[@]}" || true)
+  files=$(grep -l '^var _ = Describe' "${sorted[@]}" || true) # a package with no Ginkgo specs matches nothing
   if [ -n "$files" ]; then
     re=$(echo "$files" | xargs -n1 basename | sed 's/\.go$//' | awk -v k="$k" -v n="$n" \
       '{r=(NR-1)%(2*n); if ((r<n?r:2*n-1-r)==k) {printf "%s%s",s,$0; s="|"}}')
@@ -94,8 +94,9 @@ LABELS=()
 
 # shellcheck disable=SC2329
 cleanup() { # kill the shard waiters, then delete only the Jobs this run created, by explicit name (their pods go with them)
-  jobs -p | xargs -r kill 2>/dev/null || true
-  [ ${#JOBS[@]} -eq 0 ] || k delete job --ignore-not-found --wait=false "${JOBS[@]}" >/dev/null || true
+  jobs -p | xargs -r kill 2>/dev/null || true # a waiter that already finished is not there to kill
+  [ ${#JOBS[@]} -eq 0 ] || k delete job --ignore-not-found --wait=false "${JOBS[@]}" >/dev/null ||
+    echo "remote-gate: could not delete the Jobs this run created; delete them by name: ${JOBS[*]}" >&2
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
@@ -139,20 +140,23 @@ EOF
 # Statuses: PASS, FAIL (tests), INFRA (<step>), NOT RUN (queued | no pod | apply failed).
 shard() {
   local name=ichor-gate-$RUN-$1 pod='' t0 t1 phase code last deadline
-  set +e
+  set +e # a background subshell: every path below must write the status file, so nothing may exit early
   status() { echo "$2 $(($(date +%s) - t0))s" >"$OUT/$1.status"; }
   t0=$(date +%s)
   deadline=$((t0 + 3660)) # the Job's activeDeadlineSeconds is 3600 and counts pending time too
   job "$name" "$2" "$3" "$4" "$5" | k apply -f - >/dev/null || { status "$1" "NOT RUN (apply failed)"; return; }
+  # the pod does not exist yet, so every early poll fails; the deadline ends the wait
   until pod=$(k get pod -l job-name="$name" -o name 2>/dev/null) && [ -n "$pod" ]; do
     [ "$(date +%s)" -lt "$deadline" ] || { status "$1" "NOT RUN (no pod)"; return; }
     sleep 2
   done
   last=$t0
+  # a failed poll leaves phase empty, which the case below records as NOT RUN
   while phase=$(k get "$pod" -o jsonpath='{.status.phase}' 2>/dev/null) && [ "$phase" = Pending ]; do
     [ "$(date +%s)" -lt "$deadline" ] || break
     if [ $(($(date +%s) - last)) -ge 180 ]; then
       last=$(date +%s)
+      # the message only decorates the progress line
       echo "$1: still queued after $((last - t0))s: $(k get "$pod" -o jsonpath='{.status.conditions[?(@.type=="PodScheduled")].message}' 2>/dev/null)"
     fi
     sleep 5
@@ -166,7 +170,9 @@ shard() {
   esac
   k exec "$pod" -- touch /w/ready
   k logs -f "$pod" >"$OUT/$1.log" 2>&1
+  # an empty code reads as a plain FAIL below
   code=$(k get "$pod" -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null)
+  # a wait that times out or errors is a FAIL too
   if k wait --for=condition=complete "job/$name" --timeout=120s >/dev/null 2>&1; then
     echo "PASS $(($(date +%s) - t1))s (+$((t1 - t0))s queued for a node)" >"$OUT/$1.status"
   elif [ "$code" = 75 ]; then
@@ -202,15 +208,17 @@ wait
 fails=0
 echo "== remote gate: $(git rev-parse --short HEAD), $(($(date +%s) - START))s wall =="
 for l in "${LABELS[@]}"; do
-  s=$(cat "$OUT/$l.status" 2>/dev/null || echo "NOT RUN (no status)")
+  s=$(cat "$OUT/$l.status" 2>/dev/null || echo "NOT RUN (no status)") # a missing status file is reported as NOT RUN
   printf '%-8s %s\n' "$l" "$s"
   [ "${s%% *}" = PASS ] || fails=1
 done
 if [ $fails = 1 ]; then
   echo "== failing tests =="
+  # a shard with no log or no failing test prints nothing; the status table above already failed the run
   for l in "${LABELS[@]}"; do grep -hE -e '--- FAIL' -e '\[FAIL\]' -e $'FAIL\t' "$OUT/$l.log" 2>/dev/null || true; done | sort -u
   echo "== failure messages (Ginkgo [FAILED] blocks; the full logs are in $OUT/) =="
   for l in "${LABELS[@]}"; do
+    # same: a shard with no log or no failure block prints nothing
     sed 's/\x1b\[[0-9;]*m//g' "$OUT/$l.log" 2>/dev/null | grep -E -A8 -e '\[FAILED\]' -e '^\s+panic:' | head -80 | sed "s/^/$l: /" || true
   done
 fi

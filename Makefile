@@ -191,7 +191,7 @@ setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs 
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the cluster setup-test-e2e provisioned; a no-op if there is nothing to tear down
-	@KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster destroy --name ichor-test-e2e 2>/dev/null || true
+	@KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster destroy --name ichor-test-e2e || echo "cleanup-test-e2e: talosctl cluster destroy failed (expected when setup-test-e2e never created the cluster); look for a leftover cluster" >&2
 
 .PHONY: lint
 lint: golangci-lint proto-lint ## Run golangci-lint and buf lint (proto-lint is a prerequisite so CI catches proto drift)
@@ -341,7 +341,7 @@ KUBECTL_SSA = --server-side --force-conflicts --field-manager=ichor-installer
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
-	@crds="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
+	@crds="$$( "$(KUSTOMIZE)" build config/crd )"; \
 	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply $(KUBECTL_SSA) -f -; else echo "No CRDs to install; skipping."; fi
 
 .PHONY: deploy
@@ -409,18 +409,19 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 	@# The custom build replaces the versioned binary, so the symlink stays valid and go-install-tool skips next time.
-	@test -f .custom-gcl.yml && [ ! -f "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION).custom" ] && { \
+	@if [ -f .custom-gcl.yml ] && [ ! -f "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION).custom" ]; then \
 		echo "Building custom golangci-lint with plugins..." && \
 		$(GOLANGCI_LINT) custom --destination $(LOCALBIN) --name golangci-lint-custom && \
 		mv -f $(LOCALBIN)/golangci-lint-custom "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)" && \
 		touch "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION).custom"; \
-	} || true
+	fi
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
 # $2 - package url which can be installed
 # $3 - specific version of package
 define go-install-tool
+@# readlink fails when the tool is not installed yet, which the install below handles
 @[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \
 set -e; \
 package=$(2)@$(3) ;\
@@ -433,7 +434,7 @@ ln -sf "$$(realpath "$(1)-$(3)")" "$(1)"
 endef
 
 define gomodver
-$(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
+$(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1))
 endef
 
 ##@ Helm Deployment
@@ -451,6 +452,7 @@ HELM_EXTRA_ARGS ?=
 
 .PHONY: install-helm
 install-helm: ## Install the latest version of Helm.
+	@# command -v fails when helm is absent, which the install below handles
 	@command -v $(HELM) >/dev/null 2>&1 || { \
 		echo "Installing Helm..." && \
 		curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | bash; \
@@ -524,6 +526,7 @@ proto-lint: ## Lint the proto/ sources with buf.
 
 .PHONY: proto-breaking
 proto-breaking: ## Check proto/ for breaking changes against main; a no-op until proto/ lands on main.
+	@# cat-file fails when main has no proto/ yet, which is the no-op branch below
 	@if git cat-file -e main:proto 2>/dev/null; then \
 		buf breaking proto --against '.git#branch=main,subdir=proto'; \
 	else \

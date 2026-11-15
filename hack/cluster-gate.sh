@@ -40,7 +40,7 @@ export PATH=/cache/tools:$PATH GOMODCACHE=/cache/gomod GOCACHE=/cache/gocache
 # The tools need a git checkout: claimcheck, noticecheck and thirdpartynotices shell out to git.
 git init -q && echo /bin >> .git/info/exclude && git add -A && git -c user.name=ichor-gate -c user.email=gate@example.invalid commit -q -m "gate snapshot @SHA@"
 go version; helm version --short; kubectl version --client; buf --version
-set +e
+set +e # both steps run, and the last line of this script fails unless both exited 0
 s=$(date +%s)
 make test; t=$?
 echo "GATE_STEP test exit=$t secs=$(( $(date +%s) - s ))"
@@ -145,7 +145,7 @@ ARCHIVE=bin/cluster-gate/$JOB.tgz
 created=
 cleanup() {
   rm -f "$ARCHIVE"
-  [ -z "$created" ] || kc delete job "$JOB" --ignore-not-found --cascade=foreground --wait=true >/dev/null 2>&1 \
+  [ -z "$created" ] || kc delete job "$JOB" --ignore-not-found --cascade=foreground --wait=true >/dev/null \
     || echo "cluster-gate: could not delete Job $JOB; delete it by name" >&2
 }
 trap cleanup EXIT
@@ -161,6 +161,7 @@ fi
 
 POD=
 t0=$(date +%s)
+# the pod does not exist yet, so every early poll fails; the timeout below ends the wait
 until POD=$(kc get pods -l job-name="$JOB" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) && [ -n "$POD" ]; do
   [ $(($(date +%s) - t0)) -lt 900 ] || { echo "cluster-gate: no pod for $JOB after 900s" >&2; exit 1; }
   sleep 3
@@ -172,6 +173,7 @@ kc exec "$POD" -c gate -- touch /work/ready
 # job_state: "True/" for Complete, "/True" for Failed, "/" while running. A dropped connection reads as running.
 job_state() { kc get job "$JOB" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}/{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || true; }
 
+# a dropped stream is not a failed gate: the Job's own state below decides
 kc logs -f "$POD" -c gate 2>&1 | tee "$LOG" || true
 state=$(job_state)
 case $state in True/* | */True) ;; *) echo "cluster-gate: log stream ended before the Job did; waiting for the Job" ;; esac
@@ -180,17 +182,20 @@ for _ in $(seq 1 $(((DEADLINE + 600) / 10))); do
   sleep 10
   state=$(job_state)
 done
+# the verdict comes from the Job's state, not from this fetch
 kc logs "$POD" -c gate >"$LOG" 2>&1 || true
 
 case $state in
   True/*) verdict=0; detail=PASS ;;
-  */True) verdict=1; detail="FAIL ($(kc get job "$JOB" -o jsonpath='{.status.conditions[?(@.type=="Failed")].reason}' 2>/dev/null || true))" ;;
+  */True) verdict=1; detail="FAIL ($(kc get job "$JOB" -o jsonpath='{.status.conditions[?(@.type=="Failed")].reason}' 2>/dev/null || true))" ;; # the reason only decorates a verdict already FAIL
   *) verdict=1; detail="UNKNOWN (no terminal Job condition; check the Job by name)" ;;
 esac
 
 echo "== cluster gate: $SHORT, $(($(date +%s) - START))s wall, $JOB =="
+# no match when the pod died before printing a step; the verdict above does not depend on it
 grep -E '^GATE_(STEP|SECONDS)' "$LOG" || true
 if [ "$verdict" != 0 ]; then
+  # no match when the failure was not a test failure; the verdict is already FAIL
   grep -hE -e '--- FAIL' -e '\[FAIL\]' -e $'FAIL\t' "$LOG" | sort -u || true
 fi
 echo "cluster-gate: $detail (log $LOG)"

@@ -34,6 +34,7 @@ die() {
 }
 
 for tool in curl yq cosign tar sha256sum sort make go; do
+	# command -v fails when the tool is absent, which die reports
 	command -v "$tool" >/dev/null 2>&1 || die "$tool not found (run inside nix develop)"
 done
 
@@ -92,9 +93,14 @@ done
 # pkg/release/compat.go states the Kubernetes range Cilium tests this minor with, from the release's
 # own matrix. A patch that changes the matrix needs a human to read it.
 k8s_list() {
-	curl -fsSL "https://raw.githubusercontent.com/cilium/cilium/v$1/$k8s_matrix" | yq '[.include[]."k8s-version"] | sort | join(" ")'
+	# a pipe would hide a failed fetch (sh has no pipefail), and two failed fetches would compare equal
+	matrix=$(curl -fsSL "https://raw.githubusercontent.com/cilium/cilium/v$1/$k8s_matrix") || die "cannot fetch the Kubernetes matrix of Cilium v$1"
+	echo "$matrix" | yq '[.include[]."k8s-version"] | sort | join(" ")'
 }
-[ "$(k8s_list "$old")" = "$(k8s_list "$new")" ] ||
+# assigned first: a failure inside "$(...)" in a test is discarded, an assignment's is not
+old_k8s=$(k8s_list "$old")
+new_k8s=$(k8s_list "$new")
+[ "$old_k8s" = "$new_k8s" ] ||
 	die "Cilium v$new tests other Kubernetes versions than v$old ($k8s_matrix); update pkg/release/compat.go by hand: nothing was changed"
 
 # Everything is checked: write.

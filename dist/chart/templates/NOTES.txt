@@ -32,11 +32,6 @@ To learn more about the release, try:
   $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
   $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
 
-{{- if and .Values.ichorUI.enabled (not .Values.ichorUI.oidc.enabled) (not .Values.ichorUI.users.enabled) }}
-
-NOTE: ichor-ui has no sign-in, so it serves read-only calls only. Enable ichorUI.users or ichorUI.oidc
-to make changes in it.
-{{- end }}
 
 On a cluster with no CNI the chart refuses to install (preflight.cni): run
 `ichor bootstrap cni` first, which installs Ichor Cilium, then install again.

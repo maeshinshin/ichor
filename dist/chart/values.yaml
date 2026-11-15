@@ -221,12 +221,11 @@ ichorUI:
   ##
   port: 8443
 
-  ## With neither ichorUI.oidc nor ichorUI.users enabled there is no sign-in, and ichor-ui serves
-  ## read-only calls only; there is no way to let it make changes without one. (The value
-  ## ichorUI.allowUnauthenticated that did is removed, and setting it to true fails the render.)
+  ## ichor-ui does not start without a sign-in, so with ichorUI.enabled the render fails unless
+  ## ichorUI.users.enabled or ichorUI.oidc.enabled is true. (The value ichorUI.allowUnauthenticated
+  ## that left it open is removed, and setting it to true fails the render.)
   ##
-  ## OIDC login with Kubernetes impersonation. Off by default: ichor-ui then serves read-only
-  ## calls only. On: every request needs an ID token from this
+  ## OIDC login with Kubernetes impersonation. Off by default: turn on this or users below. On: every request needs an ID token from this
   ## issuer, and ichor-ui calls the Kubernetes API as that user, so RBAC and audit apply per
   ## user. The client is public (authorization code + PKCE in the browser); register the UI's
   ## origin as a redirect URI. There is no client secret.

@@ -43,7 +43,7 @@ const (
 )
 
 func TestBuiltinUserRoles(t *testing.T) {
-	off := renderChartWithValues(t, "ichor")
+	off := renderChartWithValues(t, "ichor", "ichorUI.enabled=false")
 	for _, n := range builtinUserRoles {
 		if find(off, kindClusterRole, "ichor-"+n) != nil {
 			t.Errorf("ClusterRole ichor-%s rendered with ichorUI.users.enabled=false", n)

@@ -80,6 +80,8 @@ func TestUIServesHTTPSOnlyByDefault(t *testing.T) {
 		t.Errorf("livenessProbe = %v, want a tcpSocket on 8443", live)
 	}
 
+	delete(ports, "internal") // Ichor users' discovery listener, for the kube-apiserver and not the network
+
 	if len(ports) != 1 || ports["https"] != 8443 {
 		t.Errorf("Service ports = %v, want https 8443 only", ports)
 	}
@@ -121,6 +123,8 @@ func TestUIOperatorCertificateAndRemovedPlaintextPort(t *testing.T) {
 	if !hasMount(c, "tls") || !hasMount(c, "ui-tls") {
 		t.Errorf("mounts = %v, want tls and ui-tls", c["volumeMounts"])
 	}
+
+	delete(ports, "internal") // Ichor users' discovery listener, for the kube-apiserver and not the network
 
 	if len(ports) != 1 || ports["https"] != 8443 {
 		t.Errorf("Service ports = %v, want https 8443 only", ports)

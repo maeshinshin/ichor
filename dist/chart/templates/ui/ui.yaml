@@ -1,6 +1,9 @@
 {{- if .Values.ichorUI.allowUnauthenticated }}
 {{- fail "ichorUI.allowUnauthenticated was removed and is refused: ichor-ui no longer runs without a sign-in. Remove it from your values (helm upgrade --reuse-values keeps the old value: add --set ichorUI.allowUnauthenticated=null) and turn sign-in on with ichorUI.users.enabled=true and ichorUI.users.externalURL=https://..., or with ichorUI.oidc (docs/guides/users-and-login.md)" }}
 {{- end }}
+{{- if and .Values.ichorUI.enabled (not .Values.ichorUI.users.enabled) (not .Values.ichorUI.oidc.enabled) }}
+{{- fail "ichorUI.enabled needs a sign-in and none is configured: ichor-ui does not start without one. Set ichorUI.users.enabled=true with ichorUI.users.externalURL=https://... (Ichor's own users: needs Talos v1.14 or later; then create the first administrator with `ichor create user admin --role admin --generate --bootstrap`, set spec.authentication.ichor on the TalosCluster and run `ichor rollout config`), or ichorUI.oidc.enabled=true with ichorUI.oidc.issuer, clientId and impersonate.users and groups (an external identity provider). To install without ichor-ui, set ichorUI.enabled=false. A release that ran ichor-ui without a sign-in must set one of these on its next helm upgrade (docs/guides/users-and-login.md)" }}
+{{- end }}
 {{- if .Values.ichorUI.enabled }}
 apiVersion: apps/v1
 kind: Deployment

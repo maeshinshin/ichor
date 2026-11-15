@@ -37,11 +37,11 @@ func TestPackagedChart(t *testing.T) {
 
 	archive := filepath.Join(dir, "ichor-9.8.7.tgz")
 
-	if out, err := exec.Command("helm", "lint", archive).CombinedOutput(); err != nil {
+	if out, err := exec.Command("helm", "lint", archive, "--set", usersOn, "--set", usersURL).CombinedOutput(); err != nil {
 		t.Fatalf("helm lint %s: %v\n%s", archive, err, out)
 	}
 
-	out, err := exec.Command("helm", "template", "ichor", archive).CombinedOutput()
+	out, err := exec.Command("helm", "template", "ichor", archive, "--set", usersOn, "--set", usersURL).CombinedOutput()
 	if err != nil {
 		t.Fatalf("helm template %s: %v\n%s", archive, err, out)
 	}

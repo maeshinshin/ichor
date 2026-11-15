@@ -119,7 +119,7 @@ func TestChartInvariants(t *testing.T) {
 			checkCRDsMatchConfig(t, release, docs)
 			checkKubeProxySwitchPolicy(t, release, docs)
 			checkUIBackendRBACIsSeparate(t, release, docs)
-			checkUIBackendRBACMatchesConfig(t, release, docs, false)
+			checkUIBackendRBACMatchesConfig(t, release, docs, true)
 			checkControllerRBACMatchesConfig(t, release, docs)
 			checkMonitoringOptionsOffByDefault(t, release, docs)
 		})
@@ -282,11 +282,25 @@ func renderChartWithValuesErr(release string, sets ...string) ([]byte, error) {
 // helmTemplate runs "helm template" on this directory's chart with extra flags and --set overrides.
 func helmTemplate(release string, flags, sets []string) ([]byte, error) {
 	args := append([]string{"template", release, "."}, flags...)
+	sets = withSignIn(sets)
 	for _, s := range sets {
 		args = append(args, "--set", s)
 	}
 
 	return exec.Command("helm", args...).CombinedOutput()
+}
+
+// withSignIn adds Ichor's users to a set of values that says nothing about sign-in: the chart refuses
+// ichorUI.enabled with none, so a test of anything else would render nothing. A test that sets
+// ichorUI.enabled, ichorUI.users.enabled or ichorUI.oidc.enabled gets exactly what it set.
+func withSignIn(sets []string) []string {
+	for _, s := range sets {
+		if strings.HasPrefix(s, "ichorUI.users.enabled") || strings.HasPrefix(s, "ichorUI.oidc.enabled") || strings.HasPrefix(s, "ichorUI.enabled") {
+			return sets
+		}
+	}
+
+	return slices.Concat([]string{usersOn, usersURL}, sets)
 }
 
 // decodeYAMLDocs decodes every "---"-separated document in data into a generic map,
@@ -668,7 +682,7 @@ func impersonationRules(role map[string]any) map[string][]string {
 // internal port, the volumes, the credentials Secret, the narrowed impersonate groups and the
 // Role rules, and refuses to render without an external URL.
 func TestUIUsers(t *testing.T) {
-	off := renderChartWithValues(t, "ichor")
+	off := renderChartWithValues(t, "ichor", "ichorUI.enabled=false")
 	if find(off, "Secret", "ichor-user-credentials") != nil {
 		t.Error("the credentials Secret renders by default")
 	}

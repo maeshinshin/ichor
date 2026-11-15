@@ -45,6 +45,11 @@ command does. Each item is described where it is listed below.
 - **A JSON patch that removes `spec.network` or `spec.cni`** from a stored
   `TalosCluster` is refused, and so is an update that sets the `unmanaged`
   preset without the adoption annotation (Cluster).
+- **An update that leaves a `TalosCluster` with no `spec.cni.cilium` while it
+  held Cilium values** is refused. A whole-object `kubectl apply` or `replace`
+  with `cni: {}` or without the `cilium` block used to discard the values with no
+  message. Keep the values, or write `cilium: {}` to clear them on purpose
+  (Cluster, ADR 0163).
 - **Applying the CRDs yourself** with `kubectl apply` needs `--server-side`;
   they are too large for client-side apply (Typed configuration).
 
@@ -277,6 +282,13 @@ command does. Each item is described where it is listed below.
   `TalosCluster` is refused. The immutability rules did not run on a field that
   was absent, so the removal went through. Setting a field that was unset is
   still allowed.
+- An update that leaves a `TalosCluster` with no `spec.cni.cilium` while the
+  stored object held Cilium values is refused, and the message says so. Sending
+  `cni: {}`, or a `cni` without the `cilium` block, reads the same after the
+  defaults fill in `preset` and `kubeProxy`, and used to discard the values.
+  `spec.cni.cilium: {}` clears them on purpose, which is what `ichor apply
+  cni-values` with an empty file writes. A cluster with no values is not
+  affected (ADR 0163).
 - An update that makes `spec.cni.preset` `unmanaged` is refused unless the
   object carries the adoption annotation, as create already was. A JSON patch
   could do it to a stored cluster without one, and it stops Ichor's Cilium

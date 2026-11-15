@@ -488,7 +488,7 @@ func (st *adoptState) finishAdopt(ctx context.Context, deps adoptDeps, clusterNa
 	return err == nil, err
 }
 
-// loadAdoption reads the TalosCluster and machines (or discovers them), applies the Talos v1.12
+// loadAdoption reads the TalosCluster and machines (or discovers them), applies the Talos v1.14
 // gate before anything else is read, and reads each approved node's configuration and facts.
 func loadAdoption(ctx context.Context, clusterName, namespace string, deps adoptDeps) (*adoptState, error) {
 	st := &adoptState{}
@@ -558,7 +558,7 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		}
 	}
 
-	// The Talos v1.12 gate runs before anything is read or written.
+	// The Talos v1.14 gate runs before anything is read or written.
 	if err := gateTalosVersions(ctx, approved, deps.DialTalos); err != nil {
 		return nil, err
 	}
@@ -984,14 +984,14 @@ func (st *adoptState) announceInstallCilium(say adoptSay) {
 		"then Ichor is installed, then the cluster is adopted with the managed cilium preset", cilium.ChartVersion, tunnel, st.kubeProxy)
 }
 
-// adoptMinContract is the lowest version contract adopt takes. Ichor turns sign-in on by default
+// adoptMinContract is the lowest version contract adopt takes. Ichor's sign-in is always on
 // (spec.authentication.ichor), and only v1.14 carries Ichor's issuer through KubeAuthenticationConfig.
 const adoptMinContract = "v1.14"
 
 // refuseOldContract says why adopt does not take contract, and what the operator does next. Nothing
 // is written before the contract is chosen, so the refusal changes nothing on the cluster.
 func refuseOldContract(name, contract, running string) error {
-	reason := "Ichor turns sign-in on by default, and only " + adoptMinContract + " can carry its issuer (spec.authentication.ichor)"
+	reason := "Ichor's sign-in is always on, and only " + adoptMinContract + " can carry its issuer (spec.authentication.ichor)"
 
 	if semver.Compare(semver.MajorMinor(running), adoptMinContract) < 0 {
 		return fmt.Errorf("adopt: %s runs Talos %s, which takes version contract %s, and adopt takes %s or later: %s. "+

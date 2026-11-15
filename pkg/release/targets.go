@@ -27,7 +27,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// The lowest releases an upgrade lists. Talos 1.12 is the adopt floor.
+// The lowest releases an upgrade lists. A cluster Ichor already manages can still run Talos 1.12: it was
+// adopted when that was the adopt floor (adopt takes v1.14 and later now).
 // Kubernetes 1.30.0 is the lowest release machinery pairs with Talos 1.12.
 const (
 	TalosFloor      = "v1.12.0"

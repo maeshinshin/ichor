@@ -54,11 +54,11 @@ func TestAdoptRefusesAContractBelowV114(t *testing.T) {
 // and the refusal comes before anything is written.
 func TestAdoptRefusesALegacyInstallBeforeWriting(t *testing.T) {
 	cp, wk := classAFixture(t, "v113")
-	env, deps := classAFlow(t, "v1.13.0", cp, wk)
+	env, deps := classAFlow(t, "v1.14.0", cp, wk)
 	deps.AssumeYes = true
 
 	err := runAdopt(context.Background(), "d1", testNamespace, deps)
-	if err == nil || !strings.Contains(err.Error(), "takes version contract v1.13") || !strings.Contains(err.Error(), "Nothing was written") {
+	if err == nil || !strings.Contains(err.Error(), "version contract v1.13") || !strings.Contains(err.Error(), "Nothing was written") {
 		t.Fatalf("runAdopt = %v, want the refusal of contract v1.13\n%s", err, env.stderr.String())
 	}
 
@@ -68,15 +68,15 @@ func TestAdoptRefusesALegacyInstallBeforeWriting(t *testing.T) {
 	}
 }
 
-// The v1.14 floor is the contract's and the v1.12 floor is each node's; the help says which is which.
-func TestAdoptHelpNamesBothFloors(t *testing.T) {
-	for _, want := range []string{"does not manage yet", adoptMinContract, adoptMinTalos} {
+// Both floors are v1.14 now, the contract's and each node's; the help says why.
+func TestAdoptHelpNamesTheFloorAndWhy(t *testing.T) {
+	for _, want := range []string{"v1.14 or later only", "Every node", "sign-in cannot be turned off", "KubeAuthenticationConfig"} {
 		if !strings.Contains(adoptCmd.Long, want) {
 			t.Errorf("adopt help lacks %q:\n%s", want, adoptCmd.Long)
 		}
 	}
 
-	if u := adoptCmd.Flags().Lookup(adoptFlagVersionContract).Usage; !strings.Contains(u, adoptMinContract) || strings.Contains(u, adoptMinTalos) {
+	if u := adoptCmd.Flags().Lookup(adoptFlagVersionContract).Usage; !strings.Contains(u, adoptMinContract) {
 		t.Errorf("--%s usage = %q", adoptFlagVersionContract, u)
 	}
 }

@@ -116,12 +116,15 @@ and --kube-api-server-url and --kube-api-tls-server-name set the Kubernetes API 
 users' kubeconfigs, as in ichor init (a Helm-managed Ichor is not touched, and takes these
 as chart values).
 
-A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
-control plane. adopt probes the version contract from that node (each minor from
-v1.12 up to the one it runs, keeping the one that differs least from the live
-configuration) and refuses a contract below v1.14, probed or named with
---version-contract. Every node adopt reads, in a new cluster or an existing one,
-must also run Talos v1.12 or later. Either refusal writes nothing.
+adopt takes Talos v1.14 or later only: sign-in cannot be turned off, and the
+kube-apiserver can trust Ichor's issuer only through the KubeAuthenticationConfig
+that Talos v1.14 carries. Every node adopt reads, in a new cluster or an existing
+one, must run Talos v1.14 or later, and a cluster Ichor does not manage yet gets the
+version contract adopt probes from its first control plane (each minor from v1.14
+up to the one it runs, keeping the one that differs least from the live
+configuration, so a configuration generated for an older contract is refused
+by name); a contract below v1.14 named with --version-contract is refused too. Either refusal says why and writes nothing. A cluster below v1.14 has to be
+upgraded first, with talosctl or your usual tool.
 
 The cluster's secrets are required: pass --secrets-bundle FILE, or
 --recover-secrets with --recover-from ADDRESS to read them from a control

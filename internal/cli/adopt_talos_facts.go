@@ -39,8 +39,14 @@ import (
 // cluster membership. Everything here is read-only; the Kubernetes-side facts
 // (DaemonSets, ConfigMaps, Helm records) belong to a different unit.
 
-// adoptMinTalos is the oldest Talos minor `ichor adopt` accepts.
-const adoptMinTalos = "v1.12"
+// adoptMinTalos is the oldest Talos minor `ichor adopt` accepts: the first with KubeAuthenticationConfig,
+// the only way the kube-apiserver can trust Ichor's issuer, and sign-in cannot be turned off.
+const adoptMinTalos = initUsersMinContract
+
+// adoptProbeFloor is the lowest version contract the probe renders at. A cluster generated for an older
+// contract and upgraded in place has a configuration that only renders cleanly there; the probe finds it so
+// that adopt can refuse it by name (adoptMinContract), where rendering at v1.14 alone would show it as drift.
+const adoptProbeFloor = "v1.12"
 
 // CNIKind says what a machine configuration selects as the cluster's CNI. It is what the
 // configuration states, not what runs: the Kubernetes side decides that.
@@ -338,9 +344,9 @@ type nodeVersion struct {
 	Version string
 }
 
-// checkTalosVersions applies the v1.12 gate to the versions read from every node
-// adopt will adopt. It returns nil if all are at or above v1.12 (pre-releases of v1.12 count as
-// v1.12). Otherwise the error wraps ErrTalosTooOld, names every node below the floor, and says to
+// checkTalosVersions applies the v1.14 gate to the versions read from every node
+// adopt will adopt. It returns nil if all are at or above v1.14 (pre-releases of v1.14 count as
+// v1.14). Otherwise the error wraps ErrTalosTooOld, names every node below the floor, and says to
 // upgrade Talos first. A version string that is not semver is an error too, never a pass.
 func checkTalosVersions(nodes []nodeVersion) error {
 	var older []nodeVersion
@@ -362,7 +368,7 @@ func checkTalosVersions(nodes []nodeVersion) error {
 
 	slices.SortFunc(older, func(a, b nodeVersion) int { return strings.Compare(a.Node, b.Node) })
 
-	const advice = "Upgrade Talos first, with talosctl or your usual tool, and run adopt again."
+	const advice = "Ichor's sign-in is always on and needs the issuer that Talos " + adoptMinTalos + " carries. Upgrade Talos first, with talosctl or your usual tool, and run adopt again."
 
 	if len(nodes) == 1 {
 		n := older[0]
@@ -381,7 +387,8 @@ func checkTalosVersions(nodes []nodeVersion) error {
 }
 
 // contractCandidates lists the version contracts to probe for a cluster whose nodes run running
-// (any semver tag), highest first, never below v1.12 (1.7 and 1.9). A running version
+// (any semver tag), highest first, never below adoptProbeFloor (v1.12 and 1.13 are there to be refused by
+// name). A running version below the node floor yields none. A running version
 // below the floor yields none.
 func contractCandidates(running string) []string {
 	mm := semver.MajorMinor(running)
@@ -391,7 +398,7 @@ func contractCandidates(running string) []string {
 
 	var out []string
 
-	for c := mm; semver.Compare(c, adoptMinTalos) >= 0; c = previousMinor(c) {
+	for c := mm; semver.Compare(c, adoptProbeFloor) >= 0; c = previousMinor(c) {
 		out = append(out, c)
 	}
 
@@ -409,7 +416,7 @@ func previousMinor(mm string) string {
 }
 
 // gateTalosVersions reads the Talos version of every machine adopt will adopt and applies the
-// v1.12 gate before anything else happens. A node whose reader cannot report a
+// v1.14 gate before anything else happens. A node whose reader cannot report a
 // version (a test double that does not implement talosVersionReader) is not gated.
 func gateTalosVersions(
 	ctx context.Context,

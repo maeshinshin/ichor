@@ -197,24 +197,26 @@ func testReadTalosFactsMultidoc(t *testing.T) {
 }
 
 func TestCheckTalosVersions(t *testing.T) {
-	ok := []nodeVersion{{"a", "v1.12.0"}, {"b", ver1143}, {"c", "v1.12.0-beta.1"}}
+	ok := []nodeVersion{{"a", "v1.14.0"}, {"b", ver1143}, {"c", "v1.14.0-beta.1"}}
 	if err := checkTalosVersions(ok); err != nil {
-		t.Fatalf("v1.12 and later must pass: %v", err)
+		t.Fatalf("v1.14 and later must pass: %v", err)
 	}
 
-	err := checkTalosVersions([]nodeVersion{{opCP, "v1.11.5"}})
-	if !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "Talos 1.11.5 is older than the oldest version Ichor adopts (v1.12)") ||
+	// The reason is in the refusal: sign-in cannot be turned off, and v1.14 carries its issuer.
+	err := checkTalosVersions([]nodeVersion{{opCP, ver113 + ".5"}})
+	if !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "Talos 1.13.5 is older than the oldest version Ichor adopts (v1.14)") ||
+		!strings.Contains(err.Error(), "sign-in is always on") || !strings.Contains(err.Error(), "issuer") ||
 		!strings.Contains(err.Error(), "Upgrade Talos first") {
 		t.Fatalf("single old node: %v", err)
 	}
 
-	err = checkTalosVersions([]nodeVersion{{opCP, "v1.12.1"}, {"w2", "v1.10.0"}, {"w1", "v1.11.9"}})
+	err = checkTalosVersions([]nodeVersion{{opCP, "v1.14.1"}, {"w2", "v1.10.0"}, {"w1", "v1.13.9"}})
 	if !errors.Is(err, ErrTalosTooOld) {
 		t.Fatalf("mixed: %v", err)
 	}
 
 	msg := err.Error()
-	if !strings.Contains(msg, "w1 runs Talos 1.11.9") || !strings.Contains(msg, "w2 runs Talos 1.10.0") || strings.Contains(msg, opCP) {
+	if !strings.Contains(msg, "w1 runs Talos 1.13.9") || !strings.Contains(msg, "w2 runs Talos 1.10.0") || strings.Contains(msg, opCP) {
 		t.Fatalf("mixed message must name exactly the old nodes: %v", msg)
 	}
 
@@ -225,9 +227,9 @@ func TestCheckTalosVersions(t *testing.T) {
 
 func TestContractCandidates(t *testing.T) {
 	cases := map[string][]string{
-		ver1143:   {"v1.14", ver113, adoptMinTalos},
-		"v1.12.0": {adoptMinTalos},
-		"v1.11.9": nil,
+		ver1143:   {"v1.14", ver113, adoptProbeFloor},
+		"v1.13.2": nil,
+		"v1.12.0": nil,
 		"junk":    nil,
 	}
 
@@ -287,7 +289,7 @@ func TestRunAdoptRefusesOldTalosBeforeReadingConfig(t *testing.T) {
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, machine).Build()
 
-	reader := &versionedReader{version: "v1.11.0"}
+	reader := &versionedReader{version: "v1.13.2"} // v1.13 was accepted before the floor moved to v1.14
 	reader.currentErr = errors.New("must not be read")
 
 	var out strings.Builder
@@ -296,8 +298,8 @@ func TestRunAdoptRefusesOldTalosBeforeReadingConfig(t *testing.T) {
 		K8s: k8s, Bundle: newTestBundle(t), DialTalos: dialerFor(reader, nil),
 		Stdout: &out, Stderr: &out, Stdin: strings.NewReader(""), AssumeYes: true, Output: outputYAML,
 	})
-	if !errors.Is(err, ErrTalosTooOld) {
-		t.Fatalf("runAdopt = %v, want ErrTalosTooOld", err)
+	if !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "sign-in is always on") || !strings.Contains(err.Error(), "issuer") {
+		t.Fatalf("runAdopt = %v, want ErrTalosTooOld saying why", err)
 	}
 }
 
@@ -311,7 +313,7 @@ func TestProbeVersionContractFindsTheLegacyContract(t *testing.T) {
 	var sys *render.SystemInputs
 
 	legacy := cluster.DeepCopy()
-	legacy.Spec.VersionContract = adoptMinTalos
+	legacy.Spec.VersionContract = adoptProbeFloor
 
 	live, _, err := render.Render(legacy, machine, bundle, nil, sys)
 	if err != nil {

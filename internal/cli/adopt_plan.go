@@ -438,7 +438,7 @@ type contractProbe struct {
 // running version's contract would turn every field into drift.
 //
 // It never mutates cluster. It returns an error if no candidate renders, including when running is
-// below the v1.12 floor.
+// below the v1.14 node floor.
 func probeVersionContract(
 	cluster *ichorv1alpha1.TalosCluster,
 	m *ichorv1alpha1.TalosMachine,

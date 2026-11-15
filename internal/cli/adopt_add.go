@@ -141,7 +141,7 @@ func (st *adoptState) loadAdded(
 		return nil // runAdopt says so and ends
 	}
 
-	// The Talos v1.12 gate runs before anything is read in full.
+	// The Talos v1.14 gate runs before anything is read in full.
 	if err := gateTalosVersions(ctx, added, deps.DialTalos); err != nil {
 		return err
 	}

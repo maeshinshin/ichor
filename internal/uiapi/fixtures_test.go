@@ -30,7 +30,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 // Fixture helpers below mirror internal/controller's own
@@ -130,14 +130,10 @@ func newTestMachine(clusterName string, identity ichorv1alpha1.TalosMachineIdent
 	return m
 }
 
-func minimalConfigSkeleton(role string) *typedconfig.Config {
-	return &typedconfig.Config{
-		ConfigVersion: "v1alpha1",
-		MachineConfig: &typedconfig.MachineConfig{
-			MachineType:     role,
-			MachineCertSANs: []string{"10.0.0.10"},
-		},
-		ClusterConfig: &typedconfig.ClusterConfig{},
+func minimalConfigSkeleton(role string) *ichorconfig.Config {
+	return &ichorconfig.Config{
+		Machine: &ichorconfig.Machine{Type: role, CertSANs: []string{"10.0.0.10"}},
+		Cluster: &ichorconfig.Cluster{},
 	}
 }
 
@@ -145,14 +141,14 @@ func minimalConfigSkeleton(role string) *typedconfig.Config {
 // API server argument set -- the fixture
 // internal/controller/talosmachine_controller_test.go uses for the same
 // purpose, under the same name.
-func extraArgsConfig(role string) *typedconfig.Config {
+func extraArgsConfig(role string) *ichorconfig.Config {
 	cfg := minimalConfigSkeleton(role)
-	cfg.ClusterConfig.APIServerConfig = &typedconfig.APIServerConfig{ExtraArgsConfig: map[string][]string{"foo": {"b"}}}
+	cfg.Cluster.ApiServer = &ichorconfig.ClusterApiServer{ExtraArgs: map[string][]string{"foo": {"b"}}}
 
 	return cfg
 }
 
-func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPatchTarget, priority int32, cfg *typedconfig.Config) *ichorv1alpha1.TalosConfigPatch {
+func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPatchTarget, priority int32, cfg *ichorconfig.Config) *ichorv1alpha1.TalosConfigPatch {
 	p := &ichorv1alpha1.TalosConfigPatch{
 		GenerateName: "patch-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
@@ -160,7 +156,7 @@ func newTestPatch(clusterName, layer string, target *ichorv1alpha1.TalosConfigPa
 			Layer:      layer,
 			Priority:   priority,
 			Target:     target,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+			Config:     cfg,
 		},
 	}
 	Expect(k8sClient.Create(ctx, p)).To(Succeed())

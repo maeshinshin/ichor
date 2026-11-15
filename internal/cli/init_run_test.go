@@ -149,7 +149,7 @@ func TestRunInit_DiskRoles(t *testing.T) {
 	var found struct{ ephemeral, storage, userVolume bool }
 
 	for _, p := range patches.Items {
-		for _, d := range p.Spec.Documents {
+		for _, d := range patchDocuments(t, p) {
 			switch d.Kind {
 			case "VolumeConfig":
 				found.ephemeral = true

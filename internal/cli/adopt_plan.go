@@ -198,6 +198,11 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: capturing node %q's current documents: %w", m.Name, err)
 	}
 
+	config, err := ichorv1alpha1.ConfigFromDocuments(docs)
+	if err != nil {
+		return nil, fmt.Errorf("adopt: node %q's current documents: %w", m.Name, err)
+	}
+
 	candidate := ichorv1alpha1.TalosConfigPatch{
 		Name:      "adopt-" + m.Name,
 		Namespace: cluster.Namespace,
@@ -205,7 +210,7 @@ func buildAdoptPlan(
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Layer:      "machine",
 			Target:     &ichorv1alpha1.TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: m.Name}},
-			Documents:  docs,
+			Config:     config,
 		},
 	}
 
@@ -355,8 +360,8 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, capt
 
 	// Only the captured subtrees of the legacy Config document (interfaces, certSANs), never the
 	// document: it carries the machine and cluster secrets.
-	//nolint:staticcheck // the legacy block is what the node runs
-	if raw := provider.RawV1Alpha1(); len(captured) > 0 && raw != nil && raw.MachineConfig != nil {
+	raw := provider.RawV1Alpha1() //nolint:staticcheck // the legacy block is what the node runs
+	if len(captured) > 0 && raw != nil && raw.MachineConfig != nil {
 		sub := &mv1alpha1.Config{ConfigVersion: mv1alpha1.Version, MachineConfig: &mv1alpha1.MachineConfig{}}
 
 		if slices.Contains(captured, pathNetworkInterfaces) && raw.MachineConfig.MachineNetwork != nil {
@@ -367,16 +372,19 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, capt
 			sub.MachineConfig.MachineCertSANs = sansBeyond(raw.MachineConfig.MachineCertSANs, specSANs)
 		}
 
-		if slices.Contains(captured, pathAPIServerCertSANs) && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
-			sub.ClusterConfig = &mv1alpha1.ClusterConfig{APIServerConfig: &mv1alpha1.APIServerConfig{ExtraCertSANs: sansBeyond(raw.ClusterConfig.APIServerConfig.ExtraCertSANs, specSANs)}}
-		}
-
 		conv, err := typedconfig.ConfigFromMachinery(sub)
 		if err != nil {
 			return nil, fmt.Errorf("converting %s: %w", strings.Join(captured, ", "), err)
 		}
 
 		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "Config", Config: conv})
+	}
+
+	// The API server's own SANs are the KubeAPIServerConfig document's setting in Ichor's schema.
+	if slices.Contains(captured, pathAPIServerCertSANs) && raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
+		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "KubeAPIServerConfig", KubeAPIServerConfig: &typedconfig.KubeAPIServerConfigV1Alpha1{
+			PodCertExtraSANs: sansBeyond(raw.ClusterConfig.APIServerConfig.ExtraCertSANs, specSANs),
+		}})
 	}
 
 	for _, d := range provider.Documents() {

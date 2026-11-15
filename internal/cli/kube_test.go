@@ -108,20 +108,13 @@ func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 		"spec": map[string]any{
 			"clusterRef": map[string]any{"name": "some-cluster"},
 			"layer":      cniPatchLayer,
-			"documents": []any{
-				map[string]any{
-					"kind": "Config",
-					"config": map[string]any{
-						"version": "v1alpha1",
-						"machine": map[string]any{
-							"type":     testRoleWorker,
-							"certSANs": []any{"10.0.0.10"},
-							// "token" no longer exists on MachineConfig; a strict client must reject
-							// it by name, not drop it silently.
-							"token": "stale-value-that-must-not-silently-vanish",
-						},
-						"cluster": map[string]any{},
-					},
+			"config": map[string]any{
+				"machine": map[string]any{
+					"type":     testRoleWorker,
+					"certSANs": []any{"10.0.0.10"},
+					// "token" is not a setting of spec.config; a strict client must reject
+					// it by name, not drop it silently.
+					"token": "stale-value-that-must-not-silently-vanish",
 				},
 			},
 		},

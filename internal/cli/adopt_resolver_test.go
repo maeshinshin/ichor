@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -71,12 +72,9 @@ func liveWithResolver(t *testing.T, cluster *ichorv1alpha1.TalosCluster, m *icho
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Layer:      cniPatchLayer,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind: kindResolverConfig,
-				ResolverConfig: &typedconfig.ResolverConfigV1Alpha1{ResolverNameservers: []*typedconfig.NameserverConfig{
-					{Address: testDNSPrimary}, {Address: "8.8.8.8"},
-				}},
-			}},
+			Config: &ichorconfig.Config{Machine: &ichorconfig.Machine{Network: &ichorconfig.MachineNetwork{
+				Nameservers: []*typedconfig.NameserverConfig{{Address: testDNSPrimary}, {Address: "8.8.8.8"}},
+			}}},
 		},
 	}
 
@@ -121,8 +119,8 @@ func TestBuildAdoptPlanCapturesResolverConfigAndRoundTrips(t *testing.T) {
 		t.Fatalf("plan = %+v, want a patch and no unrepresentable paths", plan)
 	}
 
-	if len(plan.Patch.Spec.Documents) != 1 || plan.Patch.Spec.Documents[0].Kind != kindResolverConfig {
-		t.Fatalf("patch documents = %+v, want one ResolverConfig", plan.Patch.Spec.Documents)
+	if docs := patchDocuments(t, *plan.Patch); len(docs) != 1 || docs[0].Kind != kindResolverConfig {
+		t.Fatalf("patch documents = %+v, want one ResolverConfig", docs)
 	}
 
 	rendered, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{*plan.Patch}, nil)

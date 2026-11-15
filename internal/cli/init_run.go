@@ -38,6 +38,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/uiapi"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/secureboot"
@@ -848,7 +849,7 @@ func candidatePatches(
 	// Always built, even for flannel (no inline manifest) or a CNI with
 	// no TalosPatches: its machine.type and machine.certSANs are required by the patch CRD.
 	bootstrap := buildInlineManifestsPatch(cluster, machine, nodeEndpoint, manifests)
-	bootstrap.Spec.Documents = append(bootstrap.Spec.Documents, buildDiskRoleDocuments(diskRoles)...)
+	bootstrap.Spec.Config.Machine.Volumes = buildDiskRoleVolumes(diskRoles)
 	out = append(out, bootstrap)
 
 	return out
@@ -874,6 +875,21 @@ func buildInlineManifestsPatch(
 		host = h
 	}
 
+	var inlineManifests map[string]*ichorconfig.ClusterInlineManifestsEntry
+
+	for _, m := range manifests {
+		if inlineManifests == nil {
+			inlineManifests = map[string]*ichorconfig.ClusterInlineManifestsEntry{}
+		}
+
+		inlineManifests[m.InlineManifestName] = &ichorconfig.ClusterInlineManifestsEntry{Manifest: m.InlineManifestContents}
+	}
+
+	cfg := &ichorconfig.Config{Machine: &ichorconfig.Machine{Type: machine.Spec.Role, CertSANs: []string{host}}}
+	if inlineManifests != nil {
+		cfg.Cluster = &ichorconfig.Cluster{InlineManifests: inlineManifests}
+	}
+
 	return ichorv1alpha1.TalosConfigPatch{
 		Name: cluster.Name + "-bootstrap-manifests", Namespace: cluster.Namespace,
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
@@ -882,17 +898,7 @@ func buildInlineManifestsPatch(
 			// another role: at the cluster layer a worker approved later rendered as a control plane.
 			Layer:  "role",
 			Target: &ichorv1alpha1.TalosConfigPatchTarget{Role: machine.Spec.Role},
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind: "Config",
-				Config: &typedconfig.Config{
-					ConfigVersion: "v1alpha1",
-					MachineConfig: &typedconfig.MachineConfig{
-						MachineType:     machine.Spec.Role,
-						MachineCertSANs: []string{host},
-					},
-					ClusterConfig: &typedconfig.ClusterConfig{ClusterInlineManifests: manifests},
-				},
-			}},
+			Config: cfg,
 		},
 	}
 }

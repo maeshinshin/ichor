@@ -377,6 +377,24 @@ spec: {clusterRef: {name: c}, layer: cluster, bogusField: 1, documents: []}
 	}
 }
 
+// A file written before spec.documents was removed is refused with what to write instead, not with a bare unknown field.
+func TestReadPatchFileRefusesSpecDocumentsAndSaysWhatToWrite(t *testing.T) {
+	_, err := readPatchFile(strings.NewReader(`
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: TalosConfigPatch
+metadata: {name: p}
+spec:
+  clusterRef: {name: c}
+  layer: cluster
+  documents:
+    - kind: SysctlConfig
+      sysctlConfig: {params: {net.ipv4.ip_forward: "1"}}
+`), "-", testNamespace)
+	if err == nil || !strings.Contains(err.Error(), "spec.config") || !strings.Contains(err.Error(), "spec.documents") {
+		t.Fatalf("want a refusal that names spec.documents and spec.config, got %v", err)
+	}
+}
+
 func TestEffectiveConfigFallbackMasksSecrets(t *testing.T) {
 	setAPITestFlags(t, true)
 

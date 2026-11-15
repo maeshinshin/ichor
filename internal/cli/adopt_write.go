@@ -190,7 +190,7 @@ func writeAdopt(ctx context.Context, c client.Client, in adoptWriteInput) (*adop
 	for i := range in.Patches {
 		p := in.Patches[i].DeepCopy()
 		if err := w.ensure(ctx, p, "TalosConfigPatch", func(have client.Object) bool {
-			return jsonEqual(have.(*ichorv1alpha1.TalosConfigPatch).Spec.Documents, p.Spec.Documents) &&
+			return jsonEqual(have.(*ichorv1alpha1.TalosConfigPatch).Spec.Config, p.Spec.Config) &&
 				have.(*ichorv1alpha1.TalosConfigPatch).Spec.ClusterRef == p.Spec.ClusterRef
 		}); err != nil {
 			return w.res, err

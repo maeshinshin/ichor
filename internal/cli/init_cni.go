@@ -70,12 +70,17 @@ func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string, kube
 	}
 
 	if len(docs) > 0 {
+		config, err := ichorv1alpha1.ConfigFromDocuments(docs)
+		if err != nil {
+			return nil, fmt.Errorf("init: cni Talos patches: %w", err)
+		}
+
 		out.Patch = &ichorv1alpha1.TalosConfigPatch{
 			Name: clusterName + "-cni", Namespace: namespace,
 			Spec: ichorv1alpha1.TalosConfigPatchSpec{
 				ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 				Layer:      cniPatchLayer,
-				Documents:  docs,
+				Config:     config,
 			},
 		}
 	}

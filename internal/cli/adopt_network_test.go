@@ -59,11 +59,11 @@ func TestAdoptCapturesTheLegacyNetworkInterfacesIntoAPatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(patch.Spec.Documents) != 1 || patch.Spec.Documents[0].Config == nil {
-		t.Fatalf("documents = %+v, want one Config document", patch.Spec.Documents)
+	if docs := patchDocuments(t, patch); len(docs) != 1 || docs[0].Config == nil {
+		t.Fatalf("documents = %+v, want one Config document", docs)
 	}
 
-	c := patch.Spec.Documents[0].Config
+	c := patchDocuments(t, patch)[0].Config
 	if c.ClusterConfig != nil || c.MachineConfig.MachineNetwork.NetworkHostname != "" {
 		t.Errorf("the patch carries more than machine.network.interfaces: %+v", c)
 	}

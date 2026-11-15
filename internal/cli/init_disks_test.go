@@ -16,52 +16,65 @@ limitations under the License.
 
 package cli
 
-import "testing"
+import (
+	"slices"
+	"testing"
 
-func TestBuildDiskRoleDocuments_Empty(t *testing.T) {
-	if docs := buildDiskRoleDocuments(diskRoleOptions{}); len(docs) != 0 {
-		t.Fatalf("expected no documents when no selector is given, got %+v", docs)
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
+)
+
+func TestBuildDiskRoleVolumes_Empty(t *testing.T) {
+	if v := buildDiskRoleVolumes(diskRoleOptions{}); v != nil {
+		t.Fatalf("expected no volumes when no selector is given, got %+v", v)
 	}
 }
 
-func TestBuildDiskRoleDocuments_AllThreeRoles(t *testing.T) {
-	docs := buildDiskRoleDocuments(diskRoleOptions{
+func TestBuildDiskRoleVolumes_AllThreeRoles(t *testing.T) {
+	v := buildDiskRoleVolumes(diskRoleOptions{
 		EphemeralDiskSelector:  testEphemeralDiskSelector,
 		StorageDiskSelector:    testStorageDiskSelector,
 		UserVolumeDiskSelector: `disk.wwid == "data"`,
 	})
 
-	if len(docs) != 3 {
-		t.Fatalf("expected 3 documents, got %d: %+v", len(docs), docs)
+	if v == nil || len(v.System) != 1 || len(v.Raw) != 1 || len(v.User) != 1 {
+		t.Fatalf("expected one system, raw and user volume, got %+v", v)
 	}
 
-	eph := docs[0]
-	if eph.Kind != "VolumeConfig" || eph.VolumeConfig == nil || eph.VolumeConfig.MetaName != "EPHEMERAL" {
-		t.Fatalf("ephemeral document = %+v, want kind VolumeConfig named EPHEMERAL", eph)
+	eph := v.System["EPHEMERAL"]
+	if eph == nil || eph.Provisioning.DiskSelectorSpec.Match != testEphemeralDiskSelector {
+		t.Fatalf("system volumes = %+v, want EPHEMERAL on the ephemeral selector", v.System)
 	}
 
-	if got := eph.VolumeConfig.ProvisioningSpec.DiskSelectorSpec.Match; got != testEphemeralDiskSelector {
-		t.Fatalf("ephemeral selector = %q", got)
+	if v.Raw["storage"] == nil || v.User["data"] == nil {
+		t.Fatalf("raw = %+v, user = %+v, want the default names storage and data", v.Raw, v.User)
 	}
 
-	storage := docs[1]
-	if storage.Kind != "RawVolumeConfig" || storage.RawVolumeConfig == nil || storage.RawVolumeConfig.MetaName != "storage" {
-		t.Fatalf("storage document = %+v, want kind RawVolumeConfig named storage (default)", storage)
+	// Each lands as the Talos document of its kind.
+	cfg := &ichorconfig.Config{Machine: &ichorconfig.Machine{Volumes: v}}
+
+	docs, err := ichorv1alpha1.ConvertConfig(cfg, true)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	userVol := docs[2]
-	if userVol.Kind != "UserVolumeConfig" || userVol.UserVolumeConfig == nil || userVol.UserVolumeConfig.MetaName != "data" {
-		t.Fatalf("user volume document = %+v, want kind UserVolumeConfig named data (default)", userVol)
+	var kinds []string
+	for _, d := range docs {
+		kinds = append(kinds, d.Kind)
+	}
+
+	if want := []string{"RawVolumeConfig", "UserVolumeConfig", "VolumeConfig"}; !slices.Equal(kinds, want) {
+		t.Fatalf("documents = %v, want %v", kinds, want)
 	}
 }
 
-func TestBuildDiskRoleDocuments_CustomNames(t *testing.T) {
-	docs := buildDiskRoleDocuments(diskRoleOptions{
+func TestBuildDiskRoleVolumes_CustomNames(t *testing.T) {
+	v := buildDiskRoleVolumes(diskRoleOptions{
 		StorageDiskSelector: testStorageDiskSelector,
 		StorageVolumeName:   "longhorn",
 	})
 
-	if len(docs) != 1 || docs[0].RawVolumeConfig.MetaName != "longhorn" {
-		t.Fatalf("expected one RawVolumeConfig named longhorn, got %+v", docs)
+	if v == nil || len(v.Raw) != 1 || v.Raw["longhorn"] == nil {
+		t.Fatalf("expected one raw volume named longhorn, got %+v", v)
 	}
 }

@@ -32,8 +32,10 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"k8s.io/utils/ptr"
+
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/release"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // testNamespace is the namespace every fixture below lives in.
@@ -170,16 +172,13 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 			Layer:      cniPatchLayer,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind:         kindSysctlConfig,
-				SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: params},
-			}},
+			Config:     &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: params}},
 		},
 	}
 }
 
-// legacyConfigPatch builds an unsubmitted "cluster"-layer legacy Config
-// patch carrying a non-secret cluster.apiServer.extraArgs value. It used to
+// legacyConfigPatch builds an unsubmitted "cluster"-layer patch carrying a setting only the v1alpha1
+// document has, cluster.apiServer.disablePodSecurityPolicy. It used to
 // carry a dummy machine.token too, because the mirror schema made that field
 // required on any Config document; machine.token (and
 // eight other secret-bearing fields) has since been dropped from the schema entirely, so a sparse
@@ -188,15 +187,9 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 // through the fake client. Whether that premise still holds now that sparse
 // capture is possible is the to revisit.
 func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
-	cfg := &typedconfig.Config{
-		ConfigVersion: "v1alpha1",
-		MachineConfig: &typedconfig.MachineConfig{
-			MachineType:     testRoleWorker,
-			MachineCertSANs: []string{"10.0.0.10"},
-		},
-		ClusterConfig: &typedconfig.ClusterConfig{
-			APIServerConfig: &typedconfig.APIServerConfig{ExtraArgsConfig: map[string][]string{"foo": {"b"}}},
-		},
+	cfg := &ichorconfig.Config{
+		Machine: &ichorconfig.Machine{Type: testRoleWorker, CertSANs: []string{"10.0.0.10"}},
+		Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{DisablePodSecurityPolicy: ptr.To(true)}},
 	}
 
 	return ichorv1alpha1.TalosConfigPatch{
@@ -204,9 +197,21 @@ func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
 			Layer:      cniPatchLayer,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: cfg}},
+			Config:     cfg,
 		},
 	}
+}
+
+// patchDocuments is the Talos documents a patch converts to, which is what a node receives.
+func patchDocuments(t *testing.T, p ichorv1alpha1.TalosConfigPatch) []ichorv1alpha1.TalosConfigPatchDocument {
+	t.Helper()
+
+	docs, err := p.Spec.EffectiveDocuments(true)
+	if err != nil {
+		t.Fatalf("patch %s: %v", p.Name, err)
+	}
+
+	return docs
 }
 
 func newTestScheme(t *testing.T) *runtime.Scheme {

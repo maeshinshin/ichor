@@ -203,9 +203,7 @@ func TestAdoptMapsClassAValuesOfAForeignCluster(t *testing.T) {
 			}
 
 			for _, p := range patches.Items {
-				if slices.ContainsFunc(p.Spec.Documents, func(d ichorv1alpha1.TalosConfigPatchDocument) bool {
-					return d.Config != nil && d.Config.MachineConfig != nil && len(d.Config.MachineConfig.MachineCertSANs) > 0
-				}) {
+				if p.Spec.Config != nil && p.Spec.Config.Machine != nil && len(p.Spec.Config.Machine.CertSANs) > 0 {
 					t.Errorf("patch %s captures certSANs although every node agrees", p.Name)
 				}
 			}
@@ -303,10 +301,8 @@ func TestAdoptCapturesEachNodesDifferingCertSANs(t *testing.T) {
 		}
 
 		var got []string
-		for _, d := range p.Spec.Documents {
-			if d.Config != nil && d.Config.MachineConfig != nil {
-				got = append(got, d.Config.MachineConfig.MachineCertSANs...)
-			}
+		if p.Spec.Config != nil && p.Spec.Config.Machine != nil {
+			got = p.Spec.Config.Machine.CertSANs
 		}
 
 		if want := []string{fmt.Sprintf("cp%d.example.test", i)}; !slices.Equal(got, want) {
@@ -420,27 +416,23 @@ func TestAdoptKeepsSpecCertSANsToWhatEveryNodeSharesInBothPlaces(t *testing.T) {
 
 		var sans []string
 
-		var ifaces []*ichorv1alpha1.TalosConfigPatchDocument
+		var ifaces int
 
-		for _, d := range p.Spec.Documents {
-			if d.Config == nil || d.Config.MachineConfig == nil {
-				continue
-			}
+		if m := p.Spec.Config.Machine; m != nil {
+			sans = m.CertSANs
 
-			sans = append(sans, d.Config.MachineConfig.MachineCertSANs...)
-
-			if n := d.Config.MachineConfig.MachineNetwork; n != nil && len(n.NetworkInterfaces) == 1 {
-				i := n.NetworkInterfaces[0]
+			if m.Network != nil && len(m.Network.Interfaces) == 1 {
+				i := m.Network.Interfaces[0]
 				if i.DeviceInterface != "enp1s0" || len(i.DeviceRoutes) != 1 || i.DeviceVIPConfig == nil || i.DeviceVIPConfig.SharedIP != "10.0.1.100" {
 					t.Errorf("%s: the captured interface lost its routes or vip: %+v", addr, i)
 				}
 
-				ifaces = append(ifaces, &d)
+				ifaces++
 			}
 		}
 
-		if !slices.Equal(sans, []string{"localhost"}) || len(ifaces) != 1 {
-			t.Errorf("%s: patch machine.certSANs = %v, interfaces documents = %d; want [localhost] and 1", addr, sans, len(ifaces))
+		if !slices.Equal(sans, []string{"localhost"}) || ifaces != 1 {
+			t.Errorf("%s: patch machine.certSANs = %v, interfaces = %d; want [localhost] and 1", addr, sans, ifaces)
 		}
 	}
 

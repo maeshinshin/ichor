@@ -215,7 +215,12 @@ func (s *Server) PreviewImpact(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	paths, err := patchPaths(spec.Documents)
+	documents, err := spec.EffectiveDocuments(true)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	paths, err := patchPaths(documents)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

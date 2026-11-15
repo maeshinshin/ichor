@@ -109,7 +109,7 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 
 			// The VIP comes from the renderer, never from a patch the operator would see and own.
 			for _, p := range patches {
-				for _, d := range p.Spec.Documents {
+				for _, d := range patchDocuments(t, p) {
 					if d.Kind == "Layer2VIPConfig" {
 						t.Errorf("patch %s carries a Layer2VIPConfig", p.Name)
 					}

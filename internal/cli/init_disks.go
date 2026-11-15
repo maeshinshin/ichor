@@ -17,9 +17,11 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
+
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 
-	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -43,8 +45,8 @@ type diskRoleOptions struct {
 	UserVolumeName         string
 }
 
-// buildDiskRoleDocuments turns whichever of opts' selectors were given
-// into the matching TalosConfigPatchDocument, each a role from
+// buildDiskRoleVolumes turns whichever of opts' selectors were given
+// into the matching machine.volumes entry, each a role from
 // architecture.md's "Nodes" section: ephemeral (VolumeConfig, the fixed
 // system name EPHEMERAL), storage (RawVolumeConfig, an unformatted
 // partition for a CSI provisioner) and userVolume (UserVolumeConfig). A
@@ -60,32 +62,23 @@ type diskRoleOptions struct {
 // from the mirror type as secret material, and the remaining key kinds
 // (KMS, TPM, node ID) are each their own integration this phase does not
 // build.
-func buildDiskRoleDocuments(opts diskRoleOptions) []ichorv1alpha1.TalosConfigPatchDocument {
-	var docs []ichorv1alpha1.TalosConfigPatchDocument
+func buildDiskRoleVolumes(opts diskRoleOptions) *ichorconfig.MachineVolumes {
+	var v ichorconfig.MachineVolumes
 
 	if opts.EphemeralDiskSelector != "" {
-		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{
-			Kind: "VolumeConfig",
-			VolumeConfig: &typedconfig.VolumeConfigV1Alpha1{
-				MetaName: constants.EphemeralPartitionLabel,
-				ProvisioningSpec: &typedconfig.ProvisioningSpec{
+		v.System = map[string]*ichorconfig.MachineVolumesSystemEntry{
+			constants.EphemeralPartitionLabel: {
+				Provisioning: &typedconfig.ProvisioningSpec{
 					DiskSelectorSpec: &typedconfig.DiskSelector{Match: opts.EphemeralDiskSelector},
 				},
 			},
-		})
+		}
 	}
 
 	if opts.StorageDiskSelector != "" {
-		name := opts.StorageVolumeName
-		if name == "" {
-			name = "storage"
-		}
-
-		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{
-			Kind: "RawVolumeConfig",
-			RawVolumeConfig: &typedconfig.RawVolumeConfigV1Alpha1{
-				MetaName: name,
-				ProvisioningSpec: &typedconfig.ProvisioningSpec{
+		v.Raw = map[string]*ichorconfig.MachineVolumesRawEntry{
+			cmp.Or(opts.StorageVolumeName, "storage"): {
+				Provisioning: &typedconfig.ProvisioningSpec{
 					DiskSelectorSpec: &typedconfig.DiskSelector{Match: opts.StorageDiskSelector},
 					// "0": no required minimum (Talos rejects a
 					// RawVolumeConfig/UserVolumeConfig with neither minSize
@@ -94,26 +87,23 @@ func buildDiskRoleDocuments(opts diskRoleOptions) []ichorv1alpha1.TalosConfigPat
 					ProvisioningMinSize: "0",
 				},
 			},
-		})
+		}
 	}
 
 	if opts.UserVolumeDiskSelector != "" {
-		name := opts.UserVolumeName
-		if name == "" {
-			name = "data"
-		}
-
-		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{
-			Kind: "UserVolumeConfig",
-			UserVolumeConfig: &typedconfig.UserVolumeConfigV1Alpha1{
-				MetaName: name,
-				ProvisioningSpec: &typedconfig.ProvisioningSpec{
+		v.User = map[string]*ichorconfig.MachineVolumesUserEntry{
+			cmp.Or(opts.UserVolumeName, "data"): {
+				Provisioning: &typedconfig.ProvisioningSpec{
 					DiskSelectorSpec:    &typedconfig.DiskSelector{Match: opts.UserVolumeDiskSelector},
 					ProvisioningMinSize: "0",
 				},
 			},
-		})
+		}
 	}
 
-	return docs
+	if v.System == nil && v.Raw == nil && v.User == nil {
+		return nil
+	}
+
+	return &v
 }

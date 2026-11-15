@@ -98,7 +98,7 @@ func TestRunAdopt_ZeroDrift(t *testing.T) {
 			currentCfg, rendered)
 	}
 
-	if !strings.Contains(stdout.String(), "SysctlConfig") {
+	if !strings.Contains(stdout.String(), "sysctls") {
 		t.Fatalf("expected the planned patch to be printed to stdout, got: %s", stdout.String())
 	}
 }

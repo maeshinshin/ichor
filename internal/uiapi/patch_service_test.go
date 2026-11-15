@@ -215,8 +215,14 @@ var _ = Describe("PatchService", func() {
 		It("reports install-time-only fields separately from reboot-required", func() {
 			cluster := newTestCluster("does-not-exist")
 
-			cfg := minimalConfigSkeleton(roleWorker)
-			cfg.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: "/dev/sda"}
+			cfg := &typedconfig.Config{
+				ConfigVersion: "v1alpha1",
+				MachineConfig: &typedconfig.MachineConfig{
+					MachineType: roleWorker, MachineCertSANs: []string{"10.0.0.10"},
+					MachineInstall: &typedconfig.InstallConfig{InstallDisk: "/dev/sda"},
+				},
+				ClusterConfig: &typedconfig.ClusterConfig{},
+			}
 
 			raw, err := json.Marshal(cfg)
 			Expect(err).NotTo(HaveOccurred())

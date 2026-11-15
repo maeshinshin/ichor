@@ -322,8 +322,14 @@ func documentToPB(d ichorv1alpha1.TalosConfigPatchDocument) (*pb.PatchDocument, 
 // patchToPB converts a TalosConfigPatch to the wire Patch message
 // PatchService's read methods return.
 func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
-	docs := make([]*pb.PatchDocument, 0, len(p.Spec.Documents))
-	for _, d := range p.Spec.Documents {
+	// The wire carries the Talos documents spec.config converts to: the editor works in documents.
+	effective, err := p.Spec.EffectiveDocuments(true)
+	if err != nil {
+		return nil, fmt.Errorf("patch %q: %w", p.Name, err)
+	}
+
+	docs := make([]*pb.PatchDocument, 0, len(effective))
+	for _, d := range effective {
 		pd, err := documentToPB(d)
 		if err != nil {
 			return nil, fmt.Errorf("patch %q: %w", p.Name, err)
@@ -369,7 +375,16 @@ func applyPatchSpec(spec *ichorv1alpha1.TalosConfigPatchSpec, p *pb.Patch) error
 	spec.Layer = layer
 	spec.Priority = p.GetPriority()
 	spec.Target = targetFromPB(p.GetTarget())
-	spec.Documents = docs
+	spec.Config = nil
+
+	if len(docs) > 0 {
+		cfg, err := ichorv1alpha1.ConfigFromDocuments(docs)
+		if err != nil {
+			return err
+		}
+
+		spec.Config = cfg
+	}
 
 	return nil
 }

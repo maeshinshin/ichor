@@ -311,6 +311,13 @@ command does. Each item is described where it is listed below.
   `IchorInstallation`, where it stays, for the Cilium Helm Job too, until an
   upgrade without the flag writes the check back or you delete the field. The
   help gives the undo. What the flag does is unchanged (ADR 0122).
+- **A Cilium Helm Job that runs without a signature check now leaves a record.**
+  When `spec.installerSignature.mode` is `skip` and the Job's image was not
+  already recorded by an upgrade, the controller writes the image digest and
+  `verification: Skipped` to `IchorInstallation` `status.installerImage` and
+  raises the `InstallerSignatureSkipped` Warning Event, as an Ichor upgrade
+  does. The record is replaced by the next upgrade, so it does not outlast one
+  (ADR 0122).
 
 ### Adopt
 

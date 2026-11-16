@@ -12,7 +12,9 @@ Not established either: what Helm does on upgrade when the TalosStorage CRD temp
 from the chart while its previous manifest carried helm.sh/resource-policy: keep. The guard does
 not depend on that.
 
-pre-install runs it too, so an install onto a cluster that still keeps the old CRD is guarded.
+pre-install is a deliberate deviation from ADR 0168, which names pre-upgrade only. A chart CRD is kept by
+helm.sh/resource-policy: keep, so a fresh install can land on a cluster that still holds the old CRD and its
+objects; without pre-install that install would not be guarded.
 */ -}}
 apiVersion: v1
 kind: ServiceAccount

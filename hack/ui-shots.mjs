@@ -58,8 +58,8 @@ const AUTH_STATE = (expectText) => `({
 
 // authProblem names why the page is not the signed-in UI, or returns '' when it is.
 function authProblem(st, expectText, hint) {
-  if (st.signIn) return `the sign-in form is showing. ${hint}`
-  if (!st.token) return `the ID token is gone from sessionStorage: the UI dropped it because the backend refused it. ${hint}`
+  if (st.signIn) return `the sign-in form is showing (${hint})`
+  if (!st.token) return `the ID token is gone from sessionStorage: the UI dropped it because the backend refused it (${hint})`
   if (!st.shell) return `the signed-in shell did not render; the page says: "${st.snippet}"`
   if (!st.hasText) return `the backend's data (${expectText}) is not on the page`
   return ''
@@ -107,7 +107,7 @@ async function main() {
     let origin = base
     let token = process.env.TOKEN
     let expectText = null
-    let hint = 'Set TOKEN to an ID token from a browser signed in to this server.'
+    let hint = 'set TOKEN to an ID token from a browser signed in to this server'
     if (!origin) {
       if (!existsSync(join(UI, 'node_modules/.bin/vite'))) throw new Error('ui/node_modules is missing; run make ui-install')
       assertGenerated(ANSWERED)
@@ -116,7 +116,7 @@ async function main() {
       origin = await startVite(backend.url, cleanup)
       token ??= unsignedToken()
       expectText = CLUSTER
-      hint = 'The stand-in backend did not accept the seeded token.'
+      hint = 'the seed did not take, or the stand-in backend refused the token'
     }
     mkdirSync(outDir, { recursive: true })
 

@@ -1118,7 +1118,7 @@ func (s *Server) CreateOperation(
 
 	if p.kind == ichorv1alpha1.TalosOperationKindCNI {
 		if err := s.clearKubeProxyConsent(ctx, cluster); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
+			return nil, mapOperationWriteError("clearing the kube-proxy confirmation of", clusterKey, err)
 		}
 	}
 

@@ -301,6 +301,30 @@ func TestCreateKubeProxySwitchSurvivesConflictingUpdates(t *testing.T) {
 	}
 }
 
+// The caller's own update removes the annotation, so a Forbidden there is the caller's and is not an Internal error.
+func TestCreateKubeProxySwitchReportsAForbiddenRemovalOfTheConfirmationAsPermissionDenied(t *testing.T) {
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
+	k8s := interceptor.NewClient(base, interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if _, has := obj.(*ichorv1alpha1.TalosCluster).Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]; !has {
+				return apierrors.NewForbidden(schema.GroupResource{Group: "ichor.maesh.dev", Resource: resourceTalosClusters}, obj.GetName(),
+					errors.New("update is not allowed"))
+			}
+
+			return c.Update(ctx, obj, opts...)
+		},
+	})
+
+	_, err := (&Server{Client: k8s}).CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_CNI, kubeProxyReplaced))
+	if connect.CodeOf(err) != connect.CodePermissionDenied || !strings.Contains(err.Error(), "the operation was created") {
+		t.Fatalf("want PermissionDenied that says the operation was created, got %v", err)
+	}
+
+	if len(listOps(t, base)) != 1 {
+		t.Fatal("the operation was not created")
+	}
+}
+
 // A retry after an earlier failure (or a Git-first change that carries the annotation) finds the
 // spec already changed; the annotation must not outlive the operation it consented to.
 func TestCreateKubeProxySwitchClearsALeftoverAnnotation(t *testing.T) {

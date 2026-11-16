@@ -447,7 +447,7 @@ func (r *TalosOperationReconciler) advanceShutdown(
 
 	workers, last, err := r.shutdownPlan(ctx, cluster)
 	if err != nil {
-		return ctrl.Result{}, err
+		return r.ownNodeUnread(ctx, op, err)
 	}
 
 	// A pass makes its Talos calls one after another, each up to etcdDialTimeout, so it can outlast the lease
@@ -590,6 +590,11 @@ func (r *TalosOperationReconciler) shutdownStatus(
 	apimeta.SetStatusCondition(&op.Status.Conditions, metav1.Condition{
 		Type: conditionShutdown, Status: status, Reason: reason, Message: message,
 	})
+
+	// A pause that lifted itself (setPhase wrote it) is over once the shutdown goes on.
+	if phase != ichorv1alpha1.TalosOperationPhasePaused {
+		apimeta.RemoveStatusCondition(&op.Status.Conditions, conditionOperationPaused)
+	}
 
 	return r.Status().Update(ctx, op)
 }

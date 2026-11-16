@@ -80,11 +80,18 @@ func (r *TalosOperationReconciler) ownNodeNames(
 ) (map[string]string, error) {
 	names, err := r.nodeNames(ctx, cluster, bundle, ms)
 	if err != nil && !slices.Contains(slices.Collect(maps.Values(names)), r.NodeName) {
-		return nil, fmt.Errorf("cannot tell which machine runs this controller (node %q): %w", r.NodeName, err)
+		return nil, &ownNodeUnreadError{err: fmt.Errorf("cannot tell which machine runs this controller (node %q): %w", r.NodeName, err)}
 	}
 
 	return names, nil
 }
+
+// ownNodeUnreadError is ownNodeNames's refusal. It lifts when a machine answers, its Node appears or the machine is
+// removed, so a TalosOperation pauses on it (ownNodeUnread) rather than keep the cluster lock while it waits.
+type ownNodeUnreadError struct{ err error }
+
+func (e *ownNodeUnreadError) Error() string { return e.err.Error() }
+func (e *ownNodeUnreadError) Unwrap() error { return e.err }
 
 // nodeNameOf is resolveNodeName with a dialed client when one can be had.
 func (r *TalosOperationReconciler) nodeNameOf(

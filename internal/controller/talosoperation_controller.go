@@ -56,6 +56,7 @@ const (
 	reasonOperationTransitioning = "ClusterTransitioning"
 	reasonOperationLockHeld      = "ClusterLockHeld"
 	reasonOperationPaused        = "OperatorPaused"
+	reasonOperationOwnNodeUnread = "OwnNodeUnread"
 	reasonOperationStepFailed    = "StepFailed"
 	reasonOperationAdvancing     = "Advancing"
 	reasonOperationComplete      = "Complete"
@@ -282,7 +283,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// A Kubernetes upgrade does the same in its Kubelets stage, where the node is drained first.
 	heldCPs, heldWorkers, own, err := r.holdOwnNodeLast(ctx, &cluster, op.Spec.Kind, controlPlanes, workers)
 	if err != nil {
-		return ctrl.Result{}, err
+		return r.ownNodeUnread(ctx, &op, err)
 	}
 
 	// Control planes go one at a time, and only once every one of them is
@@ -553,6 +554,18 @@ func (r *TalosOperationReconciler) lockUnavailable(ctx context.Context, op *icho
 	return ctrl.Result{}, err
 }
 
+// ownNodeUnread turns ownNodeNames's refusal into a pause that frees the cluster lock (setPhase) and says why in the
+// Paused condition; it is retried like a held lock, and the pause lifts itself when the machine can be told. Any other
+// error is returned for a retry.
+func (r *TalosOperationReconciler) ownNodeUnread(ctx context.Context, op *ichorv1alpha1.TalosOperation, err error) (ctrl.Result, error) {
+	if _, ok := errors.AsType[*ownNodeUnreadError](err); !ok {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{RequeueAfter: operationRequeueInterval},
+		r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationOwnNodeUnread, err.Error())
+}
+
 // operationLockIdentityPrefix starts the cluster lock identity of every TalosOperation.
 const operationLockIdentityPrefix = controllerIdentity + "/op/"
 
@@ -745,9 +758,11 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 
 	r.phaseEvent(op, previous, previousPauseReason, phase, reason, message)
 
-	// A pause that waits for a person frees the cluster lock, so a machine that is trying to join is not
-	// blocked by an operation nobody is working on. Its resume takes the lock again (acquireDisruptiveLock).
-	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused || reason == reasonOperationNoExecutor) {
+	// A pause that waits for a person, or for the controller's own machine to be told, frees the cluster lock, so a
+	// machine that is trying to join is not blocked by an operation nobody is working on. Its resume takes the lock
+	// again (acquireDisruptiveLock).
+	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused ||
+		reason == reasonOperationNoExecutor || reason == reasonOperationOwnNodeUnread) {
 		return r.releaseLock(ctx, op)
 	}
 

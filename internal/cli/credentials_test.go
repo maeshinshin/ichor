@@ -400,6 +400,48 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 	}
 }
 
+// The bundle plus the server address is the whole input: no kubeconfig exists on disk, no cluster is
+// reachable, and both files still come out working. The documents' claim that --bundle alone gets an
+// operator back in rests on this.
+func TestBundleAndKubeServerWriteCredentialsWithNoKubeconfigOnDisk(t *testing.T) {
+	f := newCredFixture(t, false, "")
+	t.Setenv("HOME", t.TempDir())
+	// clientcmd fixes its default ~/.kube/config at init, so HOME does not hide the developer's own
+	// kubeconfig: KUBECONFIG names a file that does not exist, and the search stops there.
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("TALOSCONFIG", "")
+
+	path := saveTestBundle(t, "no-kubeconfig", f.old, "")
+	out := t.TempDir()
+
+	req := f.request()
+	req.KubeconfigIn, req.TalosconfigIn = "", ""
+	req.BundleFile = path
+	req.TalosEndpoints = []string{"10.9.9.9"}
+	req.KubeServer = credServer
+	req.KubeconfigOut, req.TalosconfigOut = filepath.Join(out, "kubeconfig"), filepath.Join(out, "talosconfig")
+
+	// k8s is nil: nothing may be read from the cluster; and no kubeconfig exists under HOME.
+	files, err := writeCredentials(context.Background(), nil, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	caData, crt, cfg := readKubeconfigCreds(t, files.Kubeconfig)
+	if got := cfg.Clusters[cfg.Contexts[cfg.CurrentContext].Cluster].Server; got != credServer {
+		t.Fatalf("the kubeconfig names server %q, want %q", got, credServer)
+	}
+
+	if !bytes.Contains(caData, bytes.TrimSpace(f.old.Certs.K8s.Crt)) || !chainsTo(t, crt, f.old.Certs.K8s.Crt) {
+		t.Fatal("the kubeconfig does not match the bundle's Kubernetes CA")
+	}
+
+	_, tcrt, tctx := readTalosconfigCreds(t, files.Talosconfig)
+	if !chainsTo(t, tcrt, f.old.Certs.OS.Crt) || !slices.Equal(tctx.Endpoints, []string{"10.9.9.9"}) {
+		t.Fatal("the talosconfig does not match the bundle's Talos CA or the given endpoint")
+	}
+}
+
 func TestBundleFromBeforeTheCurrentCAsIsRefusedUnlessForced(t *testing.T) {
 	f := newCredFixture(t, false, "")
 	t.Setenv("HOME", t.TempDir())
@@ -847,13 +889,18 @@ func TestWatchRebuildsATunnelThatDiesAndSaysWhyItCouldNotAtFirst(t *testing.T) {
 
 func connect503() error { return connect.NewError(connect.CodeUnavailable, errors.New("tunnel gone")) }
 
-// --bundle does not skip the kubeconfig: its help must say so, not promise a way back in without one.
-func TestCreateCredentialsBundleHelpNamesTheKubeconfigItNeeds(t *testing.T) {
-	if !strings.Contains(createCredentialsCmd.Long, "It still needs your current kubeconfig") {
-		t.Errorf("--bundle help does not name the kubeconfig it needs:\n%s", createCredentialsCmd.Long)
+// --bundle with --kube-server needs no kubeconfig: its help must say the bundle plus the addresses
+// is enough, and must not claim a current kubeconfig is required.
+func TestCreateCredentialsBundleHelpSaysTheBundleAndAServerAreEnough(t *testing.T) {
+	if !strings.Contains(createCredentialsCmd.Long, "The bundle plus --kube-server URL and --talos-endpoints is\nall it needs") {
+		t.Errorf("--bundle help does not say the bundle plus the addresses is enough:\n%s", createCredentialsCmd.Long)
 	}
 
-	if strings.Contains(createCredentialsCmd.Long, "can always get back in") {
-		t.Error("--bundle help still promises a way back in without a kubeconfig")
+	if strings.Contains(createCredentialsCmd.Long, "It still needs your current kubeconfig") {
+		t.Error("--bundle help still says a current kubeconfig is required")
+	}
+
+	if createCredentialsCmd.Flags().Lookup("kube-server") == nil {
+		t.Error("create credentials has no --kube-server flag")
 	}
 }

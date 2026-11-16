@@ -158,6 +158,12 @@ var _ = Describe("StorageService.ListStorages", func() {
 	})
 })
 
+// rookPreset is the one preset the page creates; rookLabelKey is the node label the rook specs select by.
+const (
+	rookPreset   = "rook-v1"
+	rookLabelKey = "storage"
+)
+
 // builtinRoleRules returns the rules of one built-in Ichor role from its copy in config/rbac. The chart test
 // holds that copy equal to the chart's ClusterRole, so the user signed in here holds what a real one would.
 func builtinRoleRules(name string) []rbacv1.PolicyRule {
@@ -174,7 +180,7 @@ func builtinRoleRules(name string) []rbacv1.PolicyRule {
 // label selector and the preset. It has no disk selector, because the request has no field for one.
 func rookStorageRequest(cluster *ichorv1alpha1.TalosCluster, name string) *connect.Request[pb.CreateStorageRequest] {
 	return connect.NewRequest(&pb.CreateStorageRequest{
-		Cluster: objectRef(cluster.Namespace, cluster.Name), Name: name, DiskPreset: "rook-v1", NodeSelector: "storage=rook",
+		Cluster: objectRef(cluster.Namespace, cluster.Name), Name: name, DiskPreset: rookPreset, NodeSelector: rookLabelKey + "=rook",
 	})
 }
 
@@ -185,15 +191,15 @@ var _ = Describe("StorageService.CreateStorage", func() {
 
 		resp, err := s.CreateStorage(signedIn, rookStorageRequest(cluster, "rook-admin"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(resp.Msg.GetStorage().GetDiskPreset()).To(Equal("rook-v1"))
+		Expect(resp.Msg.GetStorage().GetDiskPreset()).To(Equal(rookPreset))
 		Expect(resp.Msg.GetAudit().GetActor()).To(Equal("ichor:storage-admin"))
 
 		var got ichorv1alpha1.TalosStorage
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: "rook-admin"}, &got)).To(Succeed())
 		Expect(got.Spec.ClusterRef.Name).To(Equal(cluster.Name))
-		Expect(got.Spec.DiskPreset).To(Equal("rook-v1"))
+		Expect(got.Spec.DiskPreset).To(Equal(rookPreset))
 		Expect(got.Spec.DiskSelector).To(BeEmpty(), "the page writes no disk selector")
-		Expect(got.Spec.Nodes.MatchLabels).To(Equal(map[string]string{"storage": "rook"}))
+		Expect(got.Spec.Nodes.MatchLabels).To(Equal(map[string]string{rookLabelKey: "rook"}))
 	})
 
 	It("refuses a rook-v1 TalosStorage create for an ichor-operator user, and writes nothing", func() {
@@ -217,8 +223,8 @@ var _ = Describe("StorageService.CreateStorage", func() {
 			GenerateName: "rook-selector-", Namespace: cluster.Namespace,
 			Spec: ichorv1alpha1.TalosStorageSpec{
 				ClusterRef:   corev1.LocalObjectReference{Name: cluster.Name},
-				Nodes:        metav1.LabelSelector{MatchLabels: map[string]string{"storage": "rook"}},
-				DiskPreset:   "rook-v1",
+				Nodes:        metav1.LabelSelector{MatchLabels: map[string]string{rookLabelKey: "rook"}},
+				DiskPreset:   rookPreset,
 				DiskSelector: `disk.transport == "nvme"`,
 			},
 		}
@@ -246,7 +252,7 @@ var _ = Describe("StorageService.CreateStorage", func() {
 		s, signedIn := signedInAs("ichor:storage-admin-empty", builtinRoleRules("admin"))
 
 		_, err := s.CreateStorage(signedIn, connect.NewRequest(&pb.CreateStorageRequest{
-			Cluster: objectRef(cluster.Namespace, cluster.Name), Name: "rook-everywhere", DiskPreset: "rook-v1",
+			Cluster: objectRef(cluster.Namespace, cluster.Name), Name: "rook-everywhere", DiskPreset: rookPreset,
 		}))
 		Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
 		Expect(err).To(MatchError(ContainSubstring("at least one label")))
@@ -262,13 +268,13 @@ var _ = Describe("StorageService.CreateStorage", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		got := map[string]*pb.StoragePreset{}
-		var names []string
+		names := make([]string, 0, len(resp.Msg.GetPresets()))
 		for _, p := range resp.Msg.GetPresets() {
 			got[p.GetName()] = p
 			names = append(names, p.GetName())
 		}
 		Expect(names).To(Equal(crdDiskPresetEnum()), "the presets are the CRD's diskPreset enum, in its order")
-		Expect(got["rook-v1"].GetCreatable()).To(BeTrue())
+		Expect(got[rookPreset].GetCreatable()).To(BeTrue())
 		Expect(got["longhorn-v1"].GetCreatable()).To(BeFalse())
 		Expect(got["longhorn-v1"].GetUnavailableReason()).To(ContainSubstring("kubectl"))
 	})
@@ -283,7 +289,7 @@ func crdDiskPresetEnum() []string {
 	Expect(yaml.Unmarshal(raw, &crd)).To(Succeed())
 
 	spec := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
-	var out []string
+	out := make([]string, 0, len(spec.Properties["diskPreset"].Enum))
 	for _, e := range spec.Properties["diskPreset"].Enum {
 		var v string
 		Expect(json.Unmarshal(e.Raw, &v)).To(Succeed())

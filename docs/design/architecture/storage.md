@@ -65,5 +65,7 @@ already read by the caller, plus elapsed time against
 paused -- paused, never proceeding to drain, once the timeout is reached
 with replicas still remaining.
 
+**The supported Longhorn version range is not stated.** Longhorn versions appear in this document and in the code without a range. Ichor does not install Longhorn; that is layer 2. The `longhorn-v1` preset and the evacuation hook use the `nodes.longhorn.io`, `replicas.longhorn.io` and `settings.longhorn.io` objects at `v1beta2`, and nothing in `pkg/storage` or `internal/controller` reads a Longhorn version or gates on one. The version-specific statements above cite longhorn-manager v1.9.1 and the Longhorn 1.12.1 and 1.13.0 documentation. ADR 0025's amendments cite webhook lines in v1.11.0, v1.12.1 and v1.13.0. The code states no lower or upper bound, so this document states none.
+
 `TalosStorage` reports health, so whatever installs the storage system can wait
 until the Talos side is ready.

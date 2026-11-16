@@ -222,6 +222,14 @@ check-embed-images:
 	  echo "  make build-ichor-embed VERSION=v0.0.8-abc1234 IMG=ghcr.io/maeshinshin/ichor-controller:v0.0.8-abc1234 IMG_UI=ghcr.io/maeshinshin/ichor-ui:v0.0.8-abc1234 IMAGE_DIGESTS=bin/digests.txt" >&2; \
 	  exit 1; \
 	fi
+	@for pair in IMG=$(IMG) IMG_UI=$(IMG_UI); do \
+	  name=$${pair%%=*}; img=$${pair#*=}; last=$${img##*/}; \
+	  case "$$last" in \
+	    *:latest) echo "build-ichor-embed: $$name is $$img, which is tagged latest; tag it with the version being built." >&2; exit 1 ;; \
+	    *:*) ;; \
+	    *) echo "build-ichor-embed: $$name is $$img, which has no tag; tag it with the version being built." >&2; exit 1 ;; \
+	  esac; \
+	done
 
 # .WAIT: under make -j, build-installer must not start (and rewrite dist/install.yaml with placeholders) before the refusal has finished.
 .PHONY: build-ichor-embed

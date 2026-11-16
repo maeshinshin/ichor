@@ -1799,3 +1799,21 @@ func TestUIDownloadVerbs(t *testing.T) {
 }
 
 const resClusterRoles = "clusterroles"
+
+// TestRetiredKindsGuardPullsLikeTheManager: a hook Job that omits imagePullPolicy takes Kubernetes' default
+// of Always for a :latest tag, so a kind-loaded image is never found and the install times out in pre-install.
+func TestRetiredKindsGuardPullsLikeTheManager(t *testing.T) {
+	docs := renderChart(t, "ichor")
+	guard := find(docs, "Job", "ichor-retired-kinds-guard")
+	if guard == nil {
+		t.Fatal("no ichor-retired-kinds-guard Job")
+	}
+	manager := findNameSuffix(docs, kindDeployment, "controller-manager")
+	if manager == nil {
+		t.Fatal("no controller-manager Deployment")
+	}
+	got := firstContainer(guard)["imagePullPolicy"]
+	if want := firstContainer(manager)["imagePullPolicy"]; got != want || got == nil {
+		t.Fatalf("retired-kinds guard imagePullPolicy = %v, want the manager's %v", got, want)
+	}
+}

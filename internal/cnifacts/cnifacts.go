@@ -44,6 +44,9 @@ import (
 // GatewayAPICRD is the CRD whose presence stands for "the Gateway API CRDs are installed".
 const GatewayAPICRD = "gateways.gateway.networking.k8s.io"
 
+// GatewayAPIBundleVersionAnnotation names the Gateway API release a CRD was installed from.
+const GatewayAPIBundleVersionAnnotation = "gateway.networking.k8s.io/bundle-version"
+
 const roleControlPlane = "controlplane"
 
 // Source is where the facts are read from.
@@ -78,7 +81,8 @@ func (s Source) Validate(ctx context.Context, cluster *ichorv1alpha1.TalosCluste
 }
 
 // Context collects the facts the guards need. A fact that cannot be read stays nil, which makes its
-// guard pass.
+// guard pass. The Gateway API release is read from the gateways CRD alone: that is the one CRD the
+// controller and the UI backend may get (their RBAC names it).
 func (s Source) Context(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, kubeProxy cni.KubeProxyMode,
 ) cilium.ValidationContext {
@@ -90,6 +94,7 @@ func (s Source) Context(
 	switch err := s.CRDs.Get(ctx, types.NamespacedName{Name: GatewayAPICRD}, crd); {
 	case err == nil:
 		vc.GatewayAPICRDs = ptr.To(true)
+		vc.GatewayAPIRelease = crd.GetAnnotations()[GatewayAPIBundleVersionAnnotation]
 	case apierrors.IsNotFound(err):
 		vc.GatewayAPICRDs = ptr.To(false)
 	}

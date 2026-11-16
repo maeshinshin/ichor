@@ -50,6 +50,30 @@ helm upgrade ichor ichor/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
 ```
 
+## When the install stops on the retired-kinds guard
+
+Before an install or upgrade, the chart runs a hook Job, `ichor-retired-kinds-guard`,
+that refuses while an object of the retired kind `TalosStorage` still exists. When
+the Job never gets to run, Helm prints a line that ends in `Job in progress` and
+`context deadline exceeded`. That line does not say which of two things happened:
+
+- **The guard refused.** Its pod ran and exited 1. Delete the objects it lists, then install again.
+- **The guard never ran.** Its pod was not scheduled, could not pull its image, or was killed. Deleting objects does not help; fix the cluster or the node, then install again.
+
+Run this to tell them apart:
+
+```sh
+kubectl -n ichor-system describe pods -l batch.kubernetes.io/job-name=ichor-retired-kinds-guard
+```
+
+- `State: Terminated` with `Exit Code: 1` ran. `kubectl -n ichor-system logs job/ichor-retired-kinds-guard` lists the retired objects, or an API error when the guard could not read them (fix its RBAC or the cluster in that case).
+- `Pending`, or `Waiting` with `ErrImagePull` or `ImagePullBackOff`, or a `FailedScheduling` event, never ran.
+- Any other exit code or reason, such as `OOMKilled` or `Evicted`, means the pod was killed, not refused.
+- No pods at all: `kubectl -n ichor-system describe job ichor-retired-kinds-guard` shows why the pod was never created.
+
+The chart keeps a failed hook's Job and pod, because its delete policy removes a
+hook only when it succeeds. A new attempt deletes them before it starts.
+
 ## Values
 
 Values worth knowing (see `dist/chart/values.yaml` for all of them):

@@ -35,6 +35,7 @@ rules:
   - talosmachines.ichor.maesh.dev
   - talosoperations.ichor.maesh.dev
   - talosstorages.ichor.maesh.dev
+  - talosstoragepresets.ichor.maesh.dev
   resources:
   - customresourcedefinitions
   verbs:
@@ -89,9 +90,9 @@ rules:
   - ichor-talosoperation-admin-role
   - ichor-talosoperation-editor-role
   - ichor-talosoperation-viewer-role
-  - ichor-talosstorage-admin-role
-  - ichor-talosstorage-editor-role
-  - ichor-talosstorage-viewer-role
+  - ichor-talosstoragepreset-admin-role
+  - ichor-talosstoragepreset-editor-role
+  - ichor-talosstoragepreset-viewer-role
   - ichor-viewer
   resources:
   - clusterroles

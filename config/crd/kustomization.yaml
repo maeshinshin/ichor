@@ -5,7 +5,6 @@ resources:
 - bases/ichor.maesh.dev_talosclusters.yaml
 - bases/ichor.maesh.dev_talosmachines.yaml
 - bases/ichor.maesh.dev_talosconfigpatches.yaml
-- bases/ichor.maesh.dev_talosstorages.yaml
 - bases/ichor.maesh.dev_talosoperations.yaml
 - bases/ichor.maesh.dev_talosetcdbackups.yaml
 - bases/ichor.maesh.dev_ichorinstallations.yaml

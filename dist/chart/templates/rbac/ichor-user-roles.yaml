@@ -20,7 +20,7 @@ rules:
   - talosetcdbackups
   - talosmachines
   - talosoperations
-  - talosstorages
+  - talosstoragepresets
   verbs:
   - get
   - list
@@ -65,7 +65,7 @@ rules:
   - talosetcdbackups
   - talosmachines
   - talosoperations
-  - talosstorages
+  - talosstoragepresets
   verbs:
   - get
   - list
@@ -151,7 +151,7 @@ rules:
   - talosetcdbackups
   - talosmachines
   - talosoperations
-  - talosstorages
+  - talosstoragepresets
   verbs:
   - get
   - list
@@ -285,12 +285,12 @@ rules:
   verbs:
   - create
   - delete
-# A TalosStorage is written as the signed-in user, and only an admin may create one: its disk preset
+# A TalosStoragePreset is written as the signed-in user, and only an admin may create one: its disk preset
 # decides how a node's disks are prepared and how the node is evacuated.
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstorages
+  - talosstoragepresets
   verbs:
   - create
 # Every download asks the controller for a short-lived certificate with a TalosCredentialRequest;

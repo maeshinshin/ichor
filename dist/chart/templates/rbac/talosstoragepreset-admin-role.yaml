@@ -11,12 +11,12 @@ metadata:
 {{- end }}
   labels:
     {{- include "ichor.labels" . | nindent 4 }}
-  name: {{ include "ichor.resourceName" (dict "suffix" "talosstorage-admin-role" "context" $) }}
+  name: {{ include "ichor.resourceName" (dict "suffix" "talosstoragepreset-admin-role" "context" $) }}
 rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstorages
+  - talosstoragepresets
   verbs:
   - create
   - delete
@@ -29,7 +29,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstorages/status
+  - talosstoragepresets/status
   verbs:
   - get
 {{- end }}

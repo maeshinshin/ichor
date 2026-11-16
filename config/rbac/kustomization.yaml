@@ -39,9 +39,6 @@ resources:
 - talosoperation_admin_role.yaml
 - talosoperation_editor_role.yaml
 - talosoperation_viewer_role.yaml
-- talosstorage_admin_role.yaml
-- talosstorage_editor_role.yaml
-- talosstorage_viewer_role.yaml
 - talosconfigpatch_admin_role.yaml
 - talosconfigpatch_editor_role.yaml
 - talosconfigpatch_viewer_role.yaml

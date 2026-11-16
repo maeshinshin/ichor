@@ -65,7 +65,7 @@ func TestAdoptPlanDescribesEveryShippedKind(t *testing.T) {
 			// Named documents must be named for the loader to accept them.
 			for i := range field.Elem().NumField() {
 				f := field.Elem().Type().Field(i)
-				if strings.Split(f.Tag.Get("json"), ",")[0] == "name" && f.Type.Kind() == reflect.String {
+				if strings.Split(f.Tag.Get("json"), ",")[0] == keyName && f.Type.Kind() == reflect.String {
 					field.Elem().Field(i).SetString("x")
 				}
 			}

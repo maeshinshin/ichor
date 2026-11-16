@@ -150,6 +150,15 @@ command does. Each item is described where it is listed below.
   where Longhorn is installed outside `longhorn-system`.** Ichor does not request
   eviction of such a replica in that install, so it has to leave the node by other
   means first (Operations).
+- **A `TalosConfigPatch` that writes a bond in both spellings is refused, and so is a
+  `BondConfig` enumeration above its table.** Apply the patch again with each bond setting
+  in one spelling: `primary` and `deviceSelectors` stay in the `v1alpha1` entry, and every
+  other bond setting goes in its `BondConfig` (Typed configuration). A stored object
+  still renders, because the refusal runs when a patch is written.
+- **An upgrade from v0.2.x no longer stops with `talosclusters.ichor.maesh.dev is
+  forbidden`.** The installer's own Role now grants `list` on `TalosClusters` in the
+  release's namespace, and the installer reads the issuer URL after that Role is in
+  effect. An upgrade that stopped with that message can be run again (Operations).
 
 ### CLI
 - **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The
@@ -611,6 +620,14 @@ command does. Each item is described where it is listed below.
   the restore and skipping the CA and key rotation guards. The aggregator CA
   rotation guard likewise fails on a version contract it cannot parse.
 
+- **A self-upgrade no longer fails on a permission the installer grants itself.**
+  `ichor upgrade ichor` runs the installer under the role of the release that is running,
+  and that role has no right to list `TalosClusters`. The installer read the issuer URL
+  before it applied its own RBAC, so the upgrade stopped with `talosclusters.ichor.maesh.dev
+  is forbidden` before the new role could take effect. The issuer URL is now read after the
+  installer's namespaced Role is in effect, and that Role grants `list` on `TalosClusters`
+  in the release's namespace only.
+
 ### Storage
 
 - **`TalosStorage` takes a second disk preset, `rook-v1`, for Rook/Ceph.** A node
@@ -651,6 +668,11 @@ command does. Each item is described where it is listed below.
   evacuate. The other direction can lose data: a node that the selector matches through
   `spec.nodeLabels` is rendered before its live Node carries the label, and evacuation
   does not run for it until the label is there.
+
+- **A removal held by a failed storage evacuation is retried.** The Removal condition
+  named the failed evacuation, but nothing returned to the removal until the controller's
+  periodic resync, so a machine could stay in deletion until then. The removal now asks to
+  be tried again after ten seconds.
 
 ### Etcd backups and restore
 
@@ -824,6 +846,23 @@ command does. Each item is described where it is listed below.
   network, node, KubePrism, Talos API access, inline and external manifests,
   audit policy, authorizer, credential provider, kubelet, kube-proxy,
   kube-scheduler and static pods). `docs/reference/crds/talosconfigpatch.md` lists every setting.
+- **A bond cannot be written in both spellings.** A `TalosConfigPatch` that sets a bond
+  as a `BondConfig` in `spec.config` and also as an entry of `machine.network.interfaces`
+  in the `v1alpha1` document is refused, unless that entry carries only `primary` and
+  `deviceSelectors`. The refusal names the bond and the settings the `v1alpha1` entry
+  carries, and says the `BondConfig` owns every setting of the bond, the eight only it
+  spells (`hardwareAddr`, `nsIp6Targets`, `adLACPActive`, `missedMax`, `up`, `multicast`,
+  `addresses[].routePriority`, `routes[].table`) and each setting both spell alike, while
+  the `v1alpha1` entry owns `primary` and `deviceSelectors`, which a `BondConfig` cannot
+  carry. The reason: Talos loads both without an error, gives each setting the `BondConfig`
+  carries its value, and resets a setting the `BondConfig` leaves unset to zero, so the
+  `v1alpha1` value of the same bond is lost. The check covers bonds only, and runs at
+  admission.
+- **A `BondConfig` enumeration must name a value of its table.** `bondMode`,
+  `xmitHashPolicy`, `lacpRate`, `arpValidate`, `arpAllTargets`, `failOverMac`, `adSelect`,
+  `primaryReselect` and `adLACPActive` are refused above the largest value their Talos
+  table has, and the message names the field and that value. `{"bondMode": 9}` used to
+  pass, and the node then ran a mode no table names.
 - The other 25 kinds Talos registers are not available, on purpose. 10 carry a
   credential (registry authentication and TLS, the CA and signing keys,
   the encryption key, WireGuard, SideroLink, Hetzner Cloud and the discovery

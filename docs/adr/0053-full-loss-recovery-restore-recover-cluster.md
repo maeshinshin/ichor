@@ -64,7 +64,9 @@ does have a cluster, must take the lock.
   for example when the controller ran on the only control plane that was wiped.
 - A restore round trip against a real Talos (e2e) is the design's regular proof and is not covered here.
 
-- Amendment 2026-10-27: `loadBundleFile` now decodes through `secretsbundle.Decode`, which fills `Bundle.Clock`; before, `--recover-cluster` panicked in `dialRecover` on a nil Clock.
+## Amendment (2026-10-27): `loadBundleFile` decodes through `secretsbundle.Decode`
+
+`loadBundleFile` now decodes through `secretsbundle.Decode`, which fills `Bundle.Clock`; before, `--recover-cluster` panicked in `dialRecover` on a nil Clock.
 
 ## Amendment (2026-11-16): the command is `ichor restore cluster`
 

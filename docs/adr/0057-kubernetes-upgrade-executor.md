@@ -1,6 +1,6 @@
 # 0057. The Kubernetes upgrade applies the rendered configuration node by node; talosctl's upgrade-k8s is not reused whole
 
-Status: Accepted · Date: 2026-10-26 · Design section: Upgrades
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Upgrades
 Decided: Execute `kind: Kubernetes` as a per-node AdvanceMachineFunc that applies the freshly rendered machine configuration without a reboot (only the component image fields may differ), pre-pulls the images, verifies the node from the Kubernetes API, and syncs the bootstrap manifests once the last control plane runs the target; it refuses a skipped minor, an unsupported Talos pairing and an unfinished CNI hand-over before touching a node, and only warns about removed APIs in use
 
 ## Context
@@ -116,11 +116,6 @@ declining writes nothing.
 - `pkg/fieldmeta` still lacks reboot rules for the multi-document Kubernetes component kinds. Any machine whose
   rendered config changes one of those kinds outside an operation is reported `RebootRequired`; left as is on
   purpose (above).
-- Amended: every kubelet roll (the Kubelets stage, ADR 0087) now begins storage evacuation, cordons and drains the
-  node with the config rollout's helpers, rolls the kubelet, waits for Ready, uncordons and ends the evacuation; a
-  failure pauses and ends the evacuation too. The controller's own node goes last in the Kubelets stage
-  (`holdOwnNodeLast`, as for config rollouts) and is drained and evacuated like the rest; its eviction restarts the
-  controller, and the step resumes from the node's state.
 - Deferred: the `Ichor` kind is still unwired.
 
 ## Later changes
@@ -132,4 +127,11 @@ declining writes nothing.
   stages (apiservers, then controller-manager and scheduler, then kube-proxy and the bootstrap-manifest sync, then
   kubelets), so the manifest sync does not wait for "the last control plane" and no kubelet is ever newer than an
   API server.
-- Amendment (ADR 0113): the target of a Kubernetes upgrade is the release set's Kubernetes, and other targets are refused before anything is written. The rollout runs this step after the Talos step, and after any configuration step the executor needs for an unrelated pending change. The executor's pairing and skew checks are unchanged.
+
+## Amendment (2026-10-28): every kubelet roll begins storage evacuation
+
+Every kubelet roll (the Kubelets stage, ADR 0087) now begins storage evacuation, cordons and drains the node with the config rollout's helpers, rolls the kubelet, waits for Ready, uncordons and ends the evacuation; a failure pauses and ends the evacuation too. The controller's own node goes last in the Kubelets stage (`holdOwnNodeLast`, as for config rollouts) and is drained and evacuated like the rest; its eviction restarts the controller, and the step resumes from the node's state.
+
+## Amendment (2026-11-03): the upgrade target is the release set's Kubernetes (ADR 0113)
+
+The target of a Kubernetes upgrade is the release set's Kubernetes, and other targets are refused before anything is written. The rollout runs this step after the Talos step, and after any configuration step the executor needs for an unrelated pending change. The executor's pairing and skew checks are unchanged.

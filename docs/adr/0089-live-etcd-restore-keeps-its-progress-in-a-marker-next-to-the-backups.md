@@ -286,10 +286,17 @@ own control plane. Decisions:
   the kubelet keeping the process alive through the probe server, and the informers' behaviour when the API returns
   with older objects (a restart is what happens, not a relist).
 
-- Amendment 2026-10-27: the Recovering step verifies and then re-reads the pinned snapshot, i.e. two decrypts; with the old 270 MiB scrypt cost each that OOM-killed the controller within a second (see 0047), and with the 1 MiB work factor both stay streamed and under 64 MiB.
-- Amendment 2026-10-27 (plan text and failover): the controller pod and the control plane's Node are now also found when the machine's `spec.endpoint` is stale (the observed Talos address is tried first, and the machine list shows it), and the pod is looked up in the Ichor namespace, then the cluster's, then (in-process server only) everywhere, since a CLI has no POD_NAMESPACE. `--follow` says which API servers it will fail over to, or why it has none, instead of staying silent.
+## Amendment (2026-10-27): the Recovering step re-reads the pinned snapshot
 
-Amendment 2026-11-05 (ADR 0130): `spec.etcdRestore.reason` is no longer required (the CEL `reason is not empty` and `MinLength=1` are gone; the field is optional, deprecated and unused), `CreateOperation` needs the cluster name typed and the override but no reason, the audit record and the Warning Event say who requested the restore with no reason, and the restore marker no longer holds a reason (an older marker's `reason` is ignored). `ichor restore --live` has no `--override-reason`, and the restore dialog has no reason box.
+The Recovering step verifies and then re-reads the pinned snapshot, i.e. two decrypts; with the old 270 MiB scrypt cost each that OOM-killed the controller within a second (see 0047), and with the 1 MiB work factor both stay streamed and under 64 MiB.
+
+## Amendment (2026-10-27): the controller pod and Node are found when `spec.endpoint` is stale
+
+The controller pod and the control plane's Node are now also found when the machine's `spec.endpoint` is stale (the observed Talos address is tried first, and the machine list shows it), and the pod is looked up in the Ichor namespace, then the cluster's, then (in-process server only) everywhere, since a CLI has no POD_NAMESPACE. `--follow` says which API servers it will fail over to, or why it has none, instead of staying silent.
+
+## Amendment (2026-11-05): `spec.etcdRestore.reason` is optional (ADR 0130)
+
+`spec.etcdRestore.reason` is no longer required (the CEL `reason is not empty` and `MinLength=1` are gone; the field is optional, deprecated and unused), `CreateOperation` needs the cluster name typed and the override but no reason, the audit record and the Warning Event say who requested the restore with no reason, and the restore marker no longer holds a reason (an older marker's `reason` is ignored). `ichor restore --live` has no `--override-reason`, and the restore dialog has no reason box.
 
 ## Amendment (2026-11-16): `restore --live` and `--recover-cluster` are `ichor restore etcd` and `ichor restore cluster`
 

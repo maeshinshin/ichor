@@ -1,6 +1,6 @@
 # 0093. The UI hands over a CA rotation's new credentials to administrators who hold the download verb
 
-Status: Accepted · Date: 2026-10-27 · Design section: UI backend, Trust, Secrets · Amends: 0091 (Decision 3, "the UI has no download")
+Status: Accepted, amended · Date: 2026-10-27 · Design section: UI backend, Trust, Secrets · Amends: 0091 (Decision 3, "the UI has no download")
 
 Decided: `OperationService` gains `DownloadCARotationCredentials` (server-streaming, one zip with `kubeconfig` and `talosconfig`, the files `ichor create credentials` writes) and `AcknowledgeCARotationCredentials` (builds the new kubeconfig in memory, checks that it authenticates to the cluster's Kubernetes API, then sets `ichor.maesh.dev/credentials-handoff` with `CARotationHandoffToken`); the download follows ADR 0084's authorization model: the Kubernetes RBAC verb `download` on the subresource `talosclusters/credentials`, checked with a `SelfSubjectAccessReview` as the caller, granted to nobody by default (the chart's `ichorUI.credentials.groups`, or `serviceAccount: true` if the operator insists), a Warning Event `CredentialsDownload` on the TalosCluster before any byte is produced and a refusal if it cannot be recorded; the download is allowed from `AwaitingCredentials` to `Finalizing`, the acknowledgement only in `AwaitingCredentials`; the acknowledgement needs no download and no new RBAC (it is an `update` of the operation, like pausing); the operation page offers "Download new credentials" (only to a caller who holds the verb) and "Continue rotation" (behind a confirmation); the credential builder is the shared package `internal/credentials`, used by the CLI and the UI backend
 
@@ -35,5 +35,6 @@ The premise "the keys never pass through ichor-ui" is also weaker than it read. 
 - The Kubernetes server in the downloaded kubeconfig is the declared endpoint, which can differ from the address an operator's own kubeconfig uses (a load balancer name, say); `ichor create credentials` copies the operator's own. The backend's acknowledgement check also goes to the declared endpoint from inside the cluster, so a cluster whose endpoint pods cannot reach is acknowledged through the CLI.
 - Not built: downloading after `Done`, a Talos API check on acknowledgement, a way for the server to know a download happened, a `--skip` of the hand-off, and the CLI streaming through ichor-ui (`ichor create credentials` still reads the Secret itself and works offline; the in-process OperationService answers `Unimplemented` to the stream).
 
+## Amendment (2026-10-28): `GetCARotationCredentialsPermission` is removed
 
-Amendment: `GetCARotationCredentialsPermission` is removed; `DiagnosticsService.GetMyPermissions(cluster)` returns the same `download`-on-`talosclusters/credentials` answer as `cluster_credentials`, together with ADR 0084's flags.
+`GetCARotationCredentialsPermission` is removed; `DiagnosticsService.GetMyPermissions(cluster)` returns the same `download`-on-`talosclusters/credentials` answer as `cluster_credentials`, together with ADR 0084's flags.

@@ -1,6 +1,6 @@
 # 0056. `TalosCluster.spec.gitops`: a repository connection, strict mode, and the UI/CLI opening PRs
 
-Status: Superseded by ADR 0101 · Date: 2026-10-26 · Design section: GitOps and Argo CD
+Status: Superseded by ADR 0101, amended · Date: 2026-10-26 · Design section: GitOps and Argo CD
 Decided: `TalosCluster.spec.gitops` carries `mode` (`relaxed` default, `strict`) and an optional `repository` connection (host, https API URL, owner/repo, https clone URL, base branch, a `tokenSecretRef` read in the UI backend's own namespace, `machinesPath` required for strict); `Server.requireUntracked` becomes `planWrite`, which sends a CR Argo CD tracks to a pull request when a connection exists and refuses otherwise, and sends a strict approval to a pull request that adds the `TalosMachine` file; changing `mode` rewrites nothing; the response carries `pull_request_url` and the audit action gets a `-pr` suffix; amended 2026-10-26: the PR branch is `ichor/<verb>-<name>` (since 2026-10-27 `ichor/<verb>-<namespace>-<name>`) and a request whose head branch already has an open PR returns that PR instead of opening another, and deleting a tracked `TalosConfigPatch` becomes a PR that removes its document (or its file)
 
 ## Context
@@ -106,9 +106,6 @@ before they are returned; the Secret read errors name the Secret, never its data
 - Until a strict-approval PR merges the machine stays pending and the UI still offers approval; a click now
   returns the open PR's URL (decision 6). Nothing follows a PR to merge, and the UI does not mark a machine
   as having one open.
-- Amended 2026-10-27: the branch is `ichor/<verb>-<namespace>-<name>` (`prBranchName`), so same-named objects in
-  different namespaces no longer share one; a name with characters outside `[a-z0-9-]` or over 100 bytes gets an
-  8-hex hash of the full name appended, which keeps it a valid, bounded ref. PRs opened under the old name are not found.
 - `machinesPath` is one directory for every cluster's machines in that connection; a layout that needs more is
   not built.
 - The new-file manifest carries no labels or annotations from the live `TalosMachine`.
@@ -116,3 +113,7 @@ before they are returned; the Secret read errors name the Secret, never its data
   prunes or uses `Replace`, that is the Application's setting, not Ichor's.
 
 (Amended 2026-10-26, ADR 0065: a request may carry `Override{reason}` to write a tracked or strict-mode CR directly and still open this PR, if Kubernetes RBAC grants the `override` verb.)
+
+## Amendment (2026-10-27): the PR branch name includes the namespace
+
+The branch is `ichor/<verb>-<namespace>-<name>` (`prBranchName`), so same-named objects in different namespaces no longer share one; a name with characters outside `[a-z0-9-]` or over 100 bytes gets an 8-hex hash of the full name appended, which keeps it a valid, bounded ref. PRs opened under the old name are not found.

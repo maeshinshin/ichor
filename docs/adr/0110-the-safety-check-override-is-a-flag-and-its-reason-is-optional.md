@@ -1,6 +1,6 @@
 # 0110. The safety-check override is a flag, and its reason is optional
 
-Status: Accepted · Date: 2026-11-03 · Design section: Trust, Validation · Touches: 0065, 0085, 0089, 0107, 0109
+Status: Accepted, amended · Date: 2026-11-03 · Design section: Trust, Validation · Touches: 0065, 0085, 0089, 0107, 0109
 
 Decided: the override of a safety check is requested with a flag (`--override`, `override` on a node operation), and a reason is optional, recorded with `--override-reason` or `overrideReason`; the RBAC verb `override` stays the only gate, and an override with no reason is recorded as "no reason given".
 
@@ -39,4 +39,6 @@ The reason was never the gate. The gate is the Kubernetes verb `override`, check
 - The etcd restore keeps a required `reason` in its spec, now filled with "no reason given" when none was typed, so the restore record always has a value.
 - The Connect messages keep their names; the proto comments and the generated code change only where their text does.
 
-Amendment 2026-11-05 (ADR 0130): the optional reason is gone too. Decisions 2, 4 and 5 no longer hold: there is no `--override-reason`, `Override.reason` and `overrideReason` are deprecated and unused, the audit record and the Event no longer say `no reason given` (they say nothing about a reason), the etcd restore's `spec.etcdRestore.reason` is optional and not written, and the UI's override checkbox has no reason box. Decisions 1 and 3 (the flag, and the verb as the only gate) stand.
+## Amendment (2026-11-05): the optional reason is removed (ADR 0130)
+
+The optional reason is gone too. Decisions 2, 4 and 5 no longer hold: there is no `--override-reason`, `Override.reason` and `overrideReason` are deprecated and unused, the audit record and the Event no longer say `no reason given` (they say nothing about a reason), the etcd restore's `spec.etcdRestore.reason` is optional and not written, and the UI's override checkbox has no reason box. Decisions 1 and 3 (the flag, and the verb as the only gate) stand.

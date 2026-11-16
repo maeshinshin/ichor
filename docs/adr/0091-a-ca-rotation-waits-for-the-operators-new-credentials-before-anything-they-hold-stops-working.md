@@ -114,7 +114,9 @@ exists, and the command does not pretend otherwise.
 - ADR 0063's statement that "Ichor's dial" is the only client it keeps connected stands: the controller's bundle-based dial is
   unaffected; this ADR is about every other client the operator owns.
 
-Amendment 2026-11-06: `ichor rotate ca` without `--follow` still stays until the hand-off is done (Decision 3 stands: the files and the acknowledgement need the operator's own kubeconfig, and the CLI is the one party that has it); it returns once the operation has gone on, in seconds when the nodes already trust the new CAs. Its help text and the `--follow` usage now say so. To start a rotation without the CLI, create the operation with `kubectl` or the UI and hand it off later with `ichor create credentials NAME --acknowledge`.
+## Amendment (2026-11-06): `ichor rotate ca` without `--follow` still stays until the hand-off is done
+
+`ichor rotate ca` without `--follow` still stays until the hand-off is done (Decision 3 stands: the files and the acknowledgement need the operator's own kubeconfig, and the CLI is the one party that has it); it returns once the operation has gone on, in seconds when the nodes already trust the new CAs. Its help text and the `--follow` usage now say so. To start a rotation without the CLI, create the operation with `kubectl` or the UI and hand it off later with `ichor create credentials NAME --acknowledge`.
 
 ## Amendment (2026-11-16): `--kube-server` names the server, so `--bundle` needs no kubeconfig
 

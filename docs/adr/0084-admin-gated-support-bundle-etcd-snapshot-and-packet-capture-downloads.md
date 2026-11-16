@@ -1,6 +1,6 @@
 # 0084. Admin-gated support bundle, etcd snapshot and packet capture downloads
 
-Status: Accepted · Date: 2026-10-27 · Design section: UI backend, Trust, Secrets
+Status: Accepted, amended · Date: 2026-10-27 · Design section: UI backend, Trust, Secrets
 Decided: three read-only downloads from a node's Talos API are served by the UI backend (`DiagnosticsService`, server-streaming byte chunks over the existing Connect transport): `DownloadSupportBundle` (one node, or every approved node of a cluster), `DownloadEtcdSnapshot` (a control plane node) and `CapturePackets` (one interface, 30 s by default and 5 min at most, 100 MiB at most, optional validated BPF filter); each needs the Kubernetes RBAC verb `download` on the subresource `talosmachines/support-bundle`, `talosmachines/etcd-snapshot` or `talosmachines/packet-capture`, checked with a `SelfSubjectAccessReview` as the caller, and granted to nobody by default, including the `ichor-ui` ServiceAccount; the chart grants it to named groups or, if the operator insists, to the ServiceAccount; every download records a Warning Event `DiagnosticsDownload` on the TalosMachine before any byte is read and is refused if that Event cannot be recorded; the backend mints a Talos client certificate per call with the least role the call needs (`os:reader`, `os:etcd:backup`, `os:operator`); nothing is stored; the UI adds an Actions menu on the node page, the CLI adds `ichor support-bundle`, `ichor pcap` and `ichor snapshot etcd`
 
 ## Context
@@ -50,4 +50,6 @@ The calls are in Talos v1.14.3 (`pkg/machinery` and the node's RBAC table in `in
 - The Talos side is the vendored client (`client.EtcdSnapshot`, `PacketCapture`, `Dmesg`, `Logs`, COSI `List`) and the roles each call needs are those of Talos v1.14.3's RBAC table. A Talos version that changes that table makes a download fail visibly with the node's refusal.
 - The role `PacketCapture` needs may differ on Talos versions other than 1.14.
 
-Amendment: `GetDiagnosticsPermissions` is replaced by `GetMyPermissions(machine?, cluster?)`, one call that answers these three flags and ADR 0093's credentials flag with concurrent `SelfSubjectAccessReview`s; the pages fetch it once and pass the flags down.
+## Amendment (2026-10-28): `GetMyPermissions` replaces `GetDiagnosticsPermissions`
+
+`GetDiagnosticsPermissions` is replaced by `GetMyPermissions(machine?, cluster?)`, one call that answers these three flags and ADR 0093's credentials flag with concurrent `SelfSubjectAccessReview`s; the pages fetch it once and pass the flags down.

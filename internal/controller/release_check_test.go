@@ -23,7 +23,8 @@ const (
 	releaseCheckApp = "ichor"
 )
 
-// ensureCiliumPolicyCRD installs the CiliumNetworkPolicy CRD the envtest suite lacks (idempotent).
+// ensureCiliumPolicyCRD installs the CiliumNetworkPolicy CRD the envtest suite lacks (idempotent), and
+// returns once the kind resolves: until discovery publishes the new CRD, a Get is a NoMatch, not a NotFound.
 func ensureCiliumPolicyCRD() {
 	const plural = "ciliumnetworkpolicies"
 
@@ -39,6 +40,13 @@ func ensureCiliumPolicyCRD() {
 		},
 	}}
 	Expect(k8sClient.Create(ctx, crd)).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
+
+	Eventually(func() error {
+		var l unstructured.UnstructuredList
+		l.SetGroupVersionKind(ciliumPolicyGVK)
+
+		return k8sClient.List(ctx, &l)
+	}, "20s", "200ms").Should(Succeed())
 }
 
 var _ = Describe("ReleaseCheck", Ordered, func() {

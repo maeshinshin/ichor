@@ -1242,8 +1242,8 @@ func findRoleBindingTo(docs []map[string]any, roleName string) map[string]any {
 }
 
 // checkNoClusterWideSecretsRead guards the regression
-// (commit 645f5be reintroduced a ClusterRole rule granting unrestricted
-// get/list/watch on every Secret in every namespace, which 823b04f had
+// (commit b6aa84b97 reintroduced a ClusterRole rule granting unrestricted
+// get/list/watch on every Secret in every namespace, which e90a1ef12 had
 // already removed once): no ClusterRole in the rendered chart may grant
 // get, list or watch on secrets without resourceNames to restrict it. The
 // toggled manager-role template renders as a Role instead of a ClusterRole

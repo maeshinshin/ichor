@@ -8,7 +8,7 @@ Decided: Before the controller creates the installer Job of an Ichor upgrade it 
 
 ADR 0108 signs the three release images and the chart keylessly with cosign and documents `cosign verify`, but left two things open (its follow-up table): the installer Job's image is `installerRepository:version`, a tag a registry operator or an attacker with write access can repoint after anyone looked, and nothing in Ichor checks a signature. The installer Job's ServiceAccount holds `escalate` and `bind` on ClusterRoles (ADR 0059), so the installer image is the most privileged thing Ichor runs; "as strong as cluster-admin". Audit finding M3 asked for resolution by digest (`spec.installerDigest`) and a signature check before the Job runs.
 
-`internal/imagesig` and its `sigstore-go` dependency existed until commit 3c04d972 for the Cilium image-patch path ADR 0115 later removed. The verification code, the embedded trusted root and the way the bundles are read (OCI referrers, Sigstore bundle v0.3, what cosign 3 writes by default; `cosign sign` v3.1.3 is the flake's version) are reused here. ADR 0090 says air-gapped installs are out of scope; mirrors are in scope (`installerRepository`).
+`internal/imagesig` and its `sigstore-go` dependency existed until commit 55a6baa5e for the Cilium image-patch path ADR 0115 later removed. The verification code, the embedded trusted root and the way the bundles are read (OCI referrers, Sigstore bundle v0.3, what cosign 3 writes by default; `cosign sign` v3.1.3 is the flake's version) are reused here. ADR 0090 says air-gapped installs are out of scope; mirrors are in scope (`installerRepository`).
 
 ## Decisions
 

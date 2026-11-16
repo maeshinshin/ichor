@@ -269,7 +269,7 @@ func TestRollbackRestoresTheInstallerRBACSnapshot(t *testing.T) {
 }
 
 // A new release adds an installer Role in a namespace the old installer has no rights in (the
-// kube-system Role of commit 8a7199b). The old installer cannot even read it, so the rights must
+// kube-system Role of commit d2f1ce505). The old installer cannot even read it, so the rights must
 // arrive through the cluster-scoped role, which stage 0 applies before it touches that namespace.
 func TestRunUpgradeReachesANewNamespaceThroughTheClusterRole(t *testing.T) {
 	ctx := context.Background()

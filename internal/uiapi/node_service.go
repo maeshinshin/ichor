@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"slices"
 	"sync"
 
@@ -368,33 +367,12 @@ func (s *Server) findKubernetesNode(ctx context.Context, m *ichorv1alpha1.TalosM
 		}
 	}
 
-	// The address the node answers on now, then the one spec names: a node that moved is found by the first.
-	var hosts []string
-
-	for _, ep := range []string{m.DialEndpoint(), m.Spec.Endpoint} {
-		if h, _, err := net.SplitHostPort(ep); err == nil {
-			ep = h
-		}
-
-		hosts = append(hosts, ep)
-	}
-
 	var list corev1.NodeList
 	if err := s.List(ctx, &list); err != nil {
 		return nil, err
 	}
 
-	for _, host := range hosts {
-		for i := range list.Items {
-			for _, addr := range list.Items[i].Status.Addresses {
-				if addr.Address == host {
-					return &list.Items[i], nil
-				}
-			}
-		}
-	}
-
-	return nil, nil
+	return m.NodeByAddress(list.Items), nil
 }
 
 func kubernetesNodeStatus(node *corev1.Node) *pb.KubernetesNodeStatus {

@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"net"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -317,6 +319,28 @@ func (m *TalosMachine) DialEndpoint() string {
 	}
 
 	return m.Spec.Endpoint
+}
+
+// NodeByAddress is the Node of nodes that has the address the machine answers on now (DialEndpoint), else the one
+// spec.endpoint names: a node that moved is found by the first, one the Node object has not caught up with by the
+// second. It is nil when none matches. The controller and the UI backend both ask this to tell which machine a node is.
+func (m *TalosMachine) NodeByAddress(nodes []corev1.Node) *corev1.Node {
+	for _, endpoint := range []string{m.DialEndpoint(), m.Spec.Endpoint} {
+		host := endpoint
+		if h, _, err := net.SplitHostPort(endpoint); err == nil {
+			host = h
+		}
+
+		for i := range nodes {
+			for _, addr := range nodes[i].Status.Addresses {
+				if addr.Address == host {
+					return &nodes[i]
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // KubeletServingCertificateStatus records one issued kubelet serving certificate.

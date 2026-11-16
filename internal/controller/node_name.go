@@ -130,12 +130,8 @@ func resolveNodeName(ctx context.Context, c client.Reader, talos TalosClient, m 
 		return "", fmt.Errorf("listing Kubernetes nodes to find %q's: %w", m.Name, err)
 	}
 
-	for i := range nodes.Items {
-		for _, addr := range nodes.Items[i].Status.Addresses {
-			if addr.Address == host {
-				return nodes.Items[i].Name, nil
-			}
-		}
+	if n := m.NodeByAddress(nodes.Items); n != nil {
+		return n.Name, nil
 	}
 
 	return "", fmt.Errorf("node %q has no spec.hostname and neither its node's report nor a Kubernetes node at %q names its node", m.Name, host)

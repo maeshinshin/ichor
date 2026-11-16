@@ -22,7 +22,7 @@ import { formatTimestamp } from '@/lib/format'
 import { createBatcher, type Entry, LogBuffer, truncateMessage } from '@/lib/logBuffer'
 import { streamWithResume } from '@/lib/resumableStream'
 import { refreshSession } from '@/lib/session'
-import { t, type Key } from '@/lib/i18n'
+import { t } from '@/lib/i18n'
 
 // The viewer keeps the newest MAX_LINES lines, appends them in
 // batches every FLUSH_MS, and shows at most MAX_CHARS of one message until
@@ -34,16 +34,14 @@ const MAX_CHARS = 1000
 // Known Talos service names (node.proto's own comment); "kernel" is this screen's own sentinel for the empty-string
 // wire value (Talos's Dmesg log) - Select can't use "" as a real item
 // value, since empty string is its own placeholder-vs-selected signal.
-const LOG_SOURCES: { value: string; label: Key | string; wire: string }[] = [
-  { value: 'kernel', label: 'node.logKernel', wire: '' },
+const LOG_SOURCES: { value: string; label: string; wire: string }[] = [
+  { value: 'kernel', label: t('node.logKernel'), wire: '' },
   { value: 'kubelet', label: 'kubelet', wire: 'kubelet' },
   { value: 'etcd', label: 'etcd', wire: 'etcd' },
   { value: 'trustd', label: 'trustd', wire: 'trustd' },
   { value: 'apid', label: 'apid', wire: 'apid' },
   { value: 'machined', label: 'machined', wire: 'machined' },
 ]
-
-const labelText = (label: string) => (label.startsWith('node.') ? t(label as Key) : label)
 
 // A render error in the log list must not take the whole page down
 // (preact unmounts the tree on an uncaught render error).
@@ -81,7 +79,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
   const listRef = useRef<HTMLDivElement>(null)
   const [wrap, setWrap] = useState(true)
   const service = LOG_SOURCES.find((s) => s.value === source)?.wire ?? ''
-  const sourceLabel = labelText(LOG_SOURCES.find((s) => s.value === source)?.label ?? source)
+  const sourceLabel = LOG_SOURCES.find((s) => s.value === source)?.label ?? source
   // One string for the copy button, built only when the lines change.
   const copyText = useMemo(() => entries.map((e) => formatTimestamp(e.item.time) + ' ' + e.item.message).join('\n'), [entries])
 
@@ -188,7 +186,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
               <SelectContent>
                 {LOG_SOURCES.map((s) => (
                   <SelectItem key={s.value} value={s.value}>
-                    {labelText(s.label)}
+                    {s.label}
                   </SelectItem>
                 ))}
               </SelectContent>

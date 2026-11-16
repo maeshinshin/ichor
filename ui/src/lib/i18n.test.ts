@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
+import ts from 'typescript'
 import { timestampFromDate, type Timestamp } from '@bufbuild/protobuf/wkt'
 import { enumLabel } from './enum.ts'
 import { display, formatBytes, formatCores, formatDate, formatTimestamp, formatUsage } from './format.ts'
@@ -86,8 +87,30 @@ test('the overview node count is read from overview.nodesReady, and the table de
 
 test('every literal t(\'key\') call in the UI names a key the table defines', () => {
   // This duplicates the Key type for literal calls and exists for when that type stops constraining them (Key widened to string).
-  // shortcut: reads only literal single-quoted t('...') calls; a key built from a template string (ops.start.${kind}) or carried as data (labelKey, a label field) is not seen. Replace with a real call-site extractor when a reviewer cannot check those by eye.
+  // A key built from a template string (ops.start.${kind}) or carried as data (a label field) is checked by tsc, whose t(key: Key) needs every member of the argument's type to be a key; the next test closes the one way round that.
   const calls = sources.flatMap(([, text]) => [...text.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))
   assert.notEqual(calls.length, 0)
   assert.deepEqual([...new Set(calls)].filter((k) => !keys.includes(k as Key)), [])
+})
+
+test('no t(...) call passes its key through a type assertion, so tsc checks every key the UI looks up', () => {
+  // shortcut: syntactic, so a key typed any still passes; the lint rule against explicit any covers the usual way to get one, so add a type-checker pass if one appears.
+  let calls = 0
+  const casts = sources.flatMap(([f, text]) => {
+    const sf = ts.createSourceFile(f, text, ts.ScriptTarget.Latest, true, f.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+    const found: string[] = []
+    const visit = (n: ts.Node) => {
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 't' && n.arguments.length > 0) {
+        calls++
+        let key = n.arguments[0]
+        while (ts.isParenthesizedExpression(key)) key = key.expression
+        if (ts.isAsExpression(key) || ts.isTypeAssertionExpression(key)) found.push(`${f}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}`)
+      }
+      ts.forEachChild(n, visit)
+    }
+    visit(sf)
+    return found
+  })
+  assert.notEqual(calls, 0)
+  assert.deepEqual(casts, [])
 })

@@ -1,8 +1,10 @@
-// Fails the build when a fenced code block under docs/ has no language, so every block is highlighted
+// Fails the build when a fenced code block under docs/ has no language, so every block is highlighted, or has an
+// option the site cannot read (plugins/fence.mjs), so that a typo does not silently drop it
 // (docs/development/contributing-docs.md, "Code"). Runs before `astro build`. Only the docs on main are checked: a
 // release's docs are frozen by its tag and must keep building.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { parseFenceMeta } from '../plugins/fence.mjs'
 import { docsRoot, isNext, repoRoot } from '../plugins/docs.mjs'
 
 if (!isNext) {
@@ -16,16 +18,20 @@ const files = (dir) =>
   )
 
 const bare = []
+const badOptions = []
 for (const file of files(docsRoot)) {
   let fence = null // the opening fence while inside a block
   readFileSync(file, 'utf8')
     .split('\n')
     .forEach((line, i) => {
-      const m = line.match(/^\s*(`{3,}|~{3,})\s*(\S*)/)
+      const m = line.match(/^\s*(`{3,}|~{3,})\s*(\S*)(.*)$/)
       if (!fence) {
         if (!m) return
         fence = m[1]
-        if (!m[2]) bare.push(`${relative(repoRoot, file)}:${i + 1}`)
+        const where = `${relative(repoRoot, file)}:${i + 1}`
+        if (!m[2]) bare.push(where)
+        const { errors } = parseFenceMeta(m[3])
+        if (errors.length) badOptions.push(`${where}: ${errors.join('; ')}`)
       } else if (m && !m[2] && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null
     })
 }
@@ -34,4 +40,8 @@ if (bare.length) {
   console.error(`${bare.length} code fence(s) without a language (use sh, console, yaml, go, json or text):\n${bare.join('\n')}`)
   process.exit(1)
 }
-console.log('check-fences: every code fence has a language')
+if (badOptions.length) {
+  console.error(`${badOptions.length} code fence(s) with an option the site cannot read (title="…" and lineNumbers):\n${badOptions.join('\n')}`)
+  process.exit(1)
+}
+console.log('check-fences: every code fence has a language and readable options')

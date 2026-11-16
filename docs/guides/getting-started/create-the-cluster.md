@@ -6,9 +6,8 @@ sidebar_order: 2
 
 `ichor init` makes the node the first control plane of a new cluster. Before
 you run it, choose the endpoint: the one address that kubectl, the nodes and
-Ichor's controller use to reach the Kubernetes API, and what stands behind
-that address. The endpoint type is that choice, and it is the one setting that
-is hard to change later. Each pattern below is one endpoint type.
+Ichor's controller use to reach the Kubernetes API. The endpoint type is that
+choice, and it is the one setting that is hard to change later.
 
 | Pattern | Endpoint type | Use it when |
 | --- | --- | --- |
@@ -16,17 +15,21 @@ is hard to change later. Each pattern below is one endpoint type.
 | [Single node endpoint](create-the-cluster/node.md) | `node` | a lab or a single control plane. The node's own address is the endpoint. |
 | [Load balancer endpoint](create-the-cluster/node.md#load-balancer-endpoint) | `node` | there is no shared layer-2 segment, or you are in a cloud, or you have a DNS name and no load balancer. You run what answers on that address. |
 
+![Three endpoint types. The virtual IP is one address on the layer-2 segment that moves between control planes, held by one at a time. The single node endpoint is the node's own address, answered by that control plane. The load balancer endpoint is an address you give Ichor, with whatever answers there run by you.](../../images/create-the-cluster-endpoints.light.drawio.svg)
+
+*What stands behind the one address that each endpoint type gives the cluster.*
+
 Use the virtual IP unless your network rules it out. Only the VIP changes what
 Ichor renders. For a load balancer or a DNS name, Ichor records the address you
-give it and creates nothing behind it: running what answers on that address is
-yours.
+give it and creates nothing behind it.
 
-Each page gives the same three ways to create the cluster, as sections of that
-page: at a prompt, from an `init.yaml` file, and with flags. The load balancer
-endpoint is a section of the single node endpoint page, because the procedure is
-the same and only the address differs. The settings that every pattern shares
-(the topology preset, the subnets, the secrets bundle's passphrase, the
-kubeconfig and sign-in) are on [Settings every pattern shares](create-the-cluster/settings-every-pattern.md).
+Each pattern's page gives the same three ways to create the cluster: at a
+prompt, from an `init.yaml` file, and with flags. The load balancer endpoint is
+a section of the single node endpoint page, because the procedure is the same
+and only the address differs. The settings every pattern shares (the topology
+preset, the subnets, the secrets bundle's passphrase, the kubeconfig and
+sign-in) are on [Settings every pattern shares](create-the-cluster/settings-every-pattern.md).
 
-Changing the endpoint type or address after init re-issues every certificate in
-the cluster. That is why init prints a warning for any type other than `vip`.
+> [!WARNING]
+> Changing the endpoint type or address after init re-issues every certificate
+> in the cluster. That is why init prints a warning for any type other than `vip`.

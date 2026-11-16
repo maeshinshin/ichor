@@ -60,21 +60,31 @@ only its path.
 
 Init first writes the secrets bundle to `~/.ichor/clusters/demo/secrets.yaml`
 (mode 0600), encrypted. It is the cluster's root of trust. On a terminal, init
-generates a passphrase, prints it once and waits for Enter: save it in a
-password manager, together with a copy of the file kept somewhere off this
-machine. Without the passphrase the file cannot be opened (it is an age file;
-`age -d` opens it too). To choose the passphrase instead, or to run init
-without a terminal, give it a file (`--bundle-passphrase-file ./pass`, which
-may be `/dev/fd/3`) or set `ICHOR_BUNDLE_PASSPHRASE` (at least 12 characters);
-with neither and no terminal, init refuses before it does anything.
-`--bundle-plaintext` stores the file unencrypted, with a warning; do it only
-for a throwaway cluster. [Users and login](../../users-and-login.md) and
+generates a passphrase, prints it once and waits for Enter. The file is an age
+file, and `age -d` opens it too.
+
+> [!IMPORTANT]
+> Save the passphrase in a password manager, together with a copy of
+> `secrets.yaml` kept somewhere off this machine. Without the passphrase the
+> file cannot be opened.
+
+To choose the passphrase instead, or to run init without a terminal, give it a
+file (`--bundle-passphrase-file ./pass`, which may be `/dev/fd/3`) or set
+`ICHOR_BUNDLE_PASSPHRASE` (at least 12 characters). With neither and no
+terminal, init refuses before it does anything.
+
+> [!WARNING]
+> `--bundle-plaintext` stores the file unencrypted. Use it only for a throwaway
+> cluster.
+
+[Users and login](../../users-and-login.md) and
 [Hardening](../../hardening.md) say how the file and the passphrase are used later.
 
-Then init applies the configuration to the node (which installs Talos and
-reboots), bootstraps etcd, saves the kubeconfig next to the bundle, stores the
-bundle in the cluster, installs Ichor and waits for Ichor to take over Cilium.
-Expect several minutes.
+Then init does the rest, in the order of the figure. Expect several minutes.
+
+![The steps of ichor init after the bundle is written, in order: apply the configuration to the node, which installs Talos and reboots; bootstrap etcd; save the kubeconfig next to the bundle; store the bundle in the cluster; install Ichor; and last, Ichor takes over Cilium.](../../../images/init-sequence.light.drawio.svg)
+
+*What init does, in order.*
 
 ## Your kubeconfig
 
@@ -104,7 +114,7 @@ it:
 
 In the file this is a `ui` block, next to `cluster` and `firstNode`:
 
-```yaml
+```yaml title="init.yaml"
 ui:
   url: https://192.168.1.60
   adminUser: admin

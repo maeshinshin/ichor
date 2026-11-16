@@ -512,6 +512,14 @@ command does. Each item is described where it is listed below.
   addresses (the one it answers on, then the one `spec.endpoint` names). A forbidden
   removal of the kube-proxy confirmation after a CNI operation is created is now reported
   as permission denied, not as an internal error.
+- **An operation that stops because it cannot tell which machine runs the controller pauses
+  and frees the cluster lock.** The stop kept the lock, and the retry renewed it, so no other
+  disruptive operation, machine join or removal, CNI handover or etcd restore could start
+  while it lasted, and nothing on the operation said why. The operation now pauses with the
+  reason `OwnNodeUnread` in its `Paused` condition, which carries the same message, frees
+  the lock, and tries again every 30 seconds; it resumes by itself once a machine answers,
+  its Node appears or the machine is removed. A shutdown that is waiting on this does the
+  same, and a shutdown that resumes from any pause no longer keeps the `Paused` condition.
 - **ADR 0080 says what the `ConfigRollout` marker does when a rollout ends.** The ADR
   said the rollout clears the marker. It sets the `TalosMachine` condition to `False`
   with reason `Converged` and leaves it there until the next rollout. The reason is not

@@ -627,6 +627,12 @@ command does. Each item is described where it is listed below.
   `RejectMachine` and `SetMachineInstall` writes now say so, as `GetMachine` already
   did. A write that hits a conflict is `Aborted`, one the API server finds invalid is
   `InvalidArgument`, and a failure of the server's own stays `Internal`.
+- The docs site's dialogs, menus and sheets now carry the fixes the admin UI had: a
+  tap outside a layer on a touch screen closes it when the finger lifts (iOS sends no
+  click for a tap on a page that is not interactive), a layer opened over another
+  closes alone, and a modal no longer pads the page to make up for the scrollbar it
+  hides. The two apps vendor the same Radix port, and a UI test now fails when a file
+  of `ui/src/lib/radix` and `site/src/lib/radix` differs.
 
 ### Typed configuration
 

@@ -34,8 +34,8 @@ class Portal extends Component<{ children?: ComponentChildren }> {
   // counter before every render, because each render replaces the root that carries it.
   // shortcut: reads Preact's minified internals (`__v` vnode, `__` parent, `__m` id counter, `__k` rendered tree), the same in 10.29
   // and 11.0. If a release renames them this does nothing and ids repeat across the portal. Nothing guards that: node --test has no
-  // DOM to render into, so Preact is pinned exactly in ui/package.json. When bumping it, check these names still mean the same (e.g.
-  // preact/hooks' useId still counts in `__m`); if not, ids repeat between the portal and the tree around it.
+  // DOM to render into, so ui/package.json pins Preact exactly. When bumping Preact in either app, check these names still mean the
+  // same (e.g. preact/hooks' useId still counts in `__m`); if not, ids repeat between the portal and the tree around it.
   // Preact 11's core createPortal renders inside one tree, so it needs none of this and this function goes away
   shareIds() {
     let vnode = (this as any).__v

@@ -43,7 +43,8 @@ function lockScroll() {
   if (scrollLocks++ === 0) {
     const { body } = document
     const { overflow } = body.style
-    // No padding compensation: `html { scrollbar-gutter: stable }` (index.css) keeps the gutter, so nothing shifts when body locks.
+    // No padding compensation: `html { scrollbar-gutter: stable }` (each app's stylesheet) keeps the gutter, so nothing shifts when body
+    // locks.
     body.style.overflow = "hidden"
     restoreScroll = () => Object.assign(body.style, { overflow })
   }

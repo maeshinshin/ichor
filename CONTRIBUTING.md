@@ -115,6 +115,12 @@ lint failures are not yours.
 - The UI is Vite + Preact + [preactcn](https://maeshinshin.github.io/preactcn/).
   Add components with `npx shadcn@latest add @preactcn/<name>`. No React,
   no `preact/compat`.
+  `ui/src/lib/radix` and `site/src/lib/radix` are the same vendored Radix port and
+  must stay file for file identical where both have a file (a test checks it). Both
+  carry fixes the registry lacks in `internal/dismissable-layer.ts`,
+  `internal/modal-layer.ts` and `internal/portal.tsx`, so `shadcn add` offers to
+  overwrite them: answer no (it names only the file's base name and `--yes` does not
+  skip the question), or run it with `--dry-run` first and look for `overwrite`.
 - The UI and CLI talk to the backend over Connect. Helm is used through its Go
   SDK.
 - Check the docs for the version of a library you're using before writing

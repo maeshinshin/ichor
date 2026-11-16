@@ -116,3 +116,19 @@ func TestSettingsTableHumanOutput(t *testing.T) {
 		"! The settings are managed by the deployment (--settings-read-only); change them there.\n"
 	wantText(t, sb.String(), want)
 }
+
+// The settings commands take the same API flags as their neighbours, so they can be pointed at --local.
+func TestSettingsCommandsTakeTheAPIFlags(t *testing.T) {
+	for _, path := range [][]string{{"get", "settings"}, {"set", "settings"}} {
+		c, _, err := rootCmd.Find(path)
+		if err != nil || c == rootCmd {
+			t.Fatalf("ichor %v is missing: %v", path, err)
+		}
+
+		for _, name := range []string{"local", "namespace", "ichor-namespace"} {
+			if c.PersistentFlags().Lookup(name) == nil {
+				t.Errorf("ichor %v lacks --%s", path, name)
+			}
+		}
+	}
+}

@@ -87,6 +87,8 @@ reclaim.enabled is removed: who may reset and add a node is decided by RBAC alon
 }
 
 func init() {
+	addAPIFlags(getSettingsCmd)
+	addAPIFlags(setSettingsCmd)
 	getCmd.AddCommand(getSettingsCmd)
 	setCmd.AddCommand(setSettingsCmd)
 }

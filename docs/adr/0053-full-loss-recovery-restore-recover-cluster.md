@@ -1,6 +1,6 @@
 # 0053. `ichor restore --recover-cluster`: full-loss etcd recovery from the bundle and a snapshot
 
-Status: Accepted · Date: 2026-10-26 · Design section: Backup, recovery, certificates
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Backup, recovery, certificates
 
 Decided: `ichor restore --recover-cluster` runs standalone (no Kubernetes, no Ichor): it reads the local secrets bundle, takes S3 credentials from environment variables, picks the newest snapshot that decrypts and passes the etcd checksum (or the one named by `--snapshot`, which is refused if broken), asks for confirmation, then uploads it with `EtcdRecover` to one freshly installed control plane and calls `Bootstrap{RecoverEtcd: true}`; restoring into a live cluster is a separate controller-run operation (ADR 0089)
 
@@ -65,3 +65,7 @@ does have a cluster, must take the lock.
 - A restore round trip against a real Talos (e2e) is the design's regular proof and is not covered here.
 
 - Amendment 2026-10-27: `loadBundleFile` now decodes through `secretsbundle.Decode`, which fills `Bundle.Clock`; before, `--recover-cluster` panicked in `dialRecover` on a nil Clock.
+
+## Amendment (2026-11-16): the command is `ichor restore cluster`
+
+This ADR was written for `ichor restore --recover-cluster`. The verb-first command surface made it the subcommand `ichor restore cluster`, with the same flags (`--node-endpoint`, `--s3-*`, `--snapshot`, `--secrets-bundle`) and the same behaviour, and made the live restore `ichor restore etcd`. Read every `--recover-cluster` above as `ichor restore cluster`, and `ichor restore --live` as `ichor restore etcd`; the decision is unchanged.

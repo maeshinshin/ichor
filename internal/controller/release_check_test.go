@@ -126,7 +126,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		Expect(newCheck(listing("0.2.0"), true).check(ctx)).To(BeTrue())
 
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultReleaseCheckPolicyName}, cnpGVK())
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "no controller policy, so no rule")
+		Expect(err).To(MatchError(apierrors.IsNotFound, "no controller policy, so no rule"))
 
 		static := cnpGVK()
 		static.SetNamespace(releaseCheckNS)
@@ -153,7 +153,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 
 		Expect(newCheck(listing("0.2.0"), false).check(ctx)).To(BeTrue())
 		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultReleaseCheckPolicyName}, cnpGVK())
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the rule goes with the switch")
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the rule goes with the switch"))
 	})
 
 	// byRepo lists the given repositories; any other one fails, as an unreachable registry would.

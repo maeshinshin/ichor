@@ -287,7 +287,7 @@ var _ = Describe("installer image registry egress", func() {
 		reconcileNow()
 
 		_, err := rule()
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "no controller policy, so no rule")
+		Expect(err).To(MatchError(apierrors.IsNotFound, "no controller policy, so no rule"))
 
 		static := cnpGVK()
 		static.SetNamespace(releaseCheckNS)
@@ -327,6 +327,6 @@ var _ = Describe("installer image registry egress", func() {
 		reconcileNow()
 
 		_, err = rule()
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the rule goes when the controller policy does")
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the rule goes when the controller policy does"))
 	})
 })

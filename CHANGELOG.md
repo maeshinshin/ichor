@@ -799,6 +799,8 @@ command does. Each item is described where it is listed below.
   `ui/src/lib/radix` and in `site/src/lib/radix`.
 - `THIRD-PARTY-NOTICES` names cmdk, which `ui/src/lib/shims/cmdk.tsx` and
   `site/src/lib/shims/cmdk.tsx` port, with its MIT copyright line.
+- `THIRD-PARTY-NOTICES` names Superhuman's command-score, whose scoring function
+  the same two cmdk ports carry at their end, with its MIT copyright line.
 
 ### Docs
 

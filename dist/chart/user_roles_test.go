@@ -117,6 +117,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosclusters/credentials", "download", ""},
 		{ichorGroup, "talosmachines/support-bundle", "download", ""},
 		{ichorGroup, "ichorusers", verbCreateController, ""},
+		{ichorGroup, "talosstorages", verbCreateController, ""},
 		{ichorGroup, "ichorinstallations/version", verbUpdate, ""},
 		{ichorGroup, "machinereclaims", "reclaim", ""},
 		{ichorGroup, "ichorinstallations/settings", verbUpdate, ""},

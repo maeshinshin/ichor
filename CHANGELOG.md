@@ -893,6 +893,14 @@ command does. Each item is described where it is listed below.
 - The Makefile's `go-install-tool` rebuilds an installed tool when the Go that
   built it is not the Go in use. Outside `nix develop`, where the shell's Go is
   older, the first `make` after this rebuilds all four installed tools.
+- `make docs-check` fails when a branch or group of the docs sidebar has no check
+  of its own, and checks that the phone drawer locks the page scroll and that
+  Escape or a press beside it closes it. The site pins Preact to 11.1.1, as the UI
+  pins 10.29.8, because the vendored portal reads Preact's internals, and a test
+  fails if either app's pin becomes a range. The UI's field search tests skip,
+  naming `make ui-fieldindex`, when the index has not been written, where they
+  failed with `ENOENT`. A test fails for a `t()` call that passes its key through
+  a type assertion.
 
 ## v0.2.4 (2026-11-13)
 

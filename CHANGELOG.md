@@ -499,6 +499,16 @@ command does. Each item is described where it is listed below.
   Reset says the wipe is unconfirmed until the node answers in maintenance mode.
 
 ### Operations
+- **A registry that cannot be read is no longer reported as an unsigned image.**
+  An unreachable registry, or one that refuses the signature manifest, used to
+  pause with `InstallerImageUnverified` and a message saying the image "is not
+  signed by" its identity — telling an operator their supply chain was
+  compromised when their network was down. It now pauses with
+  `InstallerImageUnresolved`, which ADR 0122 already assigned to that case, and
+  says the signature could not be checked rather than that it failed. A
+  signature that was read and does not verify is unchanged.
+- `imagesig` gained `VerifyBlob`, which checks a Sigstore bundle of a release
+  blob offline, for artefacts that are not OCI images.
 - **An operation paused because the controller cannot tell which machine it runs
   on no longer tells the operator to resume it.** That pause lifts itself when the
   machine can be named again, so `ichor resume operation` had nothing to do.

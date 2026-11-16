@@ -24,6 +24,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the ichor itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- talosstoragepreset_admin_role.yaml
+- talosstoragepreset_editor_role.yaml
+- talosstoragepreset_viewer_role.yaml
 - ichoruser_admin_role.yaml
 - ichoruser_editor_role.yaml
 - ichoruser_viewer_role.yaml
@@ -57,3 +60,5 @@ resources:
 - ichor_user_access_role.yaml
 - ichor_roles_binding.yaml
 - credentials_role.yaml
+
+

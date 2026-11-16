@@ -1,0 +1,121 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// TalosStoragePresetSpec defines the desired state of TalosStoragePreset. It stays thin on purpose (design
+// section "Storage"): which nodes, which disk preset, how disks are handed to the storage
+// system, and evacuation settings. The storage system's own configuration (Longhorn's Helm
+// values, replica counts, and so on) lives in Argo CD, not here -- Ichor only owns layer 1
+// (Talos-side preparation) and layer 4 (node-operation coordination, a separate work unit).
+// +kubebuilder:validation:XValidation:rule="self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)",message="diskSelector is required for longhorn-v1"
+// +kubebuilder:validation:XValidation:rule="self.diskPreset != 'rook-v1' || !has(self.diskSelector)",message="rook-v1 writes no disk config, so a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStoragePreset from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one update"
+type TalosStoragePresetSpec struct {
+	// clusterRef names the TalosCluster this storage configuration applies to.
+	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
+	// +required
+	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
+
+	// nodes selects which nodes get storage prepared. Rendering matches the machine's spec.nodeLabels;
+	// evacuation matches the live Kubernetes Node's labels. The two select the same nodes only when the
+	// selector names labels set through spec.nodeLabels; a label the Node carries from elsewhere (a kubelet
+	// preset label, or one set with kubectl) makes the TalosStoragePreset govern evacuation without rendering.
+	// +required
+	Nodes metav1.LabelSelector `json:"nodes"`
+
+	// diskPreset names which storage system this configuration prepares Talos for. Each preset
+	// fixes the required system extensions, the UserVolumeConfig shape, and the kubelet mount
+	// that preset needs; see pkg/storage.
+	// +kubebuilder:validation:Enum=longhorn-v1;rook-v1
+	// +required
+	DiskPreset string `json:"diskPreset"`
+
+	// diskSelector is a Talos disk-selector CEL expression (the same language
+	// provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
+	// document) choosing which disk on each selected node is handed to the storage system. Required
+	// for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStoragePresetSpec).
+	// +optional
+	DiskSelector string `json:"diskSelector,omitempty"`
+
+	// evacuationTimeout bounds how long the node-operation hook (layer 4) waits for replicas to
+	// evacuate a node before pausing the operation rather than proceeding. Unset means the hook's
+	// own default.
+	// +optional
+	EvacuationTimeout *metav1.Duration `json:"evacuationTimeout,omitempty"`
+}
+
+// TalosStoragePresetStatus defines the observed state of TalosStoragePreset.
+type TalosStoragePresetStatus struct {
+	// conditions represent the current state of the TalosStoragePreset resource, kstatus-compatible.
+	// Ready reports whether the Talos side (layer 1) is prepared, so Argo CD's sync wave can hold
+	// the storage system's Application until this is true (design section "Storage").
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// observedGeneration is the most recent generation the controller has reconciled.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=tsp
+// +kubebuilder:printcolumn:name="Preset",type=string,JSONPath=".spec.diskPreset"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
+
+// TalosStoragePreset is the Schema for the talosstoragepresets API
+type TalosStoragePreset struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitzero"`
+
+	// spec defines the desired state of TalosStoragePreset
+	// +required
+	Spec TalosStoragePresetSpec `json:"spec"`
+
+	// status defines the observed state of TalosStoragePreset
+	// +optional
+	Status TalosStoragePresetStatus `json:"status,omitzero"`
+}
+
+// +kubebuilder:object:root=true
+
+// TalosStoragePresetList contains a list of TalosStoragePreset
+type TalosStoragePresetList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitzero"`
+	Items           []TalosStoragePreset `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(GroupVersion, &TalosStoragePreset{}, &TalosStoragePresetList{})
+		return nil
+	})
+}

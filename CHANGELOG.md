@@ -847,6 +847,16 @@ command does. Each item is described where it is listed below.
   closes alone, and a modal no longer pads the page to make up for the scrollbar it
   hides. The two apps vendor the same Radix port, and a UI test now fails when a file
   of `ui/src/lib/radix` and `site/src/lib/radix` differs.
+- **A forced first-login password change is refused for a sign-in older than ten
+  minutes.** The forced change takes no current password, so it needs a sign-in within
+  the last ten minutes. The refusal says so and asks the person to sign in again, and
+  the must-change screen now has the account menu's sign-out, so that can be done from
+  it. A session that its refresh token kept open no longer makes the change on its own.
+- **ID tokens carry `auth_time`, the time of the sign-in.** This is a token-format
+  addition: an existing client that does not read it is unaffected, and discovery lists
+  it under `claims_supported`. A refresh keeps `auth_time` and re-issues `iat`. A token
+  issued before this release has no `auth_time`, so a forced change refuses it until
+  the tab refreshes or signs in again.
 
 ### Typed configuration
 

@@ -209,7 +209,11 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 	if err := ui.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = ui.Process.Kill(); _, _ = ui.Process.Wait(); t.Logf("ichor ui output:\n%s", uiOut.String()) }()
+	defer func() {
+		_ = ui.Process.Kill()
+		_, _ = ui.Process.Wait()
+		t.Logf("ichor ui output:\n%s", uiOut.String())
+	}()
 	time.Sleep(15 * time.Second)
 	root, err := foreign.Root()
 	if err != nil {

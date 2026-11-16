@@ -1,7 +1,8 @@
 ---
 // The rendered Markdown of a docs page. Callouts (`> [!NOTE]`) are swapped for
-// the preactcn Alert and tables get a scroll container; everything else is the
-// Markdown pipeline's own HTML.
+// the preactcn Alert, tables get a scroll container, fences with options are the
+// preactcn CodeBlock, and `:::tabs` (plugins/docs.mjs) is made interactive by DocTabs.
+// Everything else is the Markdown pipeline's own HTML.
 import { fromHtml } from 'hast-util-from-html'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -13,6 +14,7 @@ import { Link } from 'lucide-preact'
 import { buttonVariants } from '@/components/ui/button'
 import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from '@/components/ui/code-block'
 import { Callout, type CalloutKind } from './Callout'
+import { DocTabs } from './DocTabs'
 
 const html = await Astro.slots.render('default')
 
@@ -41,14 +43,17 @@ function callouts() {
 function codeBlocks() {
   return (tree: any) => {
     visit(tree, 'element', (node: any, i, parent: any) => {
-      const { dataTitle: title, dataLineNumbers: numbered } = node.properties ?? {}
-      if (node.tagName !== 'pre' || (title === undefined && numbered === undefined)) return
+      const { dataTitle: title, dataLineNumbers: numbered, dataHighlight: highlight } = node.properties ?? {}
+      if (node.tagName !== 'pre' || (title === undefined && numbered === undefined && highlight === undefined)) return
       const lines = (node.children.find((c: any) => c.tagName === 'code')?.children ?? []).filter((c: any) => c.properties?.className?.includes('line'))
+      // The highlighted lines are numbered from 1; a number past the last line is a typo, and fails the build.
+      const marked = new Set<number>(String(highlight ?? '').split(' ').filter(Boolean).map(Number))
+      if (marked.size && Math.max(...marked) > lines.length) throw new Error(`highlighted line ${Math.max(...marked)} is past the last line (${lines.length})`)
       const html = (line: any) => String(unified().use(rehypeStringify).stringify({ type: 'root', children: line.children } as any))
       const block = h(CodeBlock, { className: 'not-prose my-4' },
         title === undefined ? h(CodeBlockActions, {}) : h(CodeBlockHeader, {}, h(CodeBlockTitle, {}, title), h(CodeBlockActions, {})),
         h(CodeBlockContent, { className: 'astro-code', lineNumbers: numbered !== undefined },
-          lines.map((line: any) => h(CodeBlockLine, {}, h('span', { dangerouslySetInnerHTML: { __html: html(line) } })))),
+          lines.map((line: any, n: number) => h(CodeBlockLine, { variant: marked.has(n + 1) ? 'highlighted' : 'default' }, h('span', { dangerouslySetInnerHTML: { __html: html(line) } })))),
       )
       parent.children[i] = fromHtml(renderToString(block), { fragment: true }).children[0]
       return 'skip'
@@ -85,6 +90,9 @@ function headingLinks() {
 }
 
 const out = String(await unified().use(rehypeParse, { fragment: true }).use(callouts).use(codeBlocks).use(headingLinks).use(rehypeStringify).process(html))
+// The Tabs island is mounted only on a page that has tabs; any other page ships no island script.
+const hasTabs = out.includes('data-doc-tabs')
 ---
 
 <div class="prose prose-neutral max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:text-foreground prose-img:mx-auto prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none [&_td]:min-w-40 [&_td]:break-words" set:html={out} />
+{hasTabs && <DocTabs client:idle />}

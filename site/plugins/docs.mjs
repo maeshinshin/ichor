@@ -175,3 +175,33 @@ export function remarkCallouts() {
     })
   }
 }
+
+// A paragraph that is one line of text, as the tabs markers are written; anything else is not a marker.
+const lineOf = (n) => (n.type === 'paragraph' && n.children.length === 1 && n.children[0].type === 'text' ? n.children[0].value : '')
+
+/**
+ * `:::tabs` with a `::tab[Label]` line before each section (and `:::` to close) becomes <div data-doc-tabs> of
+ * <div data-tab="Label">. Each section starts with its label as a paragraph, which is what a reader without
+ * scripts sees; DocTabs (components/DocTabs.tsx) makes the block into the preactcn Tabs. GitHub shows the
+ * markers as plain lines, with the sections' Markdown between them.
+ */
+export function remarkTabs() {
+  return (tree, file) => {
+    for (let i = 0; i < tree.children.length; i++) {
+      if (lineOf(tree.children[i]) !== ':::tabs') continue
+      const end = tree.children.findIndex((n, j) => j > i && lineOf(n) === ':::')
+      if (end < 0) file.fail('a :::tabs block needs a closing :::', tree.children[i])
+      const tabs = []
+      for (const n of tree.children.slice(i + 1, end)) {
+        const label = /^::tab\[([^\]]+)\]$/.exec(lineOf(n))?.[1]
+        if (label) {
+          const heading = { type: 'paragraph', data: { hProperties: { dataTabLabel: '' } }, children: [{ type: 'strong', children: [{ type: 'text', value: label }] }] }
+          tabs.push({ type: 'tab', data: { hName: 'div', hProperties: { dataTab: label } }, children: [heading] })
+        } else if (!tabs.length) file.fail('the first line of a :::tabs block is ::tab[Label]', n)
+        else tabs.at(-1).children.push(n)
+      }
+      if (!tabs.length) file.fail('a :::tabs block has no ::tab[Label] section', tree.children[i])
+      tree.children.splice(i, end - i + 1, { type: 'tabs', data: { hName: 'div', hProperties: { dataDocTabs: '' } }, children: tabs })
+    }
+  }
+}

@@ -4,7 +4,7 @@ import preact from '@astrojs/preact'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 import { fenceOptions } from './plugins/fence.mjs'
-import { remarkCallouts, remarkDocsLinks, remarkDropTitle, remarkVersion, versionBase } from './plugins/docs.mjs'
+import { remarkCallouts, remarkDocsLinks, remarkDropTitle, remarkTabs, remarkVersion, versionBase } from './plugins/docs.mjs'
 
 // The defaults are the published site, https://ichor.maesh.dev/; DOCS_SITE and DOCS_BASE move it (a fork).
 // One build is one version of the docs, at <DOCS_BASE>/<DOCS_VERSION>/ (next, or a minor line vX.Y).
@@ -20,7 +20,7 @@ export default defineConfig({
   vite: { plugins: [tailwindcss()] },
   markdown: {
     // Plain typography like GitHub's: smartypants would turn `--flag` into an em dash.
-    processor: unified({ smartypants: false, remarkPlugins: [[remarkDocsLinks, { base: baseSlash }], remarkDropTitle, remarkCallouts, remarkVersion] }),
+    processor: unified({ smartypants: false, remarkPlugins: [[remarkDocsLinks, { base: baseSlash }], remarkDropTitle, remarkCallouts, remarkTabs, remarkVersion] }),
     shikiConfig: { themes: { light: 'github-light', dark: 'github-dark' }, defaultColor: false, transformers: [fenceOptions()] },
   },
 })

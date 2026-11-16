@@ -20,7 +20,8 @@ By default the client certificates live a year, which is also the maximum; --ttl
 hours and --read-only makes the talosconfig os:reader instead of os:admin, for access that cannot
 change a node.
 
-The server and context names are copied from your current kubeconfig, the Talos endpoints from the
+The Kubernetes server is --kube-server, else the one in your current kubeconfig (its context names
+are kept too); with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
 cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix .ichor-new
 (never over them), unless --kubeconfig-out and --talosconfig-out say otherwise.
@@ -30,8 +31,9 @@ the files trust the old and the new CAs and are signed by the new one, which eve
 the moment the rotation waits for credentials: they keep working after the old CA is dropped.
 
 With --bundle FILE (the output of 'ichor export bundle') the CAs come from the file, not the cluster,
-so an unreachable cluster does not stop it. It still needs your current kubeconfig, though: its current
-context supplies the server and the names, so run it where that kubeconfig and context exist. A bundle
+so an unreachable cluster does not stop it. The bundle plus --kube-server URL and --talos-endpoints is
+all it needs: no kubeconfig or talosconfig has to exist. Without --kube-server it still takes the
+server from your current kubeconfig, so run it where that kubeconfig and context exist. A bundle
 saved before a rotation names CAs that no node accepts any more.
 
 With --acknowledge the command also tells a waiting CA rotation that you have the credentials, after
@@ -47,7 +49,8 @@ ichor create credentials NAME [flags]
 ```sh
   ichor create credentials prod
   ichor create credentials prod --read-only --ttl 8h
-  ichor create credentials prod --bundle ~/.ichor/clusters/prod/secrets.yaml
+  ichor create credentials prod --bundle ~/.ichor/clusters/prod/secrets.yaml \
+    --kube-server https://10.0.0.2:6443 --talos-endpoints 10.0.0.2
 ```
 
 ### Options
@@ -59,6 +62,7 @@ ichor create credentials NAME [flags]
       --force                     with --bundle: write the files even though the bundle's CAs differ from the stored secrets bundle; pass it when you know the file is the current bundle (for example after a restore)
   -h, --help                      help for credentials
       --ichor-namespace string    namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
+      --kube-server string        the Kubernetes API server URL for the kubeconfig, for example https://10.0.0.2:6443 (default: the server of your current kubeconfig)
       --kubeconfig-out string     where to write the kubeconfig (default: your current kubeconfig's path plus .ichor-new)
       --local                     do not use ichor-ui; compute from the Kubernetes API directly
   -n, --namespace string          namespace of the Ichor resources the command names (default "ichor-system")

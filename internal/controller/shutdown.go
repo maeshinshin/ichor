@@ -442,7 +442,9 @@ func (r *TalosOperationReconciler) advanceShutdown(
 
 	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("loading secrets bundle to shut down %q: %w", cluster.Name, err)
+		// A missing bundle does not clear on a retry, so it is a step failure: a person retries it, and it frees the lock.
+		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed,
+			fmt.Sprintf("loading secrets bundle to shut down %q: %v", cluster.Name, err))
 	}
 
 	workers, last, err := r.shutdownPlan(ctx, cluster)
@@ -464,8 +466,10 @@ func (r *TalosOperationReconciler) shutdownPass(
 	bundle *secrets.Bundle, workers, last []*ichorv1alpha1.TalosMachine,
 ) (ctrl.Result, error) {
 	// Stage 1: drain and stop the workers; wait until they are down.
+	// A stop request that fails can keep failing (a node that answers its probe and refuses the stop), so the lock
+	// goes back before the error is returned; the retry takes it again.
 	if err := r.requestStop(ctx, op, cluster, bundle, workers, false); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Join(err, lock.Release(ctx, operationLockIdentity(op)))
 	}
 
 	waiting := 0
@@ -497,7 +501,7 @@ func (r *TalosOperationReconciler) shutdownPass(
 
 	// Stage 2: the rest in one burst. Quorum is lost here and only here.
 	if err := r.requestStop(ctx, op, cluster, bundle, last, true); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Join(err, lock.Release(ctx, operationLockIdentity(op)))
 	}
 
 	if err := lock.Release(ctx, operationLockIdentity(op)); err != nil {

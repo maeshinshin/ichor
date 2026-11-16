@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -57,7 +58,7 @@ var _ = Describe("a paused TalosOperation and the cluster lock", func() {
 		expectPausedBecause(fetchOperation(op), reasonOperationNoExecutor)
 	})
 
-	It("gives the cluster lock back when a shutdown cannot load the secrets bundle", func() {
+	It("pauses a shutdown for a person, and gives the cluster lock back, when it cannot load the secrets bundle", func() {
 		f := newShutdownFixture()
 		f.r.ControllerNamespace = ""
 
@@ -65,7 +66,10 @@ var _ = Describe("a paused TalosOperation and the cluster lock", func() {
 		_, err := reconcileOperation(f.r, op)
 
 		expectLeaseFree(opTestLock(f.cluster))
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("loading secrets bundle"))
 	})
 
 	It("gives the cluster lock back when a shutdown's stop request fails, so the retry takes it again", func() {
@@ -77,5 +81,49 @@ var _ = Describe("a paused TalosOperation and the cluster lock", func() {
 		Expect(err).To(HaveOccurred())
 
 		expectLeaseFree(opTestLock(f.cluster))
+	})
+
+	It("pauses a node operation for a person, and gives the cluster lock back, when it cannot load the secrets bundle", func() {
+		f := newNodeFixture(map[string]string{hostW1: roleWorker})
+		f.r.ControllerNamespace = ""
+		op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+
+		_, err := reconcileOperation(f.r, op)
+
+		expectLeaseFree(opTestLock(f.cluster))
+		Expect(err).NotTo(HaveOccurred())
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("loading secrets bundle"))
+	})
+
+	It("reports a CA rotation that cannot load the secrets bundle as blocked, not as a failed reconcile", func() {
+		f := newCARotFixture()
+		r := f.newReconciler()
+		r.ControllerNamespace = ""
+		op := f.newOp()
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		cond := apimeta.FindStatusCondition(fetchOperation(op).Status.Conditions, conditionCARotation)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(reasonCARotationBlocked))
+		Expect(cond.Message).To(ContainSubstring("loading the secrets bundle"))
+	})
+
+	It("reports a key rotation that cannot load the secrets bundle as blocked, not as a failed reconcile", func() {
+		f := newKeyRotFixture(newTestBundle("v1.14"))
+		r := f.newReconciler()
+		r.ControllerNamespace = ""
+		op := f.newOp([]string{"secretbox"})
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		cond := apimeta.FindStatusCondition(fetchOperation(op).Status.Conditions, conditionKeyRotation)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Reason).To(Equal(reasonKeyRotationBlocked))
+		Expect(cond.Message).To(ContainSubstring("loading the secrets bundle"))
 	})
 })

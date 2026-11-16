@@ -118,7 +118,7 @@ func (r *TalosOperationReconciler) advanceNode(
 
 	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("loading secrets bundle for %q: %w", m.Name, err)
+		return r.nodeFailed(ctx, op, fmt.Errorf("loading secrets bundle for %q: %w", m.Name, err))
 	}
 
 	dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)

@@ -196,7 +196,7 @@ func (r *TalosOperationReconciler) advanceCARotation(
 
 	bundle, err := loadBundle(ctx, reader, r.ControllerNamespace, cluster)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("loading secrets bundle to rotate %q's CAs: %w", cluster.Name, err)
+		return ctrl.Result{}, run.blocked(ctx, fmt.Sprintf("loading the secrets bundle to rotate %q's CAs failed: %v", cluster.Name, err))
 	}
 
 	run.bundle = bundle

@@ -149,7 +149,7 @@ shard() {
   deadline=$((t0 + 3660)) # the Job's activeDeadlineSeconds is 3600 and counts pending time too
   job "$name" "$2" "$3" "$4" "$5" | k apply -f - >/dev/null || { status "$1" "NOT RUN (apply failed)"; return; }
   # the pod does not exist yet, so every early poll fails; the deadline ends the wait
-  until pod=$(k get pod -l job-name="$name" -o name 2>/dev/null) && [ -n "$pod" ]; do
+  until pod=$(k get pod -l batch.kubernetes.io/job-name="$name" -o name 2>/dev/null) && [ -n "$pod" ]; do
     [ "$(date +%s)" -lt "$deadline" ] || { status "$1" "NOT RUN (no pod)"; return; }
     sleep 2
   done

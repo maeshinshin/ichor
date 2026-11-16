@@ -50,7 +50,7 @@ func ichorRecords(c *foreign.Cluster) string {
 // cniJobPods returns the pods of the ichor-cni Jobs (pods are named after their Job).
 func cniJobPods(c *foreign.Cluster) []string {
 	var res []string
-	for _, p := range names(c, "-n", "kube-system", "get", "pods", "-l", "job-name") {
+	for _, p := range names(c, "-n", "kube-system", "get", "pods", "-l", "batch.kubernetes.io/job-name") {
 		if strings.HasPrefix(p, "ichor-cni") {
 			res = append(res, p)
 		}

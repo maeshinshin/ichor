@@ -1829,10 +1829,13 @@ func TestRetiredKindsGuardCanReadTheCRDItChecks(t *testing.T) {
 	rules, _ := role["rules"].([]any)
 	for _, r := range rules {
 		rule, _ := r.(map[string]any)
-		if containsStr(rule["apiGroups"], "apiextensions.k8s.io") && containsStr(rule["resources"], "customresourcedefinitions") &&
-			containsStr(rule["verbs"], "get") && containsStr(rule["resourceNames"], "talosstorages.ichor.maesh.dev") {
+		if containsStr(rule["apiGroups"], "apiextensions.k8s.io") &&
+			containsStr(rule["resources"], "customresourcedefinitions") &&
+			containsStr(rule["verbs"], "get") &&
+			containsStr(rule["resourceNames"], "talosstorages.ichor.maesh.dev") {
 			return
 		}
 	}
-	t.Fatalf("retired-kinds guard ClusterRole has no get on customresourcedefinitions talosstorages.ichor.maesh.dev: %v", rules)
+	t.Fatalf("retired-kinds guard ClusterRole has no get on customresourcedefinitions talosstorages.ichor.maesh.dev: %v",
+		rules)
 }

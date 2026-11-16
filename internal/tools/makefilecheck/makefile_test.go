@@ -1,10 +1,14 @@
 package makefilecheck
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/mod/semver"
 )
 
 // repoRoot is the module root, relative to this package's directory, where `go test` runs.
@@ -79,5 +83,57 @@ func TestEmbedBuildsTheInstallerOnlyAfterTheCheck(t *testing.T) {
 
 	if seen == 0 {
 		t.Fatal("make -p printed no build-ichor-embed rule")
+	}
+}
+
+// releaseVersionPattern returns the grep -E pattern that the release target checks VERSION with. It is read from the
+// Makefile, so the test pins what make runs.
+func releaseVersionPattern(t *testing.T) string {
+	t.Helper()
+
+	src, err := os.ReadFile(filepath.Join(repoRoot, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inRelease := false
+
+	for line := range strings.Lines(string(src)) {
+		if strings.HasPrefix(line, "release:") {
+			inRelease = true
+			continue
+		}
+
+		if _, rest, ok := strings.Cut(line, "grep -Eq '"); inRelease && ok {
+			pattern, _, _ := strings.Cut(rest, "' ||")
+
+			return strings.ReplaceAll(pattern, "$$", "$")
+		}
+	}
+
+	t.Fatal("the release target has no grep -Eq check of VERSION")
+
+	return ""
+}
+
+// TestReleaseVersionIsSemver requires the release target's VERSION check to agree with semver.IsValid. A numeric
+// prerelease identifier with a leading zero (v0.1.0-0123456) is not semver, so make release must refuse it.
+func TestReleaseVersionIsSemver(t *testing.T) {
+	pattern := releaseVersionPattern(t)
+
+	for _, v := range []string{
+		"v0.1.0", "v10.20.30", "v0.1.0-0", "v0.1.0-rc.1", "v0.1.0-alpha-01", "v0.1.0-0a", "v0.1.0-1.0a",
+		"v0.0.8-g0123456", "v0.0.8-g9794517",
+		"v0.1.0-0123456", "v0.1.0-01", "v0.1.0-rc.01", "v0.1.0-1.00", "v0.1.0-", "v0.1.0-a..b", "v01.0.0",
+	} {
+		t.Run(v, func(t *testing.T) {
+			c := exec.Command("grep", "-Eq", pattern)
+			c.Stdin = strings.NewReader(v + "\n")
+
+			matched := c.Run() == nil
+			if want := semver.IsValid(v); matched != want {
+				t.Errorf("the release pattern accepts %q = %v, but semver.IsValid says %v", v, matched, want)
+			}
+		})
 	}
 }

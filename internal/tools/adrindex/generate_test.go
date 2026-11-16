@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -186,8 +187,10 @@ func TestNoADRNamesARemovedCommand(t *testing.T) {
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("want ADRs under %s, got %v (err %v)", adrDir, paths, err)
 	}
+	total := 0
+
 	for _, cmd := range removedCommandPaths {
-		re := regexp.MustCompile("(ichor |`)" + regexp.QuoteMeta(cmd) + "([^a-z-]|$)")
+		re := removedCommandRegexp(cmd)
 		for _, path := range paths {
 			// The index repeats each ADR's Decided line, so its source is the file to fix.
 			base := filepath.Base(path)
@@ -199,6 +202,8 @@ func TestNoADRNamesARemovedCommand(t *testing.T) {
 				t.Fatalf("reading %s: %v", path, err)
 			}
 			n := len(re.FindAll(body, -1))
+			total += n
+
 			if !slices.ContainsFunc(strings.Fields(removedBy[cmd]), func(num string) bool { return strings.HasPrefix(base, num+"-") }) {
 				if n > 0 {
 					t.Errorf("%s names the removed command %q (%d time(s))", path, cmd, n)
@@ -208,5 +213,80 @@ func TestNoADRNamesARemovedCommand(t *testing.T) {
 				t.Errorf("%s is excused for %q but does not name it; drop it from removedBy", path, cmd)
 			}
 		}
+	}
+
+	// The ADRs record these commands, so a scan that finds none has a broken pattern or a wrong directory.
+	if total == 0 {
+		t.Fatal("no ADR names any removed command; the pattern or the directory is wrong")
+	}
+}
+
+// removedCommandRegexp matches a command as `ichor <path>` or as a `<path>` code span.
+func removedCommandRegexp(cmd string) *regexp.Regexp {
+	return regexp.MustCompile("(ichor |`)" + regexp.QuoteMeta(cmd) + "([^a-z-]|$)")
+}
+
+// stillNamedByDesign lists the documents outside the ADRs that may name a removed command, each as
+// "<path from the repository root> <command>", with why. Everything else that names one tells a reader to
+// run a command that does not exist.
+var stillNamedByDesign = map[string]string{
+	"CONTRIBUTING.md node reboot":                  "the rule that says never to run it: the command is verb first",
+	"docs/design/architecture/nodes.md node reset": "the note that says when the command was removed",
+}
+
+// TestNoGuideNamesARemovedCommand is TestNoADRNamesARemovedCommand for the places a reader acts on: a
+// stale command is correct history in an ADR and wrong advice in a guide. It scans docs/ outside the ADRs,
+// the README and CONTRIBUTING.md, and fails for an exemption that no longer names its command.
+func TestNoGuideNamesARemovedCommand(t *testing.T) {
+	root := filepath.Join(adrDir, "..", "..")
+
+	files := []string{filepath.Join(root, "README.md"), filepath.Join(root, "CONTRIBUTING.md")}
+
+	err := filepath.WalkDir(filepath.Join(root, "docs"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() && path == filepath.Clean(adrDir) {
+			return filepath.SkipDir
+		}
+
+		if !d.IsDir() && filepath.Ext(path) == ".md" {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	total := 0
+
+	for _, file := range files {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rel, _ := filepath.Rel(root, file)
+
+		for _, cmd := range removedCommandPaths {
+			n := len(removedCommandRegexp(cmd).FindAll(body, -1))
+			total += n
+			_, excused := stillNamedByDesign[rel+" "+cmd]
+
+			switch {
+			case n > 0 && !excused:
+				t.Errorf("%s names the removed command %q (%d time(s))", rel, cmd, n)
+			case n == 0 && excused:
+				t.Errorf("%s is excused for %q but does not name it; drop it from stillNamedByDesign", rel, cmd)
+			}
+		}
+	}
+
+	// The two exemptions are known to match, so a scan that finds none has a broken pattern or root.
+	if total == 0 {
+		t.Fatal("no document names any removed command; the pattern or the directory is wrong")
 	}
 }

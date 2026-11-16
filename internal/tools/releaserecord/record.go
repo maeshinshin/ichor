@@ -21,11 +21,12 @@ const limit = 1 << 20
 
 // Procedure of ADR 0158 decision 10 and ADR 0165: Helm's own release encoder (JSON, gzip at best compression,
 // base64) over the release a client-only dry-run install of the chart produces, against Kubernetes v1.36.0,
-// status deployed and the timestamps pinned, so the figure is the same on every run.
+// status deployed with the description "Install complete", and the first and last deployed times pinned to
+// 2026-01-01T00:00:00Z, so the figure is the same on every run.
 //
-// The chart refuses to render without a sign-in, so the values must enable the users and give an external URL.
-// With the release name, namespace and URL below, the figure is the one the ADRs record; other values give
-// another figure. The record excludes the Secret's own metadata (name, labels, type).
+// The chart refuses to render without a sign-in, so the values must set ichorUI.users.enabled=true and
+// ichorUI.users.externalURL. With the release name, namespace and URL below, the figure is the one the ADRs
+// record; other values give another figure. The record excludes the Secret's own metadata (name, labels, type).
 const (
 	releaseName = "ichor"
 	namespace   = "ichor-system"

@@ -528,10 +528,11 @@ broken, or every user is locked out, use this credential.
 Once users are on, keep this folder offline and use it only in an incident.
 The bundle in that folder (`secrets.yaml`) is encrypted with a passphrase
 (see [Getting started](getting-started.md)); the kubeconfig is not, because
-`kubectl` reads it directly. The bundle is what matters: with it
-`ichor create credentials --bundle` makes a new kubeconfig and talosconfig at
-any time. So you can move or delete the kubeconfig once login works, and keep
-only the encrypted bundle and its passphrase.
+`kubectl` reads it directly. The bundle holds the CAs. With it, `ichor create credentials --bundle` makes a
+new kubeconfig and talosconfig even when the cluster is unreachable, but only
+where a current kubeconfig with a context for the cluster still exists, because
+that context supplies the server and names. Keep the kubeconfig: the bundle
+alone does not get you back in.
 Do not confuse it with the override write, which is an RBAC verb that guards destructive operations.
 
 ## Control plane rollout

@@ -453,9 +453,10 @@ or exposed, encrypting it does not undo that: rotate the CAs
 
 The kubeconfig next to it stays plaintext, because `kubectl` reads it. It holds
 the `system:masters` override certificate (see
-[Users and login](users-and-login.md)); once login works, move it offline or delete it
-and make a new one from the bundle when you need it. The Secret in the cluster
-that holds the bundle for the controller is not affected.
+[Users and login](users-and-login.md)); once login works, move it offline, but
+keep it: `ichor create credentials --bundle` takes the server and names from a
+current kubeconfig, so the bundle alone does not get you back in. The Secret in
+the cluster that holds the bundle for the controller is not affected.
 
 ## Rotating the CAs
 

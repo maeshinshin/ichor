@@ -8,7 +8,9 @@ You change a setting in the UI or with the CLI, and either way it is a write to
 the `IchorInstallation` named `ichor`. This page covers how, who may do it, and
 what changes when a deployment owns the settings.
 
-## In the UI
+:::tabs
+
+::tab[In the UI]
 
 Open "Settings" in the sidebar. The page is a set of cards: Deployment (target
 and running version, installer or Helm, read-only), Sign-in and Defaults. Each
@@ -17,7 +19,7 @@ value shows whether it is "Set here" or a "Deployment default".
 The page is read-only, with an explanation, when your role cannot change
 settings or when the deployment manages them (see [Read-only mode](#read-only-mode)).
 
-## With the CLI
+::tab[With the CLI]
 
 ```sh
 ichor get settings
@@ -55,6 +57,8 @@ with the new values:
   autoPatch.window=02:00-05:00                daily UTC window (empty: any time)
   autoPatch.acknowledgeHalt=NAMESPACE/NAME    clear a halt (see Automatic patching)
 ```
+
+:::
 
 > [!NOTE]
 > There is no switch for "Reset and add" (MachineReclaim) any more. `reclaim.enabled`

@@ -144,8 +144,9 @@ lint failures are not yours.
 - `make remote-gate` runs the whole gate (sharded `go test`, `make lint`, `make
   ui-ci`) for the committed `HEAD` as parallel Jobs named `ichor-gate-*` in a
   Kubernetes cluster, so a small workstation is not the bottleneck. The cluster
-  and namespace are set in `hack/remote-gate.sh` (the `k` function); point them
-  at a cluster you can run Jobs in. Uncommitted changes are not tested. Logs
+  and namespace come from the `GATE_CONTEXT` and `GATE_NAMESPACE` environment
+  variables, both required (`hack/remote-gate.sh` stops if one is unset); point
+  them at a cluster you can run Jobs in. Uncommitted changes are not tested. Logs
   land in `remote-gate-out/<shard>.log`; the summary lists PASS/FAIL per shard and
   the failing tests, and the Jobs are deleted by name at the end. It needs
   `bin/k8s/1.36.2-linux-amd64` (`make setup-envtest`; `ENVTEST_SRC` points at another

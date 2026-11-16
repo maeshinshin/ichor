@@ -149,7 +149,8 @@ GATE_REF ?= HEAD
 GATE_IMAGE ?= docker.io/library/golang:1.27.4-bookworm
 GATE_STORAGE_CLASS ?=
 GATE_CACHE_SIZE ?= 20Gi
-export GATE_KUBECONFIG GATE_CONTEXT GATE_NAMESPACE GATE_REF GATE_IMAGE GATE_STORAGE_CLASS GATE_CACHE_SIZE
+# GATE_NAMESPACE is not exported: its default would reach remote-gate, which requires it set; cluster-gate.sh defaults it.
+export GATE_KUBECONFIG GATE_CONTEXT GATE_REF GATE_IMAGE GATE_STORAGE_CLASS GATE_CACHE_SIZE
 
 .PHONY: cluster-gate
 cluster-gate: ## Run the gate (make test, then make lint) for GATE_REF (default HEAD; committed files only, uncommitted changes are not sent) as a Job in GATE_NAMESPACE on GATE_KUBECONFIG/GATE_CONTEXT; exits non-zero if it fails. GATE_RENDER=1 make cluster-gate prints the manifests only.

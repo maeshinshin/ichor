@@ -43,10 +43,13 @@ both say the release you installed.
 With sign-in on, these commands also print the sign-in line from [step 3](approve-machines.md) on
 stderr. The output below leaves it out.
 
-The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
-command for the full response. A table cell is never cut off, but a long
-machine name is shown in short form (see [step 3](approve-machines.md)); `-o yaml` prints it whole.
-Colour appears only on a terminal (set `NO_COLOR` to turn it off).
+> [!TIP]
+> The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
+> command for the full response. A table cell is never cut off, but a long
+> machine name is shown in short form (see [step 3](approve-machines.md));
+> `-o yaml` prints it whole.
+>
+> Colour appears only on a terminal. Set `NO_COLOR` to turn it off.
 
 The same goes for the operations. `ichor get operations` shows each one with a
 glyph for its phase and what it is doing; `ichor describe operation NAME` adds the
@@ -67,6 +70,10 @@ operation upgrade-talos-x7k2p · cluster demo
 … talos — InProgress · 1/3 nodes · upgrading talos-cp2
 ✓ talos — Completed (11m52s)
 ```
+
+![An operation followed with --follow: one line per change while it runs, then either a completed line with the time taken, or a failed line that names the resume command, which runs the step again.](../../images/check-operation-follow.light.drawio.svg)
+
+*Following an operation to its end.*
 
 A failed step ends the line with ✗ Failed, prints the reason and exits with an
 error that names `ichor resume operation NAME`. `ichor upgrade talos --list`

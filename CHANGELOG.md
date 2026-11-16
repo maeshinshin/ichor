@@ -148,6 +148,12 @@ command does. Each item is described where it is listed below.
   they are too large for client-side apply (Typed configuration).
 
 ### CLI
+- **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The
+  check was that the `gateways` CRD existed, so any release and any partial set
+  passed and Cilium failed later. It now reads the CRD's `bundle-version` and
+  refuses anything below v1.6.1, the minimum Cilium 1.20's upgrade notes give,
+  naming both releases; a CRD that records no release is refused too. The six
+  other CRDs are still unchecked, which the guide now says.
 - **`ichor init --gateway-api` no longer overwrites Gateway API CRDs it did not
   install.** It applied all seven with forced ownership, taking over fields
   another manager owned and replacing a CRD at any release without a word. It

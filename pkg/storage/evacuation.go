@@ -26,12 +26,13 @@ import "time"
 // system's own resources and applies the values this returns.
 type EvacuationHook interface {
 	// BeginEvacuation returns the (allowScheduling, evictionRequested)
-	// values to write to the node's (or, for one disk, that disk's) spec
-	// -- in that order, as two separate writes, never one combined
-	// patch. For longhorn-v1, Longhorn's own admission webhook rejects a
-	// write that leaves evictionRequested=true while allowScheduling is
-	// still true (longhorn-manager v1.9.1,
-	// webhook/resources/node/validator.go).
+	// values to write to the node's (or, for one disk, that disk's) spec,
+	// in that order. For longhorn-v1, Longhorn's admission webhook refuses
+	// a resulting object with evictionRequested=true and allowScheduling=true
+	// (longhorn-manager v1.9.1, webhook/resources/node/validator.go). It
+	// judges the object a write leaves, not how many writes produced it;
+	// the caller writes the two values as two separate updates, so no
+	// intermediate state has both true.
 	BeginEvacuation() (allowScheduling, evictionRequested bool)
 
 	// EndEvacuation is BeginEvacuation's inverse, written once the

@@ -139,8 +139,9 @@ func (e *LonghornEvacuator) Resolve(
 	return &evacuationTarget{hook: hook, timeout: timeout, namespace: defaultLonghornNamespace}, nil
 }
 
-// Begin implements StorageEvacuator. Scheduling is disabled first, then the eviction requested:
-// Longhorn's webhook rejects a write that leaves both true.
+// Begin implements StorageEvacuator. Scheduling is disabled first, then the eviction requested, as
+// two updates: Longhorn's webhook refuses a resulting object with both true, and this order never
+// leaves that state in between.
 func (e *LonghornEvacuator) Begin(ctx context.Context, target *evacuationTarget, node string) error {
 	allowScheduling, evictionRequested := target.hook.BeginEvacuation()
 

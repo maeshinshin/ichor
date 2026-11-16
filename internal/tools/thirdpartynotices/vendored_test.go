@@ -54,6 +54,7 @@ var shimHeader = regexp.MustCompile(`(?i)^// (?:port of )?([a-z][a-z0-9._-]*) v?
 // THIRD-PARTY-NOTICES does not name that upstream, which is how the cmdk port shipped unattributed.
 // shortcut: it reads only a header that opens "<name> <x.y.z>" or "Port of <name> <x.y.z>" and matches the name, not the path;
 // a port with no such header (next-themes.tsx has none) is invisible here, so drop this for a header every shim must carry.
+// An upstream inlined inside a port is named by no header, so it needs a test of its own (TestScoringFunctionNamesSuperhuman).
 func TestShimUpstreamsAreInNotices(t *testing.T) {
 	notices, err := os.ReadFile("../../../THIRD-PARTY-NOTICES")
 	if err != nil {
@@ -93,5 +94,32 @@ func TestShimUpstreamsAreInNotices(t *testing.T) {
 
 	if seen == 0 {
 		t.Fatal("no shim header names an upstream; the check has nothing to look at")
+	}
+}
+
+// TestScoringFunctionNamesSuperhuman fails when a tracked script holds cmdk's scoring function and THIRD-PARTY-NOTICES
+// does not name Superhuman, whose command-score it is. The shims' headers name only cmdk, so TestShimUpstreamsAreInNotices
+// cannot see an upstream that is inlined inside the port; this is how command-score went unattributed.
+// shortcut: SCORE_CONTINUE_MATCH is the handle, so a port that renames its constants escapes; drop this for a per-file
+// list of what each shim inlines once a second inlined upstream turns up.
+func TestScoringFunctionNamesSuperhuman(t *testing.T) {
+	notices, err := os.ReadFile("../../../THIRD-PARTY-NOTICES")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The needle is split so that this file does not match itself.
+	grep := exec.Command("git", "grep", "-l", "-z", "SCORE_"+"CONTINUE_MATCH", "--", "*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs")
+	grep.Dir = repoRoot
+
+	out, err := grep.Output()
+	if err != nil {
+		t.Fatalf("git grep: %v", err) // exit 1 (no match) lands here too: the check would have nothing to look at
+	}
+
+	if !strings.Contains(string(notices), "Superhuman") {
+		for f := range strings.SplitSeq(strings.TrimRight(string(out), "\x00"), "\x00") {
+			t.Errorf("%s holds the scoring function of Superhuman's command-score, which THIRD-PARTY-NOTICES does not name", f)
+		}
 	}
 }

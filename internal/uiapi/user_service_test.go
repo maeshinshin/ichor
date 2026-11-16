@@ -358,6 +358,63 @@ func TestChangeOwnPassword(t *testing.T) {
 	}
 }
 
+func TestChangeOwnPasswordForcedRotationNeedsNoCurrentPassword(t *testing.T) {
+	s := userServer(t, false, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// The session the forced first-login screen runs in: the interceptor marks it must-change.
+	forced := context.WithValue(context.Background(), identityKey{}, Identity{User: IchorUserPrefix + userAlice, Source: SourceIchor, MustChange: true})
+	if _, err := s.ChangeOwnPassword(forced, connect.NewRequest(&pb.ChangeOwnPasswordRequest{NewPassword: strongPass2})); err != nil {
+		t.Fatalf("forced change without a current password: %v", err)
+	}
+
+	cred, _ := readStored(t, s)
+	if cred.MustChange || !pwMatches(strongPass2, cred.Hash) {
+		t.Error("forced change did not store the new password, or left it must-change")
+	}
+}
+
+// The voluntary change keeps the current password, whichever of the two must-change
+// flags is set: a session that is not must-change, and a must-change session whose
+// entry was already changed, both refuse an empty current password.
+func TestChangeOwnPasswordVoluntaryPathDemandsTheCurrentPassword(t *testing.T) {
+	s := userServer(t, false, newUser(userAlice, false, "viewer"))
+	ctx := context.Background()
+	voluntary := context.WithValue(ctx, identityKey{}, Identity{User: IchorUserPrefix + userAlice, Source: SourceIchor})
+	forced := context.WithValue(ctx, identityKey{}, Identity{User: IchorUserPrefix + userAlice, Source: SourceIchor, MustChange: true})
+
+	for _, tc := range []struct {
+		name            string
+		ctx             context.Context
+		entryMustChange bool
+	}{
+		{"a settled password, voluntary session", voluntary, false},
+		{"an administrator marked the entry must-change, voluntary session", voluntary, true},
+		{"must-change session, entry already changed", forced, false},
+	} {
+		if err := s.setCredential(ctx, userAlice, strongPass, tc.entryMustChange); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := s.ChangeOwnPassword(tc.ctx, connect.NewRequest(&pb.ChangeOwnPasswordRequest{NewPassword: strongPass2}))
+		if connect.CodeOf(err) != connect.CodePermissionDenied || !strings.Contains(err.Error(), "invalid credentials") {
+			t.Errorf("%s: an empty current password got %v", tc.name, err)
+		}
+
+		if cred, _ := readStored(t, s); !pwMatches(strongPass, cred.Hash) {
+			t.Errorf("%s: the password changed without the current one", tc.name)
+		}
+	}
+
+	// A must-change session with no entry behind it is refused like any missing entry.
+	ghost := context.WithValue(ctx, identityKey{}, Identity{User: IchorUserPrefix + "ghost", Source: SourceIchor, MustChange: true})
+	if _, err := s.ChangeOwnPassword(ghost, connect.NewRequest(&pb.ChangeOwnPasswordRequest{NewPassword: strongPass2})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("forced session with no entry: %v", err)
+	}
+}
+
 func TestChangeOwnPasswordBacksOffAfterRepeatedFailures(t *testing.T) {
 	s := userServer(t, false, newUser(userAlice, false, "viewer"))
 	if err := s.setCredential(context.Background(), userAlice, strongPass, false); err != nil {

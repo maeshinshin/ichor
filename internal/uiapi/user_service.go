@@ -345,18 +345,23 @@ func (s *Server) ChangeOwnPassword(ctx context.Context, req *connect.Request[pb.
 		return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("too many failed attempts, try again in %d seconds", int(d.Seconds())+1))
 	}
 
-	// A missing entry is verified against an empty hash (a dummy inside the
-	// verifier), so the cost and the answer do not differ.
-	good, err := s.verifyPassword(ctx, req.Msg.GetOldPassword(), cred.Hash)
-	if err != nil || !found || !good {
-		if err == nil {
-			changePasswordFailures.Fail(name, s.now())
+	// The forced first-login change takes no current password: both the session and
+	// the stored entry must say must-change, read now. Every other change verifies it.
+	// shortcut: the forced path does not check the sign-in is recent; a must-change session refreshes for its whole refresh lifetime. Require the sign-in time here once the ID token carries the session start.
+	if !(id.MustChange && found && cred.MustChange) {
+		// A missing entry is verified against an empty hash (a dummy inside the
+		// verifier), so the cost and the answer do not differ.
+		good, err := s.verifyPassword(ctx, req.Msg.GetOldPassword(), cred.Hash)
+		if err != nil || !found || !good {
+			if err == nil {
+				changePasswordFailures.Fail(name, s.now())
+			}
+
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("invalid credentials"))
 		}
 
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("invalid credentials"))
+		changePasswordFailures.Reset(name)
 	}
-
-	changePasswordFailures.Reset(name)
 
 	if err := s.setCredential(ctx, name, req.Msg.GetNewPassword(), false); err != nil {
 		return nil, credentialWriteError(err)

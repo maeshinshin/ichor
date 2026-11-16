@@ -1,6 +1,6 @@
 # 0082. The machine page shows live Talos and Kubernetes state, read-only
 
-Status: Accepted · Date: 2026-10-26 · Design section: UI backend, Talos access, Secrets
+Status: Accepted, amended · Date: 2026-10-26 · Design section: UI backend, Talos access, Secrets
 Decided: a second read-only RPC, `NodeService.GetNodeTalosRuntime`, returns six independently failing sections (etcd, top processes, containers, network state, kernel modules, the Kubernetes view of the node) under ADR 0073's rules; process command lines, container environments and arguments, WireGuard keys and machine configuration are never carried; the `ichor-ui` ClusterRole gains `get;list` on pods; actions the SDK enables are listed below as a proposal, none is implemented
 
 ## Context

@@ -1,6 +1,6 @@
 # 0068. The UI and CLI start, follow, pause and delete TalosOperations through one OperationService, and write the spec first
 
-Status: Accepted · Date: 2026-10-26 · Design section: Upgrades, CLI and UI
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Upgrades, CLI and UI
 
 Decided: an `OperationService` (list, get, plan, create, pause/resume, delete) is the one entry point for `TalosOperation`s, used by `ichor upgrade`, `ichor upgrade cni`, `ichor shutdown cluster`, `ichor get operations` and the UI; every call is made as the signed-in user, `CreateOperation` changes the spec first and creates the operation second after refusing everything it can beforehand (including a dry-run create as the caller), the kube-proxy confirmation annotation is set for that one write and removed again, destructive starts show the server's plan and ask for confirmation (a shutdown also needs the cluster name typed in the UI)
 

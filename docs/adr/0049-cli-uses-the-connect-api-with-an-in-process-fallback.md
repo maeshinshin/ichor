@@ -1,6 +1,6 @@
 # 0049. The CLI calls the Connect API through ichor ui's tunnel and falls back to the same handlers in-process
 
-Status: Accepted · Date: 2026-10-26 · Design section: CLI and UI
+Status: Accepted, amended · Date: 2026-10-26 · Design section: CLI and UI
 
 Decided: `ichor machine|cluster|patch|node|config` call ichor-ui's Connect API over the `ichor ui` port-forward discovery, and when ichor-ui is unreachable run the very same `uiapi.Server` in-process on the user's Kubernetes credentials, so no check is duplicated or skipped
 

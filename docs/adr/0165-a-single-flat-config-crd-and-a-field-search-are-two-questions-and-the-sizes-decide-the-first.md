@@ -1,6 +1,6 @@
 # 0165. A single flat config CRD and a field search are two questions, and the sizes decide the first
 
-Status: Accepted · Date: 2026-11-15 · Amended · Design section: Typed configuration · Relates to: 0003, 0009, 0039, 0072, 0099, 0101, 0104, 0152, 0158
+Status: Accepted, amended · Date: 2026-11-15 · Design section: Typed configuration · Relates to: 0003, 0009, 0039, 0072, 0099, 0101, 0104, 0152, 0158
 
 Decided: Ichor's patch schema is Ichor's own, not a copy of Talos's. `TalosConfigPatch.spec.config` is one nested object, a `machine` and a `cluster` section in the shape of the `v1alpha1` `Config` document, with every document kind placed beside the setting of the same meaning, each setting written once, and the controller converts it to Talos documents when it renders. It is a new field of the existing CRD, not a new CRD. `spec.documents[]` is removed from the CRD in `v1alpha1`, so `spec.config` is the only way to write Talos configuration (see the amendment). The schema is generated from the mirror types, so a field Talos adds appears with no list edited. The field search stays a separate question and is built from a generated index.
 

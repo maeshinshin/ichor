@@ -1,6 +1,6 @@
 # 0131. Changing the Cilium values needs an admin-only verb, and the Cilium Secrets namespaces are pinned
 
-Status: Accepted · Date: 2026-11-05 · Design section: Trust, Webhooks, Cilium · Builds on: 0094, 0096, 0099, 0108, 0129
+Status: Accepted, amended · Date: 2026-11-05 · Design section: Trust, Webhooks, Cilium · Builds on: 0094, 0096, 0099, 0108, 0129
 
 Decided: A user with only the built-in `ichor-operator` role could write `spec.cni.cilium.values` (in the UI, with `ichor apply cni-values`, or with `kubectl`) and so choose what the Cilium Helm Job deploys. The Job's ServiceAccount (`ichor-cni`) holds `escalate` and `bind` on ClusterRoles and Roles by name (ADR 0099 decision 2, ADR 0108), so it is as strong as cluster-admin, and the Cilium chart accepts `extraContainers`, `extraInitContainers`, `extraHostPathMounts`, `extraVolumes`, `extraArgs`, image overrides and `securityContext`: a privileged, host-network pod with a host path on every node is a legal value. That is root on every node, and from there the Talos and Kubernetes PKI and the Secrets in `ichor-system`: operator became admin-equivalent. This ADR (1) makes changing the values a right of its own, the verb `update` on `talosclusters/cilium-values`, held by `ichor-admin` only and checked by the TalosCluster admission webhook as the requesting user, so the UI, the CLI and `kubectl` obey it alike, and (2) makes the five `*.secretsNamespace.name` values of the chart Ichor-owned, pinned to `cilium-secrets`.
 

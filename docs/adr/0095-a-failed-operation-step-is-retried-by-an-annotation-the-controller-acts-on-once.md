@@ -1,6 +1,6 @@
 # 0095. A failed operation step is retried by an annotation the controller acts on once
 
-Status: Accepted · Date: 2026-10-27 · Design section: Upgrades, UI backend · Extends: 0026, 0068
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Upgrades, UI backend · Extends: 0026, 0068
 
 Decided: `ichor operation retry NAME` (and a Retry button and the `OperationService.RetryOperation` RPC, next to pause and resume) sets the annotation `ichor.maesh.dev/retry=<RFC 3339 time>` on a `TalosOperation` that is Paused with a `failureReason`; the controller, when that time is newer than the new `status.lastRetry`, clears `failureReason`, records `lastRetry` and runs the failed machine's step again; `resume` stays as it was (it lifts `spec.paused` only) and says so when the operation has failed; `ichor node` actions also accept the machine's hostname or Kubernetes Node name instead of the TalosMachine name
 

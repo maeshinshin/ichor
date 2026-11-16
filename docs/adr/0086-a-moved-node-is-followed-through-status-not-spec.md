@@ -1,6 +1,6 @@
 # 0086. A moved node is followed through status, not spec
 
-Status: Accepted · Date: 2026-10-27 · Design section: Nodes (discovery), Configuration reconcile
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Nodes (discovery), Configuration reconcile
 Decided: the controller never mutates `TalosMachine.spec.endpoint`; when a node answers somewhere else, the address is recorded in `status.observedEndpoint` (with `status.observedEndpointFor`, the `spec.endpoint` it replaces) by discovery, which matches the identity (ADR 0011), or by the machine reconciler, which reads the InternalIP of the node's Kubernetes Node; every dial of the node's Talos API uses `DialEndpoint()` (the observed address while it still supersedes `spec.endpoint`, else `spec.endpoint`); a converged machine is re-probed every two minutes so Ready turns False when the node is gone
 
 ## Context

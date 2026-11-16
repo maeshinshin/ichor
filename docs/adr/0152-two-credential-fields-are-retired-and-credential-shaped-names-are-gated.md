@@ -1,6 +1,6 @@
 # 0152. Two credential fields are retired and credential-shaped names are gated
 
-Status: Accepted · Date: 2026-11-12 · Amended · Design section: Typed configuration · Builds on: 0003, 0012, 0099, 0101
+Status: Accepted, amended · Date: 2026-11-12 · Design section: Typed configuration · Builds on: 0003, 0012, 0099, 0101
 
 Decided: the registry client identity (`machine.registries.config.<host>.tls.clientIdentity`, a certificate and a PEM private key) and `cluster.extraManifestHeaders` (HTTP headers, usually `Authorization`) are dropped from the legacy `v1alpha1` document mirror and retired from the `TalosConfigPatch` and `TalosCluster` CRDs through the installer's retired-field list, as an exception to the append-only rule; and the generator's suspicious-name scan is now a test that fails on any credential-shaped field that is neither dropped nor on a reviewed list with a reason. Amended 2026-11-15: `TalosCluster.spec.cni.custom.documents`, the deprecated and unused second copy of the document union, is retired whole by the same exception; `spec.cni.custom` and `spec.cni.custom.source` stay.
 

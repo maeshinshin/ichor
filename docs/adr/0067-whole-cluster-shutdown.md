@@ -1,6 +1,6 @@
 # 0067. Whole-cluster shutdown is a TalosOperation kind the controller runs, with a derived mark that refuses other disruptive work
 
-Status: Accepted · Date: 2026-10-26 · Design section: Upgrades
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Upgrades
 Decided: a `TalosOperation` of kind `shutdown` stops a cluster: workers first (drained), then every control plane and the controller's own node in one forced burst; while any shutdown operation has not `Completed`, `acquireDisruptiveLock` (both of them) refuses everything else; the operation completes by itself once every machine answers on a new boot; no CLI command, no etcd snapshot taken by the shutdown
 
 ## Context

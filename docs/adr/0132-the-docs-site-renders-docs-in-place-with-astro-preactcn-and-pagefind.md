@@ -1,6 +1,6 @@
 # 0132. The docs site renders docs/ in place with Astro, preactcn and Pagefind, and deploys to GitHub Pages
 
-Status: Accepted · Date: 2026-11-06 · Design section: Documentation · Builds on: 0029, 0070
+Status: Accepted, amended · Date: 2026-11-06 · Design section: Documentation · Builds on: 0029, 0070
 
 Decided: The documentation lives only as Markdown in `docs/` and is published by a static Astro site in `site/` (Preact islands, Tailwind v4, preactcn components, Pagefind search) to GitHub Pages at `https://ichor.maesh.dev/`; a page is added or changed by editing Markdown alone, and the build fails on a broken internal link.
 

@@ -1,6 +1,6 @@
 # 0058. OIDC login and Kubernetes impersonation for ichor-ui
 
-Status: Accepted · Date: 2026-10-26 · Design section: Trust; CLI and UI
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Trust; CLI and UI
 Decided: with `ichorUI.oidc.enabled` (default off) every ichor-ui RPC needs an OIDC ID token that `github.com/coreos/go-oidc/v3` verifies (signature, issuer, audience = client ID, expiry), the backend calls the Kubernetes API as that user with `Impersonate-User`/`Impersonate-Group` so the API server alone decides what they may do, and `AuditRecord.actor` and the PR's `Requested by:` are that Kubernetes user name; the UI is a public client doing authorization code + PKCE in the browser (no client secret exists); the `impersonate` grant is on `users` and `groups` only, rendered only when OIDC is on and narrowable by name; with OIDC off nothing changes except a startup warning and a UI banner; the CLI does not forward credentials
 
 ## Context

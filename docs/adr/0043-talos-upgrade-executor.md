@@ -1,6 +1,6 @@
 # 0043. The Talos upgrade executor is one per-node function behind ADR 0026's seam
 
-Status: Accepted · Date: 2026-10-26 · Design section: Upgrades, Storage
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Upgrades, Storage
 Decided: Implement Talos upgrades as a single AdvanceMachineFunc (evacuation hook, Upgrade API, boot-ID-based reboot detection, version/readiness/etcd verification, A/B fallback is a failure) with all resumability held in TalosMachine conditions, and no Ichor-side cordon, drain or Preserve handling
 
 ## Context

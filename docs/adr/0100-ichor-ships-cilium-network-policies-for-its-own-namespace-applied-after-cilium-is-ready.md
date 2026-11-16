@@ -1,6 +1,6 @@
 # 0100. Ichor ships CiliumNetworkPolicies for its own namespace, applied after Cilium is Ready
 
-Status: Accepted · Date: 2026-10-29 · Design section: Bootstrap, Upgrades (Ichor) · Extends: 0059, 0094, 0098
+Status: Accepted, amended · Date: 2026-10-29 · Design section: Bootstrap, Upgrades (Ichor) · Extends: 0059, 0094, 0098
 
 Decided: `ichor-system` gets a default deny and one explicit allow per flow the controller, ichor-ui and the installer Job need, written as `CiliumNetworkPolicy` with the entities `kube-apiserver`, `host`, `remote-node`, `world` and `cluster`; the policies are built from `config/cilium-network-policy` into `dist/network-policies.yaml`, embedded next to the install manifest, applied by `ichor init` after Cilium is Ready and by the installer Job on an upgrade when Cilium's CRD exists, and rendered by the chart behind `networkPolicy.cilium.enabled`
 

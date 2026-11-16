@@ -1,6 +1,6 @@
 # 0010. The quorum and last-control-plane delete guards are stronger than `allow-delete`
 
-Status: Accepted · Date: 2026-10-25 · Design section: Nodes (removal), Roadmap phase 3
+Status: Accepted, amended · Date: 2026-10-25 · Design section: Nodes (removal), Roadmap phase 3
 
 Decided: Added `CheckControlPlaneQuorum` as a pure guard stronger than the `allow-delete` annotation alone
 

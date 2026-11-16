@@ -268,7 +268,7 @@ func (i *Issuer) discovery(jwksURI string) http.HandlerFunc {
 		"code_challenge_methods_supported":      []string{codeChallengeMethodS},
 		"token_endpoint_auth_methods_supported": []string{"none"},
 		"scopes_supported":                      []string{scopeOpenID, scopeOffline},
-		"claims_supported":                      []string{"iss", "sub", "aud", "exp", "iat", "groups", "nonce"},
+		"claims_supported":                      []string{"iss", "sub", "aud", "exp", "iat", "groups", "nonce", "auth_time"},
 	}
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Cache-Control", noCache)

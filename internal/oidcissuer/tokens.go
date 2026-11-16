@@ -35,6 +35,9 @@ type refreshClaims struct {
 type idClaims struct {
 	Groups []string `json:"groups"`
 	Nonce  string   `json:"nonce,omitempty"`
+	// AuthTime is when the person signed in (OIDC Core 2), carried unchanged by a refresh
+	// (Core 12.2). iat is not that: a refresh re-issues iat, so it says when this token was minted.
+	AuthTime jwt.NumericDate `json:"auth_time"`
 }
 
 // sign serializes std plus private claims as a compact JWS signed with the

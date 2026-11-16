@@ -103,3 +103,35 @@ func TestRotationKeepsTheSessionExpiry(t *testing.T) {
 		t.Fatal("rotation must not extend the absolute session lifetime or move its start")
 	}
 }
+
+// auth_time is the sign-in and survives a refresh, while iat is re-issued. The must-change
+// rotation in uiapi reads auth_time: were it iat, a session kept open would look fresh forever.
+func TestAuthTimeIsTheSignInAndSurvivesRefresh(t *testing.T) {
+	for _, withStore := range []bool{true, false} {
+		t.Run(map[bool]string{true: "with refresh store", false: "without refresh store"}[withStore], func(t *testing.T) {
+			st := &memStore{cur: map[string]string{}}
+			e := newEnvWith(t, externalURL, "", func(c *oidcissuer.Config) {
+				if withStore {
+					c.Refresh = st
+				}
+			})
+			login := e.tokens(clientCLI, cliRedirect, "")
+			signedIn := claimsOf(t, login.IDToken)["auth_time"]
+			if signedIn != float64(e.clk.now().Unix()) {
+				t.Fatalf("login auth_time = %v, want the sign-in time %d", signedIn, e.clk.now().Unix())
+			}
+
+			e.clk.shift(time.Hour)
+			s, r := e.token(refreshForm(clientCLI, login.RefreshToken, ""))
+			if s != http.StatusOK {
+				t.Fatalf("refresh: %d", s)
+			}
+			if got := claimsOf(t, r.IDToken)["auth_time"]; got != signedIn {
+				t.Fatalf("refresh moved auth_time: %v, want %v", got, signedIn)
+			}
+			if claimsOf(t, r.IDToken)["iat"] == claimsOf(t, login.IDToken)["iat"] {
+				t.Fatal("refresh did not re-issue iat")
+			}
+		})
+	}
+}

@@ -435,9 +435,10 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "user not allowed")
 		return
 	}
-	plan := refreshPlan{}
+	// The session start is kept with or without a RefreshStore: it is auth_time on the ID token.
+	plan := refreshPlan{start: std.IssuedAt.Time()}
 	if i.cfg.Refresh != nil {
-		plan = refreshPlan{issue: true, start: std.IssuedAt.Time(), expiry: std.Expiry.Time(), family: rc.Family, oldJTI: std.ID}
+		plan.issue, plan.expiry, plan.family, plan.oldJTI = true, std.Expiry.Time(), rc.Family, std.ID
 	}
 	i.respond(r.Context(), w, user, client, aud, rc.Scope, "", plan)
 }
@@ -445,7 +446,8 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 // refreshPlan says what refresh token a response carries. issue false means
 // none. A login starts a session at start; a rotation (family set) keeps the
 // session's start and expiry and replaces oldJTI; a refresh of a token from
-// before rotation existed (issue, no family) starts a family.
+// before rotation existed (issue, no family) starts a family. start is the session start on every
+// response, with or without a refresh token: it is the ID token's auth_time.
 type refreshPlan struct {
 	issue         bool
 	start, expiry time.Time
@@ -467,7 +469,7 @@ func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, cli
 	idTok, err := i.sign("JWT", jwt.Claims{
 		Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{aud}, ID: rand.Text(),
 		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(tokenTTL)),
-	}, idClaims{Groups: groups, Nonce: nonce})
+	}, idClaims{Groups: groups, Nonce: nonce, AuthTime: jwt.NumericDate(plan.start.Unix())})
 	resp := tokenResponse{
 		AccessToken: idTok, // no userinfo endpoint: the ID token doubles as the bearer
 		TokenType:   "Bearer", ExpiresIn: int(tokenTTL / time.Second), IDToken: idTok, Scope: scope,

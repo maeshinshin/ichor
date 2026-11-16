@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
+// disk preset it applies. Read only. A TalosStorage is written as a custom resource, and this
+// service does not write it.
+package ichor.v1alpha1;
+
+import "ichor/v1alpha1/common.proto";
+
+service StorageService {
+  // ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
+  rpc ListStorages(ListStoragesRequest) returns (ListStoragesResponse);
+}
+
+message ListStoragesRequest {
+  // cluster is required: a TalosStorage belongs to the TalosCluster its clusterRef names.
+  ObjectRef cluster = 1;
+}
+
+message ListStoragesResponse {
+  repeated Storage storages = 1;
+}
+
+// Storage is one TalosStorage, trimmed to what the page shows.
+message Storage {
+  ObjectRef ref = 1;
+  // disk_preset is spec.diskPreset as written.
+  string disk_preset = 2;
+  // disk_selector is spec.diskSelector, the Talos disk-selector CEL expression.
+  string disk_selector = 3;
+  // node_selector is spec.nodes rendered as a label selector ("<none>" when empty).
+  string node_selector = 4;
+  // evacuation_timeout is spec.evacuationTimeout, or empty when unset (the hook's own default applies).
+  string evacuation_timeout = 5;
+  // conditions are status.conditions as the controller last wrote them.
+  repeated Condition conditions = 6;
+  // governed_machines are the TalosMachines whose spec.nodeLabels this storage's spec.nodes selects.
+  // A machine several storages match belongs to the first by name, as the controller decides.
+  repeated ObjectRef governed_machines = 7;
+  // required_extensions are the Talos system extensions this build's preset for disk_preset needs.
+  repeated string required_extensions = 8;
+  // preset_error is set when this build does not know disk_preset; required_extensions is then empty.
+  string preset_error = 9;
+}

@@ -129,15 +129,49 @@ A block of a file names it with `title`, and a long one can number its lines wit
 ```
 ````
 
-`title` takes a double-quoted value. Any other word after the language is an
-error, and so is a `{…}` line list, which is not built yet, so a typo fails the
-build rather than dropping the option. GitHub shows the block without them.
+`title` takes a double-quoted value. `{…}` lists the lines to highlight, by number
+and range, with no spaces: `{3}`, or `{3,5-7}`. Lines are counted from 1, and a
+number past the last line fails the build:
+
+````markdown
+```yaml {3,5-7} title="main.go" lineNumbers
+```
+````
+
+Any other word after the language is an error, so a typo fails the build rather
+than dropping the option. GitHub shows the block without them, and without the
+highlight.
 
 Every block must name its language, and `make docs-site` fails with the file
 and line of one that does not. Use `sh` for shell commands, `console` for a
 session that shows `$ ` prompts with their output, `yaml`, `json` and `go` for
 source, and `text` for plain output, diagrams and file trees. The generated
 pages under `reference/` are labeled by `make docs-reference`.
+
+## Tabs
+
+Alternatives for the same job, such as the UI way and the CLI way, go in tabs. The
+block starts with `:::tabs`, each section starts with a `::tab[Label]` line followed by
+a blank line, and `:::` closes the block. Text before the first section is an error.
+
+````markdown
+:::tabs
+
+::tab[In the UI]
+
+Open the cluster's page and choose "Reset and add".
+
+::tab[With the CLI]
+
+```sh
+ichor reclaim node 10.0.0.21 --cluster prod
+```
+
+:::
+````
+
+GitHub shows the markers as plain lines, with the sections as ordinary Markdown
+between them.
 
 ## What every page gets
 

@@ -400,9 +400,9 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 	}
 }
 
-// The bundle plus the server address is the whole input: no kubeconfig exists on disk, no cluster is
-// reachable, and both files still come out working. The documents' claim that --bundle alone gets an
-// operator back in rests on this.
+// The bundle plus the server address and the Talos endpoints is the whole input: no kubeconfig exists
+// on disk, no cluster is reachable, and both files still come out working. The documents' claim that
+// --bundle alone gets an operator back in rests on this.
 func TestBundleAndKubeServerWriteCredentialsWithNoKubeconfigOnDisk(t *testing.T) {
 	f := newCredFixture(t, false, "")
 	t.Setenv("HOME", t.TempDir())

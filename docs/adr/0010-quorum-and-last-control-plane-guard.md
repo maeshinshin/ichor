@@ -646,3 +646,7 @@ was gone.
 ## Amendment (ADR 0137)
 
 An operation parked with `ClusterTransitioning` holds no lock and does not block the removal of a control plane; see ADR 0137.
+
+## Amendment (2026-11-16): what Talos's source says about the guards
+
+`docs/design/architecture/nodes.md` carried the notes below, read from Talos 1.14.3's source, beside the design statement. They are kept here, with the decision they support, and the design page states only the rule. Talos's member-removal call requires only that a leader exists right now; it does not ask whether the remaining members can still reach quorum. The one quorum guard Talos ships refuses at exactly two members and only on the upgrade path, so Ichor's three refusals are not duplicated by Talos anywhere else.

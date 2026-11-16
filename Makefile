@@ -572,8 +572,8 @@ ui-fieldindex: ## Write ui/src/gen/fieldindex.json, the UI's field search index 
 	go run ./internal/tools/gendocs fieldindex
 
 .PHONY: ui-build
-ui-build: ui-install ui-fieldindex ## Build the UI; Vite writes straight into cmd/ichor-ui/dist.
-	cd ui && npm run build
+ui-build: ui-install ui-fieldindex ## Build the UI; Vite writes straight into cmd/ichor-ui/dist, stamped with VERSION (the page reloads when the backend runs another one).
+	cd ui && ICHOR_VERSION="$(VERSION)" npm run build
 
 .PHONY: ui-typecheck
 ui-typecheck: ui-install ui-fieldindex ## Type-check the UI (tsc --noEmit).

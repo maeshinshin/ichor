@@ -434,7 +434,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		if err := r.removeEtcdMember(ctx, &cluster, m, nodeName); err != nil {
 			log.Error(err, "removing etcd member")
 
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEtcdMemberRemoveFail, err.Error())
+			return r.removalDeferred(ctx, m, reasonEtcdMemberRemoveFail, err.Error())
 		}
 	}
 
@@ -472,7 +472,7 @@ func (r *TalosMachineReconciler) resetAndFinish(
 		if !r.nodeDown(ctx, nodeName) {
 			log.Error(err, "resetting node")
 
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonResetFailed, err.Error())
+			return r.removalDeferred(ctx, m, reasonResetFailed, err.Error())
 		}
 
 		step.unwiped = err.Error()

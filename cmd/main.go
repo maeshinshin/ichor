@@ -54,7 +54,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/imagesig"
-	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/metricsauth"
 	"github.com/maeshinshin/ichor/internal/releasecheck"
@@ -193,7 +192,6 @@ func main() {
 		"Name of the CiliumNetworkPolicy the controller keeps with the addresses of the nodes, clusters and S3 stores it manages.")
 	flag.BoolVar(&talosEgressManage, "talos-egress-policy", true,
 		"Keep the CiliumNetworkPolicy of egress to managed nodes and S3 current. Off when the chart sets networkPolicy.cilium.dynamicTalosEgress=false.")
-	checkRetired := flag.Bool("check-retired-kinds", false, "Check that no retired kind (ADR 0168) still holds an object, print the objects and exit non-zero if one does. The chart's pre-upgrade hook runs this; it starts nothing.")
 	flag.BoolVar(&updateCheck, "update-check", true,
 		"Look for newer Ichor releases in the chart repository and record the newest one in the IchorInstallation status (the chart's updateCheck.enabled). spec.updateCheck.enabled overrides it.")
 	flag.BoolVar(&autoPatch.Enabled, "auto-patch", false,
@@ -221,10 +219,6 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	if *checkRetired {
-		os.Exit(runCheckRetiredKinds())
-	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -687,23 +681,4 @@ func main() {
 	controller.WaitForRestoreTails(restoreTailGrace, probeAddr)
 
 	must(err, "Failed to run manager")
-}
-
-// runCheckRetiredKinds is the --check-retired-kinds mode: 0 when no retired kind holds an object,
-// 1 otherwise, with the reason on stderr.
-func runCheckRetiredKinds() int {
-	c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "building the client:", err)
-
-		return 1
-	}
-
-	if err := installer.CheckRetiredKinds(context.Background(), c); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-
-		return 1
-	}
-
-	return 0
 }

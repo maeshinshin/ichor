@@ -25,7 +25,6 @@ import (
 	"log"
 	"maps"
 	"slices"
-	"strings"
 	"time"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -34,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -185,12 +183,6 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		p.crds, p.controller, p.ui = q.crds, q.controller, q.ui
 	}
 
-	// The retired-kind guard lists objects cluster-wide, a right the stage-0 ClusterRole grants. An older
-	// release's role lacks it, so the check runs only now, once that right is effective (ADR 0168).
-	if err := checkRetiredKinds(ctx, c, p.crds); err != nil {
-		return failWithRollback(c, opts, snap, err)
-	}
-
 	// Stage 2: everything else, now readable under the new rights. A failure here leaves nothing
 	// but the RBAC applied, which the stage-0 snapshot restores.
 	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 2, slices.Concat(p.crds, p.controller, p.ui, policies))
@@ -323,61 +315,6 @@ func checkCRDs(ctx context.Context, c client.Client, target []*unstructured.Unst
 	}
 
 	return nil
-}
-
-// checkRetiredKinds refuses the install while a retired kind still holds an object. A list that
-// fails is a refusal too: an unreadable list is not an empty one.
-func checkRetiredKinds(ctx context.Context, c client.Client, target []*unstructured.Unstructured) error {
-	shipped := make(map[string]bool, len(target))
-	for _, t := range target {
-		shipped[t.GetName()] = true
-	}
-
-	for _, rk := range retiredKinds {
-		if shipped[rk.crd] {
-			continue
-		}
-
-		if err := checkRetiredKind(ctx, c, rk); err != nil {
-			return fmt.Errorf("refusing to install: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func checkRetiredKind(ctx context.Context, c client.Client, rk retiredKind) error {
-	crd := &unstructured.Unstructured{}
-	crd.SetAPIVersion("apiextensions.k8s.io/v1")
-	crd.SetKind(kindCRD)
-
-	err := c.Get(ctx, types.NamespacedName{Name: rk.crd}, crd)
-	if apierrors.IsNotFound(err) {
-		return nil // never installed, or removed by hand: no object can be served
-	}
-
-	if err != nil {
-		return fmt.Errorf("the installer cannot read CRD %s to check for leftover %s objects: %w; this is not an empty list, the install is refused (the installer's role needs get on it)", rk.crd, rk.kind, err)
-	}
-
-	objs := &unstructured.UnstructuredList{}
-	objs.SetGroupVersionKind(schema.GroupVersionKind{Group: rk.group, Version: rk.version, Kind: rk.kind + "List"})
-
-	if err := c.List(ctx, objs); err != nil {
-		return fmt.Errorf("the installer cannot list %s objects (%s) to check whether this release would strand any: %w; this is not an empty list, the install is refused. If the error is Forbidden, the installer role lacks list on %s; the rights must be installed before this check can run. Fix the rights and run the install again; do not delete the CRD", rk.kind, rk.crd, err, rk.crd)
-	}
-
-	if len(objs.Items) == 0 {
-		return nil
-	}
-
-	nss := sets.New[string]()
-	for _, o := range objs.Items {
-		nss.Insert(o.GetNamespace())
-	}
-
-	return fmt.Errorf("%d %s object(s) remain in namespace(s) %s. This release removes the %s kind and does not read these objects, so the storage configuration each one selects would be dropped from its nodes. For each object: create a TalosStoragePreset with the same name, namespace and spec, check that the node configuration is what you expect, delete the %s, then run the install again. Once none remain, remove the empty CRD by hand with: kubectl delete crd %s (the installer never deletes a CRD)",
-		len(objs.Items), rk.kind, strings.Join(sets.List(nss), ", "), rk.kind, rk.kind, rk.crd)
 }
 
 func applyStep(ctx context.Context, c client.Client, opts Options, name string, objs []*unstructured.Unstructured) error {
@@ -692,10 +629,4 @@ func waitRBACEffective(ctx context.Context, c client.Client, rbac []*unstructure
 	}
 
 	return nil
-}
-
-// CheckRetiredKinds is the chart's guard (ADR 0168): a Helm install or upgrade does not run Run, so
-// the chart's hook runs this through the manager's --check-retired-kinds mode.
-func CheckRetiredKinds(ctx context.Context, c client.Client) error {
-	return checkRetiredKinds(ctx, c, nil)
 }

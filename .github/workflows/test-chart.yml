@@ -70,17 +70,18 @@ jobs:
         run: |
           make helm-deploy HELM_EXTRA_ARGS="--set ichorUI.image.repository=${IMG_UI%:*} --set ichorUI.image.tag=${IMG_UI##*:} --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443"
 
-      # Runs only after a failed deploy. A failed hook Job and its pod are kept (the hook's delete policy removes
-      # them only on success), and the guard's refusal is written to the pod's stderr, so this is the only place
-      # the reason shows. Every line is best effort: the step must print what is there, not fail on a missing piece.
+      # Runs only after a failed deploy. It prints what the namespace holds: the pods and jobs, each pod's
+      # description and recent logs (a failing container's stderr shows only there), the events and the Helm
+      # release status. Every line is best effort: the step must print what is there, not fail on a missing piece.
       - name: Show why the deploy failed
         if: failure()
         run: |
           ns=ichor-system
           kubectl -n "$ns" get job,pod -o wide || true
-          kubectl -n "$ns" describe job ichor-retired-kinds-guard || true
-          kubectl -n "$ns" describe pods -l batch.kubernetes.io/job-name=ichor-retired-kinds-guard || true
-          kubectl -n "$ns" logs -l batch.kubernetes.io/job-name=ichor-retired-kinds-guard --all-containers --tail=-1 --prefix || true
+          kubectl -n "$ns" describe pods || true
+          for p in $(kubectl -n "$ns" get pods -o name); do
+            kubectl -n "$ns" logs "$p" --all-containers --tail=200 --prefix || true
+          done
           kubectl -n "$ns" get events --sort-by=.lastTimestamp || true
           make helm-status || true
 

@@ -15,14 +15,6 @@ kind: ClusterRole
 metadata:
   name: installer-role
 rules:
-# ADR 0168: the install refuses while a TalosStorage object remains (checkRetiredKinds), so the installer
-# lists them cluster-wide. Cluster-scoped: an object in any namespace must be seen.
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosstorages
-  verbs:
-  - list
 - apiGroups:
   - apiextensions.k8s.io
   resources:

@@ -342,8 +342,8 @@ func TestStoredTalosConfigPatchWithDocumentsSurvivesTheCRDUpgrade(t *testing.T) 
 		kKind:       "TalosConfigPatch",
 		kMetadata:   map[string]any{kName: "old-patch", kNamespace: kDefault},
 		kSpec: map[string]any{
-			kClusterRef: map[string]any{kName: "c"},
-			"layer":     "cluster",
+			"clusterRef": map[string]any{kName: "c"},
+			"layer":      "cluster",
 			kDocuments: []any{map[string]any{
 				kKind:          "SysctlConfig",
 				"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},

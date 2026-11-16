@@ -67,10 +67,7 @@ func TestPruneCandidatesSelectsOnlyWhatTheBundleDrops(t *testing.T) {
 		}
 	}
 
-	want := []string{
-		"ClusterRole/ichor-manager-role", "Role/stale-role", "ClusterRole/ichor-ichor-break-glass-role",
-		"ClusterRole/ichor-talosstorage-admin-role", "ClusterRole/ichor-talosstorage-editor-role", "ClusterRole/ichor-talosstorage-viewer-role",
-	}
+	want := []string{"ClusterRole/ichor-manager-role", "Role/stale-role", "ClusterRole/ichor-ichor-break-glass-role"}
 	if !slices.Equal(got, want) {
 		t.Errorf("candidates = %v, want %v", got, want)
 	}
@@ -82,10 +79,7 @@ func TestPruneCandidatesSelectsOnlyWhatTheBundleDrops(t *testing.T) {
 
 // A renamed object is not a candidate while the bundle still ships its old name.
 func TestPruneCandidatesNeverPrunesAShippedRenamedName(t *testing.T) {
-	bundle := make([]ref, 0, len(renamedObjects))
-	for _, rn := range renamedObjects {
-		bundle = append(bundle, ref{APIVersion: rn.APIVersion, Kind: rn.Kind, Name: rn.Name})
-	}
+	bundle := []ref{{APIVersion: rbacAPI, Kind: kindClusterRole, Name: breakGlassRole}}
 
 	if got := pruneCandidates(nil, bundle, "ichor-system"); len(got) != 0 {
 		t.Errorf("candidates = %v, want none: the bundle still ships the name", got)

@@ -124,6 +124,12 @@ func (cv *converter) document(k instance) (TalosConfigPatchDocument, error) {
 		return TalosConfigPatchDocument{}, fmt.Errorf("spec.config: the %s document: %w", describe(k), err)
 	}
 
+	if d.BondConfig != nil {
+		if err := checkBondEnums(d.BondConfig); err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("spec.config: %w", err)
+		}
+	}
+
 	if err := d.Validate(); err != nil {
 		return TalosConfigPatchDocument{}, fmt.Errorf("spec.config: %w", err)
 	}

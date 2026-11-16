@@ -162,7 +162,7 @@ func TestInternalServerLimits(t *testing.T) {
 func TestVersionHeaderIsNotSentToAnonymousCallers(t *testing.T) {
 	saved := version.Version
 	t.Cleanup(func() { version.Version = saved })
-	version.Version = "v9.9.9-version-test"
+	version.Version = testVersion
 
 	page := securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), contentSecurityPolicy(false))
 	rec := httptest.NewRecorder()

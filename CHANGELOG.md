@@ -502,6 +502,16 @@ command does. Each item is described where it is listed below.
   holds it back to last only in the kubelet stage. Each stage now names its machines in
   order, with the controller's node marked, and the machine list is the kubelet stage's.
   The plan of a config operation is unchanged.
+- **Which machine runs the controller is decided the same way by the run and the plan,
+  and a name that cannot be read stops the run.** A config or Kubernetes operation and a
+  cluster shutdown used to treat a machine whose node name could not be read as not the
+  controller's, which could put the controller's own machine in the wrong place and restart
+  the controller in the middle of the operation. They now stop with an error that names the
+  node, as the etcd restore does, unless another machine is already known to be the
+  controller's. The controller and the UI backend also find a machine's Node by the same
+  addresses (the one it answers on, then the one `spec.endpoint` names). A forbidden
+  removal of the kube-proxy confirmation after a CNI operation is created is now reported
+  as permission denied, not as an internal error.
 - **ADR 0080 says what the `ConfigRollout` marker does when a rollout ends.** The ADR
   said the rollout clears the marker. It sets the `TalosMachine` condition to `False`
   with reason `Converged` and leaves it there until the next rollout. The reason is not

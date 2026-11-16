@@ -280,10 +280,9 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// A config rollout reboots nodes, so the machine this controller runs on goes last: its reboot
 	// stops the controller, which resumes from the status and has nothing left to wait for.
 	// A Kubernetes upgrade does the same in its Kubelets stage, where the node is drained first.
-	var own []*ichorv1alpha1.TalosMachine
-	heldCPs, heldWorkers := controlPlanes, workers
-	if slices.Contains([]string{ichorv1alpha1.TalosOperationKindConfig, ichorv1alpha1.TalosOperationKindKubernetes}, op.Spec.Kind) {
-		heldCPs, heldWorkers, own = r.holdOwnNodeLast(ctx, &cluster, controlPlanes, workers)
+	heldCPs, heldWorkers, own, err := r.holdOwnNodeLast(ctx, &cluster, op.Spec.Kind, controlPlanes, workers)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Control planes go one at a time, and only once every one of them is
@@ -906,17 +905,22 @@ func kubernetesBatch(
 
 // holdOwnNodeLast takes the machine whose Kubernetes node is nodeName (the one this controller
 // runs on) out of controlPlanes and workers; it is advanced after both. Empty nodeName (the
-// controller runs outside the cluster) changes nothing.
-// The node names are resolved as everywhere else (spec.hostname is empty on the first control plane).
+// controller runs outside the cluster) changes nothing, nor does a kind other than config and kubernetes.
+// The node names are resolved as everywhere else (spec.hostname is empty on the first control plane), and the
+// operation is not advanced while the controller's machine cannot be told apart from one whose name could not be read.
 func (r *TalosOperationReconciler) holdOwnNodeLast(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, controlPlanes, workers []*ichorv1alpha1.TalosMachine,
-) (cps, ws, own []*ichorv1alpha1.TalosMachine) {
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, kind string, controlPlanes, workers []*ichorv1alpha1.TalosMachine,
+) (cps, ws, own []*ichorv1alpha1.TalosMachine, err error) {
 	nodeName := r.NodeName
-	if nodeName == "" {
-		return controlPlanes, workers, nil
+	// Only a config rollout and a Kubernetes upgrade reboot or drain the node they visit.
+	if nodeName == "" || !slices.Contains([]string{ichorv1alpha1.TalosOperationKindConfig, ichorv1alpha1.TalosOperationKindKubernetes}, kind) {
+		return controlPlanes, workers, nil, nil
 	}
 
-	names, _ := r.nodeNames(ctx, cluster, nil, slices.Concat(controlPlanes, workers)) // an unnamed machine is not the controller's
+	names, err := r.ownNodeNames(ctx, cluster, nil, slices.Concat(controlPlanes, workers))
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	split := func(in []*ichorv1alpha1.TalosMachine) (rest []*ichorv1alpha1.TalosMachine) {
 		for _, m := range in {
@@ -935,7 +939,7 @@ func (r *TalosOperationReconciler) holdOwnNodeLast(
 	cps = split(controlPlanes)
 	ws = split(workers)
 
-	return cps, ws, own
+	return cps, ws, own, nil
 }
 
 // pendingMachines returns every machine in candidates that has not reached

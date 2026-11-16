@@ -211,7 +211,8 @@ func recorded(op *ichorv1alpha1.TalosOperation, name string) (ichorv1alpha1.Talo
 // and is asked last within it. It selects machines to stop; it does not count
 // control planes for any quorum decision (that is acquireDisruptiveLock's
 // canonical count, taken before this runs). Upgrade holds are not honoured: they exclude
-// a machine from a rollout, not from a planned stop of the whole cluster.
+// a machine from a rollout, not from a planned stop of the whole cluster. It fails when the controller's machine
+// cannot be told from one whose node name could not be read (ownNodeNames), rather than stop the controller early.
 func (r *TalosOperationReconciler) shutdownPlan(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
 ) (workers, last []*ichorv1alpha1.TalosMachine, err error) {
@@ -232,7 +233,9 @@ func (r *TalosOperationReconciler) shutdownPlan(
 	var names map[string]string
 
 	if r.NodeName != "" {
-		names, _ = r.nodeNames(ctx, cluster, nil, machines) // a machine whose name cannot be told is simply not the controller's
+		if names, err = r.ownNodeNames(ctx, cluster, nil, machines); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	for _, m := range machines {

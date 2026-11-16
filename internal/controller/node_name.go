@@ -19,7 +19,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
+	"slices"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
@@ -66,6 +68,22 @@ func (r *TalosOperationReconciler) nodeNames(
 	}
 
 	return names, first
+}
+
+// ownNodeNames is nodeNames for asking which machine runs this controller (r.NodeName, which is set). It fails when
+// a name could not be read and no machine's name is r.NodeName: the controller may be on the machine that could not
+// be named, and treating that machine as another would put it in the wrong place and stop the controller part-way
+// through an operation. A machine whose name is r.NodeName settles it, since a node has one name. The etcd restore
+// asks for every control plane's name, so it refuses on any failure.
+func (r *TalosOperationReconciler) ownNodeNames(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle, ms []*ichorv1alpha1.TalosMachine,
+) (map[string]string, error) {
+	names, err := r.nodeNames(ctx, cluster, bundle, ms)
+	if err != nil && !slices.Contains(slices.Collect(maps.Values(names)), r.NodeName) {
+		return nil, fmt.Errorf("cannot tell which machine runs this controller (node %q): %w", r.NodeName, err)
+	}
+
+	return names, nil
 }
 
 // nodeNameOf is resolveNodeName with a dialed client when one can be had.

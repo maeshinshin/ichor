@@ -14,15 +14,16 @@ import { t } from '@/lib/i18n'
 
 // The change-own-password form, used in the account menu's dialog and, with nothing
 // else on the screen, when the account must change its password. Neither password is kept anywhere
-// but in these fields, and they are cleared once the call succeeds.
-export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
+// but in these fields, and they are cleared once the call succeeds. forced is the first-login change,
+// which takes no current password; the server skips that check only when the session and the stored entry both say must-change.
+export function ChangePasswordForm({ onCancel, forced = false }: { onCancel?: () => void; forced?: boolean }) {
   const [oldPassword, setOld] = useState('')
   const [next, setNext] = useState('')
   const [again, setAgain] = useState('')
   const { busy, error, run } = useAction(passwordError)
 
   const mismatch = again !== '' && again !== next
-  const ready = oldPassword !== '' && passwordOk(next) && next === again
+  const ready = (forced || oldPassword !== '') && passwordOk(next) && next === again
 
   async function submit(e: Event) {
     e.preventDefault()
@@ -43,10 +44,12 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
   return (
     <form onSubmit={submit}>
       <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="pw-old">{t('account.oldPassword')}</FieldLabel>
-          <Input id="pw-old" type="password" autoComplete="current-password" value={oldPassword} onInput={(e) => setOld((e.target as HTMLInputElement).value)} />
-        </Field>
+        {!forced && (
+          <Field>
+            <FieldLabel htmlFor="pw-old">{t('account.oldPassword')}</FieldLabel>
+            <Input id="pw-old" type="password" autoComplete="current-password" value={oldPassword} onInput={(e) => setOld((e.target as HTMLInputElement).value)} />
+          </Field>
+        )}
         <Field>
           <FieldLabel htmlFor="pw-new">{t('account.newPassword')}</FieldLabel>
           <Input id="pw-new" type="password" autoComplete="new-password" value={next} onInput={(e) => setNext((e.target as HTMLInputElement).value)} />
@@ -97,7 +100,7 @@ export function MustChangePassword() {
           <CardDescription>{t('account.mustChangeBody')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ChangePasswordForm />
+          <ChangePasswordForm forced />
         </CardContent>
       </Card>
     </main>

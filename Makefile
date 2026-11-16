@@ -506,7 +506,7 @@ RELEASE_DIR ?= bin/release
 
 .PHONY: release
 release: ## Build the local release artifacts for VERSION=vX.Y.Z into bin/release (CLI with its install manifest, install.yaml, chart); pushes and tags nothing. IMAGE_DIGESTS=<the release workflow's digests.txt> names the controller and ichor-ui images by digest.
-	@echo "$(VERSION)" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$$' || { echo "release: VERSION must be a semver tag with a leading v, like v0.1.0 (got '$(VERSION)'; dev is not a release)" >&2; exit 1; }
+	@echo "$(VERSION)" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$$' || { echo "release: VERSION must be a semver tag with a leading v, like v0.1.0 (got '$(VERSION)'; dev is not a release)" >&2; exit 1; }
 	$(MAKE) build-ichor-embed IMG=$(RELEASE_REGISTRY)/ichor-controller:$(VERSION) IMG_UI=$(RELEASE_REGISTRY)/ichor-ui:$(VERSION) IMG_INSTALLER=$(RELEASE_REGISTRY)/ichor-installer:$(VERSION)
 	mkdir -p $(RELEASE_DIR)
 	cp bin/ichor $(RELEASE_DIR)/ichor

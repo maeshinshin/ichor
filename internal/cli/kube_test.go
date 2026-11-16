@@ -27,6 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/maeshinshin/ichor/internal/envtestbin"
 )
 
 // TestNewKubeClientForConfig_RejectsUnknownField proves architecture.md's
@@ -49,11 +51,11 @@ import (
 func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 	assetsDir := os.Getenv("KUBEBUILDER_ASSETS")
 	if assetsDir == "" {
-		assetsDir = firstFoundEnvTestBinaryDir(t)
-	}
-
-	if assetsDir == "" {
-		t.Skip("no envtest binaries found (set KUBEBUILDER_ASSETS or run via `make test`)")
+		dir, err := envtestbin.Dir(filepath.Join("..", ".."))
+		if err != nil {
+			t.Fatalf("%v: set KUBEBUILDER_ASSETS, or run make setup-envtest and make test", err)
+		}
+		assetsDir = dir
 	}
 
 	// envtest's wait for the "default" namespace is a fixed 5s that cannot
@@ -128,27 +130,4 @@ func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 	if !strings.Contains(err.Error(), "token") {
 		t.Fatalf("expected the error to name the unknown field \"token\", got: %v", err)
 	}
-}
-
-// firstFoundEnvTestBinaryDir mirrors internal/controller/suite_test.go's
-// getFirstFoundEnvTestBinaryDir: locates the first binary directory under
-// bin/k8s, for runs that didn't get KUBEBUILDER_ASSETS set by `make test`
-// (e.g. an IDE's own test runner).
-func firstFoundEnvTestBinaryDir(t *testing.T) string {
-	t.Helper()
-
-	basePath := filepath.Join("..", "..", "bin", "k8s")
-
-	entries, err := os.ReadDir(basePath)
-	if err != nil {
-		return ""
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			return filepath.Join(basePath, entry.Name())
-		}
-	}
-
-	return ""
 }

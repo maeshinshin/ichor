@@ -58,6 +58,6 @@ Consequences: a diagram is edited in draw.io on the light file and exported agai
 
 ## Amendment (2026-11-16): diagram labels are plain SVG text, not HTML
 
-Decided: every label in a diagram in `docs/images/` is plain SVG text. The root cells and every label cell carry `html=0`, and a diagram with an HTML label (`html=1` on a cell) or a `foreignObject` in its SVG breaks the rule. `make test` fails on such a diagram (`internal/tools/diagramlabels`, which reads every `docs/images/*.drawio.svg` and `*.drawio`).
+Decided: every label in a diagram in `docs/images/` is plain SVG text. The root cells and every label cell carry `html=0`, and a diagram with an HTML label (`html=1` on a cell), a `<br>` or `<div>` in a label, or a `foreignObject` in its SVG breaks the rule. A line break is a real newline, and a label does not set `whiteSpace=wrap`, which draw.io writes as a `foreignObject`. `make test` fails on such a diagram (`internal/tools/diagramlabels`, which reads every `docs/images/*.drawio.svg` and `*.drawio`).
 
 The 2026-11-06 amendment says of the diagrams: "The labels are HTML, drawn with the viewer's own font (Helvetica where present)". That was true of the diagrams as first drawn, and is no longer. The labels were changed to plain SVG text, `html=0`, so that phones render them (the commits with "plain SVG text labels so phones render them" in their subject). The font is unchanged: each cell still names `fontFamily=Helvetica`, and the viewer's own font applies where present.

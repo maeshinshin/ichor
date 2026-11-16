@@ -58,6 +58,7 @@ const (
 
 const (
 	groupRBAC       = "rbac.authorization.k8s.io"
+	rbacV1          = "rbac.authorization.k8s.io/v1"
 	groupAdmission  = "admissionregistration.k8s.io"
 	kindClusterRole = "ClusterRole"
 	kindRole        = "Role"
@@ -75,12 +76,12 @@ type renamedObject struct {
 
 var renamedObjects = []renamedObject{
 	// The safety-check override's ClusterRole.
-	{APIVersion: "rbac.authorization.k8s.io/v1", Kind: kindClusterRole, Name: breakGlassRole, To: overrideRole},
+	{APIVersion: rbacV1, Kind: kindClusterRole, Name: breakGlassRole, To: overrideRole},
 	// ADR 0168: the TalosStorage helper ClusterRoles are renamed with the kind. A build from before the
 	// inventory recorded none of them, so these names are how they go.
-	{APIVersion: "rbac.authorization.k8s.io/v1", Kind: kindClusterRole, Name: "ichor-talosstorage-admin-role", To: "ichor-talosstoragepreset-admin-role"},
-	{APIVersion: "rbac.authorization.k8s.io/v1", Kind: kindClusterRole, Name: "ichor-talosstorage-editor-role", To: "ichor-talosstoragepreset-editor-role"},
-	{APIVersion: "rbac.authorization.k8s.io/v1", Kind: kindClusterRole, Name: "ichor-talosstorage-viewer-role", To: "ichor-talosstoragepreset-viewer-role"},
+	{APIVersion: rbacV1, Kind: kindClusterRole, Name: "ichor-talosstorage-admin-role", To: "ichor-talosstoragepreset-admin-role"},
+	{APIVersion: rbacV1, Kind: kindClusterRole, Name: "ichor-talosstorage-editor-role", To: "ichor-talosstoragepreset-editor-role"},
+	{APIVersion: rbacV1, Kind: kindClusterRole, Name: "ichor-talosstorage-viewer-role", To: "ichor-talosstoragepreset-viewer-role"},
 }
 
 // prunableKinds are the kinds a run may delete, each with the resource that

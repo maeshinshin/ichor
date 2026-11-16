@@ -36,7 +36,7 @@ func storedTalosStorage(ns string) *unstructured.Unstructured {
 		kKind:       "TalosStorage",
 		kMetadata:   map[string]any{kName: "leftover", kNamespace: ns},
 		kSpec: map[string]any{
-			"clusterRef": map[string]any{kName: "cluster"},
+			kClusterRef:  map[string]any{kName: "cluster"},
 			"nodes":      map[string]any{},
 			"diskPreset": "rook-v1",
 		},
@@ -58,7 +58,6 @@ func (c listRefusedClient) List(ctx context.Context, list client.ObjectList, opt
 
 // The installer refuses to install while a TalosStorage object remains: this release does not read
 // the kind, so the node configuration of the object's nodes would silently lose its volume document.
-//
 func TestInstallerRefusesWhileATalosStorageObjectRemains(t *testing.T) {
 	f := newFixture(t)
 

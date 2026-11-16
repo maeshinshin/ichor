@@ -25,6 +25,8 @@ import (
 
 // Keys these tests repeat (goconst).
 const (
+	// kClusterRef is the spec key a TalosStorage names its cluster under.
+	kClusterRef = "clusterRef"
 	kSpec       = "spec"
 	kMetadata   = "metadata"
 	kAPIVersion = "apiVersion"

@@ -82,7 +82,7 @@ func TestPruneCandidatesSelectsOnlyWhatTheBundleDrops(t *testing.T) {
 
 // A renamed object is not a candidate while the bundle still ships its old name.
 func TestPruneCandidatesNeverPrunesAShippedRenamedName(t *testing.T) {
-	var bundle []ref
+	bundle := make([]ref, 0, len(renamedObjects))
 	for _, rn := range renamedObjects {
 		bundle = append(bundle, ref{APIVersion: rn.APIVersion, Kind: rn.Kind, Name: rn.Name})
 	}

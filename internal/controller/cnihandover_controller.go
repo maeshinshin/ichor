@@ -330,7 +330,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, r.Images, r.Recorder,
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.reader(), r.Namespace, cluster, mode, nodes, inst, r.Images, r.Recorder,
 		cniValuesCheck(r.Client, r.reader(), r.Namespace, cluster, mode), "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
@@ -637,7 +637,7 @@ func (r *CNIHandoverReconciler) lastLogLine(ctx context.Context, jobName string)
 	}
 
 	var pods corev1.PodList
-	if err := r.reader().List(ctx, &pods, client.InNamespace(cniJobNamespace), client.MatchingLabels{"job-name": jobName}); err != nil {
+	if err := r.reader().List(ctx, &pods, client.InNamespace(cniJobNamespace), client.MatchingLabels{jobNameLabel: jobName}); err != nil {
 		return ""
 	}
 

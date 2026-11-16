@@ -67,6 +67,9 @@ const (
 	// namespace (the storage namespace the callers pass).
 	cniJobNamespace = cilium.ReleaseNamespace
 
+	// cniContainerName is the container of the Cilium Helm Job.
+	cniContainerName = "cni"
+
 	// CNIValuesHashAnnotation records the effective-values hash a Job was started for, so a
 	// finished Job is only taken as proof for the values it ran with.
 	CNIValuesHashAnnotation = "ichor.maesh.dev/cni-values-hash"
@@ -170,9 +173,12 @@ func hashCiliumValues(vals map[string]any) (string, error) {
 }
 
 // CNIHelmJobFailedError is what AdvanceCNIHelmJob returns for a Job that ended Failed, so a caller
-// can tell it from a transient API error and look up the Job's pod log.
+// can tell it from a transient API error.
 type CNIHelmJobFailedError struct {
 	JobName, Reason, Message string
+
+	// Detail is the Job's termination message, the run's own error; "" when its pod has none.
+	Detail string
 
 	// NoPod marks a Job that never got a pod (see cniPodGrace); AdvanceCNIHelmJob has deleted
 	// it, so the next call starts a new one. The reason is in the Job's FailedCreate events.
@@ -182,6 +188,11 @@ type CNIHelmJobFailedError struct {
 func (e *CNIHelmJobFailedError) Error() string {
 	if e.NoPod {
 		return fmt.Sprintf("cilium Helm Job %s created no pod within %s: %s", e.JobName, cniPodGrace, e.Message)
+	}
+
+	if e.Detail != "" {
+		return fmt.Sprintf("cilium Helm Job %s failed (%s: %s): %s; the pod log has the full run",
+			e.JobName, e.Reason, e.Message, e.Detail)
 	}
 
 	return fmt.Sprintf("cilium Helm Job %s failed (%s: %s); an upgrade rolled back before it failed, "+
@@ -228,8 +239,8 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 
 // AdvanceCNIHelmJob makes sure the Cilium Helm Job for cluster's current effective values
 // exists in kube-system (ns is where the release record is stored) and reports whether it has
-// completed. A failed Job is an error carrying its reason; the Job's pod log has the detail. A
-// Job that got no pod within cniPodGrace is deleted and reported the same way (NoPod). It is the one entry the hand-over (unit 8),
+// completed. A failed Job is a *CNIHelmJobFailedError carrying its reason and, when its pod wrote one, the
+// termination message. A Job that got no pod within cniPodGrace is deleted and reported the same way (NoPod). It is the one entry the hand-over (unit 8),
 // the kube-proxy switch (unit 9) and the upgrade call; taking the cluster operation lock around it is theirs
 // (the switch and a values edit must not overlap). A salt in the Job name gives an upgrade
 // operation a Job of its own even when a finished one for the same values exists.
@@ -241,9 +252,11 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // check (nil: none) runs before a Job is created, never for one that exists; its error is returned as a
 // *CNIInvalidValuesError and no Job is started. The installer image is then pinned to
 // a verified digest by images (cniJobImage); a refusal is an *installerImageError and no Job is started.
-// recorder (nil: no Event) is where a Job run without a signature check is announced.
+// recorder (nil: no Event) is where a Job run without a signature check is announced. pods is an uncached
+// reader: a failed Job's termination message is read from its pod through it.
 func AdvanceCNIHelmJob(
-	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
+	ctx context.Context, c client.Client, pods client.Reader, ns string, cluster *ichorv1alpha1.TalosCluster,
+	mode cni.KubeProxyMode, nodes int,
 	inst *ichorv1alpha1.IchorInstallation, images InstallerImages, recorder record.EventRecorder,
 	check func(context.Context) error, salt string, since time.Time,
 ) (bool, error) {
@@ -287,7 +300,12 @@ func AdvanceCNIHelmJob(
 	}
 
 	if failed != nil {
-		return false, &CNIHelmJobFailedError{JobName: name, Reason: failed.Reason, Message: failed.Message}
+		detail, err := jobTerminationMessage(ctx, pods, cniJobNamespace, name)
+		if err != nil {
+			return false, err
+		}
+
+		return false, &CNIHelmJobFailedError{JobName: name, Reason: failed.Reason, Message: failed.Message, Detail: detail}
 	}
 
 	// A Job whose pods cannot be created (admission refuses them) would otherwise sit until its
@@ -369,7 +387,7 @@ func newCNIHelmJob(
 		map[string]string{cniClusterLabel: cniHelmClusterHash(cluster)},
 		map[string]string{CNIValuesHashAnnotation: valuesHash},
 		corev1.Container{
-			Name:  "cni",
+			Name:  cniContainerName,
 			Image: image,
 			Args:  args,
 			Env: []corev1.EnvVar{

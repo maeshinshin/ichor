@@ -17,12 +17,16 @@ limitations under the License.
 package controller
 
 import (
+	"context"
+	"fmt"
 	"maps"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // The one-shot Jobs of the installer and the Cilium Helm run share this shape:
@@ -30,6 +34,9 @@ import (
 
 const (
 	nameLabel = "app.kubernetes.io/name"
+
+	// jobNameLabel is the label the Job controller puts on a Job's pods.
+	jobNameLabel = "job-name"
 
 	// jobTTL keeps a finished Job (and its pod log) for a day: long enough to read why a run
 	// failed, short enough that Jobs do not pile up.
@@ -52,6 +59,42 @@ func jobOutcome(job *batchv1.Job) (done bool, failed *batchv1.JobCondition) {
 	}
 
 	return false, nil
+}
+
+// jobMessageLimit is how long a container's termination message may be: the kubelet cuts a longer
+// one to this many bytes (Container.terminationMessagePath in the Kubernetes API reference).
+const jobMessageLimit = 4096
+
+// jobTerminationMessage is the termination message a Job's container wrote, as the kubelet copied it into
+// the pod's status: that of the container that finished last among the Job's pods and wrote one, "" when
+// none did. The Job's backoffLimit is 0, so there is one pod unless a pod was lost before it failed. A
+// message at jobMessageLimit may have been cut, and says so. pods must be uncached: the controller's
+// cache holds no pods (it has no watch on them).
+func jobTerminationMessage(ctx context.Context, pods client.Reader, ns, jobName string) (string, error) {
+	var list corev1.PodList
+	if err := pods.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{jobNameLabel: jobName}); err != nil {
+		return "", fmt.Errorf("listing the pods of Job %s: %w", jobName, err)
+	}
+
+	var msg string
+	var finished time.Time
+
+	for i := range list.Items {
+		for _, cs := range list.Items[i].Status.ContainerStatuses {
+			t := cs.State.Terminated
+			if t == nil || t.Message == "" || (msg != "" && !t.FinishedAt.After(finished)) {
+				continue
+			}
+
+			msg, finished = t.Message, t.FinishedAt.Time
+		}
+	}
+
+	if len(msg) >= jobMessageLimit {
+		msg += " (at the termination message limit, so it may be cut off)"
+	}
+
+	return msg, nil
 }
 
 // jobUID is the user and group of the nonroot distroless image the Jobs run (the images' USER 65532).

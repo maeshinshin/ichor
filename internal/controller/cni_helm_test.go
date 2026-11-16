@@ -285,7 +285,7 @@ func setCNIJobCondition(t *testing.T, c client.Client, ns, name string, ct batch
 
 // advanceTestJob is one AdvanceCNIHelmJob call for cluster's spec mode, with no node count, salt or since.
 func advanceTestJob(c client.Client, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
-	return AdvanceCNIHelmJob(context.Background(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, nil, "", time.Time{})
+	return AdvanceCNIHelmJob(context.Background(), c, c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, nil, "", time.Time{})
 }
 
 // First call creates the Job, later calls report it, and a values change is a new Job.

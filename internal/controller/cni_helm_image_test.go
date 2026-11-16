@@ -183,7 +183,7 @@ func TestAdvanceCNIHelmJobStartsNoJobForAnUnverifiedImage(t *testing.T) {
 	hash, _ := CNIValuesHash(cluster, specMode(cluster), 0)
 	name := cniHelmJobName(cluster, hash)
 
-	done, err := AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images, nil,
+	done, err := AdvanceCNIHelmJob(t.Context(), c, c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images, nil,
 		nil, "", time.Time{})
 	if done || pauseReason(err) != reasonInstallerImageUnverified {
 		t.Fatalf("= %t, %v; want not done and the reason %s", done, err, reasonInstallerImageUnverified)
@@ -197,7 +197,7 @@ func TestAdvanceCNIHelmJobStartsNoJobForAnUnverifiedImage(t *testing.T) {
 	// Verified: the Job runs the digest.
 	images.verifyErr = nil
 
-	if _, err := AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images, nil,
+	if _, err := AdvanceCNIHelmJob(t.Context(), c, c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), images, nil,
 		nil, "", time.Time{}); err != nil {
 		t.Fatal(err)
 	}

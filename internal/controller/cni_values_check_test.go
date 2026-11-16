@@ -235,7 +235,7 @@ func TestAdvanceCNIHelmJobRunsTheCheckOnlyBeforeCreatingTheJob(t *testing.T) {
 	cluster := cniTestCluster("")
 	problem := errors.New("bpf.masquerade=true needs forwardKubeDNSToHost=false")
 	advance := func(check func(context.Context) error) (bool, error) {
-		return AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, check, "", time.Time{})
+		return AdvanceCNIHelmJob(t.Context(), c, c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, check, "", time.Time{})
 	}
 
 	_, err := advance(func(context.Context) error { return problem })

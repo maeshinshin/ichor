@@ -418,15 +418,10 @@ func installerJobSettled(ctx context.Context, uncached client.Reader, ns string,
 	return ichorRolledOut(ctx, uncached, ns)
 }
 
-// installerMessageLimit is how long a container's termination message may be; the kubelet cuts a
-// longer one to this many bytes (Container.terminationMessagePath in the Kubernetes API reference).
-const installerMessageLimit = 4096
-
-// installerJobFailure is the error for a failed installer Job. The installer's own error is its
-// termination message, which it writes in its pod and the kubelet copies into the pod's status; the
-// pod log is the pointer for when there is none.
+// installerJobFailure is the error for a failed installer Job: the installer's own error, its termination
+// message, when the Job's pod has one; the pod log is the pointer when it has none.
 func installerJobFailure(ctx context.Context, uncached client.Reader, ns string, job *batchv1.Job, failed *batchv1.JobCondition) error {
-	msg, err := installerTerminationMessage(ctx, uncached, ns, job.Name)
+	msg, err := jobTerminationMessage(ctx, uncached, ns, job.Name)
 	if err != nil {
 		return fmt.Errorf("installer Job %s failed (%s: %s), and reading its pod for the installer's message failed: %w",
 			job.Name, failed.Reason, failed.Message, err)
@@ -437,40 +432,8 @@ func installerJobFailure(ctx context.Context, uncached client.Reader, ns string,
 			"before it fails, see the Job's pod log", job.Name, failed.Reason, failed.Message)
 	}
 
-	cut := ""
-	if len(msg) >= installerMessageLimit {
-		cut = " (at the termination message limit, so it may be cut off)"
-	}
-
-	return fmt.Errorf("installer Job %s failed (%s: %s): %s%s; the pod log has the full run",
-		job.Name, failed.Reason, failed.Message, msg, cut)
-}
-
-// installerTerminationMessage is the termination message of the installer container that finished last
-// among the Job's pods, and it wrote one; "" when none did. The Job's backoffLimit is 0, so there is one
-// pod unless a pod was lost before it failed. Then the newest finished one that wrote a message is the
-// run that failed.
-func installerTerminationMessage(ctx context.Context, uncached client.Reader, ns, job string) (string, error) {
-	var pods corev1.PodList
-	if err := uncached.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{"job-name": job}); err != nil {
-		return "", fmt.Errorf("listing the installer Job's pods: %w", err)
-	}
-
-	var msg string
-	var finished time.Time
-
-	for i := range pods.Items {
-		for _, cs := range pods.Items[i].Status.ContainerStatuses {
-			t := cs.State.Terminated
-			if t == nil || t.Message == "" || (msg != "" && !t.FinishedAt.After(finished)) {
-				continue
-			}
-
-			msg, finished = t.Message, t.FinishedAt.Time
-		}
-	}
-
-	return msg, nil
+	return fmt.Errorf("installer Job %s failed (%s: %s): %s; the pod log has the full run",
+		job.Name, failed.Reason, failed.Message, msg)
 }
 
 // ichorRolledOut reports whether the controller's and ichor-ui's Deployments have finished

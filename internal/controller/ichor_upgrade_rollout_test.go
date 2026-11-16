@@ -181,7 +181,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		// The pod the Job ran, as the kubelet reports a container that wrote its error to its
 		// termination message file.
 		pod := &corev1.Pod{
-			Namespace: ns, Name: job.Name + "-pod", Labels: map[string]string{"job-name": job.Name},
+			Namespace: ns, Name: job.Name + "-pod", Labels: map[string]string{jobNameLabel: job.Name},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "installer", Image: "registry.example/installer:v1"}}},
 		}
 		Expect(k8sClient.Create(ctx, pod)).To(Succeed())

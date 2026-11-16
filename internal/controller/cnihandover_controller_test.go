@@ -697,8 +697,8 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		job := cniJob(cluster)
 		pod := &corev1.Pod{
-			Namespace: cniJobNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{"job-name": job.Name},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "cni", Image: "x"}}},
+			Namespace: cniJobNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{jobNameLabel: job.Name},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: cniContainerName, Image: "x"}}},
 		}
 		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, pod))).To(Succeed()) })

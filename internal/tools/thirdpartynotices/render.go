@@ -446,7 +446,7 @@ func (d *doc) frontend() {
 	d.section("5. User interface")
 	d.listing("Packages bundled into the UI:", kindNPM)
 	d.listing("Packages whose CSS the UI stylesheet inlines:", kindCSS)
-	d.printf("The UI components under ui/src derive from the preactcn registry (https://github.com/maeshinshin/preactcn),\nwhich credits the following upstream projects.\n\n")
+	d.printf("The UI components under ui/src and site/src/components/ui derive from the preactcn registry (https://github.com/maeshinshin/preactcn),\nwhich credits the following upstream projects.\n\n")
 	d.listing("Upstream projects:", kindUpstream)
 	d.section("6. Embedded chart and data")
 	d.listing("Embedded chart:", kindChart)

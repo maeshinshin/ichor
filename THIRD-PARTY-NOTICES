@@ -3702,7 +3702,7 @@ Packages whose CSS the UI stylesheet inlines:
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2025 Wombosvideo
 
-The UI components under ui/src derive from the preactcn registry (https://github.com/maeshinshin/preactcn),
+The UI components under ui/src and site/src/components/ui derive from the preactcn registry (https://github.com/maeshinshin/preactcn),
 which credits the following upstream projects.
 
 Upstream projects:

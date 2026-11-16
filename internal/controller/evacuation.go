@@ -280,6 +280,10 @@ func evacuateMachine(
 		return storage.EvacuationDone, nil
 	}
 
+	// A hung storage or API call must not hold the reconcile worker; the caller requeues on the error.
+	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
 	target, err := ev.Resolve(ctx, cluster, node)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -335,6 +339,9 @@ func endMachineEvacuation(
 	if ev == nil || !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionStorageEvacuation) {
 		return nil
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
 
 	target, err := ev.Resolve(ctx, cluster, node)
 	if err != nil {

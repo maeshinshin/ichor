@@ -122,14 +122,14 @@ func TestClusterStatusNamesTheReasonLikeDescribe(t *testing.T) {
 
 	cl := initshowCluster()
 	cl.Conditions = realConditions()
-	cl.Conditions[1] = cond("Transitioning", condTrue, "Rolling", "upgrading control plane", time.Minute)
+	cl.Conditions[1] = cond(conditionTransitioning, condTrue, "Rolling", "upgrading control plane", time.Minute)
 
 	var out bytes.Buffer
 	if err := renderClusterStatus(newHuman(&out), cl); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"  Health       … transitioning\n", "Conditions\n", "Transitioning", "Rolling", "upgrading control plane"} {
+	for _, want := range []string{"  Health       … transitioning\n", "Conditions\n", conditionTransitioning, "Rolling", "upgrading control plane"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())
 		}

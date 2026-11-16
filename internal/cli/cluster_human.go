@@ -39,6 +39,9 @@ func conditionsOf(conds []*pb.Condition) []conditionRow {
 	return rows
 }
 
+// conditionTransitioning is the condition the controller sets while a cluster is changing.
+const conditionTransitioning = "Transitioning"
+
 // healthTypes are the condition types that read as health when False, as the UI decides it
 // (ui/src/lib/conditions.ts); CiliumUpgradeAvailable only ends in a health word.
 var healthTypes = regexp.MustCompile(`(Ready|Available|Healthy|Synced|Approved|Present)$`)
@@ -71,7 +74,7 @@ func clusterHealth(cl *pb.Cluster) (mark, string) {
 	}
 
 	for _, c := range conds {
-		if c.GetType() == "Transitioning" && c.GetStatus() == condTrue {
+		if c.GetType() == conditionTransitioning && c.GetStatus() == condTrue {
 			return markPending, "transitioning"
 		}
 	}

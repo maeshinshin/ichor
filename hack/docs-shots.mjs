@@ -307,7 +307,10 @@ try {
             : `own(x)?.textContent.trim() === ${JSON.stringify(label)}`})
           return r ? own(r) : undefined
         })()`
+        // Every branch that goes through branchCheck, by its page's route or, for a directory with no page, by its label.
+        const checked = new Set()
         const branchCheck = async (name, route, label, child) => {
+          checked.add(route ?? label)
           const t = trigger(route, label)
           // A closed branch renders its contents empty and hidden, so their links must have no box on screen.
           const closed = await ev(`(() => { const b = ${t}; if (!b || b.getAttribute('aria-expanded') !== 'false') return false; return [...b.closest('[data-slot=collapsible]').querySelectorAll('[data-slot=collapsible-content] a[href]')].every((a) => !a.getClientRects().length) })()`)
@@ -368,6 +371,11 @@ try {
         const all = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].map((a) => a.pathname)`)
         const folded = docRoutes.filter((route) => !all.includes(base + route))
         check(folded.length === 0, `${tag}: every page is in the sidebar once its branches are opened (not listed: ${folded.join(' ') || 'none'})`)
+        // With every branch open, each collapsible row of the sidebar must have been through branchCheck, so a branch or group that
+        // arrives without a check of its own fails here instead of going unguarded.
+        const rows = await ev(`[...document.querySelectorAll('[data-slot=sidebar] [data-slot=collapsible]')].map((x) => { const a = [...x.parentElement.children].find((c) => c.matches('a[href]')); return a ? a.pathname.slice(${JSON.stringify(base)}.length) : x.querySelector('[aria-expanded]')?.textContent.trim() })`)
+        const unchecked = rows.filter((k) => !checked.has(k))
+        check(rows.length > 0 && unchecked.length === 0, `${tag}: every branch and group of the sidebar has its own check (${rows.length} found; without one: ${unchecked.join(' ') || 'none'})`)
       }
 
       // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.

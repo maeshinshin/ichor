@@ -57,17 +57,21 @@ const (
 )
 
 // newTestBundle returns one shared, read-only bundle: generating one costs a 4096-bit RSA key.
-var newTestBundle = sync.OnceValue(newFreshTestBundle)
-
-func newFreshTestBundle() *secrets.Bundle {
+// Plain tests reach it too (testTalosIdentity), where Gomega's Expect panics with no fail handler
+// registered, so a setup error panics with its own cause; the shared value has no *testing.T to fail.
+var newTestBundle = sync.OnceValue(func() *secrets.Bundle {
 	contract, err := coreconfig.ParseContractFromVersion(testVersionContract)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(err)
+	}
 
 	bundle, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), contract)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(err)
+	}
 
 	return bundle
-}
+})
 
 func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
 	raw, err := yaml.Marshal(bundle)

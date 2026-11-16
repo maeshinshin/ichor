@@ -764,6 +764,14 @@ command does. Each item is described where it is listed below.
   default and what changing the names costs.
 - The CNI concept page and `ichor bootstrap cni --help` say that Cilium reaches
   the API through KubePrism only when kube-proxy is replaced.
+- The users-and-login and hardening guides no longer say that the secrets bundle
+  alone gets you back in once the kubeconfig is gone. `ichor create credentials
+  --bundle` takes the server and the names from a current kubeconfig, so keep
+  one.
+- `ichor --help`, the CLI and UI page and the architecture overview name the
+  three commands that write to a Talos node, `init`, `restore cluster` and
+  `reclaim node --talosconfig`. `adopt` only reads from nodes. ADR 0014 is
+  amended: its list of exceptions named `adopt` and left out `reclaim`.
 
 ### CI
 

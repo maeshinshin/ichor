@@ -26,7 +26,7 @@ same way it catches a stale chart.
 | [0011](0011-discovery-does-not-choose-candidates-or-auto-register-weak-identities.md) | Made `TalosMachineSpec.Role` optional; discovery never picks a role or auto-registers a weak identity | Accepted |
 | [0012](0012-volume-config-document-kinds.md) | Mirror `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` as three more mirrorgen roots, for disk roles | Accepted |
 | [0013](0013-cni-presets.md) | Settled the `cni.Preset` interface, `custom`'s required fields, Hubble's certificate handling, and where the two immutability guards live | Accepted; superseded in part by ADR 0099 |
-| [0014](0014-cli-skeleton-and-adopt.md) | Settled `cmd/ichor`'s package layout and how `ichor adopt` guarantees zero drift | Accepted |
+| [0014](0014-cli-skeleton-and-adopt.md) | Settled `cmd/ichor`'s package layout and how `ichor adopt` guarantees zero drift | Accepted, amended |
 | [0015](0015-gitops-application-templates-and-repo-skeleton.md) | Built GitOps `Application` as a hand-rolled type (`pkg/gitops`) behind one constructor, plus a policy-free repo skeleton | Superseded by ADR 0101, amended |
 | [0016](0016-connect-api-phase5-read-and-approval.md) | Split the Connect read/approval API into `ClusterService`/`MachineService`/`NodeService` and fixed their message shapes | Accepted |
 | [0017](0017-ui-skeleton.md) | Settled `ui/`'s directory, `cmd/ichor-ui` as a second binary, and how the Go side builds without the UI present | Accepted |

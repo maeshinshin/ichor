@@ -144,6 +144,9 @@ func TestControllerLooksUpNamesThatExist(t *testing.T) {
 	}
 
 	for label, docs := range renders {
+		if len(docs) == 0 {
+			continue // loadInstallManifest has reported the missing or empty manifest
+		}
 		name := controller.ImpersonationRoleName
 
 		if find(docs, kindClusterRole, name) == nil {

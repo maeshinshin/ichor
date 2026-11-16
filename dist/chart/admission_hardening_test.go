@@ -201,7 +201,11 @@ func setOf(names []string) map[string]bool {
 func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 	var clusterRoles, allRoles, nsRoles []string
 
-	for _, d := range loadInstallManifest(t, "../install.yaml") {
+	install := loadInstallManifest(t, "../install.yaml")
+	if len(install) == 0 {
+		return // loadInstallManifest has reported the missing or empty manifest
+	}
+	for _, d := range install {
 		switch kindOf(d) {
 		case kindClusterRole:
 			clusterRoles = append(clusterRoles, nameOf(d))

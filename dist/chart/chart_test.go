@@ -341,14 +341,20 @@ func loadYAMLDocs(t *testing.T, path string) []map[string]any {
 }
 
 // loadInstallManifest is loadYAMLDocs for dist/install.yaml, which make build-installer writes.
-// It skips when the file is absent, so the package runs on its own; make test builds it first.
+// When the file is absent or empty it reports that and returns nil, so a test whose chart-side
+// checks do not need the manifest still runs them; the callers that compare against it return on nil.
 func loadInstallManifest(t *testing.T, path string) []map[string]any {
 	t.Helper()
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Skipf("%s is missing: run make build-installer first", path)
+		t.Errorf("%s is missing: run make build-installer first (make test runs it)", path)
+		return nil
 	}
-	return loadYAMLDocs(t, path)
+	docs := loadYAMLDocs(t, path)
+	if len(docs) == 0 {
+		t.Errorf("%s holds no objects: run make build-installer again", path)
+	}
+	return docs
 }
 
 func kindOf(doc map[string]any) string {

@@ -1,0 +1,72 @@
+---
+sidebar_order: 2
+---
+
+# Install the chart
+
+## Where the chart lives
+
+The chart is published by a workflow that runs when a `v*` tag is pushed, as a
+Helm repository on the docs site and as an OCI artifact, with the images next
+to it. Both hold the same signed archive:
+
+```sh
+helm repo add ichor https://ichor.maesh.dev/charts
+helm repo update
+```
+
+```text
+oci://ghcr.io/maeshinshin/charts/ichor
+```
+
+The chart's default images are `ghcr.io/maeshinshin/ichor-controller` and
+`ghcr.io/maeshinshin/ichor-ui`, by digest. To install a chart and images you
+built yourself, see [Build from source](../../development/build-from-source.md#install-your-own-chart).
+The chart `version` has no leading `v` (for example
+`{{version}}`); `appVersion` and the image tags have it (`v{{version}}`). The published
+images are multi-arch (linux/amd64 and linux/arm64). Helm is not provided by Ichor; [install it](https://helm.sh/docs/intro/install/)
+yourself.
+
+## Install
+
+For a cluster that already has a pod network:
+
+```sh
+helm install ichor ichor/ichor --version X.Y.Z \
+  --namespace ichor-system --create-namespace \
+  --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443
+ichor create user admin --role admin --generate --bootstrap
+ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
+```
+
+The OCI form installs the same chart without adding the repository:
+`helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z …`.
+
+Adopt does not apply the network policies on a Helm install. When they apply,
+it tells you to run:
+
+```sh
+helm upgrade ichor ichor/ichor --version X.Y.Z \
+  --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
+```
+
+## Values
+
+Values worth knowing (see `dist/chart/values.yaml` for all of them):
+
+| Value | Default | Meaning |
+|---|---|---|
+| `networkPolicy.cilium.enabled` | `null` | Ichor's `CiliumNetworkPolicy` objects (see [Network policies](network-policies.md)). `null` renders them when the cluster serves Cilium's `CiliumNetworkPolicy` API, `true` renders them regardless (Cilium's CRD must exist), `false` renders none. |
+| `networkPolicy.cilium.metricsNamespaces`, `metricsPodLabels` | `[]`, `{}` | Who may open the controller's metrics port. Empty: nobody. Name your Prometheus's namespace, and optionally its pod labels. |
+| `preflight.cni` | `true` | Refuse to install when every node is NotReady with the network-plugin message. Skipped by `helm template` and `--dry-run`. |
+| `installer.enabled` | `false` | Leave off: a Helm install is upgraded by Helm. |
+| `ichorUI.port` | `8443` | The HTTPS port of ichor-ui. |
+| `ichorUI.tls.secretName` | unset | Your own certificate for ichor-ui. Unset uses a leaf from the Ichor serving CA. |
+| `ichorUI.tls.caConfigMap`, `caSecret`, `caKey` | `ichor-ui-ca`, unset, `ca.crt` | The CA the ServiceMonitor (`prometheus.enabled`) verifies the HTTPS port against: the ConfigMap, or the Secret when `caSecret` is set. |
+| `settings.readOnly` | `false` | Hand the runtime settings to the chart: the `IchorInstallation` settings fields are ignored and the webhook denies writes. |
+| `updateCheck.enabled` | `true` | Look for a newer Ichor release in the chart repository and show it on the dashboard (see [Settings](../settings.md#updates)). `false` stops the requests and removes their egress rule. |
+
+## Settings on a Helm install
+
+See [Settings](../settings.md#a-helm-install). `settings.readOnly: true` makes the
+chart the only source.

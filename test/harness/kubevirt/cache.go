@@ -123,7 +123,8 @@ func ensureBaseCache() (string, error) {
 	name := baseCacheName()
 	started := time.Now()
 
-	if err := kube.Apply(fmt.Sprintf(baseCacheManifestTmpl, name, talosFactorySchematic, talosVersion, kube.StorageClass())); err != nil {
+	manifest := fmt.Sprintf(baseCacheManifestTmpl, name, talosFactorySchematic, talosVersion, kube.StorageClass())
+	if err := kube.Apply(manifest); err != nil {
 		return "", fmt.Errorf("creating the base cache DataVolume %s: %w", name, err)
 	}
 

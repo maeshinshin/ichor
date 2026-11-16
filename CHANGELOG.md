@@ -512,25 +512,25 @@ command does. Each item is described where it is listed below.
   addresses (the one it answers on, then the one `spec.endpoint` names). A forbidden
   removal of the kube-proxy confirmation after a CNI operation is created is now reported
   as permission denied, not as an internal error.
-- **An operation that stops because it cannot tell which machine runs the controller pauses
-  and frees the cluster lock.** The stop kept the lock, and the retry renewed it, so no other
-  disruptive operation, machine join or removal, CNI handover or etcd restore could start
-  while it lasted, and nothing on the operation said why. The operation now pauses with the
-  reason `OwnNodeUnread` in its `Paused` condition, which carries the same message, frees
-  the lock, and tries again every 30 seconds; it resumes by itself once a machine answers,
-  its Node appears or the machine is removed. A shutdown that is waiting on this does the
+- **An operation that cannot tell which machine runs the controller pauses, frees the
+  cluster lock and resumes by itself.** The stop used to return an error that kept the
+  lock, and the retry renewed it, so no other disruptive operation, machine join or removal,
+  CNI handover or etcd restore could start while it lasted, and nothing on the operation
+  said why. The operation now pauses with the reason `OwnNodeUnread` in its `Paused`
+  condition, which carries the message `cannot tell which machine runs this controller`
+  and why the name could not be read, writes one Event, frees the lock and tries again
+  every 30 seconds. It resumes by itself once a machine answers, its Node appears or the
+  machine is removed; no retry request is needed. A shutdown that stops on this does the
   same, and a shutdown that resumes from any pause no longer keeps the `Paused` condition.
+  ADRs 0067, 0080 and 0087 said the controller's own node goes last and not that the
+  operation stops when a machine's node name cannot be read and the controller's machine
+  is not among those that can be named; each now carries a dated amendment that says when
+  it stops, which operations it covers, that the etcd restore already refused so, and what
+  the operator sees.
 - **ADR 0080 says what the `ConfigRollout` marker does when a rollout ends.** The ADR
   said the rollout clears the marker. It sets the `TalosMachine` condition to `False`
   with reason `Converged` and leaves it there until the next rollout. The reason is not
   renamed, and `kubectl explain talosmachine.status.conditions` now explains it.
-- **ADRs 0067, 0080 and 0087 say that a name that cannot be read stops the run.** Each
-  said the controller's own node goes last and not that the operation stops when a
-  machine's node name cannot be read and the controller's machine is not among those
-  that can be named. Each now carries a dated amendment that says when it stops, which
-  operations it covers, that the etcd restore already behaved so, and what the operator
-  sees: the operation retries with backoff and does not pause, and the reason is in the
-  controller log only.
 - A missing cosign signature of the installer image now says what was looked
   for: the signature referrer, through the referrers API or the
   `sha256-<hex>` tag of the digest. It used to say only that the image had no

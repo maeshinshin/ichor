@@ -1,6 +1,6 @@
 # 0127. The local secrets bundle is encrypted with an age passphrase
 
-Status: Accepted; built · Date: 2026-11-04 · Design section: Trust · Touches: 0014, 0053, 0063, 0094, 0103, 0108
+Status: Accepted; built, amended · Date: 2026-11-04 · Design section: Trust · Touches: 0014, 0053, 0063, 0094, 0103, 0108
 
 Decided: `~/.ichor/clusters/<name>/secrets.yaml` is written as an age file (armored, one scrypt passphrase recipient, `filippo.io/age`, already a dependency of the etcd backup format) instead of plaintext. `ichor init`, `ichor adopt --recover-secrets` and `ichor export bundle` seal new files by default; a passphrase comes from `--bundle-passphrase-file PATH` (any readable path, so `/dev/fd/3` and `/dev/stdin` work), then `$ICHOR_BUNDLE_PASSPHRASE`, and on a terminal with neither Ichor generates one and prints it once; with neither on a non-terminal the command refuses before it writes anything, and `--bundle-plaintext` is the explicit, warned opt-out. Every reader (`restore`, `adopt --secrets-bundle`, `create credentials --bundle`, `export bundle`'s read-back, adopt's stored-bundle comparison) recognises an encrypted file by its header and takes the passphrase from the same two sources, then a no-echo prompt. A plaintext file keeps working and warns on every read; `ichor secrets encrypt` migrates one. The file name and path do not change, the in-cluster Secret is untouched, and the local kubeconfig stays plaintext (decision 6).
 
@@ -41,3 +41,7 @@ The user decided this ships in v0.1.0.
 - `$ICHOR_BUNDLE_PASSPHRASE` is readable by the same user and root; documented, with the file and descriptor routes recommended.
 - A weak operator-chosen passphrase (12 characters or more, otherwise unchecked) is guessable offline at the cost of scrypt; the generated one is not.
 - Scripts that ran `ichor init` or `adopt --recover-secrets` non-interactively now fail until given a passphrase source or `--bundle-plaintext`. This is deliberate.
+
+## Amendment (2026-11-16): the bundle makes a kubeconfig only beside one that names the server
+
+Decision 6 says the bundle "can mint a new one at any time" and advises deleting the kubeconfig and using the bundle to make a new one. Neither holds. `ichor create credentials --bundle` copies the server and the names from a kubeconfig, the current one or the one given with `--kubeconfig` (ADR 0091 decision 5); the bundle supplies the CAs, not the endpoint, and the command fails with "the current kubeconfig has no current context to copy the server from" when there is none. So a bundle makes new credentials only while some kubeconfig naming the server exists, and the kubeconfig to move offline is the one to keep. `docs/guides/users-and-login.md` and `docs/guides/hardening.md` say this. The rest of this ADR stands.

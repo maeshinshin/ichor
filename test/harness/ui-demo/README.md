@@ -2,7 +2,7 @@
 
 A long-lived throwaway Talos cluster for looking at ichor-ui in a browser, built by the
 product's own bootstrap: `ichor init` creates the control plane, a second VM is approved
-with `ichor approve node --install-disk`. Everything lives in the outer `ichor-e2e`
+with `ichor approve node --install-disk`. Everything lives in the outer `$NS`
 namespace and is named `<prefix>-*` (prefix `ichor-ui-demo`; the current build is
 `ichor-ui-demo3`).
 
@@ -24,14 +24,21 @@ and prints its generated password once (must change on first login). It needs an
 
 ## Steps
 
-`P=ichor-ui-demo3`, `C=OUTER_CONTEXT` (your outer cluster's kube context); run inside `nix develop`. Replace `__PREFIX__` with `$P`.
+`P=ichor-ui-demo3`, `C=OUTER_CONTEXT` (your outer cluster's kube context), `NS=ichor-e2e` (the outer namespace).
+`NS` is the lab's value and must be the namespace the harness uses (`Namespace` in `test/internal/kube`, `ichor-e2e` today):
+the harness has no namespace parameter of its own. Run inside `nix develop`. Replace `__PREFIX__` with `$P` and
+`__NAMESPACE__` with `$NS`.
+
+`outer-service.yaml` takes no address from the manifest: Cilium hands the Service one from the
+`CiliumLoadBalancerIPPool` whose `serviceSelector` admits it. The lab's pool is `192.168.0.64/26`; yours is the pool your
+outer cluster serves (`kubectl --context $C get ippools -o yaml`).
 
 VM memory defaults to 2560Mi for both VMs. Override per role before `up-demo` with
 `ICHOR_UI_DEMO_CP_MEMORY` and `ICHOR_UI_DEMO_WORKER_MEMORY` (a plain `Mi`/`Gi` quantity, e.g.
 `ICHOR_UI_DEMO_CP_MEMORY=3Gi`). Talos needs at least 2 GiB for a control plane and 1 GiB for a worker.
 
 **ISO cache.** `up-demo`, `up` and `up-ha` clone one cached Talos ISO DataVolume
-(`ichor-e2e-talos-v1-14-3-<schematic8>-base`, outer namespace `ichor-e2e`) instead of importing the ISO per VM.
+(`ichor-e2e-talos-v1-14-3-<schematic8>-base`, outer namespace `$NS`) instead of importing the ISO per VM.
 The first run creates it and waits for the import; no `down*` deletes it, so delete it by hand when the Talos
 version changes. `ICHOR_E2E_BASE_CACHE=0` restores the per-VM import. The VMs still boot the ISO in maintenance
 mode and Ichor still installs Talos, so the install step stays exercised. Both VMs are created together.
@@ -50,12 +57,14 @@ value also deletes `-cp2`, `-cp3` and `-cp4` and their DataVolumes.
 
 ```sh
 export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P
+NS=ichor-e2e   # the outer namespace; see Steps
 go build -o bin/kubevirt-harness ./test/harness/kubevirt
 
 # 1. registry + images (no container runtime: ko builds them, crane pushes them)
-sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n ichor-e2e apply -f -
-REG=$(kubectl --context $C -n ichor-e2e get svc $P-registry -o jsonpath={.spec.clusterIP})
-kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # leave it running while you push
+# registry.yaml still names ichor-e2e in its manifest, so NS must be that value until it takes __NAMESPACE__ too.
+sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n $NS apply -f -
+REG=$(kubectl --context $C -n $NS get svc $P-registry -o jsonpath={.spec.clusterIP})
+kubectl --context $C -n $NS port-forward svc/$P-registry 5000:5000 &   # leave it running while you push
 make demo-images VERSION=v0.0.0-demo REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests.txt   # builds and pushes manager, ichor-ui, installer; prints digests
 D=$(sed -n 's/.*ichor-installer@//p' bin/demo-digests.txt)   # the installer image's digest, for init below
 cp bin/img/ichor/ichor bin/ichor-static   # the installembed ichor demo-images built
@@ -65,8 +74,8 @@ cp bin/img/ichor/ichor bin/ichor-static   # the installembed ichor demo-images b
 
 # 3. the outer LoadBalancer first: init needs its address (LB_IP) for --ui-url and the cert.
 #    (Cilium assigns the address on creation; it reaches the VM once the inner NodePort exists, step 6.)
-sed s/__PREFIX__/$P/ test/harness/ui-demo/outer-service.yaml | kubectl --context $C -n ichor-e2e apply -f -
-LB_IP=$(kubectl --context $C -n ichor-e2e get svc ichor-ui-demo -o jsonpath={.status.loadBalancer.ingress[0].ip})
+sed -e s/__PREFIX__/$P/ -e s/__NAMESPACE__/$NS/ test/harness/ui-demo/outer-service.yaml | kubectl --context $C -n $NS apply -f -
+LB_IP=$(kubectl --context $C -n $NS get svc ichor-ui-demo -o jsonpath={.status.loadBalancer.ingress[0].ip})
 
 # 4. self-signed cert for ichor-ui, with the LB address as an IP SAN (openssl is in nix develop)
 nix develop --command openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 \
@@ -74,11 +83,11 @@ nix develop --command openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:pr
 chmod 0600 bin/ui-demo.key
 
 # 5. tools pod; copy ichor-static, the cert and key in; init from inside it
-kubectl --context $C -n ichor-e2e run $P-tools --image=busybox:1.37 --restart=Never -- sleep 86400
-kubectl --context $C -n ichor-e2e cp bin/ichor-static $P-tools:/tmp/ichor
-kubectl --context $C -n ichor-e2e cp bin/ui-demo.crt $P-tools:/tmp/ui.crt
-kubectl --context $C -n ichor-e2e cp bin/ui-demo.key $P-tools:/tmp/ui.key
-kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes --bundle-plaintext \
+kubectl --context $C -n $NS run $P-tools --image=busybox:1.37 --restart=Never -- sleep 86400
+kubectl --context $C -n $NS cp bin/ichor-static $P-tools:/tmp/ichor
+kubectl --context $C -n $NS cp bin/ui-demo.crt $P-tools:/tmp/ui.crt
+kubectl --context $C -n $NS cp bin/ui-demo.key $P-tools:/tmp/ui.key
+kubectl --context $C -n $NS exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes --bundle-plaintext \
   --cluster $P --preset single --cni cilium --cni-tunnel geneve --endpoint-type node --endpoint-address $CP_IP \
   --node-endpoint $CP_IP:50000 --talos-version v1.14.5 --version-contract v1.14 --install-disk /dev/vda \
   --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \
@@ -125,7 +134,7 @@ computes from the Kubernetes API directly.
 ## Update to the current tree
 
 ```sh
-kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
+kubectl --context $C -n $NS port-forward svc/$P-registry 5000:5000 &   # only ever this service
 PF=$!   # the port-forward's PID, to stop it below
 V=v0.0.$(date +%s)-g$(git rev-parse --short HEAD)   # always newer than the installed one
 make demo-images VERSION=$V REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests.txt
@@ -156,10 +165,10 @@ init delete and recreate the VMs (`down-demo`, `up-demo`).
 Every command names its target; nothing uses `-l` or `--all`.
 
 ```sh
-C=OUTER_CONTEXT; P=ichor-ui-demo3
-kubectl --context $C -n ichor-e2e delete pod $P-tools
-kubectl --context $C -n ichor-e2e delete deployment $P-registry
-kubectl --context $C -n ichor-e2e delete service $P-registry
+C=OUTER_CONTEXT; P=ichor-ui-demo3; NS=ichor-e2e
+kubectl --context $C -n $NS delete pod $P-tools
+kubectl --context $C -n $NS delete deployment $P-registry
+kubectl --context $C -n $NS delete service $P-registry
 ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_KUBE_CONTEXT=$C ./bin/kubevirt-harness down-demo   # VMs $P-cp/-w and their 4 DataVolumes
 rm -f bin/ui-demo.kubeconfig   # only if it is for this cluster
 # the shared Service ichor-ui-demo: delete it only when no demo is left

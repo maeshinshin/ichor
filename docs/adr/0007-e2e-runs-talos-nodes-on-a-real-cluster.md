@@ -183,9 +183,9 @@ Constraints the harness has to respect:
   traps SIGINT/SIGTERM to run `down()` before exiting, so a killed `up` can't
   strand the node. Any harness step whose correctness depends on catching a
   signal has to run as the actual binary, not under `go run`.
-- **A `ReadOnlyMany` ISO disk shared across nodes does not work on RBD-backed
-  storage.** rook-ceph's RBD CSI driver refuses the PVC outright
-  (`readOnly accessMode is supported only with content source`), so every node
+- **On RBD-backed storage a `ReadOnlyMany` ISO disk shared across nodes can be
+  refused.** For example, rook-ceph's RBD CSI driver refuses the PVC outright
+  (`readOnly accessMode is supported only with content source`), so each node
   gets its own copy of the Factory image.
 - **`talosctl health`'s `--nodes` takes exactly one node, not the list.**
   `--control-plane-nodes` is the list to check; `--nodes` (`-n`) is the single

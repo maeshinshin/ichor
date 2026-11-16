@@ -394,7 +394,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 
 		progress, err = evacuateMachine(ctx, r.Client, r.Evacuator, &cluster, m, nodeName, "removal")
 		if err != nil {
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonEvacuationFailed, err.Error())
+			return r.removalDeferred(ctx, m, reasonEvacuationFailed, err.Error())
 		}
 	}
 

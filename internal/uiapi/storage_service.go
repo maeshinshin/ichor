@@ -18,9 +18,12 @@ package uiapi
 
 import (
 	"context"
+	"slices"
 
 	"connectrpc.com/connect"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -28,6 +31,20 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 	storagepkg "github.com/maeshinshin/ichor/pkg/storage"
 )
+
+// storagePresets is every value of TalosStorage.spec.diskPreset this build knows, in the CRD enum's order.
+// TestStoragePresetsMatchTheCRDEnum reads the enum from config/crd/bases and fails if the two differ.
+var storagePresets = []string{storagepkg.LonghornV1, storagepkg.RookV1}
+
+// presetUnavailable says why the page does not create a preset, and what to do instead. A preset not
+// listed here is creatable.
+var presetUnavailable = map[string]string{
+	// shortcut: longhorn-v1 is refused here until a validating webhook checks the disk selector; drop this
+	// entry only with that webhook, not with the CRD's non-empty rule alone.
+	storagepkg.LonghornV1: "longhorn-v1 needs a disk selector, and this page does not write one: the API server " +
+		"only checks that the selector is not empty, not that it is a valid Talos expression. Apply the TalosStorage " +
+		"yourself with kubectl, as an ichor-admin, after checking the selector against the disks of the nodes it will prepare.",
+}
 
 // ListStorages returns the TalosStorages of one TalosCluster, each with the machines it governs
 // under the controller's own rule (render.StorageFor). Read only: nothing here writes a TalosStorage.
@@ -72,6 +89,13 @@ func (s *Server) ListStorages(
 		}
 	}
 
+	presets := make([]*pb.StoragePreset, 0, len(storagePresets))
+
+	for _, name := range storagePresets {
+		reason, blocked := presetUnavailable[name]
+		presets = append(presets, &pb.StoragePreset{Name: name, Creatable: !blocked, UnavailableReason: reason})
+	}
+
 	out := make([]*pb.Storage, 0, len(storages.Items))
 
 	for i := range storages.Items {
@@ -83,7 +107,64 @@ func (s *Server) ListStorages(
 		out = append(out, storageToPB(ts, governed[ts.Name]))
 	}
 
-	return connect.NewResponse(&pb.ListStoragesResponse{Storages: out}), nil
+	return connect.NewResponse(&pb.ListStoragesResponse{Storages: out, Presets: presets}), nil
+}
+
+// CreateStorage writes one TalosStorage in the cluster's namespace as the signed-in user: s.Create runs on
+// the user's client, so the user's create verb on talosstorages decides, not the ServiceAccount's. Only a
+// creatable preset is accepted, and the request has no field for a disk selector, so the page never writes one.
+func (s *Server) CreateStorage(
+	ctx context.Context, req *connect.Request[pb.CreateStorageRequest],
+) (*connect.Response[pb.CreateStorageResponse], error) {
+	m := req.Msg
+
+	if m.GetCluster().GetName() == "" {
+		return nil, invalid("cluster is required")
+	}
+
+	if m.GetName() == "" {
+		return nil, invalid("name is required")
+	}
+
+	if !slices.Contains(storagePresets, m.GetDiskPreset()) {
+		return nil, invalid("unknown disk preset %q", m.GetDiskPreset())
+	}
+
+	if reason, blocked := presetUnavailable[m.GetDiskPreset()]; blocked {
+		return nil, invalid("%s", reason)
+	}
+
+	sel, err := metav1.ParseToLabelSelector(m.GetNodeSelector())
+	if err != nil {
+		return nil, invalid("node selector: %v", err)
+	}
+
+	// An empty selector would select every node in the cluster.
+	if len(sel.MatchLabels) == 0 && len(sel.MatchExpressions) == 0 {
+		return nil, invalid("node selector must name at least one label")
+	}
+
+	cluster, err := s.loadCluster(ctx, namespacedName(m.GetCluster()))
+	if err != nil {
+		return nil, err
+	}
+
+	ts := &ichorv1alpha1.TalosStorage{}
+	ts.Namespace, ts.Name = cluster.Namespace, m.GetName()
+	ts.Spec = ichorv1alpha1.TalosStorageSpec{
+		ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
+		Nodes:      *sel,
+		DiskPreset: m.GetDiskPreset(),
+	}
+
+	if err := s.Create(ctx, ts, strictFieldValidation); err != nil {
+		return nil, mapOperationWriteError("creating storage", types.NamespacedName{Namespace: ts.Namespace, Name: ts.Name}, err)
+	}
+
+	return connect.NewResponse(&pb.CreateStorageResponse{
+		Storage: storageToPB(ts, nil),
+		Audit:   s.opAudit(ctx, "create", objectRef(ts.Namespace, ts.Name)),
+	}), nil
 }
 
 // storageToPB is one TalosStorage as the page shows it. A preset this build does not know is reported

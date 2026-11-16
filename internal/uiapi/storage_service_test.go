@@ -18,6 +18,8 @@ package uiapi
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,9 +27,13 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -151,3 +157,138 @@ var _ = Describe("StorageService.ListStorages", func() {
 		Expect(names).To(ContainElement(f.storage.Name))
 	})
 })
+
+// builtinRoleRules returns the rules of one built-in Ichor role from its copy in config/rbac. The chart test
+// holds that copy equal to the chart's ClusterRole, so the user signed in here holds what a real one would.
+func builtinRoleRules(name string) []rbacv1.PolicyRule {
+	raw, err := os.ReadFile("../../config/rbac/ichor_" + name + "_role.yaml")
+	Expect(err).NotTo(HaveOccurred())
+
+	var cr rbacv1.ClusterRole
+	Expect(yaml.Unmarshal(raw, &cr)).To(Succeed())
+
+	return cr.Rules
+}
+
+// rookStorageRequest is the create the page makes for a rook-v1 TalosStorage: a name, a cluster, a node
+// label selector and the preset. It has no disk selector, because the request has no field for one.
+func rookStorageRequest(cluster *ichorv1alpha1.TalosCluster, name string) *connect.Request[pb.CreateStorageRequest] {
+	return connect.NewRequest(&pb.CreateStorageRequest{
+		Cluster: objectRef(cluster.Namespace, cluster.Name), Name: name, DiskPreset: "rook-v1", NodeSelector: "storage=rook",
+	})
+}
+
+var _ = Describe("StorageService.CreateStorage", func() {
+	It("creates a rook-v1 TalosStorage as an ichor-admin user", func() {
+		cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+		s, signedIn := signedInAs("ichor:storage-admin", builtinRoleRules("admin"))
+
+		resp, err := s.CreateStorage(signedIn, rookStorageRequest(cluster, "rook-admin"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Msg.GetStorage().GetDiskPreset()).To(Equal("rook-v1"))
+		Expect(resp.Msg.GetAudit().GetActor()).To(Equal("ichor:storage-admin"))
+
+		var got ichorv1alpha1.TalosStorage
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: "rook-admin"}, &got)).To(Succeed())
+		Expect(got.Spec.ClusterRef.Name).To(Equal(cluster.Name))
+		Expect(got.Spec.DiskPreset).To(Equal("rook-v1"))
+		Expect(got.Spec.DiskSelector).To(BeEmpty(), "the page writes no disk selector")
+		Expect(got.Spec.Nodes.MatchLabels).To(Equal(map[string]string{"storage": "rook"}))
+	})
+
+	It("refuses a rook-v1 TalosStorage create for an ichor-operator user, and writes nothing", func() {
+		cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+		s, signedIn := signedInAs("ichor:storage-operator", builtinRoleRules("operator"))
+
+		_, err := s.CreateStorage(signedIn, rookStorageRequest(cluster, "rook-operator"))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
+		Expect(err).To(MatchError(ContainSubstring("talosstorages")))
+
+		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: "rook-operator"}, &ichorv1alpha1.TalosStorage{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the refused create must not have written the TalosStorage")
+	})
+
+	It("refuses a rook-v1 TalosStorage that carries a diskSelector", func() {
+		cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+
+		// The page cannot send a selector. This is the write it would have to make, made by the envtest admin so
+		// that only the CEL rule, not RBAC, can refuse it.
+		ts := &ichorv1alpha1.TalosStorage{
+			GenerateName: "rook-selector-", Namespace: cluster.Namespace,
+			Spec: ichorv1alpha1.TalosStorageSpec{
+				ClusterRef:   corev1.LocalObjectReference{Name: cluster.Name},
+				Nodes:        metav1.LabelSelector{MatchLabels: map[string]string{"storage": "rook"}},
+				DiskPreset:   "rook-v1",
+				DiskSelector: `disk.transport == "nvme"`,
+			},
+		}
+		err := k8sClient.Create(ctx, ts)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "the API server refuses it")
+		Expect(err).To(MatchError(ContainSubstring("rook-v1 writes no disk config")))
+	})
+
+	It("refuses a longhorn-v1 create with the reason, and writes nothing", func() {
+		cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+		s, signedIn := signedInAs("ichor:storage-admin-longhorn", builtinRoleRules("admin"))
+
+		_, err := s.CreateStorage(signedIn, connect.NewRequest(&pb.CreateStorageRequest{
+			Cluster: objectRef(cluster.Namespace, cluster.Name), Name: "longhorn-page", DiskPreset: "longhorn-v1", NodeSelector: "storage=longhorn",
+		}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
+		Expect(err).To(MatchError(ContainSubstring("needs a disk selector")))
+
+		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: "longhorn-page"}, &ichorv1alpha1.TalosStorage{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("refuses an empty node selector, which would select every node", func() {
+		cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+		s, signedIn := signedInAs("ichor:storage-admin-empty", builtinRoleRules("admin"))
+
+		_, err := s.CreateStorage(signedIn, connect.NewRequest(&pb.CreateStorageRequest{
+			Cluster: objectRef(cluster.Namespace, cluster.Name), Name: "rook-everywhere", DiskPreset: "rook-v1",
+		}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
+		Expect(err).To(MatchError(ContainSubstring("at least one label")))
+	})
+
+	It("offers the CRD's disk presets, with only rook-v1 creatable and longhorn-v1 explained", func() {
+		cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+		s, signedIn := signedInAs("ichor:storage-admin-presets", builtinRoleRules("admin"))
+
+		resp, err := s.ListStorages(signedIn, connect.NewRequest(&pb.ListStoragesRequest{
+			Cluster: objectRef(cluster.Namespace, cluster.Name),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		got := map[string]*pb.StoragePreset{}
+		var names []string
+		for _, p := range resp.Msg.GetPresets() {
+			got[p.GetName()] = p
+			names = append(names, p.GetName())
+		}
+		Expect(names).To(Equal(crdDiskPresetEnum()), "the presets are the CRD's diskPreset enum, in its order")
+		Expect(got["rook-v1"].GetCreatable()).To(BeTrue())
+		Expect(got["longhorn-v1"].GetCreatable()).To(BeFalse())
+		Expect(got["longhorn-v1"].GetUnavailableReason()).To(ContainSubstring("kubectl"))
+	})
+})
+
+// crdDiskPresetEnum reads spec.diskPreset's enum from the CRD in config/crd/bases, the file envtest installs.
+func crdDiskPresetEnum() []string {
+	raw, err := os.ReadFile("../../config/crd/bases/ichor.maesh.dev_talosstorages.yaml")
+	Expect(err).NotTo(HaveOccurred())
+
+	var crd apiextv1.CustomResourceDefinition
+	Expect(yaml.Unmarshal(raw, &crd)).To(Succeed())
+
+	spec := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
+	var out []string
+	for _, e := range spec.Properties["diskPreset"].Enum {
+		var v string
+		Expect(json.Unmarshal(e.Raw, &v)).To(Succeed())
+		out = append(out, v)
+	}
+
+	return out
+}

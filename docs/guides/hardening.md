@@ -454,8 +454,10 @@ or exposed, encrypting it does not undo that: rotate the CAs
 The kubeconfig next to it stays plaintext, because `kubectl` reads it. It holds
 the `system:masters` override certificate (see
 [Users and login](users-and-login.md)); once login works, move it offline, but
-keep it: `ichor create credentials --bundle` takes the server and names from a
-current kubeconfig, so the bundle alone does not get you back in. The Secret in
+keep it. The bundle can also make a new one: `ichor create credentials --bundle
+FILE --kube-server URL --talos-endpoints ADDRESS` writes a kubeconfig and
+talosconfig with no kubeconfig on disk. The bundle holds no addresses, so note
+the API server's address with it. The Secret in
 the cluster that holds the bundle for the controller is not affected.
 
 ## Rotating the CAs

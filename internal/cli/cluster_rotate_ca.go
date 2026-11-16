@@ -115,8 +115,8 @@ needs your own kubeconfig, so this command does it with or without --follow: it 
 operation has gone on (a few seconds to a few minutes), then returns, and the rest of the rotation
 runs in the controller. The files' contents are never printed. If this command is interrupted while the operation waits, run
 'ichor create credentials NAME --acknowledge' with your current kubeconfig. If you lost both,
-'ichor create credentials NAME --bundle FILE --kubeconfig FILE' makes credentials from a current bundle
-file; the bundle holds the CAs, so the kubeconfig only has to name the server in its current context.
+'ichor create credentials NAME --bundle FILE --kube-server URL --talos-endpoints ADDRESS' makes credentials
+from a current bundle file; the bundle holds the CAs, and the flags supply the addresses it does not hold.
 
 Before it starts, every node must answer, run the configuration Ichor renders for it, and every
 Kubernetes Node must be Ready; otherwise the operation pauses without changing anything. While it

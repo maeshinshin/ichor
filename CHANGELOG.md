@@ -159,6 +159,11 @@ command does. Each item is described where it is listed below.
   and a new guide, Back up etcd to S3, has the procedure (CLI, ADR 0164). The
   etcd warning of `rotate ca`, in its help and in the plan, names this command
   for an operator with no backup yet, and `ichor backup etcd NAME` for one that exists.
+- **New: `ichor create credentials --kube-server URL`** names the Kubernetes API
+  server for the kubeconfig. With `--bundle FILE` and `--talos-endpoints`, the
+  command now writes a working kubeconfig and talosconfig with no kubeconfig on
+  disk; before, it copied the server from a current kubeconfig and failed
+  without one. Without the flag it behaves as before (CLI, ADR 0091).
 - **Breaking: the command surface is verb first.** `ichor machine list` is now
   `ichor get nodes`, and `ichor machine approve NAME` is
   `ichor approve node NAME`. The noun-first groups `cluster`, `machine`,
@@ -764,14 +769,10 @@ command does. Each item is described where it is listed below.
   default and what changing the names costs.
 - The CNI concept page and `ichor bootstrap cni --help` say that Cilium reaches
   the API through KubePrism only when kube-proxy is replaced.
-- The users-and-login and hardening guides no longer say that the secrets bundle
-  alone gets you back in once the kubeconfig is gone. `ichor create credentials
-  --bundle` takes the server and the names from a current kubeconfig, so keep
-  one.
-- `ichor rotate ca --help` said that `ichor create credentials --bundle` makes
-  credentials after you lost both your kubeconfig and talosconfig; it now adds
-  that the command also needs `--kubeconfig` naming the server. ADRs 0127 and
-  0129 are amended for the same reason.
+- The users-and-login and hardening guides, `ichor rotate ca --help` and ADRs
+  0091, 0127 and 0129 say what `ichor create credentials --bundle` needs: the
+  bundle, the API server's address (`--kube-server`) and a Talos endpoint
+  (`--talos-endpoints`). The bundle holds the CAs and no addresses.
 - `ichor --help`, the CLI and UI page and the architecture overview name the
   three commands that write to a Talos node, `init`, `restore cluster` and
   `reclaim node --talosconfig`. `adopt` only reads from nodes. ADR 0014 is

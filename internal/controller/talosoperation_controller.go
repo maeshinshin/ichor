@@ -867,6 +867,10 @@ func nextBatch(
 // the last stage is done. The controller's own machine (own, already taken out of heldCPs and
 // heldWorkers) is only held back to last in the Kubelets stage, where its node is drained and the
 // controller restarts; the other stages use the full controlPlanes list.
+//
+// It does not read upgrade.KubernetesOrder, which the plan states, on purpose (ADR 0087): it decides one batch at a
+// time from the status. TestKubernetesBatchVisitsTheMachinesInTheOrderThePlanStates walks it to the end and fails
+// when the two disagree, which is what catches drift.
 func kubernetesBatch(
 	op *ichorv1alpha1.TalosOperation, controlPlanes, heldCPs, heldWorkers, own []*ichorv1alpha1.TalosMachine,
 ) []*ichorv1alpha1.TalosMachine {

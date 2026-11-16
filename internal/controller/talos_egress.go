@@ -544,5 +544,5 @@ func (e *TalosEgress) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&ichorv1alpha1.TalosMachine{}, one).
 		Watches(&ichorv1alpha1.TalosEtcdBackup{}, one).
 		Watches(&ichorv1alpha1.MachineReclaim{}, one).
-		Complete(quietExpected(e))
+		Complete(quietExpected(e, "talosegress"))
 }

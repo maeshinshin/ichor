@@ -27,6 +27,7 @@ import (
 	"github.com/go-logr/logr/funcr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -85,7 +86,7 @@ var _ = Describe("quietExpected", func() {
 			return reconcile.Result{}, mgr.GetClient().Update(ctx, &cm)
 		})
 		Expect(ctrl.NewControllerManagedBy(mgr).For(&corev1.ConfigMap{}).Named(ns).
-			Complete(quietExpectedSince(r, start, time.Now))).To(Succeed())
+			Complete(quietExpectedSince(r, ns, start, time.Now))).To(Succeed())
 
 		mctx, stop := context.WithCancel(ctx)
 		DeferCleanup(stop)
@@ -138,6 +139,7 @@ var _ = Describe("quietExpected", func() {
 		Expect(logs.String()).To(ContainSubstring("failed calling webhook"))
 		Expect(logs.String()).NotTo(ContainSubstring("Reconciler error"))
 		Eventually(calls, 20*time.Second, 100*time.Millisecond).Should(BeNumerically(">=", 2), "the reconcile is retried")
+		Expect(testutil.ToFloat64(expectedErrors.WithLabelValues(ns, "webhook_startup"))).To(BeNumerically(">=", 1))
 	})
 
 	It("logs the same failure as a reconciler error once the startup window is over", func() {
@@ -148,6 +150,7 @@ var _ = Describe("quietExpected", func() {
 		Eventually(logs.String, 20*time.Second, 100*time.Millisecond).Should(ContainSubstring("Reconciler error"))
 		Expect(logs.String()).To(ContainSubstring("failed calling webhook"))
 		Expect(logs.String()).NotTo(ContainSubstring("not reachable yet"))
+		Expect(testutil.ToFloat64(expectedErrors.WithLabelValues(ns, "webhook_startup"))).To(BeZero(), "a real failure is not counted as expected")
 	})
 
 	It("logs a conflict as expected, whatever the time", func() {
@@ -157,6 +160,7 @@ var _ = Describe("quietExpected", func() {
 		Expect(logs.String()).To(ContainSubstring("the object has been modified"))
 		Expect(logs.String()).NotTo(ContainSubstring("Reconciler error"))
 		Eventually(calls, 20*time.Second, 100*time.Millisecond).Should(BeNumerically(">=", 2), "the reconcile is retried")
+		Expect(testutil.ToFloat64(expectedErrors.WithLabelValues(ns, "conflict"))).To(BeNumerically(">=", 1))
 	})
 
 	It("returns any other error, and a webhook that answered, unchanged", func() {
@@ -167,7 +171,7 @@ var _ = Describe("quietExpected", func() {
 		} {
 			r := quietExpectedSince(reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 				return reconcile.Result{}, err
-			}), time.Now(), time.Now)
+			}), "x", time.Now(), time.Now)
 
 			_, got := r.Reconcile(ctx, reconcile.Request{})
 			Expect(got).To(MatchError(err))

@@ -111,5 +111,5 @@ func (r *BootSecurityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.TalosCluster{}).
 		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(machineCluster)).
 		Named("bootsecurity").
-		Complete(quietExpected(r))
+		Complete(quietExpected(r, "bootsecurity"))
 }

@@ -656,5 +656,5 @@ func (r *MachineReclaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("machinereclaim").
 		// A request waits on a node that may be gone; four workers keep one from blocking the rest.
 		WithOptions(controller.Options{MaxConcurrentReconciles: 4}).
-		Complete(quietExpected(r))
+		Complete(quietExpected(r, "machinereclaim"))
 }

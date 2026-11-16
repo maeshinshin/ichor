@@ -476,7 +476,7 @@ func TestCaptureDocumentsWritesTheAPIServerSANsAsTheKubeAPIServerDocumentSetting
 	cp, _ := classAFixture(t, "v114")
 	cfg := strings.Replace(string(cp), "\ncluster:\n", "\ncluster:\n    apiServer:\n        certSANs:\n            - extra.example.test\n", 1)
 
-	docs, err := captureDocuments([]byte(cfg), false, false, []string{pathAPIServerCertSANs}, false, nil)
+	docs, err := captureDocuments([]byte(cfg), nil, []string{pathAPIServerCertSANs}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

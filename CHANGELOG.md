@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.0 (2026-11-15)
+## v0.3.0 (unreleased)
 
 The command line is verb first, which breaks every script that calls it, and a
 `TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts, up from
@@ -148,6 +148,10 @@ command does. Each item is described where it is listed below.
   they are too large for client-side apply (Typed configuration).
 
 ### CLI
+- **`ichor create credentials --kube-server` refuses an address that is not an
+  HTTPS URL.** It used to accept `host:port` and write it into the kubeconfig,
+  where client-go accepts any non-empty server, so the credential was broken
+  only when something tried to use it.
 
 - **New: `ichor create etcd-backup`** writes the S3 credentials Secret, in the
   controller's namespace, and the `TalosEtcdBackup` that names it. Nothing in
@@ -495,6 +499,15 @@ command does. Each item is described where it is listed below.
   Reset says the wipe is unconfirmed until the node answers in maintenance mode.
 
 ### Operations
+- **An operation paused because the controller cannot tell which machine it runs
+  on no longer tells the operator to resume it.** That pause lifts itself when the
+  machine can be named again, so `ichor resume operation` had nothing to do.
+- **Every error path that can persist now gives the cluster lock back.** A
+  shutdown or node operation that cannot load the secrets bundle pauses for a
+  person instead of returning while holding the lease, a failed stop request
+  releases before its retry, and a CA or key rotation reports itself blocked. A
+  shutdown with no Talos client now writes the reason on the operation rather
+  than only to the log. Paths whose failure cannot persist are unchanged.
 
 - **The Kubernetes upgrade's plan states the order the run follows, stage by stage**
   (ADR 0087). When the controller runs on one of the cluster's nodes, the plan listed
@@ -535,7 +548,7 @@ command does. Each item is described where it is listed below.
   for: the signature referrer, through the referrers API or the
   `sha256-<hex>` tag of the digest. It used to say only that the image had no
   signature (`InstallerImageUnverified`, ADR 0122).
-- **A paused operation releases the cluster lock** (ADR 0162). An
+- **A paused operation releases the cluster lock** (ADR 0162), including one that lifts itself. An
   operation paused for a person, by a failed step or by `spec.paused`, used to
   keep the lock, so a node that tried to join was blocked for as long as the
   pause lasted. It releases the lock when it pauses and takes it again when it
@@ -784,6 +797,12 @@ command does. Each item is described where it is listed below.
   requires one keeps working, and `go list -m -u` reports the retraction.
 
 ### Licensing
+- **`THIRD-PARTY-NOTICES` names every vendored copy, not only the first of
+  each.** The documentation site's component ports, both copies of the sonner
+  and next-themes shims, and `ui/src/lib/shims/internal/sonner-styles.ts` were
+  carried without attribution. Each now has a test keyed on something in the
+  copied code, because the previous check matched only a shim's own header name
+  and so could not see an upstream that is named nowhere in the file.
 
 - `NOTICE` names `api/v1alpha1/zz_generated.talosconfigpatchdocument.go`,
   which holds the generated union and carries the MPL-2.0 header, with the
@@ -803,6 +822,12 @@ command does. Each item is described where it is listed below.
   the same two cmdk ports carry at their end, with its MIT copyright line.
 
 ### Docs
+- **Twenty amendment paragraphs across twelve ADRs carry a dated heading and the
+  index marker.** The index reads amendments from the heading, so these were
+  recorded but invisible to it. Each kept its original date.
+- **ADRs 0055 and 0006 say that the Argo CD Application they describe is gone.**
+  ADR 0101 removed it; both still described it in the present tense, and 0006
+  named a chart example that no longer exists.
 
 - The guides, concepts, getting started, the design document, the diagrams and
   the README name the verb-first commands, and say that `adopt` takes Talos

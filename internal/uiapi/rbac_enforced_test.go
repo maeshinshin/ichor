@@ -136,7 +136,8 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		other := &corev1.ConfigMap{Name: "something-else", Namespace: testNamespace}
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, other))).To(Succeed())
-		Expect(apierrors.IsForbidden(saClient.Get(ctx, client.ObjectKeyFromObject(other), &corev1.ConfigMap{}))).To(BeTrue())
+		err = saClient.Get(ctx, client.ObjectKeyFromObject(other), &corev1.ConfigMap{})
+		Expect(err).To(MatchError(apierrors.IsForbidden, "the backend cannot read a ConfigMap it was not granted"))
 	})
 
 	It("lets GetNodeTalosRuntime read the Node and the pods bound to it", func() {
@@ -258,7 +259,8 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, u))).To(Succeed())
 
 		Expect(saClient.Get(ctx, client.ObjectKeyFromObject(u), &ichorv1alpha1.IchorUser{})).To(Succeed())
-		Expect(apierrors.IsForbidden(saClient.List(ctx, &ichorv1alpha1.IchorUserList{}, client.InNamespace(testNamespace)))).To(BeTrue())
+		err := saClient.List(ctx, &ichorv1alpha1.IchorUserList{}, client.InNamespace(testNamespace))
+		Expect(err).To(MatchError(apierrors.IsForbidden, "the backend cannot list IchorUsers"))
 
 		store := &corev1.Secret{Name: ichorauth.CredentialsSecretName, Namespace: testNamespace}
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, store))).To(Succeed())
@@ -272,7 +274,8 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		other := &corev1.Secret{Name: "something-else", Namespace: testNamespace}
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, other))).To(Succeed())
-		Expect(apierrors.IsForbidden(saClient.Patch(ctx, other, client.RawPatch(types.MergePatchType, []byte(`{"data":{"a":"Yg=="}}`))))).To(BeTrue())
+		err = saClient.Patch(ctx, other, client.RawPatch(types.MergePatchType, []byte(`{"data":{"a":"Yg=="}}`)))
+		Expect(err).To(MatchError(apierrors.IsForbidden, "the backend cannot patch a Secret it was not granted"))
 		// Reclaim gives the backend create on Secrets, nothing more: it cannot patch, so the line above holds.
 	})
 })

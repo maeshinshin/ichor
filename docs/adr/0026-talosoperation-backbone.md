@@ -1,6 +1,6 @@
 # 0026. `TalosOperation`: the backbone every upgrade kind shares, with none of their execution
 
-Status: Accepted · Date: 2026-10-25 · Design section: Upgrades
+Status: Accepted, amended · Date: 2026-10-25 · Design section: Upgrades
 
 Decided: `TalosOperation`: the backbone every upgrade kind shares (lock, status-held state machine, pause-on-failure, paused, maxUnavailable, hold annotation, ordering), with none of their execution
 

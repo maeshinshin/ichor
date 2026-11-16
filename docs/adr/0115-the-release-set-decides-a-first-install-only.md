@@ -1,6 +1,6 @@
 # 0115. The release set decides a first install only; each component upgrades on its own
 
-Status: Accepted · Date: 2026-11-03 · Design section: Upgrades · Touches: 0043, 0057, 0059, 0098, 0099, 0103, 0110, 0113, 0114
+Status: Accepted, amended · Date: 2026-11-03 · Design section: Upgrades · Touches: 0043, 0057, 0059, 0098, 0099, 0103, 0110, 0113, 0114
 
 Decided: the release set in `pkg/release` (`Pinned`) decides the versions of a first install (`ichor init`, the CLI defaults, the UI's proposed values); after that Talos, Kubernetes and Cilium upgrade on their own, to any version the compatibility rules accept, and the set does not limit them. Each upgrade target must be a final semantic version newer than what runs, on a path the component's rule allows, and compatible with the other components in one table (`pkg/release/compat.go`) whose refusal only the override verb (ADR 0110) passes, recorded in the cluster's Events.
 

@@ -1,6 +1,6 @@
 # 0080. Reboot-requiring configuration changes roll out through an explicit `config` operation
 
-Status: Accepted · Date: 2026-10-26 · Design section: Configuration reconcile (step 4), Upgrades
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Configuration reconcile (step 4), Upgrades
 
 Decided: a new `TalosOperation` kind `config` applies the pending reboot-requiring changes of the approved machines, one at a time (control planes first with an etcd membership check before each, then workers within `maxUnavailable`, the controller's own node last), staged and then rebooted; the machine reconciler only reports them, now naming the fields, and never reboots a node
 

@@ -1,6 +1,6 @@
 # 0085. Node actions are controller-run operations of kind `node`
 
-Status: Accepted · Date: 2026-10-27 · Design section: Upgrades, Nodes (removal), UI backend, Talos access
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Upgrades, Nodes (removal), UI backend, Talos access
 Decided: items 1, 2, 4, 6, 7 and 8 of ADR 0082's proposal, plus a per-node shutdown, are one new `TalosOperation` kind `node` with `spec.node {machineRef, action, service, allowLeader, confirm}` and one action per operation: `reboot`, `shutdown`, `restart-service` (kubelet, containerd, cri only), `etcd-defrag`, `etcd-forfeit-leadership` and `reset`; "Remove node" is the existing deletion of the TalosMachine through the removal flow (a new `RemoveMachine` RPC and `ichor delete node`), not an operation, and etcd member removal stays inside it (ADR 0032); the UI and CLI write only these CRs, the controller is the only writer to the node
 
 ## Context

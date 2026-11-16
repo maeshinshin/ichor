@@ -1,6 +1,6 @@
 # 0039. Config editing UI: PatchService screens, opaque-JSON editing, no generic schema-driven renderer
 
-Status: Accepted · Date: 2026-10-26 · Amended · Design section: CLI and UI, Patch layers
+Status: Accepted, amended · Date: 2026-10-26 · Design section: CLI and UI, Patch layers
 
 Decided: built the `PatchService` CRUD screens (list, create, edit, delete) and an explicit impact-preview action on `ui/src/pages/PatchList.tsx`/`PatchDetail.tsx`, editing each `PatchDocument` and `LabelSelector` as a JSON blob in a `Textarea` rather than through a generic schema-driven form renderer, and relying on the apiserver's own CRD validation (surfaced via `describeError`) instead of a second, hand-written validation layer.
 

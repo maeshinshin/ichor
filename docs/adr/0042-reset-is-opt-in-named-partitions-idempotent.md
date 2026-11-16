@@ -1,6 +1,6 @@
 # 0042. Reset is opt-in per removal, named partitions only, and idempotent by recording after the ack
 
-Status: Accepted · Date: 2026-10-26 · Design section: Nodes (removal), Roadmap phase 3
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Nodes (removal), Roadmap phase 3
 Decided: Add an opt-in `ichor.maesh.dev/reset-on-delete` annotation that, after a removal's etcd member is gone, wipes only STATE and EPHEMERAL by label and reboots the node to maintenance mode -- holding the finalizer if Reset fails, and recording the request only after Talos has acknowledged it, so a resumed reconcile never asks twice
 
 ## Context

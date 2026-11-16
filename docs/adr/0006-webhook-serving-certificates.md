@@ -1,6 +1,6 @@
 # 0006. Webhook serving certificates without cert-manager, failing closed
 
-Status: Accepted · Date: 2026-10-25 · Design section: 4.5, 5.2.7
+Status: Accepted, amended · Date: 2026-10-25 · Design section: 4.5, 5.2.7
 
 Decided: Run `cert-controller` in-process for the webhook serving certificate instead of depending on cert-manager
 

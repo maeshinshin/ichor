@@ -1,6 +1,6 @@
 # 0078. UI app shell: sidebar, breadcrumb bar, and "On this page" section navigation
 
-Status: Accepted · Date: 2026-10-26 · Design section: UI
+Status: Accepted, amended · Date: 2026-10-26 · Design section: UI
 Decided: The UI is a left sidebar (preactcn `sidebar`, icons-collapsible, a sheet on phones) plus a sticky top bar with a `breadcrumb`; detail pages have a header and card sections with stable ids, and long ones get a sticky right-hand "On this page" list instead of tabs
 Supersedes: 0074 (the header and nav-row part only; the scrollbar-gutter and scroll-lock decisions stay)
 

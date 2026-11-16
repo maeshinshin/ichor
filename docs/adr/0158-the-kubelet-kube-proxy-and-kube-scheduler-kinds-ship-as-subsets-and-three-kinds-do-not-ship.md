@@ -1,6 +1,6 @@
 # 0158. The kubelet, kube-proxy and kube-scheduler kinds ship as subsets, and the kinds that do not ship are named in the decision
 
-Status: Accepted · Date: 2026-11-13 · Amended · Design section: Typed configuration · Amends: 0155, 0157
+Status: Accepted, amended · Date: 2026-11-13 · Design section: Typed configuration · Amends: 0155, 0157
 
 Decided: `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` are added to the union (fields `kubeletConfig`, `kubeProxyConfig`, `kubeSchedulerConfig`). Each carries its `config` payload as a local subset of the upstream Kubernetes configuration type: the fields an operator is documented to set on a Talos node, with every field left out named in a table and refused when a Talos document sets it. `KubeAuthenticationConfig` is reclassified as Ichor-owned, `KubeAdmissionControlConfig` as unstructured, and `KubeStaticPodConfig` is in the union with its pod carried as the core v1 `Pod` without its `status`, its CRDs applied with server-side apply. Of 65 accepted kinds, all 65 are in the union.
 

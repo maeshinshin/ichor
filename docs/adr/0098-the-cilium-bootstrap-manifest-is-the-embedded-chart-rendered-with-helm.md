@@ -1,6 +1,6 @@
 # 0098. The Cilium bootstrap manifest is the embedded chart rendered with Helm
 
-Status: Accepted · Date: 2026-10-28 · Design section: CNI · Extends: 0013, 0024
+Status: Accepted, amended · Date: 2026-10-28 · Design section: CNI · Extends: 0013, 0024
 
 Decided: `BootstrapManifest` for the Cilium preset returns the pinned Cilium chart expanded with the preset values into plain manifests, rendered with Helm's Go SDK from a chart archive embedded in the binary, and the tunnel protocol is a preset option that defaults to Cilium's VXLAN
 

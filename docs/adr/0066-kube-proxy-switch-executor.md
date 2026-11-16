@@ -1,6 +1,6 @@
 # 0066. The kube-proxy switch is a TalosOperation of kind cni; Ichor changes the Talos side and removes kube-proxy, and the CNI's owner changes the CNI
 
-Status: Accepted · Date: 2026-10-26 · Design section: CNI
+Status: Accepted, amended · Date: 2026-10-26 · Design section: CNI
 
 Decided: Add `TalosOperation` kind `cni` whose per-machine step applies the Talos-side kube-proxy mode (rendered by `pkg/render` from `status.cni.kubeProxy`, falling back to `spec.cni.kubeProxy`); replacing waits for Cilium to serve Services before touching any node and deletes the kube-proxy objects last, enabling brings kube-proxy up and verifies it before asking Cilium to step aside; Ichor never writes the CNI's configuration (hand-over or not) and leaves node-level kube-proxy rules to the next reboot
 

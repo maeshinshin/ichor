@@ -85,6 +85,7 @@ test('the overview node count is read from overview.nodesReady, and the table de
 })
 
 test('every literal t(\'key\') call in the UI names a key the table defines', () => {
+  // This duplicates the Key type for literal calls and exists for when that type stops constraining them (Key widened to string).
   // shortcut: reads only literal single-quoted t('...') calls; a key built from a template string (ops.start.${kind}) or carried as data (labelKey, a label field) is not seen. Replace with a real call-site extractor when a reviewer cannot check those by eye.
   const calls = sources.flatMap(([, text]) => [...text.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))
   assert.notEqual(calls.length, 0)

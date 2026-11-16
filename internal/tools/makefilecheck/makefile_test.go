@@ -11,6 +11,12 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+// The refusal messages check-embed-images prints, one per image variable.
+const (
+	imgRefusal   = "IMG is"
+	imgUIRefusal = "IMG_UI is"
+)
+
 // repoRoot is the module root, relative to this package's directory, where `go test` runs.
 const repoRoot = "../../.."
 
@@ -29,11 +35,11 @@ func TestEmbedImagesRefusesAnImageWithoutAVersionTag(t *testing.T) {
 	const ctl, ui = "ghcr.io/maeshinshin/ichor-controller", "ghcr.io/maeshinshin/ichor-ui"
 
 	refused := []struct{ name, img, imgUI, want string }{
-		{"controller tagged latest", ctl + ":latest", ui + ":v0.1.0", "IMG is"},
-		{"controller without a tag", ctl, ui + ":v0.1.0", "IMG is"},
-		{"ui tagged latest", ctl + ":v0.1.0", ui + ":latest", "IMG_UI is"},
-		{"ui without a tag", ctl + ":v0.1.0", ui, "IMG_UI is"},
-		{"registry port and no tag", "localhost:5000/ichor-controller", ui + ":v0.1.0", "IMG is"},
+		{"controller tagged latest", ctl + ":latest", ui + ":v0.1.0", imgRefusal},
+		{"controller without a tag", ctl, ui + ":v0.1.0", imgRefusal},
+		{"ui tagged latest", ctl + ":v0.1.0", ui + ":latest", imgUIRefusal},
+		{"ui without a tag", ctl + ":v0.1.0", ui, imgUIRefusal},
+		{"registry port and no tag", "localhost:5000/ichor-controller", ui + ":v0.1.0", imgRefusal},
 	}
 
 	for _, tc := range refused {

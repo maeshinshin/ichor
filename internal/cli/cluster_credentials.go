@@ -77,9 +77,10 @@ By default the CAs are read from the cluster's secrets bundle Secret. While a CA
 the files trust the old and the new CAs and are signed by the new one, which every node accepts from
 the moment the rotation waits for credentials: they keep working after the old CA is dropped.
 
-With --bundle FILE (the output of 'ichor export bundle') nothing is read from the cluster, so
-an operator with a current bundle can always get back in. A bundle saved before a rotation names CAs
-that no node accepts any more.
+With --bundle FILE (the output of 'ichor export bundle') the CAs come from the file, not the cluster,
+so an unreachable cluster does not stop it. It still needs your current kubeconfig, though: its current
+context supplies the server and the names, so run it where that kubeconfig and context exist. A bundle
+saved before a rotation names CAs that no node accepts any more.
 
 With --acknowledge the command also tells a waiting CA rotation that you have the credentials, after
 checking that the new kubeconfig authenticates to the cluster: the rotation does not continue without

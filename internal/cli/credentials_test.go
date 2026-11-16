@@ -846,3 +846,14 @@ func TestWatchRebuildsATunnelThatDiesAndSaysWhyItCouldNotAtFirst(t *testing.T) {
 }
 
 func connect503() error { return connect.NewError(connect.CodeUnavailable, errors.New("tunnel gone")) }
+
+// --bundle does not skip the kubeconfig: its help must say so, not promise a way back in without one.
+func TestCreateCredentialsBundleHelpNamesTheKubeconfigItNeeds(t *testing.T) {
+	if !strings.Contains(createCredentialsCmd.Long, "It still needs your current kubeconfig") {
+		t.Errorf("--bundle help does not name the kubeconfig it needs:\n%s", createCredentialsCmd.Long)
+	}
+
+	if strings.Contains(createCredentialsCmd.Long, "can always get back in") {
+		t.Error("--bundle help still promises a way back in without a kubeconfig")
+	}
+}

@@ -79,6 +79,10 @@ var openedThisRun = map[string]string{}
 // descriptor or a pipe (<(pass show ...)) can be read only once, and a command may need it twice.
 var readFromFile = map[string]string{}
 
+// promptedThisRun keeps the passphrase typed at the prompt for each file, so a command that opens the same
+// bundle twice (create credentials checks it, then reads it) asks once.
+var promptedThisRun = map[string]string{}
+
 // bundleWorkFactor is log2 of scrypt's N when sealing; 0 is age's default (18, about a second). The
 // passphrase may be chosen by a person, so the default is kept; a test lowers it.
 var bundleWorkFactor int
@@ -217,6 +221,10 @@ func readBundlePassphrase(path string) (string, error) {
 		return pass, nil
 	}
 
+	if pass, ok := promptedThisRun[path]; ok {
+		return pass, nil
+	}
+
 	pass, ok, err := passphraseFromSources()
 	if err != nil || ok {
 		return pass, err
@@ -235,6 +243,8 @@ func readBundlePassphrase(path string) (string, error) {
 	if pass == "" {
 		return "", errNoBundlePassphrase
 	}
+
+	promptedThisRun[path] = pass
 
 	return pass, nil
 }

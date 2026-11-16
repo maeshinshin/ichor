@@ -52,11 +52,13 @@ func useBundleCrypto(t *testing.T) *bytes.Buffer {
 	clear(sealedThisRun)
 	clear(openedThisRun)
 	clear(readFromFile)
+	clear(promptedThisRun)
 	clear(warnedThisRun)
 	t.Cleanup(func() {
 		clear(sealedThisRun)
 		clear(openedThisRun)
 		clear(readFromFile)
+		clear(promptedThisRun)
 		clear(warnedThisRun)
 		bundleWorkFactor, bundlePassphraseFile, bundleTerminal, readPasswordFn, bundleWarnings = oldFactor, oldFile, oldTerm, oldPrompt, oldWarn
 	})
@@ -216,6 +218,30 @@ func TestReadBundlePassphraseSources(t *testing.T) {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("error %q lacks %q", err, want)
 			}
+		}
+	})
+
+	t.Run("a terminal prompt is asked once per run", func(t *testing.T) {
+		useBundleCrypto(t)
+
+		bundleTerminal = func() bool { return true }
+
+		prompts := 0
+		readPasswordFn = func(string, io.Writer) (string, error) {
+			prompts++
+
+			return testBundlePass, nil
+		}
+
+		for range 2 {
+			got, err := readBundlePassphrase("x/secrets.yaml")
+			if err != nil || got != testBundlePass {
+				t.Fatalf("got %q, %v", got, err)
+			}
+		}
+
+		if prompts != 1 {
+			t.Fatalf("prompted %d times, want 1", prompts)
 		}
 	})
 

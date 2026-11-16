@@ -1014,6 +1014,7 @@ export const en = {
   'storage.preset': 'Disk preset',
   'storage.nodesHint': 'Node labels as key=value, separated by commas. At least one is required: an empty selector would select every node.',
   'storage.notHere': 'not available here',
+  'storage.notHereTitle': '{name} is not created here',
   'storage.submit': 'Create',
   'storage.created': 'TalosStorage {name} created',
   'nav.settings': 'Settings',

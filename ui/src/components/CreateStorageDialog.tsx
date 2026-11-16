@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -83,11 +83,14 @@ export function CreateStorageDialog({ cluster, presets, onDone }: { cluster?: Ob
                 ))}
               </NativeSelect>
             </Field>
-            {chosen && !chosen.creatable && (
-              <Alert>
-                <AlertDescription>{chosen.unavailableReason}</AlertDescription>
-              </Alert>
-            )}
+            {presets
+              .filter((p) => !p.creatable)
+              .map((p) => (
+                <Alert key={p.name}>
+                  <AlertTitle>{t('storage.notHereTitle', { name: p.name })}</AlertTitle>
+                  <AlertDescription>{p.unavailableReason}</AlertDescription>
+                </Alert>
+              ))}
           </FieldGroup>
           {error && <ErrorAlert {...error} />}
           <DialogFooter>

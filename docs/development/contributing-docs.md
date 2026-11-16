@@ -67,7 +67,7 @@ all that is needed:
 
 ## Front matter (optional)
 
-```yaml
+```yaml title="docs/guides/rotate-keys.md" lineNumbers
 ---
 title: A title that differs from the first heading
 sidebar_label: A shorter name for the sidebar
@@ -120,6 +120,18 @@ The kinds are `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION`.
 Use fenced blocks with a language (` ```sh `, ` ```yaml `, ` ```go `). The site
 highlights them (light and dark) and adds a copy button; there is nothing to add
 by hand.
+
+A block of a file names it with `title`, and a long one can number its lines with
+`lineNumbers`. Both follow the language on the opening fence, in either order:
+
+````markdown
+```yaml title="docs/guides/rotate-keys.md" lineNumbers
+```
+````
+
+`title` takes a double-quoted value. Any other word after the language is an
+error, and so is a `{…}` line list, which is not built yet, so a typo fails the
+build rather than dropping the option. GitHub shows the block without them.
 
 Every block must name its language, and `make docs-site` fails with the file
 and line of one that does not. Use `sh` for shell commands, `console` for a

@@ -1,6 +1,6 @@
 # 0009. Reboot necessity is predicted, because Talos will not answer it
 
-Status: Accepted · Date: 2026-10-25 · Design section: 5.6 (configuration reconcile)
+Status: Accepted, amended · Date: 2026-10-25 · Design section: 5.6 (configuration reconcile)
 
 Decided: Keep predicting reboot necessity from `pkg/fieldmeta`'s field-path table; Talos itself won't answer the question
 

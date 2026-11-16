@@ -579,11 +579,16 @@ func (r *CNIHandoverReconciler) setProgress(
 	return r.Status().Update(ctx, cluster)
 }
 
-// failureMessage is the Job's last log line, or its own reason when the log cannot be read.
+// failureMessage is the run's own error, the termination message the operation's message carries too; else
+// the Job's last log line; else its own reason when the log cannot be read.
 func (r *CNIHandoverReconciler) failureMessage(ctx context.Context, failed *CNIHelmJobFailedError) string {
 	if failed.NoPod {
 		return fmt.Sprintf("Cilium Helm Job %s created no pod within %s: %s", failed.JobName, cniPodGrace,
 			cmp.Or(r.failedCreateMessage(ctx, failed.JobName), failed.Message))
+	}
+
+	if failed.Detail != "" {
+		return fmt.Sprintf("Cilium Helm Job %s failed: %s", failed.JobName, failed.Detail)
 	}
 
 	if line := r.lastLogLine(ctx, failed.JobName); line != "" {

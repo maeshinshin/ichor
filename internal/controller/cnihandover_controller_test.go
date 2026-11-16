@@ -711,6 +711,41 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring("fake logs"))
 	})
 
+	It("says the same run error in the failure condition as in the operation's message, for one failed Job", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		reconcileHandoverOK(r, cluster)
+
+		job := cniJob(cluster)
+		const runError = `helm apply: cannot list resource "talosclusters" in API group "ichor.maesh.dev"`
+
+		pod := &corev1.Pod{
+			Namespace: cniJobNamespace, GenerateName: "cni-job-pod-", Labels: map[string]string{jobNameLabel: job.Name},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: cniContainerName, Image: "x"}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, pod))).To(Succeed()) })
+
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: cniContainerName,
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: 1, FinishedAt: metav1.Now(), Message: runError,
+			}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+		setJobCondition(job, batchv1.JobFailed, "Job has reached the specified backoff limit")
+
+		// The operation's message: what AdvanceCNIHelmJob reports for the same Job.
+		_, err := AdvanceCNIHelmJob(ctx, k8sClient, k8sClient, testIchorNamespace, cluster, specMode(cluster), liveNodes(),
+			cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, nil, "", time.Time{})
+		Expect(err).To(MatchError(ContainSubstring(runError)))
+
+		// The condition: what the hand-over writes for the same Job.
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring(runError))
+	})
+
 	It("fails fast with the FailedCreate message when the Job's pod cannot be created, and releases the lock", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)

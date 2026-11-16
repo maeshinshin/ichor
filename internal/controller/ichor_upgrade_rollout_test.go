@@ -190,7 +190,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
 			Name: "installer",
 			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
-				ExitCode: 1, Reason: "Error", FinishedAt: metav1.Now(),
+				ExitCode: 1, FinishedAt: metav1.Now(),
 				Message: `upgrade failed (listing talosclusters: cannot list resource "talosclusters" in API group "ichor.maesh.dev"); rolled back to the previous manifests`,
 			}},
 		}}

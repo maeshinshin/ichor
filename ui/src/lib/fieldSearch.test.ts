@@ -189,3 +189,21 @@ test('a required setting under a map entry is named with the entry key it is mis
     ['machine.volumes.user.data.encryption.keys', 'machine.volumes.user.data.encryption.provider'],
   )
 })
+
+// The browse tree (B) reads the index one level at a time: the names under a path, each with its own setting row when it has one.
+test('the tree lists the top level, then one level under a path, with a setting row where the path has one', () => {
+  assert.deepEqual(
+    A.childrenOf(rows, '').map((c) => c.seg),
+    ['cluster', 'debug', 'machine', 'persist'],
+  )
+  const install = A.childrenOf(rows, 'machine.install')
+  assert.ok(install.some((c) => c.seg === 'wipe' && c.row?.path === 'machine.install.wipe'))
+  assert.ok(install.some((c) => c.seg === 'disk' && c.row?.path === 'machine.install.disk'))
+  // A map's entries are one child, named by the key placeholder, and the entry is a row of its own.
+  assert.deepEqual(
+    A.childrenOf(rows, 'machine.containers').map((c) => [c.seg, c.path, c.row?.path]),
+    [['<key>', 'machine.containers.<key>', 'machine.containers.<key>']],
+  )
+  // An array's item fields are under the array's own segment.
+  assert.ok(A.childrenOf(rows, 'machine.network.interfaces[]').some((c) => c.seg === 'bond'))
+})

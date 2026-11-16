@@ -25,6 +25,8 @@ import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
 import { t, type Key } from '@/lib/i18n'
 import { FieldInput } from '@/components/FieldInput'
+import { ConfigTree } from '@/components/ConfigTree'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { previewKey } from '@/lib/patchDocs'
 import { FieldSearchDialog } from '@/components/FieldSearchDialog'
 import { pickField, removeField, renameKey, requiredMissing, scalarBlock, settle, steps, withRequiredSiblings, complete, type Chosen, type FieldRow } from '@/lib/fieldSearch'
@@ -410,6 +412,18 @@ export function PatchDetail({ name }: { name?: string }) {
           </CardHeader>
           <CardContent>
             <FieldGroup>
+              {indexRows && (
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      {t('patch.browseSettings')}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    <ConfigTree rows={indexRows} onSelect={addFromSearch} />
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
               {chosen.length === 0 && config.trim() === '{}' && <EmptyNote icon={FileCogIcon}>{t('patch.noSettings')}</EmptyNote>}
               {chosen.map((c) => (
                 <FieldInput

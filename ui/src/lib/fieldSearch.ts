@@ -249,6 +249,23 @@ function treeOf(rows: FieldRow[]): Tree {
   return t
 }
 
+// TreeChild is one name under a path of the index: its segment, its path, and the setting row when the path is one.
+export interface TreeChild {
+  seg: string
+  path: string
+  row?: FieldRow
+}
+
+// childrenOf lists the names directly under a path ('' for the top level). The browse tree asks for one level at a
+// time, so it never holds the whole index as nodes.
+export function childrenOf(rows: FieldRow[], under: string): TreeChild[] {
+  const { exact, kids } = treeOf(rows)
+  return (kids.get(under) ?? []).map((seg) => {
+    const path = under ? `${under}.${seg}` : seg
+    return { seg, path, row: exact.get(path) }
+  })
+}
+
 // Missing is a required setting that its present parent does not have. keys are the keys of the entries it is under.
 export interface Missing {
   path: string

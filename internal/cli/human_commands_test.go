@@ -88,7 +88,12 @@ func TestClusterStatusHumanOutput(t *testing.T) {
 		"  Kubernetes   v1.36.6\n" +
 		"  Cilium       1.20.4\n" +
 		"  Endpoint     10.244.1.136 (node)\n" +
-		"  Health       ✓ ready\n"
+		"  Health       ✓ ready\n" +
+		"\n" +
+		"Conditions\n" +
+		"  ✓ Ready                   Converged     all machines match their rendered configuration\n" +
+		"  ✓ CertificatesExpiring    NoneExpiring  no CA expires within 30 days\n" +
+		"  ! NetworkPoliciesApplied  CNINotCilium  the detected CNI is not Cilium\n"
 	wantText(t, out.String(), want)
 }
 
@@ -105,6 +110,26 @@ func TestClusterStatusHumanOutputForAnUnmanagedAndAnUnreadyCluster(t *testing.T)
 	}
 
 	for _, want := range []string{"  CNI          unmanaged (flannel), not managed by Ichor\n", "  Health       ✗ not ready (MachinesNotReady)\n"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("missing %q in:\n%s", want, out.String())
+		}
+	}
+}
+
+// Health alone says "transitioning" and nothing about why; the status names the reason through the conditions block.
+func TestClusterStatusNamesTheReasonLikeDescribe(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+
+	cl := initshowCluster()
+	cl.Conditions = realConditions()
+	cl.Conditions[1] = cond("Transitioning", condTrue, "Rolling", "upgrading control plane", time.Minute)
+
+	var out bytes.Buffer
+	if err := renderClusterStatus(newHuman(&out), cl); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"  Health       … transitioning\n", "Conditions\n", "Transitioning", "Rolling", "upgrading control plane"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())
 		}

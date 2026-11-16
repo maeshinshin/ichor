@@ -221,6 +221,7 @@ func renderClusterStatus(h *human, cl *pb.Cluster) error {
 
 	rows = append(rows, kv{"Endpoint", endpointWithType(cl)}, kv{labelHealth, h.clusterHealthRow(cl)})
 	h.Block(nsName(cl.GetRef()), rows...)
+	h.Conditions("Conditions", conditionsOf(cl.GetConditions())) // the reason behind the Health row, as describe prints it
 
 	return h.Err()
 }

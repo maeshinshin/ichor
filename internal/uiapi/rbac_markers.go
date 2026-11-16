@@ -30,38 +30,37 @@ limitations under the License.
 // --load-build-tags=ichorui_rbac, so this file -- and the ClusterRole it
 // produces -- stays entirely separate from the controller's.
 //
-// Kept minimal (design principle: "the UI backend holds a read-only
-// [Talos] identity"; this is its Kubernetes-API counterpart, not a claim
-// that every verb here is read-only): get/list on talosclusters, get/
-// list/update on talosmachines (RejectMachine, SetMachineInstall), get/list
-// on the Kubernetes Node findKubernetesNode looks up (node_service.go),
-// and get/list/create/update/delete on talosconfigpatches (PatchService, roadmap phase 6 -- the one CRD this package
-// actually creates
-// and deletes, not just updates).
+// Every RPC carries the signed-in user (AuthInterceptor), and cl(ctx) makes each write under that user, so
+// the writes on the user-requested CRs are the user's own RBAC and the validating webhook's. This role
+// holds no write verb on those CRs (ADR 0108, amendments of 2026-11-16). What it writes itself is named
+// below where it is granted: the Events of an override or download, the TalosCredentialRequests it asks the
+// controller for, the credentials Secret's patch and the reclaim Secret's create. Reads are granted as
+// before. The point is that the UI backend holds a read-only Talos identity and no Kubernetes write on the
+// CRs a user changes.
 package uiapi
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;update
-// OperationService. Every write below is made as the signed-in user (OIDC or Ichor users): a server
-// with no sign-in serves reads only, so the ServiceAccount is never the caller of a write.
-// create: creates the TalosOperation that carries a start the user made.
-// delete: DeleteOperation removes the record of an operation that may still be abandoned; it stops
-// nothing that was already sent to a machine.
+// OperationService and ClusterService read TalosClusters as the ServiceAccount, and write them as the
+// signed-in user (cl(ctx)): the write verbs are the user's, not this role's.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list
+// The operations are created, paused, acknowledged and deleted as the signed-in user. The ServiceAccount
+// reads them only.
 // There is no start verb here, on purpose: the destructive starts (talosoperations/<kind>) are the
 // signed-in user's own right, asked as the user, and a ServiceAccount that held them would let the
 // validating webhook, which asks whoever wrote the TalosOperation, pass a start nobody signed in for.
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;create;update;delete
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
-// SettingsService: with OIDC off the backend is the caller and the settings webhook judges its
-// ServiceAccount, so it holds the settings subresource like it holds update above (never .../version).
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations/settings,verbs=update
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;create;update;delete
-// update: RejectMachine and SetMachineInstall are made as the signed-in user. The ServiceAccount cannot
-// approve: the webhook asks for approve on talosmachines/approval and fails closed.
-// No delete: the only delete of a TalosMachine is RemoveMachine, which asks for the override verb, so
-// the ServiceAccount never reaches it, and it is the user who deletes.
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;update
-// An etcd restore is planned and chosen from the backups' status: get/list, nothing written.
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list;update
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list
+// SettingsService writes the installation as the signed-in user, and checks the settings subresource
+// as that user too (never .../version): this role holds no update on it.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get
+// PatchService creates, updates and deletes TalosConfigPatches as the signed-in user; the reads are unchanged.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list
+// Machine writes (RejectMachine, SetMachineInstall, RemoveMachine) are made as the signed-in user. The
+// ServiceAccount cannot approve: the webhook asks for approve on talosmachines/approval and fails closed.
+// The only delete of a TalosMachine is RemoveMachine, which asks for the override verb, so the ServiceAccount
+// never reaches it, and it is the user who deletes.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list
+// An etcd restore is planned and chosen from the backups' status: get/list, nothing written. The backup
+// request is written as the signed-in user.
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list
 // GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStorages with
 // the ServiceAccount; the caller's own list follows. List only, no informer.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=list
@@ -111,8 +110,8 @@ package uiapi
 // permission itself is not here: it is the user's, checked with a
 // SelfSubjectAccessReview made as the user (every authenticated user may ask
 // that), so the ServiceAccount gains nothing for it.
-// The operation page lists the Events about an operation; with OIDC on that list is made as the
-// signed-in user, so this rule only serves the no-OIDC mode.
+// The operation page lists the Events about an operation as the signed-in user, so the list is not one the
+// backend makes as itself; it is still granted here, unchanged.
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;list
 
 // Diagnostic downloads add nothing to this role on purpose. The download verb on
@@ -123,11 +122,11 @@ package uiapi
 
 // Ichor users, in ichor-system only. The per-RPC re-read of the signed-in IchorUser
 // is a get with the ServiceAccount. The password hashes live in one Secret that the backend patches
-// after a SelfSubjectAccessReview as the caller: get, update, patch on that name and no other, never
-// create (the chart makes the Secret) and never list. The user CRs themselves are written as the
-// caller, so the ServiceAccount needs nothing more on ichorusers.
+// (a merge patch, never an update) after a SelfSubjectAccessReview as the caller:
+// get and patch on that name and no other, never update, create (the chart makes the Secret) or list.
+// The user CRs themselves are written as the caller, so the ServiceAccount needs nothing more on ichorusers.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=ichorusers,verbs=get
-// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;patch
 
 // GetEffectiveConfig renders the kube-apiserver's authentication layer, which reads the
 // trust ConfigMap the controller publishes: get on that one name in ichor-system, never list or watch.
@@ -135,10 +134,10 @@ package uiapi
 
 // "Reset and add" (MachineReclaim), in ichor-system only. The backend creates the credential
 // Secret, with the owner reference set at creation (the MachineReclaim is written first); it can never read it back or patch it.
-// The MachineReclaim itself is written as the caller, so the ServiceAccount only reads and lists it
-// (when OIDC is off it also creates and updates it; the webhook then judges the ServiceAccount).
+// The MachineReclaim itself is created, confirmed and cancelled as the signed-in user, so the ServiceAccount
+// only reads and lists it.
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update;delete
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list
 
 // /metrics is served only to a caller that proves a Kubernetes token and may `get` the
 // non-resource URL /metrics: the same TokenReview and SubjectAccessReview the controller's secure metrics

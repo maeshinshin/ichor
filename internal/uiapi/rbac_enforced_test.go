@@ -197,16 +197,34 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 			return review.Status.Allowed
 		}
 
-		Expect(may("create", "")).To(BeTrue(), "the role is bound: it still creates TalosOperations")
+		// The binding is live: the role still reads TalosOperations, so the refusals below are the role's, not a missing binding.
+		Expect(may(cniVerbGet, "")).To(BeTrue(), "the role is bound: it still reads TalosOperations")
 
 		for _, sub := range []string{startShutdown, startCARotation, startKeyRotation, startEtcdRestore, startNodeReset, startNodeShutdown} {
 			Expect(may("start", sub)).To(BeFalse(), sub)
 		}
 	})
 
-	// The ServiceAccount's generated role reads the rotation keys, lists machines, creates the
-	// Event and updates the operation (so the acknowledgement works), but is not granted the download verb.
-	It("builds and acknowledges CA rotation credentials as the ServiceAccount, and refuses their download", func() {
+	// The acknowledgement is the signed-in user's write, made the way a request arrives: an identity on the
+	// context and a client impersonating it. The user holds only what this path asks for, and the
+	// ServiceAccount holds no update on TalosOperations, so the write cannot go through as the ServiceAccount.
+	It("builds and acknowledges CA rotation credentials as a signed-in user, and refuses their download", func() {
+		const ackUser = "rbac-ack-user"
+
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{
+			Name: ackUser,
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{caOpsResource}, Verbs: []string{cniVerbGet, verbUpdate}},
+				{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{credentialRequestsResource}, Verbs: []string{cniVerbCreate}},
+			},
+		}))).To(Succeed())
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
+			Name:     ackUser,
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: cniClusterRole, Name: ackUser},
+			Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: rbacv1.UserKind, Name: ackUser}},
+		}))).To(Succeed())
+
+		userCtx := ContextWithIdentity(ctx, Identity{User: ackUser})
 		contract, err := coreconfig.ParseContractFromVersion(testVersionContract)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -240,16 +258,24 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		s := &Server{
 			Client: saClient, ControllerNamespace: testNamespace,
 			VerifyKubeconfig: func(context.Context, []byte) error { return nil },
+			Impersonate:      NewImpersonator(cfg, client.Options{Scheme: scheme.Scheme}),
 		}
 
-		allowed, err := s.mayDownload(ctx, op.Namespace, resourceTalosClusters, CredentialsScope, op.Spec.ClusterRef.Name)
+		allowed, err := s.mayDownload(userCtx, op.Namespace, resourceTalosClusters, CredentialsScope, op.Spec.ClusterRef.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(allowed).To(BeFalse())
 
+		// The Event is the backend's own write, so it is made as the ServiceAccount.
 		Expect(s.emitCredentialsEvent(ctx, cluster, op.Name)).To(Succeed())
 
-		_, err = s.AcknowledgeCARotationCredentials(ctx, connect.NewRequest(&pb.AcknowledgeCARotationCredentialsRequest{Operation: objectRef(op.Namespace, op.Name)}))
+		_, err = s.AcknowledgeCARotationCredentials(userCtx, connect.NewRequest(&pb.AcknowledgeCARotationCredentialsRequest{Operation: objectRef(op.Namespace, op.Name)}))
 		Expect(err).NotTo(HaveOccurred())
+
+		var got ichorv1alpha1.TalosOperation
+		Expect(saClient.Get(ctx, client.ObjectKeyFromObject(op), &got)).To(Succeed())
+		Expect(got.Annotations).To(HaveKey(ichorv1alpha1.CredentialsHandoffAnnotation))
+
+		Expect(apierrors.IsForbidden(saClient.Update(ctx, &got))).To(BeTrue(), "the ServiceAccount holds no update on TalosOperations")
 	})
 
 	// The backend re-reads an IchorUser (get, no list) and patches one named Secret,

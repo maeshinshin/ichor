@@ -55,23 +55,17 @@ rules:
   - ichorinstallations
   verbs:
   - get
-  - update
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - ichorinstallations/settings
-  verbs:
-  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:
   - talosclusters
+  - talosconfigpatches
   - talosetcdbackups
   - talosmachines
+  - talosoperations
   verbs:
   - get
   - list
-  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:
@@ -79,17 +73,6 @@ rules:
   - talosclusters/public
   verbs:
   - issue
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosconfigpatches
-  - talosoperations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:
@@ -133,7 +116,6 @@ rules:
   verbs:
   - get
   - patch
-  - update
 - apiGroups:
   - ichor.maesh.dev
   resources:
@@ -145,8 +127,5 @@ rules:
   resources:
   - machinereclaims
   verbs:
-  - create
-  - delete
   - get
   - list
-  - update

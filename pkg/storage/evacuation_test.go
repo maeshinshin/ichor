@@ -17,6 +17,7 @@ limitations under the License.
 package storage
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -34,17 +35,31 @@ func TestNewEvacuationHook(t *testing.T) {
 
 }
 
-// rook-v1 is an allowed preset with no evacuation hook: resolving one must return an error, not panic on the
-// type assertion.
-func TestNewEvacuationHook_RookV1IsAnErrorNotAPanic(t *testing.T) {
+// rook-v1 is an allowed preset with no evacuation hook: resolving one must return ErrNoEvacuationHook, not panic
+// on the type assertion, so the caller can tell it from an unknown preset.
+func TestNewEvacuationHook_RookV1IsNoHookNotAPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf(`NewEvacuationHook("rook-v1") panicked: %v`, r)
 		}
 	}()
 
-	if _, err := NewEvacuationHook("rook-v1"); err == nil {
-		t.Fatal(`NewEvacuationHook("rook-v1") = nil error, want an error (rook-v1 has no evacuation hook)`)
+	if _, err := NewEvacuationHook("rook-v1"); !errors.Is(err, ErrNoEvacuationHook) {
+		t.Fatalf(`NewEvacuationHook("rook-v1") error = %v, want one wrapping ErrNoEvacuationHook`, err)
+	}
+}
+
+// An unknown preset is a real error and must not match ErrNoEvacuationHook: if it did, the controller would
+// treat a mistyped preset as nothing to evacuate and drain its node. Keep the two paths apart.
+func TestNewEvacuationHook_UnknownPresetIsNotNoHook(t *testing.T) {
+	_, err := NewEvacuationHook("no-such-preset")
+	if err == nil {
+		t.Fatal(`NewEvacuationHook("no-such-preset") = nil error, want an error`)
+	}
+
+	if errors.Is(err, ErrNoEvacuationHook) {
+		t.Fatalf(`NewEvacuationHook("no-such-preset") error %q matches ErrNoEvacuationHook; `+
+			`an unknown preset must not be drainable`, err)
 	}
 }
 

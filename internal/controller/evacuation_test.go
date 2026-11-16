@@ -45,17 +45,25 @@ func newTestStorageNode(name string, labels map[string]string) {
 	Expect(k8sClient.Create(ctx, n)).To(Succeed())
 }
 
-// newTestStorage creates a TalosStorage for clusterName, selecting nodes by selector.
+// newTestStorage creates a longhorn-v1 TalosStorage for clusterName, selecting nodes by selector.
 func newTestStorage(clusterName string, selector metav1.LabelSelector, timeout *metav1.Duration) {
+	newTestStorageOf(clusterName, storage.LonghornV1, selector, timeout)
+}
+
+// newTestStorageOf creates a TalosStorage with preset. Only longhorn-v1 takes a diskSelector: the CRD refuses
+// one on rook-v1.
+func newTestStorageOf(clusterName, preset string, selector metav1.LabelSelector, timeout *metav1.Duration) {
 	s := &ichorv1alpha1.TalosStorage{
 		GenerateName: "storage-", Namespace: tmNamespace,
 		Spec: ichorv1alpha1.TalosStorageSpec{
 			ClusterRef:        corev1.LocalObjectReference{Name: clusterName},
 			Nodes:             selector,
-			DiskPreset:        storage.LonghornV1,
-			DiskSelector:      "disk.transport == 'nvme'",
+			DiskPreset:        preset,
 			EvacuationTimeout: timeout,
 		},
+	}
+	if preset == storage.LonghornV1 {
+		s.Spec.DiskSelector = "disk.transport == 'nvme'"
 	}
 	Expect(k8sClient.Create(ctx, s)).To(Succeed())
 }
@@ -103,6 +111,18 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 
 		e := &LonghornEvacuator{Client: k8sClient}
 		target, err := e.Resolve(ctx, cluster, "node-resolve4")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(target).To(BeNil())
+	})
+
+	It("returns nil, nil for a node a rook-v1 TalosStorage governs -- rook-v1 has no evacuation hook", func() {
+		cluster := newOpTestCluster()
+		newTestStorageNode("node-resolve5", map[string]string{testStorageLabelKey: testStorageLabelValue})
+		newTestStorageOf(cluster.Name, storage.RookV1,
+			metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
+
+		e := &LonghornEvacuator{Client: k8sClient}
+		target, err := e.Resolve(ctx, cluster, "node-resolve5")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(target).To(BeNil())
 	})

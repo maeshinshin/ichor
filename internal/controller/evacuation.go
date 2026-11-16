@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -63,7 +64,8 @@ type evacuationTarget struct {
 // And AdvanceMachineFunc do.
 type StorageEvacuator interface {
 	// Resolve finds the TalosStorage (if any) in cluster whose node selector matches node. nil, nil means
-	// none does: nothing to evacuate, the common case for a cluster with no storage system.
+	// none does: nothing to evacuate, the common case for a cluster with no storage system. A preset with no
+	// evacuation hook (rook-v1) is nil, nil too.
 	Resolve(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, node string) (*evacuationTarget, error)
 
 	// Begin writes target.hook.BeginEvacuation's two values to node's storage-system resource, in the order
@@ -129,6 +131,10 @@ func (e *LonghornEvacuator) Resolve(
 	}
 
 	hook, err := storage.NewEvacuationHook(chosen.Spec.DiskPreset)
+	if errors.Is(err, storage.ErrNoEvacuationHook) {
+		// rook-v1: nothing to evacuate first. Its storage system gates the drain itself.
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

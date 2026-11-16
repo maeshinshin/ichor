@@ -150,4 +150,19 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 		Expect(kube.Actions()).NotTo(BeEmpty())
 		Expect(machineGone(cp)).To(BeTrue())
 	})
+
+	It("drains and removes a node that a rook-v1 TalosStorage governs, since rook-v1 has no evacuation step", func() {
+		r, kube, cp := evacuatingRemoval("node-rm-rook", &LonghornEvacuator{Client: k8sClient})
+
+		node := &corev1.Node{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: "node-rm-rook"}, node)).To(Succeed())
+		node.Labels = map[string]string{testStorageLabelKey: testStorageLabelValue}
+		Expect(k8sClient.Update(ctx, node)).To(Succeed())
+		newTestStorageOf(cp.Spec.ClusterRef.Name, storage.RookV1,
+			metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
+
+		reconcileOK(r, cp)
+		Expect(kube.Actions()).NotTo(BeEmpty(), "the drain must run: rook-v1 has no evacuation to wait for")
+		Expect(machineGone(cp)).To(BeTrue())
+	})
 })

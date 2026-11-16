@@ -17,9 +17,16 @@ limitations under the License.
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
+
+// ErrNoEvacuationHook is wrapped by NewEvacuationHook for a preset that is known and allowed but implements no
+// evacuation hook (rook-v1: its storage system gates the drain itself). It is not returned for an unknown preset,
+// which NewPreset refuses with its own error, so a caller that matches it treats only the known preset as having
+// nothing to evacuate.
+var ErrNoEvacuationHook = errors.New("the preset has no evacuation hook")
 
 // EvacuationHook is the storage-system side of the design's shared
 // node-operation hook (docs/design/architecture.md, "Storage"): mark a
@@ -49,7 +56,7 @@ type EvacuationHook interface {
 // diskPreset, the same value TalosStorage.spec.diskPreset's enum allows.
 // Every Preset is also an EvacuationHook (longhornV1 implements both);
 // this is the discoverable, NewPreset-shaped way to reach the hook half
-// without requiring the caller to know that and type-assert.
+// without requiring the caller to know that and type-assert. A known preset with no hook returns ErrNoEvacuationHook.
 func NewEvacuationHook(diskPreset string) (EvacuationHook, error) {
 	p, err := NewPreset(diskPreset)
 	if err != nil {
@@ -64,7 +71,7 @@ func NewEvacuationHook(diskPreset string) (EvacuationHook, error) {
 func evacuationHookOf(diskPreset string, p Preset) (EvacuationHook, error) {
 	h, ok := p.(EvacuationHook)
 	if !ok {
-		return nil, fmt.Errorf("storage: preset %q does not implement EvacuationHook", diskPreset)
+		return nil, fmt.Errorf("storage: preset %q: %w", diskPreset, ErrNoEvacuationHook)
 	}
 
 	return h, nil

@@ -832,8 +832,8 @@ command does. Each item is described where it is listed below.
 - `make remote-gate` fails when `GATE_NAMESPACE` is unset. The Makefile supplied
   a default, which made the script's own check unreachable.
 - `make docs-check` runs `make docs-audit` first, which fails on a high or
-  critical advisory in the docs site's production dependencies, as the admin UI's
-  audit does. `npm ci` no longer prints its own count for the site. The site pins
+  critical advisory in the docs site's dependencies, the `shadcn` tool included.
+  `npm ci` no longer prints its own count for the site. The site pins
   `postcss-selector-parser` and `minimatch` to their patched versions with
   `overrides`, which cleared five of the eight advisories `npm ci` reported; the
   rest are `deepmerge`, which has no fixed version, and two packages that depend on

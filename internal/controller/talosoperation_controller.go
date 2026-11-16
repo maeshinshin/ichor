@@ -766,9 +766,16 @@ func (r *TalosOperationReconciler) releaseLock(ctx context.Context, op *ichorv1a
 
 // isStepFailure is true for the pause reasons that mean "a step failed, never retry automatically": they set
 // status.failureReason, which the CLI, the UI and the retry request key on. The installer image
-// refusals are failures of the Ichor upgrade's first step.
+// refusals are failures of the Ichor upgrade's first step; the Cilium Job's two typed failures are those of the
+// Cilium chart upgrade.
 func isStepFailure(reason string) bool {
-	return reason == reasonOperationStepFailed || reason == reasonInstallerImageUnresolved || reason == reasonInstallerImageUnverified
+	switch reason {
+	case reasonOperationStepFailed, reasonInstallerImageUnresolved, reasonInstallerImageUnverified,
+		reasonCNIInvalidValues, reasonCNIJobFailed:
+		return true
+	}
+
+	return false
 }
 
 // phaseEvent records the Event for a phase transition: a pause (once per reason), a resume out of a

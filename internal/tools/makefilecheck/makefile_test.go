@@ -2,6 +2,7 @@ package makefilecheck
 
 import (
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -48,5 +49,35 @@ func TestEmbedImagesRefusesAnImageWithoutAVersionTag(t *testing.T) {
 		if out, err := makeOut(t, "check-embed-images", "IMG="+pair[0], "IMG_UI="+pair[1]); err != nil {
 			t.Errorf("check-embed-images refused a tagged pair %v: %v\n%s", pair, err, out)
 		}
+	}
+}
+
+// TestEmbedBuildsTheInstallerOnlyAfterTheCheck pins build-ichor-embed's prerequisites to the check alone. Under make -k a
+// prerequisite still runs after a failed check, and build-installer would then rewrite dist/install.yaml with the
+// placeholders; the recipe runs build-installer only once the check has passed.
+func TestEmbedBuildsTheInstallerOnlyAfterTheCheck(t *testing.T) {
+	db, err := exec.Command("make", "-s", "-C", repoRoot, "-p", "-n", "build-ichor-embed").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const rule = "build-ichor-embed:"
+
+	seen := 0
+
+	for line := range strings.Lines(string(db)) {
+		if !strings.HasPrefix(line, rule) {
+			continue
+		}
+
+		seen++
+
+		if got := strings.Fields(strings.TrimPrefix(line, rule)); !slices.Equal(got, []string{"check-embed-images"}) {
+			t.Errorf("build-ichor-embed has prerequisites %q, want only check-embed-images", got)
+		}
+	}
+
+	if seen == 0 {
+		t.Fatal("make -p printed no build-ichor-embed rule")
 	}
 }

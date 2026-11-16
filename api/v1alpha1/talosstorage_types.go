@@ -27,6 +27,7 @@ import (
 // system, and evacuation settings. The storage system's own configuration (Longhorn's Helm
 // values, replica counts, and so on) lives in Argo CD, not here -- Ichor only owns layer 1
 // (Talos-side preparation) and layer 4 (node-operation coordination, a separate work unit).
+// +kubebuilder:validation:XValidation:rule="self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)",message="diskSelector is required for longhorn-v1"
 type TalosStorageSpec struct {
 	// clusterRef names the TalosCluster this storage configuration applies to.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
@@ -40,16 +41,16 @@ type TalosStorageSpec struct {
 	// diskPreset names which storage system this configuration prepares Talos for. Each preset
 	// fixes the required system extensions, the UserVolumeConfig shape, and the kubelet mount
 	// that preset needs; see pkg/storage.
-	// +kubebuilder:validation:Enum=longhorn-v1
+	// +kubebuilder:validation:Enum=longhorn-v1;rook-v1
 	// +required
 	DiskPreset string `json:"diskPreset"`
 
 	// diskSelector is a Talos disk-selector CEL expression (the same language
 	// provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
-	// document) choosing which disk on each selected node is handed to the storage system.
-	// +kubebuilder:validation:XValidation:rule="self != ''",message="diskSelector is required"
-	// +required
-	DiskSelector string `json:"diskSelector"`
+	// document) choosing which disk on each selected node is handed to the storage system. Required
+	// for longhorn-v1 (see TalosStorageSpec); rook-v1 writes no disk config and ignores it.
+	// +optional
+	DiskSelector string `json:"diskSelector,omitempty"`
 
 	// evacuationTimeout bounds how long the node-operation hook (layer 4) waits for replicas to
 	// evacuate a node before pausing the operation rather than proceeding. Unset means the hook's

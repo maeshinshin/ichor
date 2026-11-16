@@ -76,16 +76,15 @@ spec:
                   that preset needs; see pkg/storage.
                 enum:
                 - longhorn-v1
+                - rook-v1
                 type: string
               diskSelector:
                 description: |-
                   diskSelector is a Talos disk-selector CEL expression (the same language
                   provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
-                  document) choosing which disk on each selected node is handed to the storage system.
+                  document) choosing which disk on each selected node is handed to the storage system. Required
+                  for longhorn-v1 (see TalosStorageSpec); rook-v1 writes no disk config and ignores it.
                 type: string
-                x-kubernetes-validations:
-                - message: diskSelector is required
-                  rule: self != ''
               evacuationTimeout:
                 description: |-
                   evacuationTimeout bounds how long the node-operation hook (layer 4) waits for replicas to
@@ -142,9 +141,12 @@ spec:
             required:
             - clusterRef
             - diskPreset
-            - diskSelector
             - nodes
             type: object
+            x-kubernetes-validations:
+            - message: diskSelector is required for longhorn-v1
+              rule: self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) &&
+                size(self.diskSelector) > 0)
           status:
             description: status defines the observed state of TalosStorage
             properties:

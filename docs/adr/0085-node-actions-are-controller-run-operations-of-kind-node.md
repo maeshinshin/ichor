@@ -53,3 +53,7 @@ Amendment 2026-11-07: the typed confirmation is one rule everywhere: the TalosMa
 ## Amendment (ADR 0137)
 
 An operation parked with `ClusterTransitioning` holds no lock and does not block the removal of a control plane; see ADR 0137.
+
+## Amendment (2026-11-16): `ichor restore --live` is `ichor restore etcd`
+
+The amendment of 2026-11-06 compares `--confirm NAME` with `ichor restore --live --confirm`. The verb-first command surface renamed that command `ichor restore etcd`; it still takes `--confirm`. The decision is unchanged.

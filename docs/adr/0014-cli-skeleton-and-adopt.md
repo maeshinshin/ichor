@@ -235,3 +235,7 @@ full rendered machine configuration.
 ## Amendment (2026-11-16): the exceptions are `init`, `restore cluster` and `reclaim node --talosconfig`
 
 The Context names the exceptions to "the CLI writes CRs, never a Talos node" as `init`, `adopt` and full-loss recovery. `adopt` is not one: it only ever reads from a node, as the Decision above says and as ADR 0103 repeats. The CLI commands that write to a Talos node are `ichor init` (it applies the first node's configuration and bootstraps it), `ichor restore cluster` (full-loss recovery) and `ichor reclaim node ADDRESS --talosconfig FILE` (ADR 0103, which uses the operator's own credential, and Ichor never stores that). The first two predate the cluster, so there is no controller to act for them. `docs/design/architecture/cli-and-ui.md` and `ichor --help` carry the corrected list. The rest of this ADR stands.
+
+## Amendment (2026-11-16): `restore --recover-cluster` is `ichor restore cluster`
+
+The list of CLI packages above names `restore --recover-cluster`. The verb-first command surface made it `ichor restore cluster`; where the code lives is unchanged.

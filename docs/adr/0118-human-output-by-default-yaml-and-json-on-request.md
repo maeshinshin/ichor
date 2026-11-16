@@ -1,6 +1,6 @@
 # 0118. Human output by default; YAML and JSON on request
 
-Status: Accepted · Date: 2026-11-04 · Design section: CLI and UI · Touches: 0014, 0117
+Status: Accepted, amended · Date: 2026-11-04 · Design section: CLI and UI · Touches: 0014, 0117
 
 Decided: `ichor` prints for a person unless `-o yaml` or `-o json` is given: a table or an aligned key/value block, enum names without their type prefix (`control-plane`, not `MACHINE_ROLE_CONTROL_PLANE`), the glyphs ✓ ! ✗ … for status and ages like `5m`, with colour only on a terminal (`NO_COLOR` and `TERM=dumb` honoured, the layout identical in a pipe). The global `-o` defaults to unset instead of `yaml`. `-o yaml` and `-o json` print exactly what they printed before, so scripts opt in by naming the format. A command with no human view yet prints YAML when `-o` is unset (`machineFormat`, used by every writer of a machine format), so nothing prints nothing; every command that reports a result has a human view now, and `ichor ui` prints its status lines in the same style; what streams or prints raw content (`logs node`, `get cni-values`, the `auth` credential plugin) stays as it is. The shared helpers are in `internal/cli/human.go`. `Cluster` and `Machine` in the Connect API gain `created_at` (for the AGE column) and `Cluster` gains `endpoint_type`, `pod_subnets`, `service_subnets` and `cni_tunnel`, so `describe cluster` can show them.
 
@@ -22,3 +22,7 @@ Every command dumped YAML by default, including the protobuf enum names (`MACHIN
 - A script that read the default output must now say `-o yaml`. The CLI's own docs and guides do.
 - `-o yaml|json` of `get clusters|describe cluster` and `get nodes|describe node` carry the new fields (`createdAt`, `endpointType`, `podSubnets`, `serviceSubnets`, `cniTunnel`); fields are only added, and a CLI that talks to an older ichor-ui shows `-` for an age it does not have.
 - A command with a human view is a render function passed to `showAPIHuman` or `printAPI`; a start command (`upgrade`, `set kube-proxy`, `rollout config`, the node actions, `restore --live`) goes through `runStartOperation`, `runNodeAction` and `watchOperation`, which print the result and the live view.
+
+## Amendment (2026-11-16): `restore --live` is `ichor restore etcd`
+
+The list of commands that start an operation names `restore --live`; it is `ichor restore etcd` since the verb-first command surface. The decision on human output is unchanged.

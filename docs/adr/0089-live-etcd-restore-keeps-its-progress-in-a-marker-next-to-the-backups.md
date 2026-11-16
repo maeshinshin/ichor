@@ -1,6 +1,6 @@
 # 0089. A live etcd restore is a controller-run operation whose progress outlives the API in a marker next to the backups
 
-Status: Accepted · Date: 2026-10-27 · Design section: Backup, recovery, certificates; Upgrades (status-held state machine), Trust
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Backup, recovery, certificates; Upgrades (status-held state machine), Trust
 
 Decided: restoring a stored etcd snapshot into a running cluster is a new `TalosOperation` kind `etcd-restore` with `spec.etcdRestore {backupRef, snapshot, confirm, reason}` (`confirm` must equal the cluster name, `reason` is the override reason; CEL and the override webhook enforce both, and the verb is checked on the `TalosCluster`); the controller takes the cluster lock, decrypts and checksums the snapshot and keeps a pinned ciphertext copy of it in the bucket, writes a marker object next to the backups, wipes etcd on every control plane at once (Talos's own disaster-recovery procedure: non-graceful reset with reboot of EPHEMERAL), uploads the snapshot to one control plane and bootstraps it with `RecoverEtcd`, waits for the others to rejoin and the API to answer, asks every `TalosMachine` to reconcile again and waits until each is Ready; because the rollback deletes the operation itself, the progress that must survive lives in the marker, the wipe-and-recover runs as a job independent of the manager, and the operation is recreated from the marker; `ichor restore --live` and the cluster page's "Restore from backup…" create the CR
 
@@ -290,3 +290,7 @@ own control plane. Decisions:
 - Amendment 2026-10-27 (plan text and failover): the controller pod and the control plane's Node are now also found when the machine's `spec.endpoint` is stale (the observed Talos address is tried first, and the machine list shows it), and the pod is looked up in the Ichor namespace, then the cluster's, then (in-process server only) everywhere, since a CLI has no POD_NAMESPACE. `--follow` says which API servers it will fail over to, or why it has none, instead of staying silent.
 
 Amendment 2026-11-05 (ADR 0130): `spec.etcdRestore.reason` is no longer required (the CEL `reason is not empty` and `MinLength=1` are gone; the field is optional, deprecated and unused), `CreateOperation` needs the cluster name typed and the override but no reason, the audit record and the Warning Event say who requested the restore with no reason, and the restore marker no longer holds a reason (an older marker's `reason` is ignored). `ichor restore --live` has no `--override-reason`, and the restore dialog has no reason box.
+
+## Amendment (2026-11-16): `restore --live` and `--recover-cluster` are `ichor restore etcd` and `ichor restore cluster`
+
+Throughout this ADR, `ichor restore --live` is `ichor restore etcd` (it keeps `--follow` and has no `--override-reason`, as written) and `ichor restore --recover-cluster` is `ichor restore cluster`. The verb-first command surface renamed both. The marker and the resume rules are unchanged.

@@ -1,6 +1,6 @@
 # 0106. HA findings: a patch is dry-rendered at admission, a restore refuses an in-cluster backup store, an unreachable node says so, and a dead control plane can be removed
 
-Status: Accepted · Date: 2026-10-30 · Design section: Configuration, Backup and restore, Nodes · Touches: 0003, 0065
+Status: Accepted, amended · Date: 2026-10-30 · Design section: Configuration, Backup and restore, Nodes · Touches: 0003, 0065
 
 Decided: a `TalosConfigPatch` is dry-rendered by a validating webhook (create and update) against every approved machine of its cluster that it selects, with the controller's own `render.Render`, and refused with the render error when the render would fail and did not already fail without the patch; the generated `Config` mirror makes `machine`, `cluster`, `machine.type` and `machine.certSANs` optional (an additive loosening) so a sparse `Config` document no longer repeats them and no longer reads as "needs a reboot"; `ichor restore --live` and the `TalosEtcdBackup` condition `StoreInCluster` refuse or warn when the backup endpoint is inside the cluster being restored; a `TalosMachine` whose node cannot be read reports `Ready=False` `NodeUnreachable` with the endpoint and, when the Kubernetes Node shows another InternalIP, the likely new address (spec is never changed); `ichor delete node` of a control plane below the declared count is allowed when its etcd member is unhealthy or unreachable.
 
@@ -43,3 +43,7 @@ A machine whose endpoint answers as another node is reported as `EndpointIdentit
 ## Consequences
 
 - The cluster keeps probing every `spec.discovery.addresses` entry after the machines are approved and emits an `AlreadyConfigured` Warning Event on the TalosCluster for each address every few minutes, including the stale address of a node that has left. On a network where addresses are reused it would probe an unrelated host. This is not changed here.
+
+## Amendment (2026-11-16): `ichor restore --live` is `ichor restore etcd`
+
+The two places that name `ichor restore --live` mean `ichor restore etcd`, the name the verb-first command surface gave it. The findings and fixes are unchanged.

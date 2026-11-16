@@ -748,7 +748,7 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 
 	// A pause that waits for a person frees the cluster lock, so a machine that is trying to join is not
 	// blocked by an operation nobody is working on. Its resume takes the lock again (acquireDisruptiveLock).
-	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused) {
+	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused || reason == reasonOperationNoExecutor) {
 		return r.releaseLock(ctx, op)
 	}
 

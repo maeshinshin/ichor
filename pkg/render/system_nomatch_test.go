@@ -27,12 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// Before Ichor is installed (a first adopt) the API server does not serve TalosStorage: that is
+// Before Ichor is installed (a first adopt) the API server does not serve TalosStoragePreset: that is
 // no storage, not an error.
 func TestResolveSystemInputsUnservedStorageKind(t *testing.T) {
 	c := fake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
 		List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
-			return &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "ichor.maesh.dev", Kind: "TalosStorage"}}
+			return &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "ichor.maesh.dev", Kind: "TalosStoragePreset"}}
 		},
 	}).Build()
 

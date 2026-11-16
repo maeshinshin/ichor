@@ -506,10 +506,10 @@ func main() {
 	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnidetect")
-	must((&controller.TalosStorageReconciler{
+	must((&controller.TalosStoragePresetReconciler{
 		ControllerNamespace: ns,
 		Client:              mgr.GetClient(), APIReader: mgr.GetAPIReader(),
-	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosstorage")
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosstoragepreset")
 	// The backbone (TalosOperationReconciler) never branches on spec.kind itself, so the kind-to-executor selection
 	// happens here, in the wiring: Talos, Kubernetes, Ichor and the CNI kube-proxy switch. An unknown kind pauses
 	// immediately with a plain error -- never silently treated as another kind.

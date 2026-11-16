@@ -374,7 +374,7 @@ const operationRenewInterval = time.Minute
 
 // operationRenewCeiling bounds the renewal of one pass over a step that has no step clock yet. It is per pass:
 // stepRenewUntil is evaluated again on every reconcile, and the Acquire at the top of each one renews the lease. A
-// step that waits across passes (the storage evacuation under its TalosStorage's evacuationTimeout, the drain under
+// step that waits across passes (the storage evacuation under its TalosStoragePreset's evacuationTimeout, the drain under
 // drainTimeout, the node's return under the verify timeouts) is therefore bounded by its own clock, which fails the
 // step and pauses the operation, never by this ceiling. What a single pass can block on is a call with its own
 // timeout, the longest being the Upgrade call (upgradeCallTimeout, 10 minutes); the ceiling sits well above that.

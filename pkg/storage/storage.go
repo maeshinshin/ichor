@@ -33,7 +33,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// LonghornV1 is one of TalosStorage.spec.diskPreset's allowed values.
+// LonghornV1 is one of TalosStoragePreset.spec.diskPreset's allowed values.
 const LonghornV1 = "longhorn-v1"
 
 // RookV1 is the other allowed value: Rook/Ceph consumes raw devices, so its preset writes
@@ -113,7 +113,7 @@ type Preset interface {
 }
 
 // NewPreset returns the Preset implementation for name, the same value
-// TalosStorage.spec.diskPreset's enum allows, or an error for any other
+// TalosStoragePreset.spec.diskPreset's enum allows, or an error for any other
 // name.
 func NewPreset(name string) (Preset, error) {
 	switch name {

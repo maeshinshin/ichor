@@ -134,7 +134,7 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 		Expect(removal.Reason).To(Equal(reasonEvacuationFailed))
 	})
 
-	It("removes as before when no TalosStorage selects the node", func() {
+	It("removes as before when no TalosStoragePreset selects the node", func() {
 		ev := &fakeStorageEvacuator{target: nil}
 		r, kube, cp := evacuatingRemoval("node-rm-evac3", ev)
 
@@ -152,7 +152,7 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 		Expect(machineGone(cp)).To(BeTrue())
 	})
 
-	It("drains and removes a node that a rook-v1 TalosStorage governs, since rook-v1 has no evacuation step", func() {
+	It("drains and removes a node that a rook-v1 TalosStoragePreset governs, since rook-v1 has no evacuation step", func() {
 		r, kube, cp := evacuatingRemoval("node-rm-rook", &LonghornEvacuator{Client: k8sClient})
 
 		node := &corev1.Node{}

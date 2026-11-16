@@ -60,7 +60,7 @@ var _ = Describe("CniService", func() {
 	BeforeEach(func() {
 		read := rbacv1.PolicyRule{
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group},
-			Resources: []string{resourceTalosClusters, resourceTalosMachines, "talosconfigpatches", "talosstorages"},
+			Resources: []string{resourceTalosClusters, resourceTalosMachines, "talosconfigpatches", "talosstoragepresets"},
 			Verbs:     []string{cniVerbGet, cniVerbList},
 		}
 		write := rbacv1.PolicyRule{

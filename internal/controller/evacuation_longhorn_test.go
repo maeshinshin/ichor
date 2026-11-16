@@ -143,7 +143,7 @@ var _ = Describe("LonghornEvacuator Begin and End", func() {
 
 // longhornElsewhere is the API as seen when Longhorn is installed outside longhorn-system: no Longhorn Node
 // object is found for node (the one in longhorn-system is NotFound), and a replica in another namespace still
-// names node. Every other object is the real envtest API, so TalosStorage and Node resolve as they do in production.
+// names node. Every other object is the real envtest API, so TalosStoragePreset and Node resolve as they do in production.
 type longhornElsewhere struct {
 	client.Client
 
@@ -177,7 +177,7 @@ func (l longhornElsewhere) List(ctx context.Context, list client.ObjectList, opt
 }
 
 var _ = Describe("storage evacuation refuses a drain it cannot evacuate", func() {
-	It("refuses the drain when a TalosStorage governs the node, Longhorn's Node is not in longhorn-system, and a replica still names it", func() {
+	It("refuses the drain when a TalosStoragePreset governs the node, Longhorn's Node is not in longhorn-system, and a replica still names it", func() {
 		cluster := newOpTestCluster()
 		newTestStorageNode("node-refuse1", map[string]string{testStorageLabelKey: testStorageLabelValue})
 		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)

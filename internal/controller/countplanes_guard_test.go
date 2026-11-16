@@ -50,7 +50,7 @@ var countplanesScanDirs = []string{".", "../webhook/v1alpha1"}
 // Adding a name here must come with the same kind of justification, in that
 // function's own doc comment, not just to silence this test.
 var countplanesAllowedFuncs = map[string]bool{
-	// machinesOfCluster (talosmachine_controller.go) maps a TalosStorage, TalosConfigPatch or
+	// machinesOfCluster (talosmachine_controller.go) maps a TalosStoragePreset, TalosConfigPatch or
 	// TalosCluster event to every machine of the cluster to re-reconcile -- unapproved and
 	// deleting ones included, since both still need their reconcile (the removal finalizer runs
 	// on a deleting one). Counting nothing and gating nothing, it cannot use the approved filter.

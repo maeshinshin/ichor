@@ -69,7 +69,7 @@ func validateNodeLabels(nodeLabels map[string]string) error {
 
 // injectNodeLabels merges the machine's spec.nodeLabels into cfg. It runs after injectStorage:
 // the labels are the operator's intent (machine layer) and win a key shared with the
-// TalosStorage's system-layer label.
+// TalosStoragePreset's system-layer label.
 func injectNodeLabels(
 	cfg coreconfig.Provider, contract *coreconfig.VersionContract, m *ichorv1alpha1.TalosMachine,
 ) (coreconfig.Provider, error) {

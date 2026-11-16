@@ -234,7 +234,7 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstoragepresets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
@@ -312,8 +312,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	// The system layer's inputs (registry credentials, TalosStorages), read once so that the
-	// render and the fingerprint below see the same TalosStorages.
+	// The system layer's inputs (registry credentials, TalosStoragePresets), read once so that the
+	// render and the fingerprint below see the same TalosStoragePresets.
 	rendered, hash, sys, err := r.renderMachine(ctx, &cluster, &m, bundle, patches.Items)
 	if err != nil {
 		log.Error(err, "rendering machine configuration")
@@ -594,7 +594,7 @@ var renderVersion = render.Version
 // so a patch unrelated to m never perturbs it. The result is a hash only (principle 3).
 func desiredInputsHash(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
-	storages []ichorv1alpha1.TalosStorage, registryAuth string,
+	storages []ichorv1alpha1.TalosStoragePreset, registryAuth string,
 ) (string, error) {
 	applicable, err := render.SelectPatches(cluster, m, candidates)
 	if err != nil {
@@ -609,11 +609,11 @@ func desiredInputsHash(
 		parts = append(parts, fmt.Sprintf("patch:%s=%d", p.Name, p.Generation))
 	}
 
-	// The TalosStorage governing m feeds the render too; a change to it must read as
+	// The TalosStoragePreset governing m feeds the render too; a change to it must read as
 	// a desired-state change, not as drift.
 	chosen, err := render.StorageFor(cluster, m, storages)
 	if err != nil {
-		return "", fmt.Errorf("selecting governing TalosStorage: %w", err)
+		return "", fmt.Errorf("selecting governing TalosStoragePreset: %w", err)
 	}
 
 	if chosen != nil {
@@ -835,7 +835,7 @@ func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, bund
 }
 
 // renderMachine resolves cluster's system-layer inputs and renders m, returning the inputs so the
-// caller fingerprints the same TalosStorages it rendered. Registry Secrets are read in
+// caller fingerprints the same TalosStoragePresets it rendered. Registry Secrets are read in
 // ControllerNamespace, the same fixed namespace as loadBundle and never the TalosCluster's own; resolution errors
 // name the Secret, never its data.
 func (r *TalosMachineReconciler) renderMachine(
@@ -854,7 +854,7 @@ func (r *TalosMachineReconciler) renderMachine(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// TalosStorage, TalosConfigPatch and TalosCluster are render inputs: creating,
+	// TalosStoragePreset, TalosConfigPatch and TalosCluster are render inputs: creating,
 	// editing or deleting one re-reconciles the machines of its cluster, which is how a change
 	// reaches an already converged node. Only a spec change (generation) counts for
 	// an update, so the status writes these controllers make do not wake every machine.
@@ -878,7 +878,7 @@ func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfAuthSecret)).
 		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(r.controlPlaneSiblings), renderInput).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.machinesOfOIDCTrust)).
-		Watches(&ichorv1alpha1.TalosStorage{}, enqueue, renderInput).
+		Watches(&ichorv1alpha1.TalosStoragePreset{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosConfigPatch{}, enqueue, renderInput).
 		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, builder.WithPredicates(
 			predicate.Or(predicate.GenerationChangedPredicate{}, clusterStatusRenderInputChanged()))).
@@ -912,7 +912,7 @@ func clusterStatusRenderInputChanged() predicate.Funcs {
 	}
 }
 
-// machinesOfCluster maps a render input (TalosStorage, TalosConfigPatch or TalosCluster) to every
+// machinesOfCluster maps a render input (TalosStoragePreset, TalosConfigPatch or TalosCluster) to every
 // TalosMachine of its cluster, to re-reconcile them. It selects machines to enqueue; it does not
 // count control planes or gate anything, so a cached read is fine (countplanes_guard_test.go).
 func (r *TalosMachineReconciler) machinesOfCluster(ctx context.Context, obj client.Object) []reconcile.Request {
@@ -923,7 +923,7 @@ func (r *TalosMachineReconciler) machinesOfCluster(ctx context.Context, obj clie
 		clusterName = o.Name
 	case *ichorv1alpha1.TalosConfigPatch:
 		clusterName = o.Spec.ClusterRef.Name
-	case *ichorv1alpha1.TalosStorage:
+	case *ichorv1alpha1.TalosStoragePreset:
 		clusterName = o.Spec.ClusterRef.Name
 	default:
 		return nil

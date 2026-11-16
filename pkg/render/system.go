@@ -33,7 +33,7 @@ import (
 
 // SystemInputs is everything Render needs that Ichor itself contributes below the
 // TalosConfigPatch layers (the "system" layer) and that has to be read from
-// the cluster: resolved registry credentials and the TalosStorage objects whose layer-1
+// the cluster: resolved registry credentials and the TalosStoragePreset objects whose layer-1
 // preparation may apply. It is one argument so that a new system-layer input extends this
 // struct instead of adding a parameter every caller must remember.
 //
@@ -43,9 +43,9 @@ type SystemInputs struct {
 	// RegistryAuth is ResolveRegistryAuth's result, keyed by TalosClusterRegistry.Host.
 	RegistryAuth map[string]RegistryAuth
 
-	// Storage is every TalosStorage in the cluster's namespace (any cluster; storage.Select
+	// Storage is every TalosStoragePreset in the cluster's namespace (any cluster; storage.Select
 	// filters). Order does not matter.
-	Storage []ichorv1alpha1.TalosStorage
+	Storage []ichorv1alpha1.TalosStoragePreset
 
 	// CARotation is a CA rotation's current stage and new CAs. Only the rotation
 	// executor sets it; nil is the normal case.
@@ -67,7 +67,7 @@ type SystemInputs struct {
 }
 
 // ResolveSystemInputs reads what Render's system layer needs: registry credentials from
-// secretNamespace (ResolveRegistryAuth) and the TalosStorages in the cluster's own namespace.
+// secretNamespace (ResolveRegistryAuth) and the TalosStoragePresets in the cluster's own namespace.
 func ResolveSystemInputs(
 	ctx context.Context, c client.Client, secretNamespace string, cluster *ichorv1alpha1.TalosCluster,
 ) (*SystemInputs, error) {
@@ -76,10 +76,10 @@ func ResolveSystemInputs(
 		return nil, err
 	}
 
-	var storages ichorv1alpha1.TalosStorageList
+	var storages ichorv1alpha1.TalosStoragePresetList
 	// A kind the API server does not serve (Ichor is not installed yet, as in a first adopt) has no objects.
 	if err := c.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil && !meta.IsNoMatchError(err) {
-		return nil, fmt.Errorf("listing TalosStorages: %w", err)
+		return nil, fmt.Errorf("listing TalosStoragePresets: %w", err)
 	}
 
 	trust, err := resolveOIDCTrust(ctx, c, secretNamespace, cluster)
@@ -90,17 +90,17 @@ func ResolveSystemInputs(
 	return &SystemInputs{RegistryAuth: auth, Storage: storages.Items, OIDCTrust: trust}, nil
 }
 
-// StorageFor returns the TalosStorage governing m (storage.Select over m's declared
+// StorageFor returns the TalosStoragePreset governing m (storage.Select over m's declared
 // spec.nodeLabels, the labels Talos stamps onto its Node), or nil. It is the single entry point
 // for "does layer 1 apply to this machine": Render, the machine controller's input fingerprint
-// and the TalosStorage status controller all call it.
+// and the TalosStoragePreset status controller all call it.
 func StorageFor(
-	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, storages []ichorv1alpha1.TalosStorage,
-) (*ichorv1alpha1.TalosStorage, error) {
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, storages []ichorv1alpha1.TalosStoragePreset,
+) (*ichorv1alpha1.TalosStoragePreset, error) {
 	return storage.Select(cluster, storages, m.Spec.NodeLabels)
 }
 
-// injectStorage merges the governing TalosStorage's preset documents (volume, kubelet mount,
+// injectStorage merges the governing TalosStoragePreset's preset documents (volume, kubelet mount,
 // Node label and annotation) into cfg as part of the system layer. Applied before any
 // TalosConfigPatch, so a patch that touches the same fields wins.
 func injectStorage(
@@ -114,12 +114,12 @@ func injectStorage(
 
 	preset, err := storage.NewPreset(chosen.Spec.DiskPreset)
 	if err != nil {
-		return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+		return nil, fmt.Errorf("render: TalosStoragePreset %q: %w", chosen.Name, err)
 	}
 
 	patches, err := preset.TalosPatches(chosen.Spec.DiskSelector)
 	if err != nil {
-		return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+		return nil, fmt.Errorf("render: TalosStoragePreset %q: %w", chosen.Name, err)
 	}
 
 	docs := make([]config.Document, 0, len(patches))
@@ -127,7 +127,7 @@ func injectStorage(
 	for _, d := range patches {
 		doc, err := DocumentFromPatch(d)
 		if err != nil {
-			return nil, fmt.Errorf("render: TalosStorage %q: %w", chosen.Name, err)
+			return nil, fmt.Errorf("render: TalosStoragePreset %q: %w", chosen.Name, err)
 		}
 
 		docs = append(docs, doc)
@@ -137,7 +137,7 @@ func injectStorage(
 	// document carries them depends on the version contract.
 	docs = append(docs, nodeRegistrationDocs(contract, preset)...)
 
-	return mergeDocument(cfg, fmt.Sprintf("TalosStorage %q", chosen.Name), docs...)
+	return mergeDocument(cfg, fmt.Sprintf("TalosStoragePreset %q", chosen.Name), docs...)
 }
 
 // nodeRegistrationDocs returns the Node label and annotation that register the disk with the

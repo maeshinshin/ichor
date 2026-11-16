@@ -35,10 +35,10 @@ const (
 	kindUserVolume      = "UserVolumeConfig"
 )
 
-func testStorage(name string, sel map[string]string) ichorv1alpha1.TalosStorage {
-	return ichorv1alpha1.TalosStorage{
+func testStorage(name string, sel map[string]string) ichorv1alpha1.TalosStoragePreset {
+	return ichorv1alpha1.TalosStoragePreset{
 		Namespace: testNamespace, Name: name,
-		Spec: ichorv1alpha1.TalosStorageSpec{
+		Spec: ichorv1alpha1.TalosStoragePresetSpec{
 			ClusterRef:   corev1.LocalObjectReference{Name: testClusterName},
 			Nodes:        metav1.LabelSelector{MatchLabels: sel},
 			DiskPreset:   "longhorn-v1",
@@ -47,12 +47,12 @@ func testStorage(name string, sel map[string]string) ichorv1alpha1.TalosStorage 
 	}
 }
 
-// TestRenderStorage: layer 1 lands in the config of a machine the TalosStorage selects, and in
+// TestRenderStorage: layer 1 lands in the config of a machine the TalosStoragePreset selects, and in
 // no other machine's.
 func TestRenderStorage(t *testing.T) {
 	cluster := testCluster("true")
 	bundle := testBundle(t)
-	sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{
+	sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStoragePreset{
 		testStorage("longhorn", map[string]string{storageSelectorKey: storageRoleLabel}),
 	}}
 	selected := testMachine("node-a", roleWorker, map[string]string{storageSelectorKey: storageRoleLabel})
@@ -63,12 +63,12 @@ func TestRenderStorage(t *testing.T) {
 
 	requireNone(t, mustRenderSys(t, cluster, other, bundle, nil, sys), kindUserVolume, "longhorn")
 
-	t.Run("another cluster's TalosStorage never applies", func(t *testing.T) {
+	t.Run("another cluster's TalosStoragePreset never applies", func(t *testing.T) {
 		foreign := testStorage("foreign", map[string]string{storageSelectorKey: storageRoleLabel})
 		foreign.Spec.ClusterRef.Name = "someone-else"
 
 		requireNone(t, mustRenderSys(t, cluster, selected, bundle, nil,
-			&SystemInputs{Storage: []ichorv1alpha1.TalosStorage{foreign}}), kindUserVolume)
+			&SystemInputs{Storage: []ichorv1alpha1.TalosStoragePreset{foreign}}), kindUserVolume)
 	})
 
 	t.Run("a patch overrides the system layer", func(t *testing.T) {

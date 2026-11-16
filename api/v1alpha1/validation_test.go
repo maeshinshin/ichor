@@ -939,11 +939,11 @@ var _ = Describe("TalosMachine", func() {
 	)
 })
 
-func newStorage(preset, selector string) *TalosStorage {
-	return &TalosStorage{
+func newStorage(preset, selector string) *TalosStoragePreset {
+	return &TalosStoragePreset{
 		GenerateName: "storage-",
 		Namespace:    testNamespace,
-		Spec: TalosStorageSpec{
+		Spec: TalosStoragePresetSpec{
 			ClusterRef:   corev1.LocalObjectReference{Name: literalCluster},
 			Nodes:        metav1.LabelSelector{MatchLabels: map[string]string{"storage": testTrue}},
 			DiskPreset:   preset,
@@ -952,7 +952,7 @@ func newStorage(preset, selector string) *TalosStorage {
 	}
 }
 
-var _ = Describe("TalosStorage diskSelector", func() {
+var _ = Describe("TalosStoragePreset diskSelector", func() {
 	const nvme = `disk.transport == "nvme"`
 
 	DescribeTable("accepted presets",

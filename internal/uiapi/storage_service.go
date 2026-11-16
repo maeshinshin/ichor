@@ -32,7 +32,7 @@ import (
 	storagepkg "github.com/maeshinshin/ichor/pkg/storage"
 )
 
-// storagePresets is every value of TalosStorage.spec.diskPreset this build knows, in the CRD enum's order.
+// storagePresets is every value of TalosStoragePreset.spec.diskPreset this build knows, in the CRD enum's order.
 // TestStoragePresetsMatchTheCRDEnum reads the enum from config/crd/bases and fails if the two differ.
 var storagePresets = []string{storagepkg.LonghornV1, storagepkg.RookV1}
 
@@ -42,12 +42,12 @@ var presetUnavailable = map[string]string{
 	// shortcut: longhorn-v1 is refused here until a validating webhook checks the disk selector; drop this
 	// entry only with that webhook, not with the CRD's non-empty rule alone.
 	storagepkg.LonghornV1: "longhorn-v1 needs a disk selector, and this page does not write one: the API server " +
-		"only checks that the selector is not empty, not that it is a valid Talos expression. Apply the TalosStorage " +
+		"only checks that the selector is not empty, not that it is a valid Talos expression. Apply the TalosStoragePreset " +
 		"yourself with kubectl, as an ichor-admin, after checking the selector against the disks of the nodes it will prepare.",
 }
 
-// ListStorages returns the TalosStorages of one TalosCluster, each with the machines it governs
-// under the controller's own rule (render.StorageFor). Read only: nothing here writes a TalosStorage.
+// ListStorages returns the TalosStoragePresets of one TalosCluster, each with the machines it governs
+// under the controller's own rule (render.StorageFor). Read only: nothing here writes a TalosStoragePreset.
 // It runs as the signed-in user, like every read here, so the viewer role's get and list rules decide.
 func (s *Server) ListStorages(
 	ctx context.Context, req *connect.Request[pb.ListStoragesRequest],
@@ -61,9 +61,9 @@ func (s *Server) ListStorages(
 		return nil, err
 	}
 
-	var storages ichorv1alpha1.TalosStorageList
+	var storages ichorv1alpha1.TalosStoragePresetList
 	if err := s.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, mapListError("TalosStorage", err)
+		return nil, mapListError("TalosStoragePreset", err)
 	}
 
 	var machines ichorv1alpha1.TalosMachineList
@@ -110,8 +110,8 @@ func (s *Server) ListStorages(
 	return connect.NewResponse(&pb.ListStoragesResponse{Storages: out, Presets: presets}), nil
 }
 
-// CreateStorage writes one TalosStorage in the cluster's namespace as the signed-in user: s.Create runs on
-// the user's client, so the user's create verb on talosstorages decides, not the ServiceAccount's. Only a
+// CreateStorage writes one TalosStoragePreset in the cluster's namespace as the signed-in user: s.Create runs on
+// the user's client, so the user's create verb on talosstoragepresets decides, not the ServiceAccount's. Only a
 // creatable preset is accepted, and the request has no field for a disk selector, so the page never writes one.
 func (s *Server) CreateStorage(
 	ctx context.Context, req *connect.Request[pb.CreateStorageRequest],
@@ -149,9 +149,9 @@ func (s *Server) CreateStorage(
 		return nil, err
 	}
 
-	ts := &ichorv1alpha1.TalosStorage{}
+	ts := &ichorv1alpha1.TalosStoragePreset{}
 	ts.Namespace, ts.Name = cluster.Namespace, m.GetName()
-	ts.Spec = ichorv1alpha1.TalosStorageSpec{
+	ts.Spec = ichorv1alpha1.TalosStoragePresetSpec{
 		ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 		Nodes:      *sel,
 		DiskPreset: m.GetDiskPreset(),
@@ -167,9 +167,9 @@ func (s *Server) CreateStorage(
 	}), nil
 }
 
-// storageToPB is one TalosStorage as the page shows it. A preset this build does not know is reported
-// in preset_error, not refused: the TalosStorage still exists and its other fields are still true.
-func storageToPB(ts *ichorv1alpha1.TalosStorage, governed []*pb.ObjectRef) *pb.Storage {
+// storageToPB is one TalosStoragePreset as the page shows it. A preset this build does not know is reported
+// in preset_error, not refused: the TalosStoragePreset still exists and its other fields are still true.
+func storageToPB(ts *ichorv1alpha1.TalosStoragePreset, governed []*pb.ObjectRef) *pb.Storage {
 	out := &pb.Storage{
 		Ref:              objectRef(ts.Namespace, ts.Name),
 		DiskPreset:       ts.Spec.DiskPreset,

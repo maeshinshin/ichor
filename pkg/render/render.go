@@ -89,7 +89,7 @@ var layerOrder = map[string]int{
 // inputs always encode to identical bytes, in this process or any other.
 //
 // sys carries the system layer's cluster-read inputs: resolved registry
-// credentials and the TalosStorages. Production callers build it with ResolveSystemInputs. It is
+// credentials and the TalosStoragePresets. Production callers build it with ResolveSystemInputs. It is
 // a required argument rather than a second entry point, so a caller cannot forget it; nil is
 // right for a cluster with neither registries nor storage.
 func Render(

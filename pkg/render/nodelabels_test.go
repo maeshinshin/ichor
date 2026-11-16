@@ -30,7 +30,7 @@ const (
 )
 
 // TestRenderNodeLabels: TalosMachine.spec.nodeLabels reaches the rendered config under both
-// contracts, the machine's labels beat the TalosStorage's on a shared key, and a label the
+// contracts, the machine's labels beat the TalosStoragePreset's on a shared key, and a label the
 // kubelet or NodeRestriction would refuse is a render error.
 func TestRenderNodeLabels(t *testing.T) {
 	bundle := testBundle(t)
@@ -48,7 +48,7 @@ func TestRenderNodeLabels(t *testing.T) {
 
 			// Same key as the preset's label: the machine layer wins over the system layer.
 			st := testStorage("longhorn", map[string]string{zoneKey: rackOne})
-			sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{st}}
+			sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStoragePreset{st}}
 			m = testMachine("node-a", roleWorker, map[string]string{zoneKey: rackOne, longhornDiskLabel: "false"})
 
 			out := mustRenderSys(t, cluster, m, bundle, nil, sys)

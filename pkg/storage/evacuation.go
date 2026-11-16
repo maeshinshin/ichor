@@ -53,7 +53,7 @@ type EvacuationHook interface {
 }
 
 // NewEvacuationHook returns the EvacuationHook implementation for
-// diskPreset, the same value TalosStorage.spec.diskPreset's enum allows.
+// diskPreset, the same value TalosStoragePreset.spec.diskPreset's enum allows.
 // Every Preset is also an EvacuationHook (longhornV1 implements both);
 // this is the discoverable, NewPreset-shaped way to reach the hook half
 // without requiring the caller to know that and type-assert. A known preset with no hook returns ErrNoEvacuationHook.
@@ -101,7 +101,7 @@ const (
 // how many of the storage system's own replica-shaped resources the
 // caller already found still scheduled on the node or disk being
 // evacuated (replicasRemaining), and how long the caller has been waiting
-// (elapsed) against TalosStorage.spec.evacuationTimeout (timeout). For
+// (elapsed) against TalosStoragePreset.spec.evacuationTimeout (timeout). For
 // longhorn-v1, "a replica lives there" means a replicas.longhorn.io object
 // whose spec.nodeID (or spec.diskID, for one disk) still names it --
 // verified against longhorn-manager v1.9.1's volume controller

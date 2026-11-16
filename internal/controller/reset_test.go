@@ -74,7 +74,7 @@ var _ = Describe("resetNode", func() {
 		reconcileOK(r, cp1)
 
 		Expect(fake.resetCalls).To(Equal(0))
-		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node "+resetTestNode))))
+		Eventually(recorder.Events).Should(Receive(And(ContainSubstring("Warning "+reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node "+resetTestNode))))
 
 		Expect(machineGone(cp1)).To(BeTrue())
 	})

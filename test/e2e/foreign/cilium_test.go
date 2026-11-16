@@ -448,7 +448,7 @@ func TestA1Adopt(t *testing.T) {
 	}
 	jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers")
 	t.Logf("jobs in %s:\n%s", crNS, jobs)
-	logs, _ := inner(c, "-n", crNS, "logs", "-l", "job-name", "--tail=40", "--prefix")
+	logs, _ := inner(c, "-n", crNS, "logs", "-l", "batch.kubernetes.io/job-name", "--tail=40", "--prefix")
 	t.Logf("ichor-cni job log:\n%s", logs)
 	logState(t, c, "after takeover")
 	nodesReady(t, c)

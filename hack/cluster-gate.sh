@@ -162,7 +162,7 @@ fi
 POD=
 t0=$(date +%s)
 # the pod does not exist yet, so every early poll fails; the timeout below ends the wait
-until POD=$(kc get pods -l job-name="$JOB" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) && [ -n "$POD" ]; do
+until POD=$(kc get pods -l batch.kubernetes.io/job-name="$JOB" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) && [ -n "$POD" ]; do
   [ $(($(date +%s) - t0)) -lt 900 ] || { echo "cluster-gate: no pod for $JOB after 900s" >&2; exit 1; }
   sleep 3
 done

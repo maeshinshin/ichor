@@ -84,8 +84,9 @@ spec:
 ```
 
 `spec.nodes` matches the labels the machine declares in its own
-`spec.nodeLabels`, not the labels on the Kubernetes Node. `spec.diskSelector` is
-not needed for `rook-v1`; the preset ignores it if you set it.
+`spec.nodeLabels`, not the labels on the Kubernetes Node. Leave
+`spec.diskSelector` out for `rook-v1`: the API refuses it, because the preset
+writes no disk config and a selector would do nothing.
 
 The disk must already be free of partitions and filesystems. Ichor does not
 clean a disk that a previous system left behind.

@@ -21,7 +21,7 @@ own configuration is yours. Presets start with `longhorn-v1`
 installer image, create the `UserVolumeConfig` Longhorn expects) and `rook-v1`,
 which renders no Talos volume and leaves the disk to Rook (ADR 0167; the
 [Rook/Ceph guide](../../guides/rook-ceph.md) has the Talos side). `longhorn-v2`
-and `filesystem` follow. `diskSelector` is required by `longhorn-v1` and ignored
+and `filesystem` follow. `diskSelector` is required by `longhorn-v1` and refused
 by `rook-v1`.
 Missing extensions are reported by the informational `ExtensionsPresent`
 condition on `TalosStorage`, read from the Nodes' `extensions.talos.dev/*`

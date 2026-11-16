@@ -51,6 +51,11 @@ var trustedRootJSON []byte
 // was never signed: a registry that does not carry referrers gives the same answer.
 var ErrSignatureNotFound = errors.New("the signature referrer (the referrers API or the sha256-<hex> tag of the digest) was not found")
 
+// ErrRegistry is a registry that could not be read to check a signature. Nothing was read to its end, so
+// the image is neither verified nor shown to be unsigned. A signature that was read and does not verify
+// is never reported with this error.
+var ErrRegistry = errors.New("the registry could not be read")
+
 const (
 	// bundleMediaType is the artifact type of a Sigstore bundle referrer (cosign 3 stores signatures so).
 	bundleMediaType = "application/vnd.dev.sigstore.bundle.v0.3+json"
@@ -155,15 +160,17 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 	// sha256-<hex> of the digest instead (go-containerregistry v0.22.1, pkg/v1/remote/referrers.go).
 	idx, err := remote.Referrers(ref, s.opts(ctx)...)
 	if err != nil {
-		return fmt.Errorf("listing the signatures of %s@%s: %w", img.Repository, img.Digest, err)
+		return fmt.Errorf("listing the signatures of %s@%s: %w: %w", img.Repository, img.Digest, ErrRegistry, err)
 	}
 
 	im, err := idx.IndexManifest()
 	if err != nil {
-		return fmt.Errorf("reading the signatures of %s@%s: %w", img.Repository, img.Digest, err)
+		return fmt.Errorf("reading the signatures of %s@%s: %w: %w", img.Repository, img.Digest, ErrRegistry, err)
 	}
 
-	var errs []error
+	// verdicts are signatures that were read and do not verify; unreadable are signatures the registry did not
+	// serve. A verdict decides the answer even when another signature could not be read.
+	var verdicts, unreadable []error
 
 	for _, d := range im.Manifests {
 		// Some registries (ghcr.io) list referrers without artifactType and annotations. A bare entry is
@@ -174,7 +181,11 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 
 		b, err := s.bundle(ctx, repo, d.Digest)
 		if err != nil {
-			errs = append(errs, err)
+			if errors.Is(err, ErrRegistry) {
+				unreadable = append(unreadable, err)
+			} else {
+				verdicts = append(verdicts, err)
+			}
 
 			continue
 		}
@@ -184,7 +195,7 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 		}
 
 		if err := s.check(b, digest, id); err != nil {
-			errs = append(errs, fmt.Errorf("signature %s: %w", d.Digest, err))
+			verdicts = append(verdicts, fmt.Errorf("signature %s: %w", d.Digest, err))
 
 			continue
 		}
@@ -192,11 +203,15 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 		return nil
 	}
 
-	if len(errs) == 0 {
-		return fmt.Errorf("%s@%s has no cosign signature: %w", img.Repository, img.Digest, ErrSignatureNotFound)
+	if len(verdicts) > 0 {
+		return fmt.Errorf("%s@%s is not signed by %s: %w", img.Repository, img.Digest, id.SANRegexp, errors.Join(verdicts...))
 	}
 
-	return fmt.Errorf("%s@%s is not signed by %s: %w", img.Repository, img.Digest, id.SANRegexp, errors.Join(errs...))
+	if len(unreadable) > 0 {
+		return fmt.Errorf("%s@%s could not be checked against %s: %w", img.Repository, img.Digest, id.SANRegexp, errors.Join(unreadable...))
+	}
+
+	return fmt.Errorf("%s@%s has no cosign signature: %w", img.Repository, img.Digest, ErrSignatureNotFound)
 }
 
 // WithKeychain makes the verifier's registry requests authenticate with k (the docker config's default
@@ -285,7 +300,7 @@ func isSignature(artifactType string, annotations map[string]string) bool {
 func (s *Sigstore) bundle(ctx context.Context, repo name.Repository, digest v1.Hash) (*bundle.Bundle, error) {
 	desc, err := remote.Get(repo.Digest(digest.String()), s.opts(ctx)...)
 	if err != nil {
-		return nil, fmt.Errorf("reading the signature manifest %s: %w", digest, err)
+		return nil, fmt.Errorf("reading the signature manifest %s: %w: %w", digest, ErrRegistry, err)
 	}
 
 	var m v1.Manifest
@@ -304,19 +319,19 @@ func (s *Sigstore) bundle(ctx context.Context, repo name.Repository, digest v1.H
 
 		layer, err := remote.Layer(repo.Digest(l.Digest.String()), s.opts(ctx)...)
 		if err != nil {
-			return nil, fmt.Errorf("reading the bundle %s: %w", l.Digest, err)
+			return nil, fmt.Errorf("reading the bundle %s: %w: %w", l.Digest, ErrRegistry, err)
 		}
 
 		rc, err := layer.Compressed()
 		if err != nil {
-			return nil, fmt.Errorf("reading the bundle %s: %w", l.Digest, err)
+			return nil, fmt.Errorf("reading the bundle %s: %w: %w", l.Digest, ErrRegistry, err)
 		}
 
 		data, err := io.ReadAll(io.LimitReader(rc, maxBundleBytes+1))
 		_ = rc.Close()
 
 		if err != nil {
-			return nil, fmt.Errorf("reading the bundle %s: %w", l.Digest, err)
+			return nil, fmt.Errorf("reading the bundle %s: %w: %w", l.Digest, ErrRegistry, err)
 		}
 
 		if len(data) > maxBundleBytes {

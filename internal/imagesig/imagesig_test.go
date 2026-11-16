@@ -336,6 +336,33 @@ func TestVerifyIgnoresReferrersThatAreNotCosignSignatures(t *testing.T) {
 	}
 }
 
+// TestVerifyReportsAnUnreachableRegistryAsRegistryFailure: the listing of the referrers never answers. That
+// is not a verdict on the image, so it must not read as a bad signature.
+func TestVerifyReportsAnUnreachableRegistryAsRegistryFailure(t *testing.T) {
+	srv, f := newFakeRegistry(t)
+	srv.Close()
+
+	err := verifyAgainst(t, f, srv)
+	if !errors.Is(err, ErrRegistry) || strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("an unreachable registry: err = %v", err)
+	}
+}
+
+// TestVerifyReportsAnUnreadableSignatureAsRegistryFailure: the listing names a signature whose manifest the
+// registry cannot serve. Nothing was checked, so the answer is not "is not signed by".
+func TestVerifyReportsAnUnreadableSignatureAsRegistryFailure(t *testing.T) {
+	srv, f := newFakeRegistry(t)
+
+	ref := signatureReferrer(t, f, []byte(`{}`))
+	delete(f.blobs, ref[keyDigest].(string))
+	f.referrers = []map[string]any{ref}
+
+	err := verifyAgainst(t, f, srv)
+	if !errors.Is(err, ErrRegistry) || strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("an unreadable signature: err = %v", err)
+	}
+}
+
 func TestResolveDigest(t *testing.T) {
 	srv := httptest.NewServer(registry.New())
 	t.Cleanup(srv.Close)

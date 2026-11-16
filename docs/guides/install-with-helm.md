@@ -290,7 +290,7 @@ ichor-ui serves TLS on 8443 and no plain HTTP. The Service port is
 named `https`. The certificate is yours (`ichorUI.tls.secretName`) or a leaf from
 the Ichor serving CA, whose public part the controller publishes as the
 ConfigMap and Secret `ichor-ui-ca` in `ichor-system`. How to put an Ingress, a
-Gateway or a load balancer in front is in [Users and login](users-and-login.md#expose-ichor-ui-over-https).
+Gateway or a load balancer in front is in [Users and login](users-and-login/expose-ichor-ui.md).
 
 Moving an existing release:
 

@@ -50,8 +50,6 @@ var allowed = []struct {
 		codeConstant},
 	{"test/internal/", true,
 		codeConstant},
-	{"hack/remote-gate.sh", false,
-		"owned by another backlog item, which removes the names from this file"},
 	// TEMPORARY, not a decision: another agent holds these two files right now. Remove these entries when that
 	// agent's rename lands; the names are then checked here like everywhere else.
 	{"Makefile", false,

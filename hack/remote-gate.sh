@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the full gate (go test, lint, ui-ci) for the current HEAD as parallel Jobs
-# in the cluster and namespace set in k() below; see CONTRIBUTING.md.
+# in the cluster GATE_CONTEXT and namespace GATE_NAMESPACE name; see CONTRIBUTING.md.
 #   make remote-gate        (GATE_SHARDS="ctl:10 cli:4 uiapi:2 rest:3" to resize;
 #                            GATE_ONLY="cli0 uiapi1" to re-run just those shards)
 # The same file runs inside each pod as `remote-gate.sh pod <group> <k> <n>`.
@@ -84,7 +84,10 @@ if [ "${1:-}" = pod ]; then pod_main "$2" "$3" "$4"; exit; fi
 
 # --- on the workstation -----------------------------------------------------
 
-k() { kubectl --context admin@talos-cluster01 -n ichor-e2e "$@"; }
+# Both are required: an implicit current-context could be a different, real cluster.
+GATE_CONTEXT=${GATE_CONTEXT:?set GATE_CONTEXT to the kubeconfig context the gate Jobs run in}
+GATE_NAMESPACE=${GATE_NAMESPACE:?set GATE_NAMESPACE to the namespace the gate Jobs run in}
+k() { kubectl --context "$GATE_CONTEXT" -n "$GATE_NAMESPACE" "$@"; }
 RUN=$(date +%d%H%M%S)
 OUT=remote-gate-out
 JOBS=()
@@ -121,7 +124,7 @@ spec:
       labels: {app.kubernetes.io/name: ichor-gate}
     spec:
       restartPolicy: Never
-      automountServiceAccountToken: false # else helm and kubectl in the pod default to the ichor-e2e namespace
+      automountServiceAccountToken: false # else helm and kubectl in the pod default to the namespace the Job runs in
       containers:
       - name: gate
         image: $2

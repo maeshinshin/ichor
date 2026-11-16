@@ -102,6 +102,10 @@ adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own De
 check-claims: ## Fail when a Markdown file or Go comment states that something was tested, measured, verified or confirmed (internal/tools/claimcheck). make test runs it too.
 	go test -count=1 ./internal/tools/claimcheck/
 
+.PHONY: check-release-record
+check-release-record: ## Fail when the chart's Helm release record exceeds the 1,048,576 bytes a Secret holds; prints the size and headroom (internal/tools/releaserecord).
+	go run ./internal/tools/releaserecord
+
 .PHONY: docs-reference
 docs-reference: ## Regenerate docs/reference/cli (from the ichor command tree) and docs/reference/crds (from config/crd/bases); run after manifests.
 	go run ./internal/tools/gendocs

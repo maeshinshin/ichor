@@ -70,6 +70,10 @@ jobs:
       - name: Running Tests
         run: nix develop --command make test
 
+      # Helm stores the release in a Secret of at most 1 MiB; past that "helm install" fails on the user's cluster.
+      - name: Helm release record is under the Secret limit
+        run: nix develop --command make check-release-record
+
       # Known-vulnerable Go and npm dependencies fail the build.
       - name: govulncheck
         run: nix develop --command govulncheck ./...

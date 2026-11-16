@@ -798,6 +798,9 @@ command does. Each item is described where it is listed below.
   would make goreleaser ignore them. After a patch release cut from a
   `release-X.Y` branch, a workflow opens a pull request that brings its notes
   and README version to `main`. A dependency scan runs on `main` every day.
+- `make check-release-record` fails when the chart's Helm release record, which
+  Helm stores in a Secret limited to 1,048,576 bytes, is over that limit, and
+  prints the size and the headroom on every run. CI runs it with the tests.
 
 ## v0.2.4 (2026-11-13)
 

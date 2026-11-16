@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-11-15 · Design section: Upgrades · Extends: 0026, 0095, 0120
 
-Decided: an operation that is paused to wait for a person releases the cluster lock when it enters that pause, does not take it back while it is paused, and takes it again only when it resumes; a resume that cannot take the lock waits. A paused operation has no expiry: it stays until a person retries or deletes it.
+Decided: an operation that is paused to wait for a person, or for its controller's own machine to be told apart from another, releases the cluster lock when it enters that pause, does not take it back while it is paused, and takes it again only when it resumes; a resume that cannot take the lock waits. A paused operation has no expiry: it stays until a person retries or deletes it.
 
 ## Context
 
@@ -10,8 +10,8 @@ The cluster lock serializes disruptive operations on one cluster (`pkg/clusterlo
 
 ## Decision
 
-- **What releases means.** The lock is released actively when the pause is entered, not left to lapse. `setPhase` releases it for a pause with a step-failure reason (`failureReason` set) and for `spec.paused`. A lapse would depend on reconciles stopping, and a paused operation is still reconciled on every event; an explicit release also makes the freed lock visible at once. The cost is that the Lease object is deleted, so its `leaseTransitions` count and the acquire time of the last holder are lost. Nothing reads them after a release.
-- **Which pauses release.** Only a pause that waits for a person. A self-resuming pause (a rotation blocked on a step, a lock held by another operation, a cluster transitioning, a shutdown in progress) keeps the lock, because the operation resumes by itself and needs the lock to do so. A blocked rotation that stays blocked for its give-up window becomes a step failure and releases the lock then (ADR 0120).
+- **What releases means.** The lock is released actively when the pause is entered, not left to lapse. `setPhase` releases it for a pause with a step-failure reason (`failureReason` set), for `spec.paused`, and for `OwnNodeUnread`. A lapse would depend on reconciles stopping, and a paused operation is still reconciled on every event; an explicit release also makes the freed lock visible at once. The cost is that the Lease object is deleted, so its `leaseTransitions` count and the acquire time of the last holder are lost. Nothing reads them after a release.
+- **Which pauses release.** A pause that waits for a person, and `OwnNodeUnread`, which resumes by itself but releases the lock while it waits. Any other self-resuming pause (a rotation blocked on a step, a lock held by another operation, a cluster transitioning, a shutdown in progress) keeps the lock, because the operation resumes by itself and needs the lock to do so. A blocked rotation that stays blocked for its give-up window becomes a step failure and releases the lock then (ADR 0120).
 - **Not taken back.** A paused operation is decided before the lock is acquired. A later reconcile of a paused operation neither acquires nor renews the lock, so the release is not undone by the next pass.
 - **Resume.** A retry (`ichor.maesh.dev/retry`) or the lifting of `spec.paused` takes the lock again through the normal acquisition. If another holder has it, the operation pauses with `ClusterLockHeld` and retries on its requeue. Two paused operations resumed at once compete through the Lease's `resourceVersion`: one takes the lock, the other waits. Neither interleaves with the other.
 - **No expiry.** A paused operation is the record of a failure. Expiring it, or deleting it automatically, would throw away what a person needs to diagnose the failure. Releasing the lock removes the harm the pause caused (blocking the cluster) without removing the record.

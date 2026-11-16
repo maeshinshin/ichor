@@ -70,7 +70,9 @@ shows a Reset and add link. On the Nodes page, Reset and add also offers "It was
 cluster", and the inspection step shows the same warning as the CLI (the machine belongs to this
 cluster; `ichor adopt --add-machine` would keep its configuration instead).
 
-## With the CLI
+:::tabs
+
+::tab[With the CLI]
 
 This uses your own talosconfig for the machine. It is used for this command
 only, never stored or printed.
@@ -131,7 +133,7 @@ Flags:
 If the node's DHCP address changed after the reboot, the command says so and
 suggests a scan instead of guessing.
 
-## With the UI ("Reset and add")
+::tab[With the UI ("Reset and add")]
 
 "Reset and add" (the `MachineReclaim` kind) resets the STATE and EPHEMERAL
 partitions of a machine that another Talos cluster configured and adds it to
@@ -230,3 +232,5 @@ comes up within that time is found within about 15 to 30 seconds of answering;
 after that the normal 5 minute pass applies. Machines found appear as pending on the Add node page (and in
 `ichor get nodes`) and wait for approval. Removing an address or range stops
 the scanning only; machines already found stay.
+
+:::

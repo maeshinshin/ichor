@@ -58,7 +58,7 @@ not partition or format it, and Rook takes the device.
 
 Label the machines, then declare the storage for them:
 
-```yaml
+```yaml {9,21}
 apiVersion: ichor.maesh.dev/v1alpha1
 kind: TalosMachine
 metadata:

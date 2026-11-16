@@ -11,8 +11,11 @@ dangerous-operation checks; both use the same Connect API, the CLI falling
 back to local computation when it can't reach the backend. The CLI prints for
 people by default (tables and aligned blocks) and offers
 `-o yaml|json` for scripts, `--follow`/`--watch`, and interactive confirmation
-with `--yes`. The exceptions are `init`, `adopt` and full-loss recovery, which
-predate the cluster.
+with `--yes`. The CLI never writes to a Talos node, with three exceptions:
+`init` and full-loss recovery (`restore cluster`), which predate the cluster
+and so have no controller to act for them, and `reclaim node --talosconfig`,
+which acts with the operator's own credential, which Ichor never stores.
+`adopt` only reads from nodes.
 
 The UI is a Vite + Preact + TypeScript SPA built with preactcn, embedded in
 the Go backend. The backend talks to the API server, read-only to the Talos

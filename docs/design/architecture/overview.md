@@ -7,7 +7,7 @@ sidebar_order: 2
 
 ![Architecture of Ichor. The browser, the ichor CLI and kubectl reach the Kubernetes API of the cluster that Ichor manages. Inside that cluster, in the ichor-system namespace, run ichor-ui, the ichor-controller with its admission webhooks, and the Jobs (ichor-installer installs and upgrades Ichor, ichor-cni runs Helm for Cilium); they read and write Ichor's custom resources through the API. The API server holds Ichor's custom resources, Secrets and Leases. Only the controller configures the Talos machines, over the Talos API; a new machine waits in maintenance mode until you approve it, and then becomes a Talos node, a control plane or a worker.](../../images/architecture.light.drawio.svg)
 
-*Ichor runs inside the cluster it manages; ichor-ui reads nodes and never writes to them, and the controller is the only writer.*
+*Ichor runs inside the cluster it manages; ichor-ui reads nodes and never writes to them, and the controller is the only writer, apart from three CLI commands that cannot wait for it (`init`, `restore cluster`, `reclaim node --talosconfig`).*
 
 Three deliverables come out of one repository:
 

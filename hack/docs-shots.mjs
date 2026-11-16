@@ -570,8 +570,19 @@ try {
         await click('[data-slot=sidebar-trigger]')
         check(await until(`!!document.querySelector('[data-mobile=true]')`, 'the drawer'), `${tag}: the menu button opens the drawer`)
         await shot(`${tag}-drawer`)
+        // The drawer is a modal layer: it locks the page's scroll while it is open (the Radix port's scroll lock), and releases it on either way out.
+        check(await ev(`document.body.style.overflow === 'hidden'`), `${tag}: the open drawer locks the page scroll`)
         await key('Escape')
-        await until(`!document.querySelector('[data-mobile=true]')`, 'the drawer to close')
+        check(await until(`!document.querySelector('[data-mobile=true]')`, 'the drawer to close'), `${tag}: Escape closes the drawer`)
+        check(await ev(`document.body.style.overflow !== 'hidden'`), `${tag}: closing the drawer releases the page scroll`)
+        // A press on the overlay beside the drawer (the drawer is 18rem wide, the phone 375 px) dismisses it too.
+        await click('[data-slot=sidebar-trigger]')
+        await until(`!!document.querySelector('[data-mobile=true]')`, 'the drawer')
+        const beside = { x: width - 8, y: height / 2 }
+        check(await ev(`document.elementFromPoint(${beside.x}, ${beside.y})?.getAttribute('data-slot') === 'sheet-overlay'`), `${tag}: the overlay is beside the drawer`)
+        for (const type of ['mousePressed', 'mouseReleased']) await s('Input.dispatchMouseEvent', { type, ...beside, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 })
+        check(await until(`!document.querySelector('[data-mobile=true]')`, 'the drawer to close'), `${tag}: a press outside the drawer closes it`)
+        check(await ev(`document.body.style.overflow !== 'hidden'`), `${tag}: the page scroll is released after it`)
         await disclosure(tag, 'On this page', `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('On this page'))`)
         await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('On this page'))?.click()`)
         await shot(`${tag}-toc`)

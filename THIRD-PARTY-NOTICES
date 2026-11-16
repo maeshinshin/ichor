@@ -3229,6 +3229,8 @@ Components:
     Copyright (c) 2019 Material-UI SAS
 - Radix UI Primitives
     Copyright (c) 2022 WorkOS
+- cmdk
+    Copyright (c) 2022 Paco Coursey
 - next-themes
     Copyright (c) 2022 Paco Coursey
 - shadcn/ui
@@ -3711,6 +3713,10 @@ Upstream projects:
     ui/src/lib/radix and site/src/lib/radix
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 WorkOS
+- cmdk (https://github.com/pacocoursey/cmdk)
+    ui/src/lib/shims/cmdk.tsx and site/src/lib/shims/cmdk.tsx
+    Licence: MIT (variant 1 of 8) (text in section 3)
+    Copyright (c) 2022 Paco Coursey
 - next-themes (https://github.com/pacocoursey/next-themes)
     ui/src/lib/shims/next-themes.tsx
     Licence: MIT (variant 1 of 8) (text in section 3)

@@ -2,8 +2,8 @@
 // @generated from file ichor/v1alpha1/storage.proto (package ichor.v1alpha1, syntax proto3)
 /* eslint-disable */
 
-// StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// StorageService backs the Storage page: which TalosStoragePreset governs each node of a cluster, and the
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStoragePreset as the signed-in
 // user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
@@ -23,7 +23,7 @@ export const file_ichor_v1alpha1_storage: GenFile = /*@__PURE__*/
  */
 export type ListStoragesRequest = Message<"ichor.v1alpha1.ListStoragesRequest"> & {
   /**
-   * cluster is required: a TalosStorage belongs to the TalosCluster its clusterRef names.
+   * cluster is required: a TalosStoragePreset belongs to the TalosCluster its clusterRef names.
    *
    * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
    */
@@ -62,7 +62,7 @@ export const ListStoragesResponseSchema: GenMessage<ListStoragesResponse> = /*@_
   messageDesc(file_ichor_v1alpha1_storage, 1);
 
 /**
- * StoragePreset is one value of TalosStorage.spec.diskPreset, and whether the page may create one.
+ * StoragePreset is one value of TalosStoragePreset.spec.diskPreset, and whether the page may create one.
  *
  * @generated from message ichor.v1alpha1.StoragePreset
  */
@@ -99,14 +99,14 @@ export const StoragePresetSchema: GenMessage<StoragePreset> = /*@__PURE__*/
  */
 export type CreateStorageRequest = Message<"ichor.v1alpha1.CreateStorageRequest"> & {
   /**
-   * cluster is required: the TalosStorage is written in its namespace with this clusterRef.
+   * cluster is required: the TalosStoragePreset is written in its namespace with this clusterRef.
    *
    * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
    */
   cluster?: ObjectRef | undefined;
 
   /**
-   * name is the TalosStorage's metadata.name. It is required; the page does not generate one.
+   * name is the TalosStoragePreset's metadata.name. It is required; the page does not generate one.
    *
    * @generated from field: string name = 2;
    */
@@ -158,7 +158,7 @@ export const CreateStorageResponseSchema: GenMessage<CreateStorageResponse> = /*
   messageDesc(file_ichor_v1alpha1_storage, 4);
 
 /**
- * Storage is one TalosStorage, trimmed to what the page shows.
+ * Storage is one TalosStoragePreset, trimmed to what the page shows.
  *
  * @generated from message ichor.v1alpha1.Storage
  */
@@ -238,7 +238,7 @@ export const StorageSchema: GenMessage<Storage> = /*@__PURE__*/
  */
 export const StorageService: GenService<{
   /**
-   * ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
+   * ListStorages returns every TalosStoragePreset of one TalosCluster, with the machines each one governs.
    *
    * @generated from rpc ichor.v1alpha1.StorageService.ListStorages
    */
@@ -248,7 +248,7 @@ export const StorageService: GenService<{
     output: typeof ListStoragesResponseSchema;
   },
   /**
-   * CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
+   * CreateStorage writes one TalosStoragePreset in the cluster's namespace, as the signed-in user.
    *
    * @generated from rpc ichor.v1alpha1.StorageService.CreateStorage
    */

@@ -19,7 +19,7 @@ import { useList } from '@/lib/useList'
 import { Link } from '@/router'
 import { useState } from 'preact/hooks'
 
-// Storage page: every TalosStorage of the cluster, with the nodes it governs and the disk preset it
+// Storage page: every TalosStoragePreset of the cluster, with the nodes it governs and the disk preset it
 // applies (StorageService.ListStorages), and a create action for the presets the server allows here
 // (StorageService.CreateStorage). Edit and delete are not offered.
 export function StorageList() {

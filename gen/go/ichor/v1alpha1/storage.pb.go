@@ -4,8 +4,8 @@
 // 	protoc        (unknown)
 // source: ichor/v1alpha1/storage.proto
 
-// StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// StorageService backs the Storage page: which TalosStoragePreset governs each node of a cluster, and the
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStoragePreset as the signed-in
 // user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 
 package ichorv1alpha1
@@ -27,7 +27,7 @@ const (
 
 type ListStoragesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// cluster is required: a TalosStorage belongs to the TalosCluster its clusterRef names.
+	// cluster is required: a TalosStoragePreset belongs to the TalosCluster its clusterRef names.
 	Cluster       *ObjectRef `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -123,7 +123,7 @@ func (x *ListStoragesResponse) GetPresets() []*StoragePreset {
 	return nil
 }
 
-// StoragePreset is one value of TalosStorage.spec.diskPreset, and whether the page may create one.
+// StoragePreset is one value of TalosStoragePreset.spec.diskPreset, and whether the page may create one.
 type StoragePreset struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -188,9 +188,9 @@ func (x *StoragePreset) GetUnavailableReason() string {
 
 type CreateStorageRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// cluster is required: the TalosStorage is written in its namespace with this clusterRef.
+	// cluster is required: the TalosStoragePreset is written in its namespace with this clusterRef.
 	Cluster *ObjectRef `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	// name is the TalosStorage's metadata.name. It is required; the page does not generate one.
+	// name is the TalosStoragePreset's metadata.name. It is required; the page does not generate one.
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// disk_preset is spec.diskPreset. Only a creatable preset is accepted.
 	DiskPreset string `protobuf:"bytes,3,opt,name=disk_preset,json=diskPreset,proto3" json:"disk_preset,omitempty"`
@@ -311,7 +311,7 @@ func (x *CreateStorageResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
-// Storage is one TalosStorage, trimmed to what the page shows.
+// Storage is one TalosStoragePreset, trimmed to what the page shows.
 type Storage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Ref   *ObjectRef             `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`

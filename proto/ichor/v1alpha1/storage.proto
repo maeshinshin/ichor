@@ -1,21 +1,21 @@
 syntax = "proto3";
 
-// StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// StorageService backs the Storage page: which TalosStoragePreset governs each node of a cluster, and the
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStoragePreset as the signed-in
 // user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 package ichor.v1alpha1;
 
 import "ichor/v1alpha1/common.proto";
 
 service StorageService {
-  // ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
+  // ListStorages returns every TalosStoragePreset of one TalosCluster, with the machines each one governs.
   rpc ListStorages(ListStoragesRequest) returns (ListStoragesResponse);
-  // CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
+  // CreateStorage writes one TalosStoragePreset in the cluster's namespace, as the signed-in user.
   rpc CreateStorage(CreateStorageRequest) returns (CreateStorageResponse);
 }
 
 message ListStoragesRequest {
-  // cluster is required: a TalosStorage belongs to the TalosCluster its clusterRef names.
+  // cluster is required: a TalosStoragePreset belongs to the TalosCluster its clusterRef names.
   ObjectRef cluster = 1;
 }
 
@@ -25,7 +25,7 @@ message ListStoragesResponse {
   repeated StoragePreset presets = 2;
 }
 
-// StoragePreset is one value of TalosStorage.spec.diskPreset, and whether the page may create one.
+// StoragePreset is one value of TalosStoragePreset.spec.diskPreset, and whether the page may create one.
 message StoragePreset {
   string name = 1;
   // creatable is true when CreateStorage accepts this preset.
@@ -35,9 +35,9 @@ message StoragePreset {
 }
 
 message CreateStorageRequest {
-  // cluster is required: the TalosStorage is written in its namespace with this clusterRef.
+  // cluster is required: the TalosStoragePreset is written in its namespace with this clusterRef.
   ObjectRef cluster = 1;
-  // name is the TalosStorage's metadata.name. It is required; the page does not generate one.
+  // name is the TalosStoragePreset's metadata.name. It is required; the page does not generate one.
   string name = 2;
   // disk_preset is spec.diskPreset. Only a creatable preset is accepted.
   string disk_preset = 3;
@@ -51,7 +51,7 @@ message CreateStorageResponse {
   AuditRecord audit = 2;
 }
 
-// Storage is one TalosStorage, trimmed to what the page shows.
+// Storage is one TalosStoragePreset, trimmed to what the page shows.
 message Storage {
   ObjectRef ref = 1;
   // disk_preset is spec.diskPreset as written.

@@ -104,6 +104,15 @@ func pauseReason(err error) string {
 		return ie.reason
 	}
 
+	// The Cilium Job's two typed failures keep the names the CNIHandover condition gives them.
+	if _, ok := errors.AsType[*CNIInvalidValuesError](err); ok {
+		return reasonCNIInvalidValues
+	}
+
+	if _, ok := errors.AsType[*CNIHelmJobFailedError](err); ok {
+		return reasonCNIJobFailed
+	}
+
 	return reasonOperationStepFailed
 }
 

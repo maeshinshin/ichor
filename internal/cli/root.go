@@ -53,7 +53,10 @@ var rootCmd = &cobra.Command{
 	Long: `ichor is the CLI half of Ichor's CLI/UI parity (docs/design/architecture.md,
 "CLI and UI"): it changes the world by writing the same custom resources
 the UI and controller use, never by talking to a Talos node directly to
-mutate it.
+mutate it. Three commands are the exception, because no controller can act
+for them: 'ichor init' (the cluster does not exist yet), 'ichor restore cluster'
+(it is gone) and 'ichor reclaim node ADDRESS --talosconfig FILE' (it uses your
+own credential, which Ichor never stores). 'ichor adopt' only reads from nodes.
 
 After a command that reaches a cluster, ichor prints one line on stderr when the
 cluster knows of a newer Ichor release, or when this binary is older than that

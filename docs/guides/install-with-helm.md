@@ -272,7 +272,7 @@ still tags, not digests (residual risk).
 - Priority: both pods run under the PriorityClass `ichor-critical` (value
   1000000), created by the manifest and by the chart (`priorityClass.create`).
   It ranks above ordinary workloads and below every `system-*` class, so the
-  controller, the only writer to Talos nodes, is evicted last of the user
+  controller, which reconciles the Talos nodes, is evicted last of the user
   workloads. `system-cluster-critical` is not used: a user namespace may not
   use it by default.
 - Replicas: the raw install manifest runs one replica of each pod and has no

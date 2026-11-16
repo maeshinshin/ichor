@@ -72,7 +72,8 @@ const (
 	// installerImageTimeout bounds the registry requests that resolve and verify the installer image.
 	installerImageTimeout = 2 * time.Minute
 
-	// Reasons an Ichor upgrade pauses before it creates the installer Job.
+	// Reasons an Ichor upgrade pauses before it creates the installer Job. Unresolved: the registry could not be
+	// read (the tag, or the signature's referrers and bundles); Unverified: it was read and the signature fails.
 	reasonInstallerImageUnresolved = "InstallerImageUnresolved"
 	reasonInstallerImageUnverified = "InstallerImageUnverified"
 
@@ -342,6 +343,14 @@ func pinInstallerImage(
 
 	id := imagesig.IchorIdentity(tag)
 	if err := images.Verify(ctx, imagesig.Image{Repository: repo, Digest: digest}, id); err != nil {
+		// A registry that could not be read is not a signature that failed: nothing was read to its end.
+		if errors.Is(err, imagesig.ErrRegistry) {
+			return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnresolved,
+				err: fmt.Errorf("the signature of the installer image %s@%s could not be checked because the registry could not be read, "+
+					"so no installer Job was created (check that the registry is reachable from the controller; the image is neither verified "+
+					"nor shown to be unsigned; `ichor upgrade ichor --skip-signature-check` skips the check): %w", repo, digest, err)}
+		}
+
 		return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnverified,
 			err: fmt.Errorf("the installer image %s@%s is not verified, so no installer Job was created "+
 				"(fix the registry or mirror, or run the upgrade with `ichor upgrade ichor --skip-signature-check` to skip the check): %w", repo, digest, err)}

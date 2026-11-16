@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -184,6 +185,19 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 		Expect(err).To(MatchError(ContainSubstring("has no cosign signature")))
 		Expect(err).To(MatchError(ContainSubstring("--skip-signature-check")))
 		Expect(pauseReason(err)).To(Equal(reasonInstallerImageUnverified))
+		Expect(jobs()).To(BeEmpty())
+		Expect(currentInstallation().Status.InstallerImage).To(BeNil())
+	})
+
+	It("pauses with InstallerImageUnresolved, not Unverified, when the registry cannot be read to check the signature", func() {
+		startUpgrade()
+
+		unreadable := fmt.Errorf("listing the signatures of %s@%s: %w: connection reset", testInstallerRepo, testInstallerDigest, imagesig.ErrRegistry)
+		images := &fakeInstallerImages{digest: testInstallerDigest, verifyErr: unreadable}
+
+		_, err := upgrade(images, nil)
+		Expect(err).To(MatchError(ContainSubstring("connection reset")))
+		Expect(pauseReason(err)).To(Equal(reasonInstallerImageUnresolved))
 		Expect(jobs()).To(BeEmpty())
 		Expect(currentInstallation().Status.InstallerImage).To(BeNil())
 	})

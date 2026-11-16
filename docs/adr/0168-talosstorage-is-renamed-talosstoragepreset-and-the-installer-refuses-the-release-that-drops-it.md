@@ -1,6 +1,6 @@
 # 0168. `TalosStorage` is renamed `TalosStoragePreset`, and the installer refuses the release that drops the old kind while any object of it remains
 
-Status: Accepted · Date: 2026-11-17 · Design section: Storage · Supersedes in part: 0023
+Status: Accepted, amended · Date: 2026-11-17 · Design section: Storage · Supersedes in part: 0023
 
 Decided: `TalosStorage` is renamed `TalosStoragePreset` in one release, with no migration command and no dual read; `internal/installer` refuses that release while the old CRD still holds any object, and the operator recreates such objects by hand as `TalosStoragePreset`
 
@@ -131,3 +131,75 @@ This record supersedes part of ADR 0023. Its header records that as `Supersedes 
 - Whether the installer should refuse a removed enum value or a relaxed rule, which ADR 0167 also leaves open.
 - Whether the proto message `TalosStorageSection` should be renamed for consistency. Left unchanged here.
 - Whether an installation that does hit the refusal will need the migration command after all. Decided against now; revisit with a real case.
+
+## Amendment (2026-11-17): what was built, four places where the build differs from the Decision, and the inventory
+
+The rename is implemented on `feat/the-storage-kind-is-renamed`, head `57cdeecec`: ten commits over `182bb699e`, which is the head of `origin/main` when this amendment was written. This amendment says what the code does. The Decision text above is not edited; where this amendment differs from it, this amendment governs.
+
+### Built as decided
+
+- The kind is `TalosStoragePreset`, short name `tsp` (`api/v1alpha1/talosstoragepreset_types.go`), CRD `talosstoragepresets.ichor.maesh.dev`. The short-name open question is settled by this.
+- `TalosStorage` is removed from `api/`, the CRD bases, the chart, the RBAC, the controller, the render and the UI backend. The design, the guide and the reference name the new kind (`bd592835c`).
+- `internal/installer/crdcheck.go` holds `retiredKinds`, one entry: `{crd: talosstorages.ichor.maesh.dev, group: ichor.maesh.dev, version: v1alpha1, kind: TalosStorage}`.
+- `checkRetiredKinds` and `checkRetiredKind` in `internal/installer/install.go` refuse the install when the retired CRD still holds an object. The refusal reads:
+
+  > `%d %s object(s) remain in namespace(s) %s. This release removes the %s kind and does not read these objects, so the storage configuration each one selects would be dropped from its nodes. For each object: create a TalosStoragePreset with the same name, namespace and spec, check that the node configuration is what you expect, delete the %s, then run the install again. Once none remain, remove the empty CRD by hand with: kubectl delete crd %s (the installer never deletes a CRD)`
+
+### Difference 1: the helper ClusterRoles are renamed, not removed
+
+Decision 2 says the three helper ClusterRoles `ichor-talosstorage-{admin,editor,viewer}-role` are removed from the bundle. They are renamed to `ichor-talosstoragepreset-{admin,editor,viewer}-role`. The old names are entries of `renamedObjects` in `internal/installer/prune.go`, so an upgrade prunes them, including from a build that predates the inventory and so recorded none of them. The renaming is the design; the removal wording in Decision 2 is superseded by this paragraph.
+
+### Difference 2: the guard runs after the installer's own RBAC, and it lists cluster-wide
+
+Decision 2 says the refusal comes "before any object is applied". As built, `checkRetiredKinds` runs after the installer's cluster RBAC (stage 0) and namespaced RBAC (stage 1) are applied and waited on, and before stage 2 applies the CRDs, the controller, the UI and the policies. The list right is granted by the new installer ClusterRole, and an older release's role does not hold it, so the check cannot run earlier. The installer's own RBAC is the only thing written before the check. A refusal goes through `failWithRollback`, which restores the snapshots taken before the RBAC was applied.
+
+The list is cluster-wide. `checkRetiredKind` lists `TalosStorageList` without a namespace, and `config/rbac/ichor-installer/role.yaml` grants `list` on `talosstorages` in a ClusterRole rule. A namespaced grant would read only some namespaces and so miss objects elsewhere, which is the defect the guard exists to stop. A `Forbidden` answer on the list also refuses the install; that error is not an empty list.
+
+### Difference 3: the chart guard also runs on pre-install
+
+`dist/chart/templates/manager/retired-kinds-guard.yaml` is a hook Job for `pre-install` and `pre-upgrade`, with its ServiceAccount, a ClusterRole that grants `list` on `talosstorages` cluster-wide, and the binding. The Job runs the manager with `--check-retired-kinds` and exits non-zero while an object remains. Decision 2 named `pre-upgrade` only. `pre-install` is added on purpose: the chart's CRD is kept by `helm.sh/resource-policy: keep`, so a fresh install can land on a cluster that still holds the old CRD and its objects.
+
+**The hook ordering is inferred, not established.** Helm's documentation says that a failing Job hook fails the release. That the `pre-install` and `pre-upgrade` hooks run before the chart's other resources are applied is carried over from the install lifecycle; the template's own comment says the same. The installer's refusal does not depend on that ordering. What Helm does on `helm upgrade` when a CRD template that carried `keep` is removed is **not established**, and this release removes that template.
+
+### Difference 4: the selector rule is the pair ADR 0167 amended, not the one Decision 5 quotes
+
+Decision 5 says ADR 0167's object-level rule carries over unchanged. It does not. ADR 0167's amendment of 2026-11-17, on `origin/main`, records the rules as built on `TalosStoragePreset`: `self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)`, and `self.diskPreset != 'rook-v1' || !has(self.diskSelector)`. So `rook-v1` refuses a `diskSelector` at admission rather than accepting and ignoring it. The enum `longhorn-v1;rook-v1` carries over unchanged. This record defers to ADR 0167's amendment for the rule.
+
+### Inventory and its figures
+
+The inventory table in the Decision was dropped when this record was rewritten. This amendment restores it, with the counts at the commit named.
+
+Method: `git grep -c -i -P 'talosstorage|talos-storage|talos storage|\btsto\b' <rev> -- . ':!docs/adr'`. The `\btsto\b` is word-bounded. The earlier pattern `tsto\b` also matched `ConvertsTo` in `internal/tools/mirrorgen/main_test.go`, which has no kind reference; the word-bounded form removes that false match. CHANGELOG is included in these counts.
+
+- At `182bb699e` (origin/main, the base of the implementation): **79 files, 406 hits**.
+- At `de89291ff`: **77 files, 359 hits**.
+- Between them: two files are new (`dist/chart/user_roles_test.go`, `ui/src/components/CreateStorageDialog.tsx`), 17 files changed in all, and 47 hits were added net.
+
+Per area at `182bb699e`, outside `docs/adr`:
+
+| Area | Files | Hits | Examples |
+|---|---|---|---|
+| API types, deepcopy, tests | 4 | 43 | `api/v1alpha1/talosstorage_types.go`, `zz_generated.deepcopy.go` |
+| CRD bases, chart CRD, samples, testdata, PROJECT | 7 | 32 | `config/crd/bases/ichor.maesh.dev_talosstorages.yaml`, `dist/chart/testdata/user_flows.yaml` |
+| Chart test | 1 | 1 | `dist/chart/user_roles_test.go` |
+| RBAC (config and chart, UI markers) | 20 | 50 | `config/rbac/talosstorage_{admin,editor,viewer}_role.yaml`, `dist/chart/templates/rbac/*` |
+| Controller and `cmd/main.go` | 10 | 88 | `internal/controller/talosstorage_controller.go` and its test, `evacuation.go` |
+| Render | 6 | 28 | `pkg/render/system.go` |
+| `pkg/storage` | 4 | 14 | `pkg/storage/select.go` |
+| UI backend | 9 | 51 | `internal/uiapi/storage_service.go`, `node_service.go` |
+| Proto, generated Go and TS, UI | 10 | 66 | `proto/ichor/v1alpha1/storage.proto`, `ui/src/pages/StorageList.tsx`, `ui/src/lib/i18n.ts` |
+| Docs other than ADRs | 7 | 23 | `docs/design/architecture/storage.md`, `docs/guides/rook-ceph.md`, `docs/reference/crds/talosstorage.md` |
+| CHANGELOG | 1 | 10 | `CHANGELOG.md` (the maintainer writes the entry) |
+
+The ADR files (`docs/adr/`, 22 files, 90 hits) keep their historical names and are not rewritten, except for status markers.
+
+Tracked filenames at `182bb699e` containing `talosstorage`, `talos-storage` or `talos_storage` number 15; 13 are outside `docs/adr`. Those 13: `api/v1alpha1/talosstorage_types.go`, `config/crd/bases/ichor.maesh.dev_talosstorages.yaml`, `config/rbac/talosstorage_{admin,editor,viewer}_role.yaml`, `config/samples/ichor_v1alpha1_talosstorage.yaml`, `dist/chart/templates/crd/talosstorages.ichor.maesh.dev.yaml`, `dist/chart/templates/rbac/talosstorage-{admin,editor,viewer}-role.yaml`, `docs/reference/crds/talosstorage.md`, `internal/controller/talosstorage_controller.go` and `talosstorage_controller_test.go`. The other two are `docs/adr/0023-talos-storage-…` and `docs/adr/0050-talos-storage-…`.
+
+Left on the implementation head `57cdeecec`: 18 files outside `docs/adr` still contain the old name. Nine are the guard and its own tests and fixtures, which must name the kind. Eight are the `TalosStorageSection` proto section and its readers (`proto/ichor/v1alpha1/talosdetails.proto`, its generated Go and TS, and the UI backend's section reads), which Decision 4 keeps. One is `CHANGELOG.md`.
+
+### Open, after this amendment
+
+- The short name is settled as `tsp`.
+- What Helm does on upgrade when a `keep`-annotated CRD template is removed: not established.
+- Whether the `pre-install` and `pre-upgrade` hooks run before the chart's other resources on upgrade: inferred, not established.
+- Whether the proto message `TalosStorageSection` should be renamed: left as built.

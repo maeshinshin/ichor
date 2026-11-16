@@ -28,6 +28,7 @@ import (
 // values, replica counts, and so on) lives in Argo CD, not here -- Ichor only owns layer 1
 // (Talos-side preparation) and layer 4 (node-operation coordination, a separate work unit).
 // +kubebuilder:validation:XValidation:rule="self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)",message="diskSelector is required for longhorn-v1"
+// +kubebuilder:validation:XValidation:rule="self.diskPreset != 'rook-v1' || !has(self.diskSelector)",message="rook-v1 writes no disk config, so a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStorage from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one update"
 type TalosStorageSpec struct {
 	// clusterRef names the TalosCluster this storage configuration applies to.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
@@ -48,7 +49,7 @@ type TalosStorageSpec struct {
 	// diskSelector is a Talos disk-selector CEL expression (the same language
 	// provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
 	// document) choosing which disk on each selected node is handed to the storage system. Required
-	// for longhorn-v1 (see TalosStorageSpec); rook-v1 writes no disk config and ignores it.
+	// for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStorageSpec).
 	// +optional
 	DiskSelector string `json:"diskSelector,omitempty"`
 

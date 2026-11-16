@@ -961,8 +961,13 @@ var _ = Describe("TalosStorage diskSelector", func() {
 		},
 		Entry("longhorn-v1 with a selector", "longhorn-v1", nvme, true),
 		Entry("longhorn-v1 without a selector", "longhorn-v1", "", false),
-		Entry("rook-v1 with a selector", "rook-v1", nvme, true),
+		Entry("rook-v1 with a selector", "rook-v1", nvme, false),
 		Entry("rook-v1 without a selector", "rook-v1", "", true),
 		Entry("an unlisted preset", "raw", nvme, false),
 	)
+
+	It("tells a rook-v1 writer which field to remove", func() {
+		err := k8sClient.Create(context.Background(), newStorage("rook-v1", nvme))
+		Expect(err).To(MatchError(ContainSubstring("remove spec.diskSelector")))
+	})
 })

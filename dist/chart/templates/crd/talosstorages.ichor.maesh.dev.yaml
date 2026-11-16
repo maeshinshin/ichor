@@ -86,7 +86,7 @@ spec:
                   diskSelector is a Talos disk-selector CEL expression (the same language
                   provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
                   document) choosing which disk on each selected node is handed to the storage system. Required
-                  for longhorn-v1 (see TalosStorageSpec); rook-v1 writes no disk config and ignores it.
+                  for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStorageSpec).
                 type: string
               evacuationTimeout:
                 description: |-
@@ -150,6 +150,10 @@ spec:
             - message: diskSelector is required for longhorn-v1
               rule: self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) &&
                 size(self.diskSelector) > 0)
+            - message: 'rook-v1 writes no disk config, so a diskSelector would do
+                nothing: remove spec.diskSelector. To move a TalosStorage from longhorn-v1
+                to rook-v1, change diskPreset and remove diskSelector in one update'
+              rule: self.diskPreset != 'rook-v1' || !has(self.diskSelector)
           status:
             description: status defines the observed state of TalosStorage
             properties:

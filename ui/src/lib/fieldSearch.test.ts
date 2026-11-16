@@ -4,10 +4,11 @@ import { test as nodeTest, type TestContext } from 'node:test'
 import { complete, getField, inputKind, keyCount, pickField, removeField, renameKey, searchFields, setField, settle, steps, type Chosen, type FieldRow } from './fieldSearch.ts'
 
 const read = (name: string) => JSON.parse(readFileSync(new URL(name, import.meta.url), 'utf8'))
-// The index is written, untracked, by make ui-fieldindex, so a clone that has not run it skips these tests with the target's name.
-const missing = existsSync(new URL('../gen/fieldindex.json', import.meta.url)) ? false : 'ui/src/gen/fieldindex.json is missing: run make ui-fieldindex'
-const test = (name: string, fn: (t: TestContext) => void | Promise<void>) => nodeTest(name, { skip: missing }, fn)
-const rows: FieldRow[] = missing ? [] : read('../gen/fieldindex.json')
+// The index is written, untracked, by make ui-fieldindex. Without it this module throws at load, so a bare npm test
+// fails naming the command; skipping every test would report green.
+if (!existsSync(new URL('../gen/fieldindex.json', import.meta.url))) throw new Error('ui/src/gen/fieldindex.json is missing: run make ui-fieldindex')
+const test = (name: string, fn: (t: TestContext) => void | Promise<void>) => nodeTest(name, fn)
+const rows: FieldRow[] = read('../gen/fieldindex.json')
 const row = (path: string) => {
   const r = rows.find((x) => x.path === path)
   assert.ok(r, `${path} is not in the index`)

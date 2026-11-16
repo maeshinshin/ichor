@@ -753,6 +753,8 @@ command does. Each item is described where it is listed below.
   SSPL or BUSL.
 - The Gateway API CRDs that `ichor init --gateway-api` applies are embedded with
   their upstream copyright notice, and `THIRD-PARTY-NOTICES` names them.
+- `THIRD-PARTY-NOTICES` names both vendored copies of Radix UI Primitives, in
+  `ui/src/lib/radix` and in `site/src/lib/radix`.
 
 ### Docs
 

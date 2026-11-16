@@ -44,12 +44,13 @@ const (
 	bodyBackstop = 2 << 20
 )
 
-// mountRPC registers every Connect service on mux behind the metrics, access-log and auth interceptors.
+// mountRPC registers every Connect service on mux behind the metrics, access-log and auth interceptors. The
+// version header comes after auth, so only an authenticated call is answered with it (ADR 0059).
 func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
 	opts := func(max int) connect.HandlerOption {
 		return connect.WithHandlerOptions(
 			connect.WithReadMaxBytes(max),
-			connect.WithInterceptors(uiapi.SanitizeErrors(log.Default()), uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn)),
+			connect.WithInterceptors(uiapi.SanitizeErrors(log.Default()), uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn), uiapi.VersionHeaderInterceptor()),
 		)
 	}
 	small, big := opts(rpcMaxBytes), opts(rpcMaxBytesUpload)

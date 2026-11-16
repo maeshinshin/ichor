@@ -26,7 +26,9 @@ import (
 
 	"k8s.io/client-go/rest"
 
+	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
 	"github.com/maeshinshin/ichor/internal/uiapi"
+	"github.com/maeshinshin/ichor/internal/version"
 )
 
 func TestRPCBodyLimit(t *testing.T) {
@@ -153,4 +155,30 @@ func TestInternalServerLimits(t *testing.T) {
 	}
 
 	assertTLS(t, srv.TLSConfig)
+}
+
+// The version header goes only to an authenticated RPC response (ADR 0059, amendment 2026-11-16): the
+// pages and a refused call carry none, so an anonymous caller learns nothing about the running version.
+func TestVersionHeaderIsNotSentToAnonymousCallers(t *testing.T) {
+	saved := version.Version
+	t.Cleanup(func() { version.Version = saved })
+	version.Version = "v9.9.9-version-test"
+
+	page := securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), contentSecurityPolicy(false))
+	rec := httptest.NewRecorder()
+	page.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if got := rec.Header().Get("X-Ichor-Version"); got != "" {
+		t.Errorf("page: X-Ichor-Version = %q, want none", got)
+	}
+
+	// No sign-in is configured here, so every call is refused: the refusal must carry no version either.
+	mux := http.NewServeMux()
+	mountRPC(mux, &uiapi.Server{}, nil)
+	req := httptest.NewRequest(http.MethodPost, ichorv1alpha1connect.ClusterServiceListClustersProcedure, strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if got := rec.Header().Get("X-Ichor-Version"); got != "" {
+		t.Errorf("refused RPC: X-Ichor-Version = %q, want none", got)
+	}
 }

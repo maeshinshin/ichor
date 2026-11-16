@@ -35,6 +35,35 @@ same values.
 - `--l2-announcements` sets Cilium's `l2announcements.enabled` and takes the pool
   from `--l2-pool`. Init does not create the pool or the policy; you do (below).
 
+## Gateway API on a cluster init did not set up
+
+`--gateway-api` is read by `ichor init` only. On a cluster that already runs, Ichor
+does not install the Gateway API CRDs, and it refuses `gatewayAPI.enabled` until
+the `gateways` CRD exists. Install them yourself, then turn the setting on:
+
+1. Apply the seven CRDs from Gateway API v1.6.1, the release Cilium 1.20 requires
+   at minimum (Cilium's Gateway API documentation):
+
+   ```sh
+   for crd in backendtlspolicies gatewayclasses gateways grpcroutes httproutes referencegrants tlsroutes; do
+     kubectl apply --server-side -f "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_${crd}.yaml"
+   done
+   ```
+
+2. Make sure kube-proxy is replaced, since Cilium's Gateway API needs it:
+   `ichor set kube-proxy replaced`.
+
+3. Set `gatewayAPI.enabled: true`. `ichor apply cni-values -f FILE` replaces your
+   whole layer of Cilium's values, so start from `ichor get cni-values` and keep
+   what is already there.
+
+Ichor does not check the CRDs' release or their other six members. It checks only
+that the `gateways` CRD exists, so a set at an older release passes the check, and
+Cilium 1.20 does not support it. If you have `TLSRoute` objects at `v1alpha2`, use
+the experimental `TLSRoute` CRD from v1.6.1 instead of the standard one, as Cilium's
+upgrade notes say, or those objects become unreadable. Ichor never deletes or
+upgrades CRDs it did not install.
+
 ## What you write
 
 Cilium's L2 announcements need two cluster resources. Ichor has no typed kind for
@@ -109,5 +138,6 @@ firstNode:
 - L2 announcements answer ARP from one node at a time per address; the leader
   moves when its lease lapses. This is not load balancing, and it works only on
   the LAN segment the pool belongs to.
-- Existing clusters: not in this release. The flags exist only on `ichor init`, and an
-  existing cluster keeps its CNI settings.
+- Existing clusters: the flags exist only on `ichor init`, and an existing cluster keeps
+  its CNI settings. Gateway API can be turned on afterwards; see "Gateway API on a cluster
+  init did not set up".

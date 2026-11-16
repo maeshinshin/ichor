@@ -516,6 +516,13 @@ command does. Each item is described where it is listed below.
   said the rollout clears the marker. It sets the `TalosMachine` condition to `False`
   with reason `Converged` and leaves it there until the next rollout. The reason is not
   renamed, and `kubectl explain talosmachine.status.conditions` now explains it.
+- **ADRs 0067, 0080 and 0087 say that a name that cannot be read stops the run.** Each
+  said the controller's own node goes last and not that the operation stops when a
+  machine's node name cannot be read and the controller's machine is not among those
+  that can be named. Each now carries a dated amendment that says when it stops, which
+  operations it covers, that the etcd restore already behaved so, and what the operator
+  sees: the operation retries with backoff and does not pause, and the reason is in the
+  controller log only.
 - A missing cosign signature of the installer image now says what was looked
   for: the signature referrer, through the referrers API or the
   `sha256-<hex>` tag of the digest. It used to say only that the image had no

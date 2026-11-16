@@ -55,3 +55,9 @@ Decided: the docs carry a few diagrams as draw.io files in `docs/images/`, each 
 5. **Check.** `make docs-check` opens the page of every diagram at desktop and phone width in both themes, checks that both images are there, exactly one is visible and it loaded, that the page has alt text, a caption and no sideways scroll, and takes a screenshot of each (`<size>-<theme>-diagram-<name>.png`).
 
 Consequences: a diagram is edited in draw.io on the light file and exported again with one command; the dark file is never edited by hand and can drift only if someone forgets to export (a review sees the pair in one diff). The palette (neutral greys, indigo for Ichor's parts and a person's actions, amber for waiting, green for done, red for no way back) is kept by copying shapes, not enforced. The labels are HTML, drawn with the viewer's own font (Helvetica where present), so a diagram is laid out with room to spare for a wider fallback font. On a phone the diagram is scaled down to the column and is read by opening its SVG.
+
+## Amendment (2026-11-16): diagram labels are plain SVG text, not HTML
+
+Decided: every label in a diagram in `docs/images/` is plain SVG text. The root cells and every label cell carry `html=0`, and a diagram with an HTML label (`html=1` on a cell) or a `foreignObject` in its SVG breaks the rule. `make test` fails on such a diagram (`internal/tools/diagramlabels`, which reads every `docs/images/*.drawio.svg` and `*.drawio`).
+
+The 2026-11-06 amendment says of the diagrams: "The labels are HTML, drawn with the viewer's own font (Helvetica where present)". That was true of the diagrams as first drawn, and is no longer. The labels were changed to plain SVG text, `html=0`, so that phones render them (the commits with "plain SVG text labels so phones render them" in their subject). The font is unchanged: each cell still names `fontFamily=Helvetica`, and the viewer's own font applies where present.

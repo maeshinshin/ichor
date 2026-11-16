@@ -186,3 +186,12 @@ labels on the line, text is 12 px or more, and a diagram is about 900 px wide.
 The export drops the PNG copies of the labels that draw.io adds for viewers
 without `foreignObject` (700 KB a diagram), as browsers and GitHub draw the live
 text.
+
+Labels are plain SVG text, not HTML. The root cells and every label cell carry
+`html=0` (Edit Style shows it), and no cell has `html=1`. The rule exists so
+that phones render the diagrams (ADR 0132). A cell copied in from another
+diagram can bring `html=1` along. To fix one, set `html=0` on that cell in Edit
+Style, save the light file and run `make docs-diagrams` again. The check is
+`go test ./internal/tools/diagramlabels/`, and `make test` runs it. It fails on
+any cell with `html=1` and on any `foreignObject` in an SVG under `docs/images`,
+and it names the file and the cell.

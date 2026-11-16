@@ -26,3 +26,11 @@ test('both radix trees keep the local fixes to the registry files', () => {
     assert.doesNotMatch(read(root, 'internal/modal-layer.ts'), /paddingRight/, 'scroll lock relies on `html { scrollbar-gutter: stable }`')
   }
 })
+
+// The portal reads Preact's minified internals, so a Preact that moves on its own would break it where nothing renders to notice.
+test('both apps pin Preact to an exact version', () => {
+  for (const app of ['../../package.json', '../../../site/package.json']) {
+    const { preact } = JSON.parse(readFileSync(new URL(app, import.meta.url), 'utf8')).dependencies
+    assert.match(preact, /^\d+\.\d+\.\d+$/, `${app} has preact ${preact}`)
+  }
+})

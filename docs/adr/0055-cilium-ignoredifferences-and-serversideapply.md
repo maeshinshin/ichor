@@ -1,6 +1,6 @@
 # 0055. Cilium stays Synced under Argo CD with ignoreDifferences on CiliumIdentity and ServerSideApply
 
-Status: Accepted (amended); superseded in part by ADR 0099 · Date: 2026-10-26 · Design section: CNI, GitOps and Argo CD
+Status: Accepted (amended); superseded in part by ADR 0099; Argo CD removed by ADR 0101 · Date: 2026-10-26 · Design section: CNI, GitOps and Argo CD
 
 Decided: The generated Cilium Application carries `ignoreDifferences: [{group: cilium.io, kind: CiliumIdentity}]` and `ServerSideApply=true`, without `RespectIgnoreDifferences=true`; Hubble certificates stay on `hubble.tls.auto.method=cronJob`; Kokumi cannot carry either setting today, so that case is an open question; the generated Cilium and root Applications use automated sync with prune and selfHeal (addendum 2026-10-26)
 
@@ -174,3 +174,7 @@ these two builders, flannel's `ArgoCDApplication` returns nil):
 
 Without `--argocd` (or with `handover: disabled`) no Application is generated and
 nothing changes.
+
+## Amendment (2026-11-16): ADR 0101 removed the Application this decision describes
+
+The Decision and the Context describe a generated Cilium Argo CD Application with a kind-only `ignoreDifferences` entry. Ichor no longer generates that Application: the Argo CD builders were removed on 2026-10-29, and ADR 0101 removes Argo CD from Ichor. The Application, the entry and the Argo CD and Kokumi comparison above are the history of this decision, not the current behaviour.

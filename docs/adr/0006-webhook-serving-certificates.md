@@ -167,3 +167,7 @@ Decision: the webhook server does not start until its certificate exists.
 separate from the 15 min node wait), and reports the last real server answer
 when that wait ends rather than the client's own "rate limiter ... deadline
 exceeded".
+
+## Amendment (2026-11-16): the chart ships no Argo CD Application or `ignoreDifferences` entry
+
+The Decision's bullet that asks the chart to ship an `ignoreDifferences` entry and an Argo CD Application example (`dist/chart/examples/argocd-application.yaml`) describes what ADR 0101 removed. The example was deleted on 2026-10-29, when Ichor stopped managing Argo CD, and no Argo CD Application or `ignoreDifferences` entry ships. The other statements in this ADR are unchanged.

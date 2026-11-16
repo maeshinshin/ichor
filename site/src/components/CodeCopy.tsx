@@ -2,6 +2,7 @@ import { Check, Copy } from 'lucide-preact'
 import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
+import { CodeBlockCopyButton } from '@/components/ui/code-block'
 
 function CopyButton({ pre }: { pre: HTMLElement }) {
   const [done, setDone] = useState(false)
@@ -30,7 +31,8 @@ function CopyButton({ pre }: { pre: HTMLElement }) {
 export function CodeCopy() {
   useEffect(() => {
     for (const pre of document.querySelectorAll<HTMLElement>('article pre')) {
-      if (pre.dataset.copy) continue
+      // A fence with options is a preactcn CodeBlock, with its own copy button below.
+      if (pre.dataset.copy || pre.closest('[data-slot=code-block]')) continue
       pre.dataset.copy = 'true'
       const wrap = document.createElement('div')
       wrap.className = 'relative'
@@ -39,6 +41,12 @@ export function CodeCopy() {
       const mount = document.createElement('div')
       wrap.append(mount)
       render(<CopyButton pre={pre} />, mount)
+    }
+    for (const actions of document.querySelectorAll<HTMLElement>('article [data-slot=code-block-actions]')) {
+      if (actions.dataset.copy) continue
+      actions.dataset.copy = 'true'
+      const lines = actions.closest('[data-slot=code-block]')?.querySelectorAll('[data-slot=code-block-line]') ?? []
+      render(<CodeBlockCopyButton value={Array.from(lines, (line) => line.textContent).join('\n')} />, actions)
     }
   }, [])
   return null

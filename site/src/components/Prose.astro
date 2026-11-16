@@ -11,6 +11,7 @@ import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 import { Link } from 'lucide-preact'
 import { buttonVariants } from '@/components/ui/button'
+import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from '@/components/ui/code-block'
 import { Callout, type CalloutKind } from './Callout'
 
 const html = await Astro.slots.render('default')
@@ -29,6 +30,28 @@ function callouts() {
         parent.children[i] = { type: 'element', tagName: 'div', properties: { className: ['overflow-x-auto'] }, children: [node] }
         return 'skip'
       }
+    })
+  }
+}
+
+/**
+ * A fence with options (plugins/fence.mjs) becomes the preactcn CodeBlock. Its lines are Shiki's, already highlighted at
+ * build time, so nothing is highlighted in the browser; CodeCopy mounts the copy button into its actions.
+ */
+function codeBlocks() {
+  return (tree: any) => {
+    visit(tree, 'element', (node: any, i, parent: any) => {
+      const { dataTitle: title, dataLineNumbers: numbered } = node.properties ?? {}
+      if (node.tagName !== 'pre' || (title === undefined && numbered === undefined)) return
+      const lines = (node.children.find((c: any) => c.tagName === 'code')?.children ?? []).filter((c: any) => c.properties?.className?.includes('line'))
+      const html = (line: any) => String(unified().use(rehypeStringify).stringify({ type: 'root', children: line.children } as any))
+      const block = h(CodeBlock, { className: 'not-prose my-4' },
+        title === undefined ? h(CodeBlockActions, {}) : h(CodeBlockHeader, {}, h(CodeBlockTitle, {}, title), h(CodeBlockActions, {})),
+        h(CodeBlockContent, { className: 'astro-code', lineNumbers: numbered !== undefined },
+          lines.map((line: any) => h(CodeBlockLine, {}, h('span', { dangerouslySetInnerHTML: { __html: html(line) } })))),
+      )
+      parent.children[i] = fromHtml(renderToString(block), { fragment: true }).children[0]
+      return 'skip'
     })
   }
 }
@@ -61,7 +84,7 @@ function headingLinks() {
   }
 }
 
-const out = String(await unified().use(rehypeParse, { fragment: true }).use(callouts).use(headingLinks).use(rehypeStringify).process(html))
+const out = String(await unified().use(rehypeParse, { fragment: true }).use(callouts).use(codeBlocks).use(headingLinks).use(rehypeStringify).process(html))
 ---
 
 <div class="prose prose-neutral max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:text-foreground prose-img:mx-auto prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none [&_td]:min-w-40 [&_td]:break-words" set:html={out} />

@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -91,7 +92,10 @@ func TestParseADRsIsDeterministic(t *testing.T) {
 // removedCommandPaths are the CLI command paths that the verb-first surface
 // (b0a9823cc) retired. An ADR names the current command, so none of these may
 // appear in one, as `ichor <path>` or as a `<path>` code span. A later rename adds
-// its old path here.
+// its old path here. The ADR that removed a command (removedBy) may name it: that is
+// the removal's own record.
+var removedBy = map[string]string{"node reset": "0135", "operation retry": "0095"}
+
 var removedCommandPaths = []string{
 	"auth kubeconfig",
 	"auth status",
@@ -133,6 +137,7 @@ var removedCommandPaths = []string{
 	"node pcap",
 	"node reboot",
 	"node remove",
+	"node reset",
 	"node restart-service",
 	"node shutdown",
 	"node support-bundle",
@@ -140,6 +145,7 @@ var removedCommandPaths = []string{
 	"operation get",
 	"operation list",
 	"operation pause",
+	"operation retry",
 	"operation resume",
 	"patch create",
 	"patch delete",
@@ -147,6 +153,7 @@ var removedCommandPaths = []string{
 	"patch list",
 	"patch preview",
 	"patch update",
+	"self-upgrade",
 	"settings get",
 	"settings set",
 	"user create",
@@ -167,6 +174,10 @@ func TestNoADRNamesARemovedCommand(t *testing.T) {
 	for _, cmd := range removedCommandPaths {
 		re := regexp.MustCompile("(ichor |`)" + regexp.QuoteMeta(cmd) + "([^a-z-]|$)")
 		for _, path := range paths {
+			// The index repeats each ADR's Decided line, so its source is the file to fix.
+			if base := filepath.Base(path); base == "README.md" || strings.HasPrefix(base, removedBy[cmd]+"-") {
+				continue
+			}
 			body, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("reading %s: %v", path, err)

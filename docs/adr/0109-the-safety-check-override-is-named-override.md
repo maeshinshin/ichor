@@ -12,7 +12,7 @@ The user decided on 2026-11-03 that the previous name should disappear from Icho
 
 Renames, all in one change:
 
-- CLI: the flag `--override "<reason>"` replaces the earlier flag, with no alias. `ichor node reset` and the live etcd restore need it exactly as before.
+- CLI: the flag `--override "<reason>"` replaces the earlier flag, with no alias. `ichor delete node` and the live etcd restore need it exactly as before.
 - RBAC: the custom verb is `override` on `ichor.maesh.dev` resources, in every shipped role (`config/rbac/override_role.yaml`, the chart's `ichor-override-role`, the installer's role list) and in every SubjectAccessReview. The old verb is not accepted.
 - Connect API: the message is `Override` and the request fields are `override` and `override_required`. The field numbers are kept, so the binary wire format is unaffected. The JSON names change; the UI and CLI are built from the same proto and ship together.
 - Go: `Override*` and `override*` identifiers, `OverrideVerb`, `OverrideHandler`, `SetupOverrideWebhookWithManager`; files `internal/webhook/v1alpha1/override_*.go` and `internal/uiapi/override.go`.

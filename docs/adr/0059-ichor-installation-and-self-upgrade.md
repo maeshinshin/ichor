@@ -82,7 +82,7 @@ including the `--local` fallback) before a command marked as a write: `approve n
 `apply/delete patch`. Reads are never refused. It refuses only on a positive finding: no
 `IchorInstallation`, no reported version, an unreadable cluster, a `dev` build or different majors mean "cannot
 judge" and the command proceeds. Not marked yet: `init`, `adopt`, `restore`, `gitops` (they run before the
-server exists or against its absence; revisit when `ichor self-upgrade` lands). `ichor init` now creates the
+server exists or against its absence; revisit when `ichor upgrade ichor` lands). `ichor init` now creates the
 `IchorInstallation` with its own version (skipped for a `dev` build).
 
 **7. UI response header: not built.** Nothing sends or reads it; the version badge (`ui/src/lib/ichorVersion.ts`)
@@ -120,8 +120,8 @@ below were built later; see "Amendment (the remaining items, built)".)
 installer (snapshot, additive check, ordered apply, post-checks, rollback), its image and RBAC: built. 4. CLI skew refusal: built; UI header: **not started** (above). 5. `external`: no Job
 launched, built; opening the PR: **not started** (above).
 
-Also not built: `ichor self-upgrade` (creates the operation and, in external mode, the PR) -- today the
-operation is written by hand like any TalosOperation; `ichor self-upgrade --local` as the way out of a broken
+Also not built: `ichor upgrade ichor` (creates the operation and, in external mode, the PR) -- today the
+operation is written by hand like any TalosOperation; `ichor upgrade ichor --local` as the way out of a broken
 controller; snapshot garbage collection; `ttlSecondsAfterFinished` on the Job (a finished Job and its snapshot
 stay until deleted).
 

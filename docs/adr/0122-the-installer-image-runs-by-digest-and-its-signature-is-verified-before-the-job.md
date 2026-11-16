@@ -50,7 +50,7 @@ Rejected: a controller flag or chart value that turns verification off for the w
 
 ### 5. Failure
 
-The executor returns a typed error; `advanceIchor` pauses the operation (ADR 0026) with the reason `InstallerImageUnresolved` (the tag did not resolve: registry unreachable, tag missing, egress) or `InstallerImageUnverified` (no signature, a signature that does not verify, wrong identity, wrong digest) and the full message. No Job is created, so the installer ServiceAccount does not run, nothing is snapshotted and nothing is applied. Resuming (ADR 0095's retry annotation, `ichor operation retry`) re-runs resolve and verify. Nothing ever falls back to the tag or to unverified.
+The executor returns a typed error; `advanceIchor` pauses the operation (ADR 0026) with the reason `InstallerImageUnresolved` (the tag did not resolve: registry unreachable, tag missing, egress) or `InstallerImageUnverified` (no signature, a signature that does not verify, wrong identity, wrong digest) and the full message. No Job is created, so the installer ServiceAccount does not run, nothing is snapshotted and nothing is applied. Resuming (ADR 0095's retry annotation, `ichor resume operation`) re-runs resolve and verify. Nothing ever falls back to the tag or to unverified.
 
 ### 6. The apiserver enforces the digest form
 

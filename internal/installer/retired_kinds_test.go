@@ -58,7 +58,7 @@ func (c listRefusedClient) List(ctx context.Context, list client.ObjectList, opt
 
 // The installer refuses to install while a TalosStorage object remains: this release does not read
 // the kind, so the node configuration of the object's nodes would silently lose its volume document.
-// A deliberate break that turns this refusal into a warning fails this test and no other.
+//
 func TestInstallerRefusesWhileATalosStorageObjectRemains(t *testing.T) {
 	f := newFixture(t)
 
@@ -98,8 +98,6 @@ func TestInstallerAllowsAnEmptyRetiredCRD(t *testing.T) {
 
 // A list that fails is not an empty list. The installer refuses, and the message says it could not
 // read the objects, so the operator fixes the rights instead of recreating objects that may not exist.
-// A deliberate break that treats a failed list as empty fails this test and no other, because the
-// CRD is present and empty in this test.
 func TestInstallerRefusesWhenTheTalosStorageListFails(t *testing.T) {
 	f := newFixture(t)
 

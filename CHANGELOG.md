@@ -679,6 +679,18 @@ command does. Each item is described where it is listed below.
   for all six kinds, where it used to leave the decision to the webhook, and the
   checks the settings, Cilium values and reclaim handlers make about the caller
   answer no when there is no caller, where they answered yes.
+- **ichor-ui's ServiceAccount holds no write verb on the resources a signed-in user
+  changes.** It no longer holds `create`, `update` or `delete` on `talosoperations`
+  and `talosconfigpatches`, `update` on `talosclusters`, `ichorinstallations`,
+  `talosmachines` and `talosetcdbackups`, `update` on `ichorinstallations/settings`
+  and on the `ichor-user-credentials` Secret, or `create`, `update` and `delete` on
+  `machinereclaims`, in the Helm chart's role and in `config/rbac`. Each of those
+  writes was already made as the signed-in user, so what a user can do does not
+  change: the write is judged as that user, and the ServiceAccount's grant was never
+  the identity behind it. The ServiceAccount keeps its reads, and the writes it
+  makes for itself: the Events an override or a download records, the certificate
+  and cluster-fact requests it sends the controller, and the patch to the credentials
+  Secret.
 - ichor-ui refuses `--allow-unauthenticated` and `ICHOR_ALLOW_UNAUTHENTICATED=true`
   at startup, and does not start with neither `--users-enabled` nor `--oidc-issuer`.
   Its read-only calls for an anonymous caller (`readOnlyProcedures`) are gone: an
@@ -851,6 +863,14 @@ command does. Each item is described where it is listed below.
 - **ADRs 0055 and 0006 say that the Argo CD Application they describe is gone.**
   ADR 0101 removed it; both still described it in the present tense, and 0006
   named a chart example that no longer exists.
+- **ADR 0023 says when a second storage preset needs more than a new file, and ADR
+  0025 gives the real reason it does not read `ScheduledReplica`.** The claim that a
+  preset is "a new `Preset` implementation and one new `case`, nothing else" does
+  not hold for `longhorn-v2`, whose disk is named per node, an input the `Preset`
+  interface does not take. ADR 0025 now says that `ScheduledReplica` is emptied when a
+  disk is not Ready, so it cannot tell a finished eviction from a disk that went away,
+  and that Longhorn's node webhook judges the object a write leaves, not the number
+  of writes. Ichor still writes the two eviction values as two updates, in order.
 
 - The guides, concepts, getting started, the design document, the diagrams and
   the README name the verb-first commands, and say that `adopt` takes Talos

@@ -112,8 +112,9 @@ export function buildPatchTarget(layer: LayerKey, role: string, labelSelectorTex
 
 // canSavePatch gates the Save button: a layer is chosen and the target value
 // that layer asks for is filled (a selector always has a value: its JSON).
-export function canSavePatch(f: { name: string; hasCluster: boolean; layer: LayerKey; role: string; machineRef: string }): boolean {
-  if (f.name === '' || !f.hasCluster || f.layer === 'unset') return false
+// configOk is the config's own check: no required setting missing, and no setting in the way of another (lib/fieldSearch).
+export function canSavePatch(f: { name: string; hasCluster: boolean; layer: LayerKey; role: string; machineRef: string; configOk: boolean }): boolean {
+  if (f.name === '' || !f.hasCluster || f.layer === 'unset' || !f.configOk) return false
   if (f.layer === 'role') return f.role !== ''
   if (f.layer === 'machine') return f.machineRef !== ''
   return true

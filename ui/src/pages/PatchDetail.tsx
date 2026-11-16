@@ -27,7 +27,8 @@ import { t, type Key } from '@/lib/i18n'
 import { FieldInput } from '@/components/FieldInput'
 import { previewKey } from '@/lib/patchDocs'
 import { FieldSearchDialog } from '@/components/FieldSearchDialog'
-import { pickField, removeField, renameKey, settle, type Chosen, type FieldRow } from '@/lib/fieldSearch'
+import { pickField, removeField, renameKey, requiredMissing, scalarBlock, settle, steps, withRequiredSiblings, complete, type Chosen, type FieldRow } from '@/lib/fieldSearch'
+import { loadFieldIndex } from '@/lib/fieldIndex'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
@@ -94,6 +95,9 @@ export function PatchDetail({ name }: { name?: string }) {
   const [config, setConfig] = useState('{}')
   const [chosen, setChosen] = useState<Chosen[]>([])
   const [searching, setSearching] = useState(false)
+  // The field index holds the schema's required lists (lib/fieldSearch requiredMissing). Without it the required check is not run, and the page says so.
+  const [indexRows, setIndexRows] = useState<FieldRow[] | null>(null)
+  const [indexFailed, setIndexFailed] = useState(false)
 
   const [saveError, setSaveError] = useState<ErrorShape | null>(null)
   const [saving, setSaving] = useState(false)
@@ -103,6 +107,10 @@ export function PatchDetail({ name }: { name?: string }) {
   const [previewedKey, setPreviewedKey] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<ErrorShape | null>(null)
   const [previewing, setPreviewing] = useState(false)
+
+  useEffect(() => {
+    loadFieldIndex().then(setIndexRows, () => setIndexFailed(true))
+  }, [])
 
   // The machine picker lists the chosen cluster's machines.
   useEffect(() => {
@@ -227,9 +235,12 @@ export function PatchDetail({ name }: { name?: string }) {
     }
   }
 
-  // Choosing a search row puts its setting among the chosen ones; a setting in a map asks for its key.
+  // Choosing a search row puts its setting among the chosen ones, with the required settings it leaves missing
+  // beside it; a setting in a map asks for its key.
   function addFromSearch(row: FieldRow) {
-    const next = pickField(chosen, row, nextChosenId++)
+    const picked = pickField(chosen, row, nextChosenId++)
+    const next = withRequiredSiblings(indexRows ?? [], config, picked, nextChosenId)
+    nextChosenId += next.length - picked.length
     setChosen(next)
     setConfig(settle(config, next))
   }
@@ -252,6 +263,10 @@ export function PatchDetail({ name }: { name?: string }) {
     config,
   })
   const previewFresh = previewedKey === currentKey
+  // What the schema requires and the form does not yet have, and any setting a value in the config is in the way of.
+  const missing = indexRows ? requiredMissing(indexRows, config, chosen) : []
+  const blocked = chosen.some((c) => complete(c) && scalarBlock(config, steps(c.row.path, c.keys)) !== null)
+  const configOk = missing.length === 0 && !blocked
 
   if (clusterError) return <ErrorAlert {...clusterError} />
   if (loadError) return <ErrorAlert {...loadError} />
@@ -263,6 +278,7 @@ export function PatchDetail({ name }: { name?: string }) {
     layer: layerKeyOf(layer),
     role,
     machineRef,
+    configOk,
   })
 
   return (
@@ -429,6 +445,25 @@ export function PatchDetail({ name }: { name?: string }) {
           </CardHeader>
           <CardContent className="space-y-3">
             {previewError && <ErrorAlert {...previewError} />}
+            {missing.length > 0 && (
+              <Alert variant="destructive">
+                <InfoIcon />
+                <AlertTitle>{t('patch.requiredMissing')}</AlertTitle>
+                <AlertDescription>
+                  <ul class="list-disc pl-4">
+                    {missing.map((m) => (
+                      <li key={m.path}>{m.path}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            {indexFailed && (
+              <Alert>
+                <InfoIcon />
+                <AlertDescription>{t('patch.requiredUnchecked')}</AlertDescription>
+              </Alert>
+            )}
             {!preview && !previewing && !previewError && (
               <Alert>
                 <InfoIcon />

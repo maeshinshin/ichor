@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Trash2Icon } from 'lucide-preact'
-import { complete, getField, inputKind, isEntry, setField, steps, type Chosen } from '@/lib/fieldSearch'
+import { complete, getField, inputKind, isEntry, scalarBlock, setField, steps, type Chosen } from '@/lib/fieldSearch'
 import { t } from '@/lib/i18n'
 
 // One chosen setting of the config, edited with the control its type calls for
@@ -30,9 +30,12 @@ export function FieldInput({
   const path = steps(row.path, chosen.keys)
   const id = `field-${chosen.id}`
   const ready = complete(chosen)
-  const current = ready ? getField(config, path) : undefined
+  // A value in the way of this setting (a parent that is not an object) is kept, so the setting is not written.
+  const blocked = ready ? scalarBlock(config, path) : null
+  const editable = ready && blocked === null
+  const current = editable ? getField(config, path) : undefined
   const write = (value: unknown) => {
-    const next = ready ? setField(config, path, value) : null
+    const next = editable ? setField(config, path, value) : null
     if (next !== null) onChange(next)
   }
   // The names of the maps the setting is in, one for each key to name.
@@ -45,7 +48,7 @@ export function FieldInput({
       break
     case 'select':
       control = (
-        <Select value={typeof current === 'string' ? current : ''} onValueChange={write} disabled={!ready}>
+        <Select value={typeof current === 'string' ? current : ''} onValueChange={write} disabled={!editable}>
           <SelectTrigger id={id} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
             <SelectValue />
           </SelectTrigger>
@@ -60,14 +63,14 @@ export function FieldInput({
       )
       break
     case 'switch':
-      control = <Switch id={id} checked={current === true} disabled={!ready} onCheckedChange={write} />
+      control = <Switch id={id} checked={current === true} disabled={!editable} onCheckedChange={write} />
       break
     case 'number':
       control = (
         <Input
           id={id}
           type="number"
-          disabled={!ready}
+          disabled={!editable}
           value={current === undefined ? '' : String(current)}
           onInput={(e) => {
             const v = (e.target as HTMLInputElement).value
@@ -77,10 +80,10 @@ export function FieldInput({
       )
       break
     case 'text':
-      control = <Input id={id} disabled={!ready} value={current === undefined ? '' : String(current)} onInput={(e) => write((e.target as HTMLInputElement).value || undefined)} />
+      control = <Input id={id} disabled={!editable} value={current === undefined ? '' : String(current)} onInput={(e) => write((e.target as HTMLInputElement).value || undefined)} />
       break
     default:
-      control = <JsonControl id={id} value={current} disabled={!ready} onValue={write} />
+      control = <JsonControl id={id} value={current} disabled={!editable} onValue={write} />
   }
 
   return (
@@ -99,6 +102,7 @@ export function FieldInput({
       ))}
       {control}
       {!ready && !isEntry(row) && <FieldDescription>{t('patch.fieldNeedsKey')}</FieldDescription>}
+      {blocked !== null && <FieldDescription>{t('patch.fieldBlocked', { path: blocked })}</FieldDescription>}
       {row.description && <FieldDescription className="line-clamp-3">{row.description}</FieldDescription>}
     </Field>
   )

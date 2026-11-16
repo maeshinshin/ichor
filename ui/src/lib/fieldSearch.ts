@@ -100,7 +100,8 @@ export function getField(text: string, st: (string | number)[]): unknown {
 
 // setField writes value at steps and returns the new JSON text; an undefined
 // value removes the field and the objects it leaves empty. null when the text is
-// not a JSON object, so the caller leaves it alone.
+// not a JSON object, so the caller leaves it alone, and when a value in the way is
+// not an object (scalarBlock names it): it is kept, never replaced.
 export function setField(text: string, st: (string | number)[], value: unknown): string | null {
   const root = parseObject(text)
   if (!root) return null
@@ -109,10 +110,12 @@ export function setField(text: string, st: (string | number)[], value: unknown):
   for (let i = 0; i < st.length - 1; i++) {
     const s = st[i]
     let child = (cur as Record<string | number, unknown>)[s]
-    if (typeof child !== 'object' || child === null) {
+    if (child === undefined) {
       if (value === undefined) return JSON.stringify(root)
       child = typeof st[i + 1] === 'number' ? [] : {}
       ;(cur as Record<string | number, unknown>)[s] = child
+    } else if (typeof child !== 'object' || child === null || (Array.isArray(child) && typeof st[i + 1] === 'string')) {
+      return null
     }
     cur = child as Json
     parents.push(cur)
@@ -203,4 +206,111 @@ export function removeField(config: string, chosen: Chosen[], id: number): { con
   const c = chosen.find((x) => x.id === id)
   const out = c && complete(c) ? setField(config, steps(c.row.path, c.keys), undefined) : null
   return { config: out ?? config, chosen: chosen.filter((x) => x.id !== id) }
+}
+
+const dotted = (st: (string | number)[]) => st.map(String).join('.')
+
+// scalarBlock is the path of the value in the way of a setting: a parent that exists and is not an object (or is
+// an array the setting names a key of). A write through it would replace or drop that value, so setField refuses it.
+// null when nothing is in the way.
+export function scalarBlock(text: string, st: (string | number)[]): string | null {
+  for (let i = 1; i < st.length; i++) {
+    const at = st.slice(0, i)
+    const v = getField(text, at)
+    if (v === undefined) return null
+    if (typeof v !== 'object' || v === null || (Array.isArray(v) && typeof st[i] === 'string')) return dotted(at)
+  }
+  return null
+}
+
+// The index as a tree: the names under each path, where a path is a row's path with [] and <key> as the rows
+// write them. A group with no row of its own (machine) is a path too. Built once per index.
+interface Tree {
+  exact: Map<string, FieldRow>
+  kids: Map<string, string[]>
+}
+const trees = new WeakMap<FieldRow[], Tree>()
+function treeOf(rows: FieldRow[]): Tree {
+  let t = trees.get(rows)
+  if (t) return t
+  const exact = new Map<string, FieldRow>()
+  const kids = new Map<string, Set<string>>()
+  for (const r of rows) {
+    exact.set(r.path, r)
+    const segs = r.path.split('.')
+    segs.forEach((seg, i) => {
+      const parent = segs.slice(0, i).join('.')
+      if (!kids.has(parent)) kids.set(parent, new Set())
+      kids.get(parent)!.add(seg)
+    })
+  }
+  t = { exact, kids: new Map([...kids].map(([k, v]) => [k, [...v]])) }
+  trees.set(rows, t)
+  return t
+}
+
+// Missing is a required setting that its present parent does not have. keys are the keys of the entries it is under.
+export interface Missing {
+  path: string
+  row: FieldRow
+  keys: string[]
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+// augment is the config as it will be once the chosen settings are written, minus their values: each complete
+// chosen setting's parents exist (as empty objects or arrays), so a parent the user is about to write counts as present.
+function augment(config: string, chosen: Chosen[]): Record<string, unknown> {
+  let text = config
+  for (const c of chosen) {
+    if (!complete(c)) continue
+    const st = steps(c.row.path, c.keys)
+    const parents = isEntry(c.row) ? st : st.slice(0, -1)
+    for (let i = 1; i <= parents.length; i++) {
+      const at = parents.slice(0, i)
+      if (getField(text, at) === undefined) text = setField(text, at, typeof st[i] === 'number' ? [] : {}) ?? text
+    }
+  }
+  return parseObject(text) ?? {}
+}
+
+// requiredMissing lists the required settings missing under each object the config has, or that a chosen setting
+// is about to create.
+// shortcut: this covers the CRD's schema-level required lists only, through the index. The rules Talos checks when it
+// renders a config (a document-only field with a v1alpha1-only one, the bond spellings) are not checked here, so a
+// config that passes this can still be refused at render. Drop it when the server's dry-run with render checks
+// answers the same question (the plan's option C).
+export function requiredMissing(rows: FieldRow[], config: string, chosen: Chosen[]): Missing[] {
+  const { exact, kids } = treeOf(rows)
+  const out: Missing[] = []
+  const walk = (tmpl: string, value: Record<string, unknown>, shown: string, keys: string[]) => {
+    for (const seg of kids.get(tmpl) ?? []) {
+      if (seg === '<key>') continue
+      const name = seg.replace(/\[\]$/, '')
+      const child = tmpl ? `${tmpl}.${seg}` : seg
+      const r = exact.get(child)
+      const v = value[name]
+      if (r?.required && !isEntry(r) && v === undefined) out.push({ path: shown + name, row: r, keys })
+      if (v === undefined || v === null) continue
+      if (seg.endsWith('[]')) {
+        if (Array.isArray(v)) v.forEach((el, i) => isObj(el) && walk(child, el, `${shown}${name}.${i}.`, keys))
+      } else if ((kids.get(child) ?? []).includes('<key>')) {
+        if (isObj(v)) for (const [k, e] of Object.entries(v)) if (isObj(e)) walk(`${child}.<key>`, e, `${shown}${name}.${k}.`, [...keys, k])
+      } else if (isObj(v)) walk(child, v, `${shown}${name}.`, keys)
+    }
+  }
+  walk('', augment(config, chosen), '', [])
+  return out
+}
+
+// withRequiredSiblings adds, as chosen settings, the required settings that requiredMissing reports and that are not
+// chosen yet, so the form shows them to fill in. ids count up from nextId.
+export function withRequiredSiblings(rows: FieldRow[], config: string, chosen: Chosen[], nextId: number): Chosen[] {
+  let out = chosen
+  let id = nextId
+  for (;;) {
+    const m = requiredMissing(rows, config, out).find((x) => !out.some((c) => c.row.path === x.row.path && c.keys.join('\0') === x.keys.join('\0')))
+    if (!m) return out
+    out = [...out, { id: id++, row: m.row, keys: m.keys }]
+  }
 }

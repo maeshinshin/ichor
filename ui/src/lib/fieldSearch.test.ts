@@ -148,3 +148,44 @@ test('the JSON text and the typed fields are one object: an edit of either keeps
   // Removing the typed field leaves the other one.
   assert.deepEqual(JSON.parse(removeField(typed, chosen, sda.id).config), { cluster: { clusterName: 'demo' } })
 })
+
+// The required-field gate (A). Imported as a namespace so a function not written yet fails its own test, by name.
+import * as A from './fieldSearch.ts'
+
+test('choosing machine.install.disk alone names machine.install.wipe as missing before save', () => {
+  const chosen = A.pickField([], row('machine.install.disk'), 1)
+  assert.deepEqual(
+    A.requiredMissing(rows, '{}', chosen).map((m) => m.path),
+    ['machine.install.wipe'],
+  )
+})
+
+test('a required sibling that is already set is not reported missing', () => {
+  const chosen = A.pickField([], row('machine.install.disk'), 1)
+  assert.deepEqual(A.requiredMissing(rows, '{"machine":{"install":{"wipe":false}}}', chosen), [])
+})
+
+test('choosing a setting under a present parent adds its missing required sibling as a chosen row', () => {
+  const chosen = A.pickField([], row('machine.install.disk'), 1)
+  const next = A.withRequiredSiblings(rows, '{}', chosen, 2)
+  assert.deepEqual(
+    next.map((c) => c.row.path),
+    ['machine.install.disk', 'machine.install.wipe'],
+  )
+})
+
+test('a setting under a scalar parent is refused, and the scalar is kept, not replaced', () => {
+  assert.equal(A.scalarBlock('{"machine":{"install":"x"}}', steps('machine.install.disk', [])), 'machine.install')
+  assert.equal(setField('{"machine":{"install":"x"}}', steps('machine.install.disk', []), '/dev/sda'), null)
+  assert.equal(A.scalarBlock('{"machine":{"install":{"wipe":true}}}', steps('machine.install.disk', [])), null)
+})
+
+test('a required setting under a map entry is named with the entry key it is missing under', () => {
+  const chosen = A.pickField([], row('machine.volumes.user.<key>.encryption.provider'), 1)
+  const named = [{ ...chosen[0], keys: ['data'] }]
+  assert.deepEqual(
+    A.requiredMissing(rows, '{}', named).map((m) => m.path),
+    // The chosen provider is required too and has no value yet, so it is missing as well.
+    ['machine.volumes.user.data.encryption.keys', 'machine.volumes.user.data.encryption.provider'],
+  )
+})

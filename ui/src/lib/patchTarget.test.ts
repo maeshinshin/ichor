@@ -90,8 +90,10 @@ test('targetFieldsFor keeps only the field the layer uses, clearing the rest', (
 })
 
 test('canSavePatch needs name, cluster, layer, and the target value its layer asks for', () => {
-  const ok = { name: 'p', hasCluster: true, layer: 'role' as const, role: 'worker', machineRef: '' }
+  const ok = { name: 'p', hasCluster: true, layer: 'role' as const, role: 'worker', machineRef: '', configOk: true }
   assert.equal(canSavePatch(ok), true)
+  // The config's required settings are all set, and none sits in the way of another (fieldSearch requiredMissing, scalarBlock).
+  assert.equal(canSavePatch({ ...ok, configOk: false }), false)
   assert.equal(canSavePatch({ ...ok, name: '' }), false)
   assert.equal(canSavePatch({ ...ok, hasCluster: false }), false)
   assert.equal(canSavePatch({ ...ok, layer: 'unset' }), false)

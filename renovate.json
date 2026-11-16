@@ -4,6 +4,7 @@
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
   "semanticCommits": "enabled",
   "enabledManagers": ["gomod", "npm", "github-actions", "nix", "custom.regex"],
+  "timezone": "Asia/Tokyo",
   "schedule": ["before 6am on monday"],
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
@@ -49,6 +50,17 @@
       "matchUpdateTypes": ["major"],
       "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/**"],
       "automerge": false
+    },
+    {
+      "description": "The go directive is a floor, not a dependency (ADR 0151 decision 5): a person moves go.mod and the flake.nix Go override together.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["golang"],
+      "enabled": false
+    },
+    {
+      "description": "GitHub-hosted runner images (runs-on: ubuntu-24.04) are the CI environment, not a dependency: a runner change moves the toolchain under the gate and the release build, so a person decides it.",
+      "matchDatasources": ["github-runners"],
+      "enabled": false
     }
   ]
 }

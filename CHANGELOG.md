@@ -811,6 +811,20 @@ command does. Each item is described where it is listed below.
   figures in them are of earlier trees; the tool re-measures them.
 - `CONTRIBUTING.md` names `GATE_CONTEXT` and `GATE_NAMESPACE`, the variables
   `make remote-gate` takes its cluster and namespace from.
+- The guide on adopting a cluster is `guides/adopt-a-cluster.md`, no longer
+  `adopt-and-reclaim.md`: resetting a machine has its own guide. A link to the
+  old address stops working.
+- ADRs name `ichor delete node`, `ichor resume operation` and `ichor upgrade
+  ichor` where they named the removed `ichor node reset`, `ichor operation
+  retry` and `ichor self-upgrade`, and a test keeps those three out. Commit
+  references in ADRs and tests point at commits on `main`, not at the earlier
+  copies of them.
+- A test in `pkg/release` fails when a guide states a Talos, Kubernetes or
+  Cilium version that is not the one `pkg/release` pins.
+- The architecture page on nodes states the removal rules and no longer carries
+  the notes taken from Talos's source: ADR 0010 holds them, with ADR 0042. ADR
+  0053 says its command is `ichor restore cluster`, and ADR 0096 says that
+  `secretsRef` names the whole secrets bundle, not only the CAs.
 
 ### CI
 

@@ -30,6 +30,7 @@ import (
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -60,7 +61,7 @@ type credentialRequest struct {
 	// from the cluster: the offline path.
 	BundleFile string
 
-	// KubeconfigIn is the kubeconfig the server and names are copied from ("" resolves it like kubectl).
+	// KubeconfigIn is the kubeconfig the server and names are copied from, unless KubeServer is set ("" resolves it like kubectl).
 	KubeconfigIn string
 
 	// TalosconfigIn is the current talosconfig ("" resolves it like talosctl); it names the default
@@ -70,6 +71,8 @@ type credentialRequest struct {
 	KubeconfigOut  string
 	TalosconfigOut string
 	TalosEndpoints []string
+	// KubeServer, when set, is the API server the kubeconfig names, and no current kubeconfig is read.
+	KubeServer string
 
 	// TTL is how long the client certificates are valid (zero: a year, which is also the cap); ReadOnly makes
 	// the talosconfig os:reader instead of os:admin.
@@ -100,12 +103,9 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 
 	kubeIn := currentKubeconfigFile(req.KubeconfigIn)
 
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	rules.ExplicitPath = req.KubeconfigIn
-
-	current, err := rules.Load()
+	current, err := currentKubeconfig(req)
 	if err != nil {
-		return nil, fmt.Errorf("reading the current kubeconfig: %w", err)
+		return nil, err
 	}
 
 	talosIn := currentTalosconfigFile(req.TalosconfigIn)
@@ -128,7 +128,6 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 		return nil, errors.New("refusing to overwrite the current kubeconfig or talosconfig; choose another output path")
 	}
 
-	// shortcut: the kubeconfig takes its server and names from the current context, so --bundle needs a current kubeconfig too, drop this when the bundle path can take them from --cluster or the flags
 	kube, err := src.Kubeconfig(*current)
 	if err != nil {
 		return nil, err
@@ -150,6 +149,26 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 	}
 
 	return &credentialFiles{Kubeconfig: kubeOut, Talosconfig: talosOut, Dual: src.Dual}, nil
+}
+
+// currentKubeconfig is the kubeconfig the server and names are copied from: one naming only
+// req.KubeServer when that is set (nothing is read from disk), else the operator's own.
+func currentKubeconfig(req credentialRequest) (*clientcmdapi.Config, error) {
+	if req.KubeServer != "" {
+		cfg := credentials.ServerConfig(req.Cluster, req.KubeServer)
+
+		return &cfg, nil
+	}
+
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	rules.ExplicitPath = req.KubeconfigIn
+
+	current, err := rules.Load()
+	if err != nil {
+		return nil, fmt.Errorf("reading the current kubeconfig: %w", err)
+	}
+
+	return current, nil
 }
 
 // loadCredentialSources returns the CAs and, from the cluster, the control planes' Talos endpoints.

@@ -72,7 +72,8 @@ kubectl -n ichor-system describe pods -l batch.kubernetes.io/job-name=ichor-reti
 - No pods at all: `kubectl -n ichor-system describe job ichor-retired-kinds-guard` shows why the pod was never created.
 
 The chart keeps a failed hook's Job and pod, because its delete policy removes a
-hook only when it succeeds. A new attempt deletes them before it starts.
+hook only when it succeeds. A new attempt, such as a second `helm upgrade`, deletes
+them before it starts, so read them before you retry.
 
 ## Values
 

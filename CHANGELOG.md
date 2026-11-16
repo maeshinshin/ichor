@@ -633,6 +633,24 @@ command does. Each item is described where it is listed below.
   from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one
   update". To move a node from `longhorn-v1` to `rook-v1`, change `diskPreset` and
   remove `diskSelector` in one update: either change alone is refused.
+- **The Storage page creates a `rook-v1` `TalosStorage`.** It takes a name, a cluster
+  and a node selector, and writes the object as the signed-in user, so only the
+  `ichor-admin` role can create one. The page writes no disk selector, because
+  `rook-v1` takes none. It lists `longhorn-v1` as unavailable, and does not create it,
+  because `longhorn-v1` needs a disk selector and the page writes none: the API server
+  checks only that the selector is not empty, not that it is a valid Talos expression.
+  Apply that object yourself with `kubectl`, as an `ichor-admin`, after checking the
+  selector against the disks of the nodes it will prepare.
+- **`TalosStorage.spec.nodes` and `TalosConfigPatch.labelSelector` read different
+  labels.** Rendering matches a machine's `spec.nodeLabels`, and a `TalosConfigPatch`
+  selector reads only that. Evacuation, which a `TalosStorage` also drives, matches the
+  labels on the live Kubernetes Node. A selector that names only labels set through
+  `spec.nodeLabels` picks the same nodes in both. A label the Node carries from
+  elsewhere, such as a kubelet preset label or one set with `kubectl`, makes a
+  `TalosStorage` evacuate a node it renders nothing for, where there is no volume to
+  evacuate. The other direction can lose data: a node that the selector matches through
+  `spec.nodeLabels` is rendered before its live Node carries the label, and evacuation
+  does not run for it until the label is there.
 
 ### Etcd backups and restore
 
@@ -1012,6 +1030,12 @@ command does. Each item is described where it is listed below.
   0053 says its command is `ichor restore cluster`, and ADR 0096 says that
   `secretsRef` names the whole secrets bundle, not only the CAs.
 
+- **A code fence can name its file and number its lines.** After the language, a fence
+  takes `title="…"` and `lineNumbers`, in either order, and the docs site renders the
+  block with that title and those numbers. Any other word after the language, and a
+  `{…}` line list, which is not supported yet, fails the docs build with the file and
+  line. The contributing guide shows both options.
+
 ### CI
 - **An envtest suite that cannot find its binaries now says how to get them.**
   The six suites failed with `fork/exec /usr/local/kubebuilder/bin/etcd`, a path
@@ -1076,6 +1100,11 @@ command does. Each item is described where it is listed below.
   client has no grant in `config/rbac/ichor-ui/role.yaml`. The one write the role
   does not grant is an exception that names its reason, and the check fails once it
   matches nothing. A grant's `resourceNames` and namespace are not compared.
+
+- **`make ui-shots` can photograph pages behind sign-in, and fails rather than write a
+  picture of a sign-in form.** It signs in through a stand-in backend. A run writes no
+  screenshot and fails when the page it reaches is the sign-in form, a page that has
+  dropped its token, or one still loading when the wait cap is hit.
 
 ## v0.2.4 (2026-11-13)
 

@@ -63,7 +63,8 @@ type evacuationTarget struct {
 // reads and writes the storage system's own resources. Declared by its consumer (talosUpgradeAdvancer), as
 // And AdvanceMachineFunc do.
 type StorageEvacuator interface {
-	// Resolve finds the TalosStorage (if any) in cluster whose node selector matches node. nil, nil means
+	// Resolve finds the TalosStorage (if any) in cluster whose node selector matches node's live Kubernetes
+	// Node labels (rendering matches spec.nodeLabels instead; see storage.Select). nil, nil means
 	// none does: nothing to evacuate, the common case for a cluster with no storage system. A preset with no
 	// evacuation hook (rook-v1) is nil, nil too.
 	Resolve(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, node string) (*evacuationTarget, error)
@@ -120,7 +121,7 @@ func (e *LonghornEvacuator) Resolve(
 		return nil, err
 	}
 
-	// The one selection rule, shared with pkg/render's layer-1 injection.
+	// The one selection rule, shared with pkg/render's layer-1 injection; only the label source differs (storage.Select).
 	chosen, err := storage.Select(cluster, storages.Items, n.Labels)
 	if err != nil {
 		return nil, err

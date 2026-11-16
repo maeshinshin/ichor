@@ -35,7 +35,10 @@ type TalosStorageSpec struct {
 	// +required
 	ClusterRef corev1.LocalObjectReference `json:"clusterRef"`
 
-	// nodes selects which nodes get storage prepared, by their Kubernetes Node labels.
+	// nodes selects which nodes get storage prepared. Rendering matches the machine's spec.nodeLabels;
+	// evacuation matches the live Kubernetes Node's labels. The two select the same nodes only when the
+	// selector names labels set through spec.nodeLabels; a label the Node carries from elsewhere (a kubelet
+	// preset label, or one set with kubectl) makes the TalosStorage govern evacuation without rendering.
 	// +required
 	Nodes metav1.LabelSelector `json:"nodes"`
 

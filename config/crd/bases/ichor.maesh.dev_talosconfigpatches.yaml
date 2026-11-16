@@ -14030,8 +14030,8 @@ spec:
                   layer: role -> role, selector -> labelSelector, machine -> machineRef.'
                 properties:
                   labelSelector:
-                    description: labelSelector targets machines whose Kubernetes Node
-                      labels match.
+                    description: labelSelector targets machines whose spec.nodeLabels
+                      match. The live Kubernetes Node's labels are not read.
                     properties:
                       matchExpressions:
                         description: matchExpressions is a list of label selector

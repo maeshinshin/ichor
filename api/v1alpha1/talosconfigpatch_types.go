@@ -30,7 +30,7 @@ type TalosConfigPatchTarget struct {
 	// +optional
 	Role string `json:"role,omitempty"`
 
-	// labelSelector targets machines whose Kubernetes Node labels match.
+	// labelSelector targets machines whose spec.nodeLabels match. The live Kubernetes Node's labels are not read.
 	// +optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 

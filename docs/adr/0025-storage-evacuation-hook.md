@@ -1,6 +1,6 @@
 # 0025. The storage-system side of the node-operation evacuation hook
 
-Status: Accepted, amended · Date: 2026-10-25 · Design section: 4.4 (Storage)
+Status: Accepted, amended; superseded in part by ADR 0167 · Date: 2026-10-25 · Design section: 4.4 (Storage)
 
 Decided: Layer 4's storage-system side: `EvacuationHook` (write side) plus a preset-independent `EvacuationStatus` function (read side), both verified against longhorn-manager v1.9.1's own controller source
 

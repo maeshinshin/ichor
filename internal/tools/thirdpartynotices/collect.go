@@ -339,6 +339,7 @@ func upstreamComponents() []component {
 		mit("Radix UI Primitives", "https://github.com/radix-ui/primitives", "Copyright (c) 2022 WorkOS", "ui/src/lib/radix and site/src/lib/radix"),
 		mit("Base UI", "https://github.com/mui/base-ui", "Copyright (c) 2019 Material-UI SAS", "the Combobox in ui/src/lib/shims"),
 		mit("cmdk", "https://github.com/pacocoursey/cmdk", "Copyright (c) 2022 Paco Coursey", "ui/src/lib/shims/cmdk.tsx and site/src/lib/shims/cmdk.tsx"),
+		mit("command-score", "https://github.com/superhuman/command-score", "Copyright (c) 2016 Superhuman", "the scoring function at the end of ui/src/lib/shims/cmdk.tsx and site/src/lib/shims/cmdk.tsx, derived through cmdk"),
 		mit("sonner", "https://github.com/emilkowalski/sonner", "Copyright (c) 2023 Emil Kowalski", "ui/src/lib/shims/sonner.tsx"),
 		mit("next-themes", "https://github.com/pacocoursey/next-themes", "Copyright (c) 2022 Paco Coursey", "ui/src/lib/shims/next-themes.tsx"),
 	}

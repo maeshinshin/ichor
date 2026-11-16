@@ -3231,6 +3231,8 @@ Components:
     Copyright (c) 2022 WorkOS
 - cmdk
     Copyright (c) 2022 Paco Coursey
+- command-score
+    Copyright (c) 2016 Superhuman
 - next-themes
     Copyright (c) 2022 Paco Coursey
 - shadcn/ui
@@ -3717,6 +3719,10 @@ Upstream projects:
     ui/src/lib/shims/cmdk.tsx and site/src/lib/shims/cmdk.tsx
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 Paco Coursey
+- command-score (https://github.com/superhuman/command-score)
+    the scoring function at the end of ui/src/lib/shims/cmdk.tsx and site/src/lib/shims/cmdk.tsx, derived through cmdk
+    Licence: MIT (variant 1 of 8) (text in section 3)
+    Copyright (c) 2016 Superhuman
 - next-themes (https://github.com/pacocoursey/next-themes)
     ui/src/lib/shims/next-themes.tsx
     Licence: MIT (variant 1 of 8) (text in section 3)

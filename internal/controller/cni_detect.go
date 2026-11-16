@@ -191,7 +191,7 @@ func (r *CNIDetectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(operationClusters(ichorv1alpha1.TalosOperationKindCNI)),
 			builder.WithPredicates(cniDetectTriggerPredicate())).
 		Named("cnidetect").
-		Complete(quietExpected(r))
+		Complete(quietExpected(r, "cnidetect"))
 }
 
 // cniDetectTriggerPredicate passes the updates cniDetectTrigger names and nothing else.

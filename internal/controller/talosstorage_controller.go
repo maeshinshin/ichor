@@ -374,7 +374,7 @@ func (r *TalosStorageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.TalosStorage{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(r.storagesForMachine)).
 		Named("talosstorage").
-		Complete(quietExpected(r))
+		Complete(quietExpected(r, "talosstorage"))
 }
 
 func (r *TalosStorageReconciler) storagesForMachine(ctx context.Context, obj client.Object) []reconcile.Request {

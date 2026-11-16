@@ -21,8 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -35,8 +37,21 @@ import (
 // reconciling: a component waiting on itself turns fifteen seconds of noise into a deadlock when
 // the webhook never comes up. A "webhook is up" flag would be worse here, because it reads "starting"
 // forever when the webhook never comes up, which hides a real outage; a window ends, and after it
-// the failure is returned and logged as the error it then is.
+// the failure is returned and logged as the error it then is. Nor does it end with the webhook
+// server: the server is up when its handlers register, but the pod joins the Service only after the next
+// readiness probe (up to 10 s later), so the tail of the errors would still log as errors.
 const startupWindow = 2 * time.Minute
+
+// expectedErrors counts what quietExpected swallows, which controller-runtime's own
+// controller_runtime_reconcile_errors_total no longer sees. reason is "conflict" or "webhook_startup".
+var expectedErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "ichor_reconcile_expected_errors_total",
+	Help: "Reconcile errors logged as expected (a write conflict, a webhook not yet reachable at startup) and retried.",
+}, []string{"controller", "reason"})
+
+func init() {
+	metrics.Registry.MustRegister(expectedErrors)
+}
 
 // processStart is when this process began, the start of its startup window.
 var processStart = time.Now()
@@ -52,14 +67,14 @@ var processStart = time.Now()
 //     startupWindow of the process start. After that it is returned unchanged, and so logged as an
 //     error, because by then it is a real problem.
 //
-// shortcut: a conflict that never resolves is logged at info level on every retry and no longer counts in
-// controller_runtime_reconcile_errors_total (IchorReconcileErrorsPersisting); count consecutive
-// conflicts per request and return the error past a limit if such a loop is ever seen.
-func quietExpected(r reconcile.Reconciler) reconcile.Reconciler {
-	return quietExpectedSince(r, processStart, time.Now)
+// Swallowed errors leave controller_runtime_reconcile_errors_total, which the IchorReconcileErrorsPersisting
+// alert watches, so each one is counted in expectedErrors under the controller's name (the one given to
+// Named) instead: a conflict that never resolves shows as that counter rising for 15 minutes.
+func quietExpected(r reconcile.Reconciler, controller string) reconcile.Reconciler {
+	return quietExpectedSince(r, controller, processStart, time.Now)
 }
 
-func quietExpectedSince(r reconcile.Reconciler, start time.Time, now func() time.Time) reconcile.Reconciler {
+func quietExpectedSince(r reconcile.Reconciler, controller string, start time.Time, now func() time.Time) reconcile.Reconciler {
 	return reconcile.Func(func(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 		res, err := r.Reconcile(ctx, req)
 
@@ -67,9 +82,11 @@ func quietExpectedSince(r reconcile.Reconciler, start time.Time, now func() time
 		case err == nil:
 			return res, nil
 		case apierrors.IsConflict(err):
+			expectedErrors.WithLabelValues(controller, "conflict").Inc()
 			logf.FromContext(ctx).Info("Write conflicted with a newer version of the object; the reconcile runs again (expected)",
 				"error", err.Error())
 		case unreachableWebhook(err) && now().Sub(start) < startupWindow:
+			expectedErrors.WithLabelValues(controller, "webhook_startup").Inc()
 			logf.FromContext(ctx).Info("Admission webhook not reachable yet; the reconcile runs again (expected while it starts, "+
 				"an error after the startup window)", "error", err.Error(), "startupWindow", startupWindow.String())
 		default:

@@ -989,7 +989,7 @@ func (r *TalosOperationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosOperation{}).
 		Named("talosoperation").
-		Complete(quietExpected(r))
+		Complete(quietExpected(r, "talosoperation"))
 }
 
 // configSelection narrows a config operation's candidates to the machines with a pending change (the

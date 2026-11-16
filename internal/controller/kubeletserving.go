@@ -552,7 +552,7 @@ func (r *KubeletServingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&certv1.CertificateSigningRequest{}, handler.EnqueueRequestsFromMapFunc(clusterRequests(r.Client, render.KubeletServingEnabled)), builder.WithPredicates(servingOnly)).
 		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(machineCluster)).
 		Named("kubeletserving").
-		Complete(quietExpected(r))
+		Complete(quietExpected(r, "kubeletserving"))
 }
 
 // NewMachineryServingIdentity dials m's Talos API and reads the node's names and kubelet addresses.

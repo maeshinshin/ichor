@@ -456,7 +456,10 @@ command does. Each item is described where it is listed below.
   minutes the same failure is logged as an error again. A write that conflicts
   with a newer version (`the object has been modified`) is logged at info level
   and says it is expected, at any time. Both are retried as before. A conflict
-  that never resolves no longer counts in `controller_runtime_reconcile_errors_total`.
+  that never resolves no longer counts in `controller_runtime_reconcile_errors_total`,
+  which the `IchorReconcileErrorsPersisting` alert watches; the new counter
+  `ichor_reconcile_expected_errors_total`, by `controller` and `reason`
+  (`conflict` or `webhook_startup`), counts them instead.
 
 ### Nodes
 

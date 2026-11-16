@@ -143,3 +143,80 @@ func TestReleaseVersionIsSemver(t *testing.T) {
 		})
 	}
 }
+
+// fakeGo stands in for go on PATH in the go-install-tool test. Asked for GOVERSION while FAKE_GOVERSION is set, it
+// reports that version, as a toolchain other than the one that built the tool would. It records each go install and
+// writes a stand-in tool; every other subcommand runs the real go.
+const fakeGo = `#!/bin/sh
+if [ "$1" = env ] && [ "$2" = GOVERSION ] && [ -n "$FAKE_GOVERSION" ]; then echo "$FAKE_GOVERSION"; exit 0; fi
+if [ "$1" = install ]; then
+	echo "$2" >> "$MARKER"
+	name=$(basename "${2%@*}")
+	printf '#!/bin/sh\n' > "$GOBIN/$name" && chmod +x "$GOBIN/$name"
+	exit 0
+fi
+exec "$REAL_GO" "$@"
+`
+
+// TestGoInstallToolRebuildsAToolFromAnotherToolchain pins go-install-tool to the Go that built a versioned tool. A tool
+// built by the running Go is kept; one built by another Go is rebuilt, because go version reports the toolchain a Go
+// binary was built with.
+func TestGoInstallToolRebuildsAToolFromAnotherToolchain(t *testing.T) {
+	realGo, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name, goVersion string // goVersion is what the current go reports; "" keeps the real one
+		rebuilt         bool
+	}{
+		{"built by the current go", "", false},
+		{"built by another go", "go1.0.0", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bin, fake := filepath.Join(dir, "bin"), filepath.Join(dir, "fake")
+			for _, d := range []string{bin, fake} {
+				if err := os.Mkdir(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if err := os.WriteFile(filepath.Join(fake, "go"), []byte(fakeGo), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			// The versioned tool is the real go binary, so go version reads the toolchain it was built with.
+			tool := filepath.Join(bin, "controller-gen")
+			versioned := tool + "-v0.0.1"
+			if err := os.Symlink(realGo, versioned); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := os.Symlink(versioned, tool); err != nil {
+				t.Fatal(err)
+			}
+
+			marker := filepath.Join(dir, "installed")
+			cmd := exec.Command("make", "-s", "-C", repoRoot, "controller-gen", "LOCALBIN="+bin, "CONTROLLER_TOOLS_VERSION=v0.0.1")
+			cmd.Env = append(os.Environ(), "PATH="+fake+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"REAL_GO="+realGo, "MARKER="+marker)
+			if tc.goVersion != "" {
+				cmd.Env = append(cmd.Env, "FAKE_GOVERSION="+tc.goVersion)
+			}
+
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("make controller-gen: %v\n%s", err, out)
+			}
+
+			_, statErr := os.Stat(marker)
+			if rebuilt := statErr == nil; rebuilt != tc.rebuilt {
+				t.Errorf("go-install-tool rebuilt the tool = %v, want %v; make output:\n%s", rebuilt, tc.rebuilt, out)
+			}
+		})
+	}
+}

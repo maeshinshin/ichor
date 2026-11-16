@@ -432,12 +432,13 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 # $2 - package url which can be installed
 # $3 - specific version of package
 define go-install-tool
-@# readlink fails when the tool is not installed yet, which the install below handles
-@[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \
+@# readlink fails when the tool is not installed yet, which the install below handles. go version reports the Go a
+@# binary was built with; a rebuild also drops the .custom marker of an earlier custom golangci-lint build.
+@[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] && [ "$$(go version "$(1)-$(3)" 2>/dev/null | awk '{print $$NF}')" = "$$(go env GOVERSION)" ] || { \
 set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
-rm -f "$(1)" ;\
+rm -f "$(1)" "$(1)-$(3).custom" ;\
 GOBIN="$(LOCALBIN)" go install $${package} ;\
 mv "$(LOCALBIN)/$$(basename "$(1)")" "$(1)-$(3)" ;\
 } ;\

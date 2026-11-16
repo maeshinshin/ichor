@@ -449,6 +449,14 @@ command does. Each item is described where it is listed below.
   object carries the adoption annotation, as create already was. A JSON patch
   could do it to a stored cluster without one, and it stops Ichor's Cilium
   hand-over for that cluster.
+- In the first two minutes after the controller starts, a call to its own
+  admission webhook that fails (`failed calling webhook`) is logged at info
+  level and says it is expected while the webhook starts; it used to be logged as
+  `Reconciler error`, for about fifteen seconds after a fresh install. After two
+  minutes the same failure is logged as an error again. A write that conflicts
+  with a newer version (`the object has been modified`) is logged at info level
+  and says it is expected, at any time. Both are retried as before. A conflict
+  that never resolves no longer counts in `controller_runtime_reconcile_errors_total`.
 
 ### Nodes
 

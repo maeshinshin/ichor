@@ -1,0 +1,153 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package uiapi
+
+import (
+	"context"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"connectrpc.com/connect"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+)
+
+// storageFixture is a TalosCluster with one TalosStorage selecting nodes labelled key=value, and
+// one approved machine carrying that label and one that does not.
+type storageFixture struct {
+	cluster          *ichorv1alpha1.TalosCluster
+	storage          *ichorv1alpha1.TalosStorage
+	governed, others *ichorv1alpha1.TalosMachine
+}
+
+func newStorageFixture(key, value string) storageFixture {
+	cluster := newTestCluster(newTestSecret(newTestBundle()).Name)
+
+	storage := &ichorv1alpha1.TalosStorage{
+		GenerateName: "storage-", Namespace: testNamespace,
+		Spec: ichorv1alpha1.TalosStorageSpec{
+			ClusterRef:   corev1.LocalObjectReference{Name: cluster.Name},
+			Nodes:        metav1.LabelSelector{MatchLabels: map[string]string{key: value}},
+			DiskPreset:   "longhorn-v1",
+			DiskSelector: `disk.transport == "nvme"`,
+		},
+	}
+	Expect(k8sClient.Create(ctx, storage)).To(Succeed())
+
+	governed := newTestMachine(cluster.Name, strongTestIdentity("uuid-"+value), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+	governed.Spec.NodeLabels = map[string]string{key: value}
+	Expect(k8sClient.Update(ctx, governed)).To(Succeed())
+
+	others := newTestMachine(cluster.Name, strongTestIdentity("uuid-other-"+value), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+	return storageFixture{cluster: cluster, storage: storage, governed: governed, others: others}
+}
+
+// signedInAs returns a Server and a context for a signed-in user who holds exactly rules. Calls go through
+// Impersonate and the identity on the context, as AuthInterceptor and cl(ctx) make them in production.
+func signedInAs(user string, rules []rbacv1.PolicyRule) (*Server, context.Context) {
+	role := &rbacv1.ClusterRole{GenerateName: "storage-test-", Rules: rules}
+	Expect(k8sClient.Create(ctx, role)).To(Succeed())
+	Expect(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
+		GenerateName: "storage-test-",
+		RoleRef:      rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: cniClusterRole, Name: role.Name},
+		Subjects:     []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: rbacv1.UserKind, Name: user}},
+	})).To(Succeed())
+
+	s := &Server{
+		Client: k8sClient, ControllerNamespace: testNamespace,
+		Impersonate: NewImpersonator(cfg, client.Options{Scheme: scheme.Scheme}),
+	}
+
+	return s, ContextWithIdentity(ctx, Identity{User: user, Source: SourceIchor})
+}
+
+var _ = Describe("StorageService.ListStorages", func() {
+	It("returns the TalosStorage that governs each machine, with its preset", func() {
+		f := newStorageFixture("storage-spec", "longhorn-a")
+
+		s := &Server{Client: k8sClient, ControllerNamespace: testNamespace}
+		resp, err := s.ListStorages(ctx, connect.NewRequest(&pb.ListStoragesRequest{
+			Cluster: objectRef(f.cluster.Namespace, f.cluster.Name),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		var got *pb.Storage
+		for _, st := range resp.Msg.GetStorages() {
+			if st.GetRef().GetName() == f.storage.Name {
+				got = st
+			}
+		}
+		Expect(got).NotTo(BeNil(), "the TalosStorage of the cluster is listed")
+		Expect(got.GetDiskPreset()).To(Equal("longhorn-v1"))
+		Expect(got.GetRequiredExtensions()).To(ConsistOf("siderolabs/iscsi-tools", "siderolabs/util-linux-tools"))
+		Expect(got.GetPresetError()).To(BeEmpty())
+		Expect(got.GetNodeSelector()).To(Equal("storage-spec=longhorn-a"))
+		Expect(got.GetGovernedMachines()).To(HaveLen(1))
+		Expect(got.GetGovernedMachines()[0].GetName()).To(Equal(f.governed.Name))
+		Expect(got.GetGovernedMachines()).NotTo(ContainElement(WithTransform(
+			func(r *pb.ObjectRef) string { return r.GetName() }, Equal(f.others.Name))))
+	})
+
+	It("reads as the signed-in user, so a user without the talosstorages grant is refused", func() {
+		f := newStorageFixture("storage-spec", "longhorn-denied")
+
+		// The user can read the cluster and its machines, but not the TalosStorages: the refusal names them.
+		s, signedIn := signedInAs("ichor:storage-no-list", []rbacv1.PolicyRule{
+			{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosClusters}, Verbs: []string{cniVerbGet}},
+			{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosMachines}, Verbs: []string{cniVerbGet, cniVerbList}},
+		})
+		_, err := s.ListStorages(signedIn, connect.NewRequest(&pb.ListStoragesRequest{
+			Cluster: objectRef(f.cluster.Namespace, f.cluster.Name),
+		}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
+		Expect(err).To(MatchError(ContainSubstring("talosstorages")))
+	})
+
+	It("lists the TalosStorages for a signed-in user with the viewer's read rules", func() {
+		f := newStorageFixture("storage-spec", "longhorn-viewer")
+
+		s, signedIn := signedInAs("ichor:storage-viewer", []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{ichorv1alpha1.GroupVersion.Group},
+				Resources: []string{resourceTalosClusters, resourceTalosMachines, "talosstorages"},
+				Verbs:     []string{cniVerbGet, cniVerbList, "watch"},
+			},
+		})
+		var resp *connect.Response[pb.ListStoragesResponse]
+		Eventually(func() error {
+			var err error
+			resp, err = s.ListStorages(signedIn, connect.NewRequest(&pb.ListStoragesRequest{
+				Cluster: objectRef(f.cluster.Namespace, f.cluster.Name),
+			}))
+			return err
+		}).Should(Succeed())
+
+		names := make([]string, 0, len(resp.Msg.GetStorages()))
+		for _, st := range resp.Msg.GetStorages() {
+			names = append(names, st.GetRef().GetName())
+		}
+		Expect(names).To(ContainElement(f.storage.Name))
+	})
+})

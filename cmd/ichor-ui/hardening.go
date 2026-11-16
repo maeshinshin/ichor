@@ -65,6 +65,7 @@ func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
 	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(s, big))
 	mux.Handle(ichorv1alpha1connect.NewReclaimServiceHandler(s, big))
 	mux.Handle(ichorv1alpha1connect.NewSettingsServiceHandler(s, small))
+	mux.Handle(ichorv1alpha1connect.NewStorageServiceHandler(s, small))
 }
 
 // contentSecurityPolicy allows exactly what the Vite build needs: scripts and connections from

@@ -87,7 +87,7 @@ before, among the rows of their section.
 ## Links and images
 
 Link to other pages the way you would on GitHub, with relative paths:
-`[Adopt a cluster](adopt-and-reclaim.md)`, `[the design](../design/architecture/overview.md#data-flow)`.
+`[Adopt a cluster](adopt-a-cluster.md)`, `[the design](../design/architecture/overview.md#data-flow)`.
 They become site links. A relative link that leaves `docs/`
 (`../../internal/foo.go`, `../../test/harness/`) becomes a link to that file or
 directory on GitHub. A link to something that does not exist fails the build.

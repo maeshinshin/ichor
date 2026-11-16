@@ -2,7 +2,7 @@
 
 In the UI this is "Reset and add"; the resource behind it is a `MachineReclaim`.
 Not sure it is the right command for your machine? The table in
-[Adopt a running Talos cluster](adopt-and-reclaim.md#what-you-have-in-front-of-you)
+[Adopt a running Talos cluster](adopt-a-cluster.md#what-you-have-in-front-of-you)
 says which command each case takes.
 
 A node that already runs a configured Talos never reaches maintenance mode, so
@@ -23,7 +23,7 @@ Both paths refuse:
 - a machine that is already an approved Ichor machine (take it out with
   `ichor delete node`, which wipes it). A machine that belongs to a cluster Ichor manages but
   has no approved `TalosMachine` is an orphan and is accepted, with a warning that
-  [`ichor adopt --add-machine`](adopt-and-reclaim.md#add-a-machine-that-is-already-in-the-cluster) would keep its configuration instead. A stale pending `TalosMachine` for the same UUID, left
+  [`ichor adopt --add-machine`](adopt-a-cluster.md#add-a-machine-that-is-already-in-the-cluster) would keep its configuration instead. A stale pending `TalosMachine` for the same UUID, left
   by an earlier reclaim, does not count (it pinned the old maintenance certificate; the
   cluster's discovery re-reads the node on its next pass, within about five minutes, and
   records the new certificate and disks on that same machine, so approve it after that.
@@ -217,7 +217,7 @@ ADDRESS/CIDR      KIND     FOUND
 
 An address that already runs a Talos configuration is not added as a machine;
 `add` then ends with a `!` line that says so and names the two commands that apply:
-[`ichor adopt --cluster NAME --add-machine ADDRESS`](adopt-and-reclaim.md#add-a-machine-that-is-already-in-the-cluster) if it carries this cluster's certificates,
+[`ichor adopt --cluster NAME --add-machine ADDRESS`](adopt-a-cluster.md#add-a-machine-that-is-already-in-the-cluster) if it carries this cluster's certificates,
 `ichor reclaim node` if another cluster configured it.
 
 A range must be IPv4 and `/24` or smaller (at most 256 addresses), and a cluster

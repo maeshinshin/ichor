@@ -89,7 +89,7 @@ The complete list is in the [changelog](https://github.com/maeshinshin/ichor/blo
 - [Getting started](guides/getting-started.md): from the released CLI to a
   one-node cluster and the first sign-in.
 - [Install with Helm](guides/install-with-helm.md),
-  [Adopt a running cluster](guides/adopt-and-reclaim.md) and
+  [Adopt a running cluster](guides/adopt-a-cluster.md) and
   [Reclaim a machine](guides/reclaim-a-machine.md): install Ichor on an existing
   cluster, or bring existing Talos machines in.
 - [Users and login](guides/users-and-login.md),

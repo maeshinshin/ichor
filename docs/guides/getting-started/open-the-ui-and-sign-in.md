@@ -42,5 +42,5 @@ There is no way to run ichor-ui without a login: `--allow-unauthenticated` was r
 - [Settings](../settings.md), [Hardening](../hardening.md) and
   [Users and login](../users-and-login.md) for what to configure first.
 - [Install Ichor with Helm](../install-with-helm.md) and
-  [Adopt and reclaim](../adopt-and-reclaim.md) for existing clusters.
+  [Adopt a running cluster](../adopt-a-cluster.md) for existing clusters.
 - [Architecture](../../design/architecture.md) for how it works.

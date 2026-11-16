@@ -6,7 +6,7 @@ sidebar_order: 1
 
 This guide takes you from a downloaded `ichor` CLI to a running one-node
 cluster managed by Ichor. For an existing Talos cluster see
-[Adopt and reclaim](adopt-and-reclaim.md) instead. To build the CLI and the
+[Adopt a running cluster](adopt-a-cluster.md) instead. To build the CLI and the
 images yourself, see [Build from source](../development/build-from-source.md).
 
 ## Before you begin

@@ -168,7 +168,7 @@ Where the build differs from the text above, the build is right:
 - **No release exists yet.** `oci://ghcr.io/maeshinshin/charts/ichor` and the image repositories are empty until the first `v*` tag is pushed.
 - **Added flags beyond the text:** `ichor adopt --cilium-values FILE` (open question 1) and `ichor bootstrap cni --cilium-values FILE`, `--tunnel`.
 
-Guides: `docs/guides/install-with-helm.md`, and the no-CNI and Helm sections of `docs/guides/adopt-and-reclaim.md`.
+Guides: `docs/guides/install-with-helm.md`, and the no-CNI and Helm sections of `docs/guides/adopt-a-cluster.md`.
 
 ## Open questions
 

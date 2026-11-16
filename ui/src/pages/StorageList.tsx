@@ -5,32 +5,45 @@ import { CodeBlock, CodeBlockContent, CodeBlockLine } from '@/components/ui/code
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { HardDriveIcon } from 'lucide-preact'
 import { ConditionList } from '@/components/ConditionList'
+import { CreateStorageDialog } from '@/components/CreateStorageDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { PageTitle } from '@/components/PageTitle'
 import { SectionCard } from '@/components/SectionCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import type { Storage } from '@/gen/ichor/v1alpha1/storage_pb'
+import type { Storage, StoragePreset } from '@/gen/ichor/v1alpha1/storage_pb'
 import { storageClient } from '@/lib/connect'
 import { t } from '@/lib/i18n'
 import { useCluster } from '@/lib/useCluster'
 import { useList } from '@/lib/useList'
 import { Link } from '@/router'
+import { useState } from 'preact/hooks'
 
 // Storage page: every TalosStorage of the cluster, with the nodes it governs and the disk preset it
-// applies (StorageService.ListStorages). Read only: a TalosStorage is changed as a custom resource.
+// applies (StorageService.ListStorages), and a create action for the presets the server allows here
+// (StorageService.CreateStorage). Edit and delete are not offered.
 export function StorageList() {
   const { cluster } = useCluster()
-  const { items, error } = useList(async () => (await storageClient.listStorages({ cluster: cluster?.ref })).storages)
+  const [presets, setPresets] = useState<StoragePreset[]>([])
+  const { items, error, reload } = useList(async () => {
+    const res = await storageClient.listStorages({ cluster: cluster?.ref })
+    setPresets(res.presets)
+    return res.storages
+  })
 
   if (error) return <ErrorAlert {...error} />
   if (!items) return <PageSkeleton label={t('storage.loading')} />
 
+  const create = <CreateStorageDialog cluster={cluster?.ref} presets={presets} onDone={reload} />
+
   return (
     <div>
-      <PageTitle title={t('storage.title')} description={t('storage.intro')} />
+      <PageTitle title={t('storage.title')} description={t('storage.intro')} actions={create} />
       {items.length === 0 ? (
-        <EmptyNote icon={HardDriveIcon}>{t('storage.empty')}</EmptyNote>
+        <div class="space-y-4">
+          <EmptyNote icon={HardDriveIcon}>{t('storage.empty')}</EmptyNote>
+          <div class="flex justify-center">{create}</div>
+        </div>
       ) : (
         <div class="space-y-6">
           {items.map((s) => (

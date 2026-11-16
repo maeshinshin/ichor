@@ -600,8 +600,8 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
 
 		var gone batchv1.Job
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(stale), &gone))).To(BeTrue(),
-			"the failed Job of the reverted edit is removed")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(stale), &gone)
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the failed Job of the reverted edit is removed"))
 
 		setValues(cluster, bad)
 		reconcileHandoverOK(r, cluster)

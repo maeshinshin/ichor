@@ -144,7 +144,7 @@ var _ = Describe("UIEgress", Ordered, func() {
 		Expect(changed).To(BeFalse())
 
 		_, err = policy()
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "a lone egress rule would cut every other flow of the pods")
+		Expect(err).To(MatchError(apierrors.IsNotFound, "a lone egress rule would cut every other flow of the pods"))
 	})
 
 	It("writes the issuer rule beside the controller policy, leaves it alone when unchanged, and removes it with the issuer", func() {
@@ -179,7 +179,7 @@ var _ = Describe("UIEgress", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		_, err = policy()
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the issuer rule is removed with the issuer"))
 	})
 
 	It("does nothing when disabled", func() {

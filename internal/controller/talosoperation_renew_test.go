@@ -233,7 +233,7 @@ var _ = Describe("the cluster lock across a storage evacuation longer than one p
 		Expect(got.Status.FailureReason).To(ContainSubstring("timed out"))
 
 		var lease coordinationv1.Lease
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &lease))).To(BeTrue(),
-			"a paused operation releases the cluster lock (ADR 0162)")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &lease)
+		Expect(err).To(MatchError(apierrors.IsNotFound, "a paused operation releases the cluster lock (ADR 0162)"))
 	})
 })

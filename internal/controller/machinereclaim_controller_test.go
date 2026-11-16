@@ -474,7 +474,8 @@ var _ = Describe("MachineReclaim Controller", func() {
 		now = get(key).Status.ExpiresAt.Add(7*24*time.Hour + time.Minute)
 		reconcileOK(key)
 
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, key, &ichorv1alpha1.MachineReclaim{}))).To(BeTrue())
+		err := k8sClient.Get(ctx, key, &ichorv1alpha1.MachineReclaim{})
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the finished request is deleted seven days after its expiry"))
 	})
 
 	It("will not read or delete a Secret of another type named as the credential", func() {

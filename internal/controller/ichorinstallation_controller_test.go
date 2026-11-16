@@ -135,7 +135,8 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(newReconciler().Seed(ctx)).To(Succeed())
 
 			var got ichorv1alpha1.IchorInstallation
-			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, key, &got))).To(BeTrue())
+			err := k8sClient.Get(ctx, key, &got)
+			Expect(err).To(MatchError(apierrors.IsNotFound, "a dev build seeds no IchorInstallation"))
 
 			withVersion("v0.1.0")
 			Expect(newReconciler().Seed(ctx)).To(Succeed())

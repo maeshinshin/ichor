@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -295,7 +296,8 @@ var _ = Describe("TalosOperation shutdown", func() {
 		for _, completesTransition := range []bool{false, true} {
 			_, err := mr.acquireDisruptiveLock(ctx, f.cluster, f.cps[0], "shutdown-test", completesTransition)
 			var shuttingDown *shuttingDownError
-			Expect(errors.As(err, &shuttingDown)).To(BeTrue(), "completesTransition=%v", completesTransition)
+			Expect(err).To(MatchError(func(e error) bool { return errors.As(e, &shuttingDown) },
+				fmt.Sprintf("a shutting-down error when completesTransition=%v", completesTransition)))
 		}
 
 		f.halt(f.workers...)

@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -74,7 +76,7 @@ var _ = Describe("applyKubeProxyObjects", func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: kubeProxyName}, &corev1.ServiceAccount{})).To(Succeed())
 
 		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: "coredns-restore-test"}, &corev1.ConfigMap{})
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the coredns-restore-test ConfigMap is not created"))
 
 		Expect(applyKubeProxyObjects(ctx, k8sClient, objs[:2])).To(Succeed(), "idempotent")
 	})
@@ -106,7 +108,7 @@ var _ = Describe("removeKubeProxyObjects", func() {
 
 		for _, o := range []client.Object{sa, crb, cm} {
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(o), o)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue(), "%T %s should be gone", o, o.GetName())
+			Expect(err).To(MatchError(apierrors.IsNotFound, fmt.Sprintf("%T %s should be gone", o, o.GetName())))
 		}
 
 		Expect(kubeProxyExists()).To(BeFalse())

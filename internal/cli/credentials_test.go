@@ -381,7 +381,7 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 
 	req := f.request()
 	req.BundleFile = path
-	req.TalosEndpoints = []string{"10.9.9.9"}
+	req.TalosEndpoints = []string{testOtherAddr}
 
 	// k8s is nil: nothing may be read from the cluster.
 	files, err := writeCredentials(context.Background(), nil, req)
@@ -395,7 +395,7 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 	}
 
 	_, tcrt, tctx := readTalosconfigCreds(t, files.Talosconfig)
-	if !chainsTo(t, tcrt, f.old.Certs.OS.Crt) || !slices.Equal(tctx.Endpoints, []string{"10.9.9.9"}) {
+	if !chainsTo(t, tcrt, f.old.Certs.OS.Crt) || !slices.Equal(tctx.Endpoints, []string{testOtherAddr}) {
 		t.Fatal("the offline talosconfig does not match the bundle's Talos CA or the given endpoint")
 	}
 }
@@ -417,7 +417,7 @@ func TestBundleAndKubeServerWriteCredentialsWithNoKubeconfigOnDisk(t *testing.T)
 	req := f.request()
 	req.KubeconfigIn, req.TalosconfigIn = "", ""
 	req.BundleFile = path
-	req.TalosEndpoints = []string{"10.9.9.9"}
+	req.TalosEndpoints = []string{testOtherAddr}
 	req.KubeServer = credServer
 	req.KubeconfigOut, req.TalosconfigOut = filepath.Join(out, "kubeconfig"), filepath.Join(out, "talosconfig")
 
@@ -437,7 +437,7 @@ func TestBundleAndKubeServerWriteCredentialsWithNoKubeconfigOnDisk(t *testing.T)
 	}
 
 	_, tcrt, tctx := readTalosconfigCreds(t, files.Talosconfig)
-	if !chainsTo(t, tcrt, f.old.Certs.OS.Crt) || !slices.Equal(tctx.Endpoints, []string{"10.9.9.9"}) {
+	if !chainsTo(t, tcrt, f.old.Certs.OS.Crt) || !slices.Equal(tctx.Endpoints, []string{testOtherAddr}) {
 		t.Fatal("the talosconfig does not match the bundle's Talos CA or the given endpoint")
 	}
 }

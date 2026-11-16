@@ -1283,3 +1283,36 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		}
 	})
 })
+
+var _ = Describe("a key rotation that gave up, and its retry request", func() {
+	BeforeEach(func() {
+		saved := rotationGiveUpAfter
+		rotationGiveUpAfter = 2 * time.Second
+		DeferCleanup(func() { rotationGiveUpAfter = saved })
+	})
+
+	It("runs again from blocked on the retry annotation, records lastRetry and removes the request", func() {
+		f := newKeyRotFixture(fastBundle())
+		f.world.nodes[f.controlPlanes()[2].Name].down = true
+		op := f.newOp(bothTargets)
+
+		op = stepUntilGivesUp(f.step, op)
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(ContainSubstring("gave up after being blocked"))
+
+		f.world.nodes[f.controlPlanes()[2].Name].down = false
+
+		cur := fetchOperation(op)
+		if cur.Annotations == nil {
+			cur.Annotations = map[string]string{}
+		}
+		cur.Annotations[ichorv1alpha1.OperationRetryAnnotation] = ichorv1alpha1.OperationRetryRequested
+		Expect(k8sClient.Update(ctx, cur)).To(Succeed())
+
+		op = f.step(cur)
+		Expect(op.Status.FailureReason).To(BeEmpty())
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+		Expect(op.Status.LastRetry).NotTo(BeNil(), "the retry the controller acted on is recorded in status.lastRetry")
+		Expect(fetchOperation(op).Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation))
+	})
+})

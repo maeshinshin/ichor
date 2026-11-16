@@ -239,7 +239,7 @@ func (r *CertExpiryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
 		Named("certexpiry").
-		Complete(r)
+		Complete(quietExpected(r))
 }
 
 // certificateExpiries lists the end of validity of every CA in bundle, in a

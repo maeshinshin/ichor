@@ -566,5 +566,5 @@ func (r *TalosEtcdBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.TalosEtcdBackup{}, builder.WithPredicates(
 			predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
 		Named("talosetcdbackup").
-		Complete(r)
+		Complete(quietExpected(r))
 }

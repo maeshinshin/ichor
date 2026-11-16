@@ -685,5 +685,5 @@ func (r *IssuerTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.ConfigMap{}, one, builder.WithPredicates(named)).
 		Watches(&corev1.Service{}, one, builder.WithPredicates(named)).
 		Watches(&ichorv1alpha1.IchorUser{}, one).
-		Complete(r)
+		Complete(quietExpected(r))
 }

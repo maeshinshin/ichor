@@ -140,7 +140,11 @@ var _ = BeforeSuite(func() {
 	}
 
 	cfg, err := testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(),
+		"envtest found no etcd or kube-apiserver to run (KUBEBUILDER_ASSETS is unset or wrong). "+
+			"Run `make setup-envtest` from the repository root, then rerun with "+
+			"KUBEBUILDER_ASSETS=$(pwd)/bin/k8s/<version>-linux-amd64, for example 1.36.2-linux-amd64. "+
+			"Use that version directory, not bin/k8s, which holds only version directories.")
 	Expect(cfg).NotTo(BeNil())
 
 	testScheme := runtime.NewScheme()

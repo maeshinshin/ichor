@@ -337,6 +337,14 @@ type KubeletServingCertificateStatus struct {
 // TalosMachineStatus defines the observed state of TalosMachine.
 type TalosMachineStatus struct {
 	// conditions represent the current state of the TalosMachine resource, kstatus-compatible.
+	// The ConfigRollout condition is the marker of a `config` operation rolling out to this machine. It is True,
+	// with reason RebootRequested (the message is the boot ID read before the reboot) or APIServerRestarting
+	// (the message is the kube-apiserver container ID), while the machine is being rebooted or its
+	// kube-apiserver restarted. Reason Converged, with status False, means the rollout is over: the node runs the
+	// rendered configuration and was verified (it is back after the reboot, and for a control plane back in etcd,
+	// or its kube-apiserver answers /readyz). Converged is the end state, not a problem, and the condition stays
+	// at it until the next rollout rewrites it. Status False with reason Failed or APIServerNotReady means the
+	// rollout stopped on this machine; the message says why.
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

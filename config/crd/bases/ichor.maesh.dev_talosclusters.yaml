@@ -26,8 +26,8 @@ spec:
     - jsonPath: .spec.controlPlane.count
       name: Control Plane
       type: integer
-    - jsonPath: .status.conditions[?(@.type=='Ready')].status
-      name: Ready
+    - jsonPath: .status.conditions[?(@.type=='Transitioning')].status
+      name: Transitioning
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -594,8 +594,12 @@ spec:
                 type: object
               secretsRef:
                 description: |-
-                  secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle. The Secret lives in the
-                  controller's own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict
+                  secretsRef names the Secret holding the cluster's Talos secrets bundle under the key "secrets.yaml", in
+                  the format `talosctl gen secrets` writes: the Talos API, Kubernetes, Kubernetes aggregator and etcd CA
+                  certificates and private keys, the Kubernetes service account key, the cluster ID and secret, the bootstrap
+                  and trustd tokens, and the etcd encryption secret. Ichor adds its rotation state to the same Secret while a
+                  rotation runs. The Secret lives in the controller's
+                  own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict
                   Secret reads to "wherever the referencing TalosCluster happens to live" at anything narrower than
                   cluster-wide.
                 properties:

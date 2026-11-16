@@ -1,6 +1,6 @@
 # 0096. A Secret reference is set or changed only with update on the resource's secret-references
 
-Status: Accepted · Date: 2026-10-27 · Design section: Security, RBAC · Extends: 0094
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Security, RBAC · Extends: 0094
 
 Decided: any create or update that sets or changes a field naming a Secret needs the verb `update` on the subresource `secret-references` of that resource (`talosclusters/secret-references`, `talosetcdbackups/secret-references`), asked of the requesting user with a SubjectAccessReview in the validating webhook that already gates `spec.authentication`; the controller and the GitOps engines are exempt as there; writing the same value again is not gated and neither is removing a reference; `ichor-admin` holds the right, `ichor-operator` and `ichor-viewer` do not, and the ichor-ui ServiceAccount does not need it
 
@@ -32,3 +32,7 @@ Four fields name a Secret. Nothing on `TalosMachine`, `TalosConfigPatch`, `Talos
 ## Consequences
 
 An operator can no longer change where Ichor reads credentials from; setting one up (a new registry credential, an S3 bucket) is an administrator's step, and the operator keeps editing everything else. The check adds a SubjectAccessReview to a write only when a reference is touched. GitOps users change a reference through Git, reviewed there. A reference to a Secret the author may not read is still possible for an administrator; narrowing that (an allow-list of Secret names) is left out.
+
+## Amendment (2026-11-16): what `secretsRef` names
+
+The table row for `TalosCluster.spec.secretsRef` says it names the Secret holding the "Talos, Kubernetes and etcd CA bundle". The Secret holds more than CA certificates: the cluster's whole Talos secrets bundle under the key `secrets.yaml`, in the format `talosctl gen secrets` writes (the CA certificates and private keys, the service account key, the cluster ID and secret, the bootstrap and trustd tokens, the etcd encryption secret), plus Ichor's rotation state while a rotation runs. That is what the field's description in the CRD now says. Repointing the reference reaches all of it, so the `update` on `secret-references` that guards it is guarding the whole bundle, not only the CAs. The decision is unchanged.

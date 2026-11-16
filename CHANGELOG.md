@@ -772,6 +772,8 @@ command does. Each item is described where it is listed below.
   their upstream copyright notice, and `THIRD-PARTY-NOTICES` names them.
 - `THIRD-PARTY-NOTICES` names both vendored copies of Radix UI Primitives, in
   `ui/src/lib/radix` and in `site/src/lib/radix`.
+- `THIRD-PARTY-NOTICES` names cmdk, which `ui/src/lib/shims/cmdk.tsx` and
+  `site/src/lib/shims/cmdk.tsx` port, with its MIT copyright line.
 
 ### Docs
 

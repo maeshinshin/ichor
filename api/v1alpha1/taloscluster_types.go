@@ -344,8 +344,12 @@ type TalosClusterSpec struct {
 	// +optional
 	Schematic *TalosClusterSchematic `json:"schematic,omitempty"`
 
-	// secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle. The Secret lives in the
-	// controller's own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict
+	// secretsRef names the Secret holding the cluster's Talos secrets bundle under the key "secrets.yaml", in
+	// the format `talosctl gen secrets` writes: the Talos API, Kubernetes, Kubernetes aggregator and etcd CA
+	// certificates and private keys, the Kubernetes service account key, the cluster ID and secret, the bootstrap
+	// and trustd tokens, and the etcd encryption secret. Ichor adds its rotation state to the same Secret while a
+	// rotation runs. The Secret lives in the controller's
+	// own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict
 	// Secret reads to "wherever the referencing TalosCluster happens to live" at anything narrower than
 	// cluster-wide.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="secretsRef.name is required"
@@ -705,7 +709,7 @@ const TalosClusterConfirmKubeProxySwitchAnnotation = "ichor.maesh.dev/confirm-ku
 // +kubebuilder:printcolumn:name="Talos",type=string,JSONPath=".spec.talosVersion"
 // +kubebuilder:printcolumn:name="Kubernetes",type=string,JSONPath=".spec.kubernetesVersion"
 // +kubebuilder:printcolumn:name="Control Plane",type=integer,JSONPath=".spec.controlPlane.count"
-// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Transitioning",type=string,JSONPath=".status.conditions[?(@.type=='Transitioning')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // TalosCluster is the Schema for the talosclusters API

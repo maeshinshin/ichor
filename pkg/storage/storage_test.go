@@ -31,8 +31,17 @@ func TestNewPreset(t *testing.T) {
 		t.Fatalf("NewPreset(%q) = %T, want longhornV1", LonghornV1, p)
 	}
 
-	if _, err := NewPreset("rook-v1"); err == nil {
-		t.Fatal(`NewPreset("rook-v1") = nil error, want an error (not an allowed preset)`)
+	p, err = NewPreset("rook-v1")
+	if err != nil {
+		t.Fatalf(`NewPreset("rook-v1") error: %v`, err)
+	}
+
+	if _, ok := p.(rookV1); !ok {
+		t.Fatalf(`NewPreset("rook-v1") = %T, want rookV1`, p)
+	}
+
+	if _, err := NewPreset("no-such-preset"); err == nil {
+		t.Fatal(`NewPreset("no-such-preset") = nil error, want an error (not an allowed preset)`)
 	}
 }
 

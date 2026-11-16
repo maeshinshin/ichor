@@ -33,9 +33,12 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// LonghornV1 is TalosStorage.spec.diskPreset's first and, for now, only
-// allowed value.
+// LonghornV1 is one of TalosStorage.spec.diskPreset's allowed values.
 const LonghornV1 = "longhorn-v1"
+
+// RookV1 is the other allowed value: Rook/Ceph consumes raw devices, so its preset writes
+// no Talos-side disk config (see rookv1.go).
+const RookV1 = "rook-v1"
 
 // LiveConfig is what Preset.CheckConsistency compares against: the storage
 // system's own live configuration, as read by the caller (the future
@@ -82,7 +85,8 @@ type Preset interface {
 	// modules, sysctls) this preset needs for a disk matching diskSelector
 	// (a Talos disk-selector CEL expression, the same language
 	// provisioning.diskSelector.match uses), meant to be applied as a
-	// TalosConfigPatch. It returns an error if diskSelector is empty.
+	// TalosConfigPatch. A preset that needs a disk selector returns an error for an empty one;
+	// a preset that writes no disk config returns no documents for any selector.
 	TalosPatches(diskSelector string) ([]ichorv1alpha1.TalosConfigPatchDocument, error)
 
 	// KubeletMounts returns the bind mounts the kubelet needs to see the volumes
@@ -115,6 +119,8 @@ func NewPreset(name string) (Preset, error) {
 	switch name {
 	case LonghornV1:
 		return longhornV1{}, nil
+	case RookV1:
+		return rookV1{}, nil
 	default:
 		return nil, fmt.Errorf("storage: unknown disk preset %q", name)
 	}

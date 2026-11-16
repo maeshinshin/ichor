@@ -1,0 +1,299 @@
+# The installer Job's permissions: exactly the kinds dist/install.yaml
+# contains, and nothing the installer does not do (it never deletes a CRD, never reads or
+# writes a Secret, never touches a TalosCluster or any other custom resource).
+#
+# Not narrowable further: the clusterroles and clusterrolebindings
+# rules, with escalate and bind. Applying a ClusterRole that grants more than the applier
+# holds is refused unless the applier has escalate, and a new version names new roles, so
+# resourceNames cannot list them in advance. These two are the part of this file that is as
+# strong as cluster-admin, which is why the ServiceAccount exists only for the Job, the chart
+# creates it only when installer.enabled, and the controller can create the Job but not hold
+# these permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: installer-role
+rules:
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+  - get
+- apiGroups:
+  - apiextensions.k8s.io
+  resourceNames:
+  - ichorinstallations.ichor.maesh.dev
+  - ichorusers.ichor.maesh.dev
+  - machinereclaims.ichor.maesh.dev
+  - taloscredentialrequests.ichor.maesh.dev
+  - talosclusters.ichor.maesh.dev
+  - talosconfigpatches.ichor.maesh.dev
+  - talosetcdbackups.ichor.maesh.dev
+  - talosmachines.ichor.maesh.dev
+  - talosoperations.ichor.maesh.dev
+  - talosstorages.ichor.maesh.dev
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-admin
+  - ichor-auto-patch-role
+  - ichor-cni-role
+  - ichor-ichor-override-role
+  - ichor-ichor-credentials-role
+  - ichor-ichor-diagnostics-role
+  - ichor-ui-impersonate
+  - ichor-ichor-ui-role
+  - ichor-ichorinstallation-admin-role
+  - ichor-ichorinstallation-editor-role
+  - ichor-ichorinstallation-viewer-role
+  - ichor-ichoruser-admin-role
+  - ichor-ichoruser-editor-role
+  - ichor-ichoruser-viewer-role
+  - ichor-installer-role
+  - ichor-machine-reclaimer
+  - ichor-manager-role
+  - ichor-metrics-auth-role
+  - ichor-metrics-reader
+  - ichor-operator
+  - ichor-taloscluster-admin-role
+  - ichor-taloscluster-editor-role
+  - ichor-taloscluster-viewer-role
+  - ichor-talosconfigpatch-admin-role
+  - ichor-talosconfigpatch-editor-role
+  - ichor-talosconfigpatch-viewer-role
+  - ichor-talosetcdbackup-admin-role
+  - ichor-talosetcdbackup-editor-role
+  - ichor-talosetcdbackup-viewer-role
+  - ichor-talosmachine-admin-role
+  - ichor-talosmachine-editor-role
+  - ichor-talosmachine-viewer-role
+  - ichor-talosoperation-admin-role
+  - ichor-talosoperation-editor-role
+  - ichor-talosoperation-viewer-role
+  - ichor-talosstorage-admin-role
+  - ichor-talosstorage-editor-role
+  - ichor-talosstorage-viewer-role
+  - ichor-viewer
+  resources:
+  - clusterroles
+  verbs:
+  - bind
+  - escalate
+# The objects the installer applies in kube-system (the Cilium Helm Job's ServiceAccount, the
+# controller's Role for it and their bindings) and in any other
+# namespace a release adds. Installer rights are cluster-scoped only: an upgrade runs
+# under the previous release's role, which can rewrite its own ClusterRole but cannot read or
+# create a Role in a namespace it was never granted, so no namespaced Role outside the release
+# namespace exists. bind and escalate for the same reason as above: the Role it applies grants
+# Jobs and events, which this role does not hold.
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-auto-patch-impersonate-role
+  - ichor-cni-features-role
+  - ichor-cni-hubble-role
+  - ichor-cni-job-role
+  - ichor-cni-records-role
+  - ichor-cni-secrets-role
+  - ichor-cni-role
+  - ichor-ichor-ui-role
+  - ichor-installer-role
+  - ichor-leader-election-role
+  - ichor-manager-role
+  - ichor-pod-restart-role
+  - ichor-user-access
+  resources:
+  - roles
+  verbs:
+  - bind
+  - escalate
+# The PriorityClass the controller and UI pods run under. Cluster-scoped, so it cannot
+# be restricted by name for create.
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - create
+  - get
+  - patch
+  - update
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - mutatingwebhookconfigurations
+  - validatingadmissionpolicybindings
+  - validatingwebhookconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor-system
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - patch
+  - update
+# The paramKind of the controller-job-image policy: the apiserver refuses to create a
+# ValidatingAdmissionPolicy unless the creator may get every object of its paramKind.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: installer-role
+  namespace: system
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  # delete: the snapshot ConfigMaps are named <job>-snapshot-N and the Job name is generated, so
+  # resourceNames cannot express them; delete stays namespace-wide in the release namespace.
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+- apiGroups:
+  # The Cilium policies of config/cilium-network-policy, applied only when Cilium's CRD exists.
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-auto-patch-impersonate-role
+  - ichor-cni-role
+  - ichor-ichor-ui-role
+  - ichor-installer-role
+  - ichor-leader-election-role
+  - ichor-manager-role
+  - ichor-user-access
+  resources:
+  - roles
+  verbs:
+  - bind
+  - escalate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: installer-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: installer-role
+subjects:
+- kind: ServiceAccount
+  name: installer
+  namespace: system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: installer-rolebinding
+  namespace: system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: installer-role
+subjects:
+- kind: ServiceAccount
+  name: installer
+  namespace: system

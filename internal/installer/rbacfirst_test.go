@@ -137,7 +137,7 @@ subjects: [{apiGroup: rbac.authorization.k8s.io, kind: User, name: %[2]s}]
 
 	// The old role is effective, and it really does not cover Gizmos.
 	if err := wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
-		return c.Get(ctx, types.NamespacedName{Namespace: f.ns, Name: "ichor-installer-role"}, o.unstructured("rbac.authorization.k8s.io/v1", "Role")) == nil, nil
+		return c.Get(ctx, types.NamespacedName{Namespace: f.ns, Name: installerRoleName}, o.unstructured("rbac.authorization.k8s.io/v1", "Role")) == nil, nil
 	}); err != nil {
 		t.Fatalf("the old installer role never became effective: %v", err)
 	}

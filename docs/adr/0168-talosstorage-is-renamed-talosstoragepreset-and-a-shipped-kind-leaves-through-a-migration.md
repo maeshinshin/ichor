@@ -128,8 +128,8 @@ Both carry over unchanged. The enum is a property of the field, not of the kind.
 
 The rename lands **after** both of these, because each would conflict with it:
 
-- `feat/the-rook-ceph-storage-preset` (origin head `e565f1a59`), which touches `api/v1alpha1/talosstorage_types.go`, `api/v1alpha1/validation_test.go`, `config/crd/bases/ichor.maesh.dev_talosstorages.yaml`, `dist/chart/templates/crd/talosstorages.ichor.maesh.dev.yaml`, `pkg/storage/rookv1.go` and its test, `pkg/storage/storage.go`, `pkg/storage/storage_test.go`, `pkg/storage/evacuation_test.go`.
-- `feat/the-ui-shows-the-storage-presets` (origin head `ac0110677` at last fetch), which adds `proto/ichor/v1alpha1/storage.proto`, `internal/uiapi/storage_service.go`, `ui/src/pages/StorageList.tsx` and routes, and names the current kind in its backend.
+- `feat/the-rook-ceph-storage-preset` (origin head `4407bae06`, the head at the time this record was written), which touches `api/v1alpha1/talosstorage_types.go`, `api/v1alpha1/validation_test.go`, `config/crd/bases/ichor.maesh.dev_talosstorages.yaml`, `dist/chart/templates/crd/talosstorages.ichor.maesh.dev.yaml`, `pkg/storage/rookv1.go` and its test, `pkg/storage/storage.go`, `pkg/storage/storage_test.go`, `pkg/storage/evacuation_test.go`.
+- `feat/the-ui-shows-the-storage-presets` (origin head `ac0110677`), which adds `proto/ichor/v1alpha1/storage.proto`, `internal/uiapi/storage_service.go`, `ui/src/pages/StorageList.tsx` and routes, and names the current kind in its backend.
 
 ### 7. ADR number
 

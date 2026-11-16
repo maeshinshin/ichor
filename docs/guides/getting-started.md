@@ -14,7 +14,7 @@ images yourself, see [Build from source](../development/build-from-source.md).
 - One machine (virtual or bare metal) booted from a Talos ISO into maintenance
   mode, with an address your workstation can reach on port 50000. This guide
   uses `192.168.1.50`. Talos needs at least 2 GiB of memory on a control plane.
-  Ichor does not boot machines. The Talos on it must be v1.14.5 or newer, the
+  Ichor does not boot machines. The machine must run Talos v1.14.5 or newer, the
   release this Ichor installs: `ichor init` reads the node's version and
   refuses an older one before it writes anything, so boot an ISO of that
   release.

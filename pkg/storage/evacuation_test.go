@@ -32,8 +32,19 @@ func TestNewEvacuationHook(t *testing.T) {
 		t.Fatalf("NewEvacuationHook(%q) = %T, want longhornV1", LonghornV1, h)
 	}
 
+}
+
+// rook-v1 is an allowed preset with no evacuation hook: resolving one must return an error, not panic on the
+// type assertion.
+func TestNewEvacuationHook_RookV1IsAnErrorNotAPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf(`NewEvacuationHook("rook-v1") panicked: %v`, r)
+		}
+	}()
+
 	if _, err := NewEvacuationHook("rook-v1"); err == nil {
-		t.Fatal(`NewEvacuationHook("rook-v1") = nil error, want an error (not an allowed preset)`)
+		t.Fatal(`NewEvacuationHook("rook-v1") = nil error, want an error (rook-v1 has no evacuation hook)`)
 	}
 }
 

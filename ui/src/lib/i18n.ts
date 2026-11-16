@@ -1181,6 +1181,7 @@ export const en = {
   'overview.viewAllNodes': 'View all nodes ({n})',
   'overview.colStarted': 'Started',
   'overview.nodesNotReady': '{n} not ready',
+  'overview.nodesReady': '{ready} / {total} ready',
   'versions.state.up-to-date': 'Up to date',
   'versions.state.behind': 'Behind',
   'versions.state.ahead': 'Ahead',

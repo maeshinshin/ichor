@@ -344,7 +344,7 @@ function Home({
             icon={ServerIcon}
             target={targets.nodes}
             badge={machines !== null && ready !== approved.length ? t('overview.nodesNotReady', { n: approved.length - ready }) : undefined}
-            value={machines ? `${ready} / ${approved.length} ready` : '-'}
+            value={machines ? t('overview.nodesReady', { ready, total: approved.length }) : '-'}
             sub={pending.length > 0 ? t('overview.waitingApproval', { n: pending.length }) : undefined}
           />
           <Tile

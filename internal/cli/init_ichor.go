@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -291,9 +292,87 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 
 	// The IchorInstallation has a validating webhook, served by the controller this
 	// command just deployed: wait for it as long as step 5 waits for the CRs, not initRetryWindow.
-	if err := createWhenWebhooksUp(ctx, k8sClient, &unstructured.Unstructured{Object: content}, cmp.Or(wait, defaultWebhookWait), followRetryDelay, warn); err != nil {
+	err = createWhenWebhooksUp(ctx, k8sClient, &unstructured.Unstructured{Object: content}, cmp.Or(wait, defaultWebhookWait), followRetryDelay, warn)
+	// The controller's Seed creates the singleton as soon as it serves, without the installer pin, so it
+	// can win this create; the object it made is pinned below rather than failing the install.
+	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return false, fmt.Errorf("init: creating the IchorInstallation: %w", err)
 	}
 
+	if err := pinInstallation(ctx, k8sClient, pin, warn); err != nil {
+		return false, err
+	}
+
 	return true, nil
+}
+
+// pinInstallation brings the singleton to the installer pin init was given. It fills what the
+// object lacks and never changes a value it holds: an object that names another version, manager
+// or digest is an installation init did not make, so init refuses it rather than re-pointing the
+// cluster at another build (ichor upgrade does that, with its own checks).
+func pinInstallation(ctx context.Context, c client.Client, pin installerPin, progress io.Writer) error {
+	var inst ichorv1alpha1.IchorInstallation
+
+	if err := retryInit(ctx, progress, func() error {
+		return c.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)
+	}); err != nil {
+		return fmt.Errorf("init: reading the IchorInstallation: %w", err)
+	}
+
+	changed, err := fillInstallerPin(&inst, pin)
+	if err != nil || !changed {
+		return err
+	}
+
+	// updateRetrying re-reads and re-applies fillInstallerPin on a Conflict: the controller writes the status right after Seed creates it.
+	if err := updateRetrying(ctx, c, &inst, func(i *ichorv1alpha1.IchorInstallation) error {
+		_, err := fillInstallerPin(i, pin)
+
+		return err
+	}, progress); err != nil {
+		return fmt.Errorf("init: updating the IchorInstallation: %w", err)
+	}
+
+	return nil
+}
+
+// fillInstallerPin sets on inst what pin asks for and the object lacks, and reports whether it
+// changed anything. It refuses, before anything is written, a version or manager other than this
+// init's, and a digest or signature mode the object already holds that differs from the pin.
+func fillInstallerPin(inst *ichorv1alpha1.IchorInstallation, pin installerPin) (bool, error) {
+	if inst.Spec.Version != version.Version {
+		return false, fmt.Errorf("init: the IchorInstallation records Ichor %s, this init is %s: "+
+			"move an installed Ichor to another version with `ichor upgrade`", inst.Spec.Version, version.Version)
+	}
+
+	if inst.HelmManaged() {
+		return false, fmt.Errorf("init: the IchorInstallation says Helm deploys this Ichor (%s)", ichorv1alpha1.IchorHelmManagedMessage)
+	}
+
+	changed := false
+
+	if pin.Digest != "" {
+		switch inst.Spec.InstallerDigest {
+		case "":
+			inst.Spec.InstallerDigest = pin.Digest
+			changed = true
+		case pin.Digest:
+		default:
+			return false, fmt.Errorf("init: the IchorInstallation pins installerDigest %s, not %s: "+
+				"change the pin with `ichor upgrade`", inst.Spec.InstallerDigest, pin.Digest)
+		}
+	}
+
+	if pin.SkipSignature {
+		switch sig := inst.Spec.InstallerSignature; {
+		case sig == nil:
+			inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
+			changed = true
+		case sig.Mode != ichorv1alpha1.InstallerSignatureSkip:
+			return false, fmt.Errorf("init: the IchorInstallation's installerSignature.mode is %q, init was asked to skip the check: "+
+				"change it with `ichor upgrade`", sig.Mode)
+		}
+	}
+
+	return changed, nil
 }

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -434,4 +435,166 @@ func TestApplyIchorManifest_MissingNamespaceElsewhereStillFails(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("got %v, want the not found error", err)
 	}
+}
+
+const (
+	testPinnedDigest = "sha256:" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testOtherDigest  = "sha256:" + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+// seedWinsTheCreate is the controller's Seed getting its create in before init's: the first
+// IchorInstallation create lands the object Seed writes (the version and manager, no pin), then
+// runs init's own create, which comes back AlreadyExists as it does on the cluster.
+func seedWinsTheCreate(t *testing.T) client.Client {
+	t.Helper()
+
+	scheme, err := cliScheme()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seeded := false
+
+	return fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			if obj.GetObjectKind().GroupVersionKind().Kind == "IchorInstallation" && !seeded {
+				seeded = true
+
+				seed := &ichorv1alpha1.IchorInstallation{
+					Name: ichorv1alpha1.IchorInstallationName,
+					Spec: ichorv1alpha1.IchorInstallationSpec{
+						Version:    version.Version,
+						Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
+					},
+				}
+				if err := c.Create(ctx, seed); err != nil {
+					return err
+				}
+			}
+
+			return c.Create(ctx, obj, opts...)
+		},
+	}).Build()
+}
+
+// existingSingleton is a cluster whose IchorInstallation already has spec.
+func existingSingleton(t *testing.T, spec ichorv1alpha1.IchorInstallationSpec) client.Client {
+	t.Helper()
+
+	scheme, err := cliScheme()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(&ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: spec,
+	}).Build()
+}
+
+func getSingleton(t *testing.T, c client.Client) ichorv1alpha1.IchorInstallation {
+	t.Helper()
+
+	var got ichorv1alpha1.IchorInstallation
+	if err := c.Get(context.Background(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &got); err != nil {
+		t.Fatalf("get IchorInstallation: %v", err)
+	}
+
+	return got
+}
+
+// Seed may create the singleton before init does: init finishes, rather than failing on AlreadyExists.
+func TestCreateIchorInstallation_SeedCreatesFirst(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	created, err := createIchorInstallation(context.Background(), seedWinsTheCreate(t), io.Discard, 0, installerPin{})
+	if err != nil || !created {
+		t.Fatalf("createIchorInstallation = %v, %v; want created and no error", created, err)
+	}
+}
+
+// The object Seed made has no digest or signature mode: init fills in the pin it was given.
+func TestCreateIchorInstallation_SeedCreatesFirstThenPinIsFilledIn(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	t.Run("digest", func(t *testing.T) {
+		c := seedWinsTheCreate(t)
+		if _, err := createIchorInstallation(context.Background(), c, io.Discard, 0, installerPin{Digest: testPinnedDigest}); err != nil {
+			t.Fatalf("createIchorInstallation: %v", err)
+		}
+
+		if got := getSingleton(t, c).Spec.InstallerDigest; got != testPinnedDigest {
+			t.Errorf("spec.installerDigest = %q, want %q", got, testPinnedDigest)
+		}
+	})
+
+	t.Run("signature skip", func(t *testing.T) {
+		c := seedWinsTheCreate(t)
+		if _, err := createIchorInstallation(context.Background(), c, io.Discard, 0, installerPin{SkipSignature: true}); err != nil {
+			t.Fatalf("createIchorInstallation: %v", err)
+		}
+
+		if sig := getSingleton(t, c).Spec.InstallerSignature; sig == nil || sig.Mode != ichorv1alpha1.InstallerSignatureSkip {
+			t.Errorf("spec.installerSignature = %+v, want mode skip", sig)
+		}
+	})
+}
+
+// init never re-points an installation it did not make: a different version, manager or digest is
+// refused, the object is left as it was, and a repeat of the same pin is accepted.
+func TestCreateIchorInstallation_RefusesAnotherInstallation(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	current := ichorv1alpha1.IchorInstallationSpec{
+		Version:    testReleasedVersion,
+		Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
+	}
+
+	for _, tc := range []struct {
+		name    string
+		spec    ichorv1alpha1.IchorInstallationSpec
+		pin     installerPin
+		wantErr string
+	}{
+		{"another version", ichorv1alpha1.IchorInstallationSpec{Version: "v0.2.7", Deployment: current.Deployment}, installerPin{}, "upgrade"},
+		{"another digest", withDigest(current, testOtherDigest), installerPin{Digest: testPinnedDigest}, "installerDigest"},
+		{"helm manager", ichorv1alpha1.IchorInstallationSpec{Version: testReleasedVersion, Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm}}, installerPin{}, "Helm"},
+		{"signature required", withSignature(current, ichorv1alpha1.InstallerSignatureRequired), installerPin{SkipSignature: true}, "installerSignature"},
+		{"same pin again", withSignature(withDigest(current, testPinnedDigest), ichorv1alpha1.InstallerSignatureSkip), installerPin{Digest: testPinnedDigest, SkipSignature: true}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := existingSingleton(t, tc.spec)
+			before := getSingleton(t, c)
+
+			created, err := createIchorInstallation(context.Background(), c, io.Discard, 0, tc.pin)
+
+			if tc.wantErr == "" {
+				if err != nil || !created {
+					t.Fatalf("createIchorInstallation = %v, %v; want created and no error", created, err)
+				}
+
+				return
+			}
+
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("createIchorInstallation error = %v, want one mentioning %q", err, tc.wantErr)
+			}
+
+			if after := getSingleton(t, c); !reflect.DeepEqual(before.Spec, after.Spec) {
+				t.Errorf("a refused init changed the spec: %+v -> %+v", before.Spec, after.Spec)
+			}
+		})
+	}
+}
+
+func withDigest(s ichorv1alpha1.IchorInstallationSpec, digest string) ichorv1alpha1.IchorInstallationSpec {
+	s.InstallerDigest = digest
+
+	return s
+}
+
+func withSignature(s ichorv1alpha1.IchorInstallationSpec, mode string) ichorv1alpha1.IchorInstallationSpec {
+	s.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: mode}
+
+	return s
 }

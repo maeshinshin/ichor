@@ -1,5 +1,5 @@
 // Pure helpers for the override reclaim dialog.
-import { en, t, type Key } from './i18n.ts'
+import { isKey, t } from './i18n.ts'
 
 // uuidMatches is the typed consent: the text the person typed equals the node's UUID, ignoring case and
 // surrounding space. An empty UUID never matches, so a missing inspection cannot be confirmed.
@@ -23,5 +23,5 @@ export function usesClusterCredentials(own: boolean, clusterAllowed: boolean): b
 // reclaimPhaseLabel is the phase in words; a phase this build does not know is shown as received.
 export function reclaimPhaseLabel(phase: string): string {
   const key = `reclaim.phase.${phase}`
-  return key in en ? t(key as Key) : phase
+  return isKey(key) ? t(key) : phase
 }

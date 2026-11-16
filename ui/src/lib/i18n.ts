@@ -1204,6 +1204,9 @@ export const en = {
 
 export type Key = keyof typeof en
 
+// isKey narrows a string built at run time (a phase or an enum name from the server) to a key the table defines.
+export const isKey = (k: string): k is Key => k in en
+
 export type Params = Record<string, string | number>
 
 export function t(key: Key, params?: Params): string {
@@ -1215,5 +1218,5 @@ export function t(key: Key, params?: Params): string {
 // entry, or returns undefined so the caller can fall back to the raw name.
 export function enumName(name: string): string | undefined {
   const key = `enum.${name}`
-  return key in en ? en[key as Key] : undefined
+  return isKey(key) ? en[key] : undefined
 }

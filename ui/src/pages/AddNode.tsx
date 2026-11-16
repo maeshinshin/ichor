@@ -91,7 +91,7 @@ export function AddNode() {
       <div class="max-w-4xl space-y-4">
         <SectionCard id="steps" title={t('addNode.stepsTitle')}>
           <ItemGroup>
-            {([PowerIcon, RadarIcon, CircleCheckIcon] as const).map((Icon, i) => (
+            {([[PowerIcon, 'addNode.step1'], [RadarIcon, 'addNode.step2'], [CircleCheckIcon, 'addNode.step3']] as const).map(([Icon, step], i) => (
               <div key={i}>
                 {i > 0 && <ItemSeparator />}
                 <Item>
@@ -99,7 +99,7 @@ export function AddNode() {
                     <Icon aria-hidden="true" />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemDescription className="line-clamp-none">{t(`addNode.step${i + 1}` as 'addNode.step1')}</ItemDescription>
+                    <ItemDescription className="line-clamp-none">{t(step)}</ItemDescription>
                   </ItemContent>
                 </Item>
               </div>

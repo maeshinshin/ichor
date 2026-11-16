@@ -32,6 +32,11 @@ test('a 403 from the password change means the old password was wrong', () => {
   assert.match(passwordError(new ConnectError('invalid credentials', Code.PermissionDenied)).detail, /current password/)
 })
 
+test('a stale sign-in refused for the forced change is shown as the server says it, not as a wrong password', () => {
+  const e = passwordError(new ConnectError('sign in again to change the password: the change needs a sign-in within the last 10 minutes', Code.FailedPrecondition))
+  assert.match(e.detail, /sign in again/)
+})
+
 test('the saved file name keeps only safe characters', () => {
   assert.equal(downloadName('kubeconfig-prod.yaml', 'k.yaml'), 'kubeconfig-prod.yaml')
   assert.equal(downloadName('../x/y', 'k.yaml'), '..xy')

@@ -15,7 +15,8 @@ import { t } from '@/lib/i18n'
 // The change-own-password form, used in the account menu's dialog and, with nothing
 // else on the screen, when the account must change its password. Neither password is kept anywhere
 // but in these fields, and they are cleared once the call succeeds. forced is the first-login change,
-// which takes no current password; the server skips that check only when the session and the stored entry both say must-change.
+// which takes no current password; the server skips that check only when the session and the stored entry both say must-change
+// and the sign-in is recent, and refuses a stale one with a message asking the person to sign in again.
 export function ChangePasswordForm({ onCancel, forced = false }: { onCancel?: () => void; forced?: boolean }) {
   const [oldPassword, setOld] = useState('')
   const [next, setNext] = useState('')

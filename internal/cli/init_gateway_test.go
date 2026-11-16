@@ -20,22 +20,42 @@ import (
 	"context"
 	"io"
 	"slices"
+	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/pkg/cni/gatewayapi"
 )
 
-// gatewayCRDRecorder is a client whose only call is Apply; any other method is nil and panics, so a test
-// fails if the CRD path ever reads, patches or deletes anything.
+// gatewayCRDRecorder is a client whose only calls are Get and Apply; any other method is nil and panics,
+// so a test fails if the CRD path ever patches or deletes anything. crds holds the CRDs already on the
+// cluster by name; a name not in it is NotFound.
 type gatewayCRDRecorder struct {
 	client.Client
 
+	crds map[string]*unstructured.Unstructured
+
 	names  []runtime.ApplyConfiguration
 	owners []string
+	forced []bool
+}
+
+func (r *gatewayCRDRecorder) Get(_ context.Context, key client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+	crd, ok := r.crds[key.Name]
+	if !ok {
+		return apierrors.NewNotFound(schema.GroupResource{Group: "apiextensions.k8s.io", Resource: "customresourcedefinitions"}, key.Name)
+	}
+
+	obj.(*unstructured.Unstructured).Object = crd.DeepCopy().Object
+
+	return nil
 }
 
 func (r *gatewayCRDRecorder) Apply(_ context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
@@ -45,14 +65,28 @@ func (r *gatewayCRDRecorder) Apply(_ context.Context, obj runtime.ApplyConfigura
 	}
 
 	r.owners = append(r.owners, o.FieldManager)
+	r.forced = append(r.forced, o.Force != nil && *o.Force)
 
 	r.names = append(r.names, obj)
 
 	return nil
 }
 
-// TestApplyGatewayAPICRDsOnlyApplies applies the seven CRDs under their own field manager and never
-// deletes, reads or patches anything (the recorder's other methods panic).
+// foreignCRD is a CRD another tool installed: its bundle-version annotation and a managedFields entry for
+// that tool's own manager, not Ichor's.
+func foreignCRD(name, bundleVersion string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{Object: map[string]any{}}
+	u.SetAPIVersion("apiextensions.k8s.io/v1")
+	u.SetKind("CustomResourceDefinition")
+	u.SetName(name)
+	u.SetAnnotations(map[string]string{gatewayAPIBundleVersionAnnotation: bundleVersion})
+	u.SetManagedFields([]metav1.ManagedFieldsEntry{{Manager: "kubectl-client-side-apply", Operation: metav1.ManagedFieldsOperationUpdate}})
+
+	return u
+}
+
+// TestApplyGatewayAPICRDsOnlyApplies applies the seven CRDs under their own field manager, without force,
+// into an empty cluster, and never deletes, patches or reads anything but the CRDs by name.
 func TestApplyGatewayAPICRDsOnlyApplies(t *testing.T) {
 	r := &gatewayCRDRecorder{}
 
@@ -85,6 +119,76 @@ func TestApplyGatewayAPICRDsOnlyApplies(t *testing.T) {
 	for _, o := range r.owners {
 		if o != gatewayAPIFieldOwner {
 			t.Fatalf("applied under field manager %q, want %q", o, gatewayAPIFieldOwner)
+		}
+	}
+}
+
+// TestApplyGatewayAPICRDsRefusesAForeignCRDAtAnotherVersion: a CRD Ichor did not install, at a Gateway
+// API release other than the one embedded, makes the run refuse before it writes anything.
+func TestApplyGatewayAPICRDsRefusesAForeignCRDAtAnotherVersion(t *testing.T) {
+	r := &gatewayCRDRecorder{crds: map[string]*unstructured.Unstructured{
+		"gateways.gateway.networking.k8s.io": foreignCRD("gateways.gateway.networking.k8s.io", "v1.5.0"),
+	}}
+
+	err := applyGatewayAPICRDs(context.Background(), r, io.Discard)
+	if err == nil {
+		t.Fatal("applyGatewayAPICRDs returned nil, want a refusal naming the foreign CRD at v1.5.0")
+	}
+
+	if !strings.Contains(err.Error(), "gateways.gateway.networking.k8s.io") || !strings.Contains(err.Error(), "v1.5.0") {
+		t.Errorf("refusal %q does not name the CRD and its version", err)
+	}
+
+	if len(r.names) != 0 {
+		t.Fatalf("applied %d CRDs before refusing, want none", len(r.names))
+	}
+}
+
+// TestApplyGatewayAPICRDsLeavesAForeignCRDAtTheSameVersion: a CRD Ichor did not install, already at the
+// embedded release, is left as it is; the other six are applied as usual.
+func TestApplyGatewayAPICRDsLeavesAForeignCRDAtTheSameVersion(t *testing.T) {
+	objs, err := installer.Decode(gatewayapi.CRDs())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gateways := "gateways.gateway.networking.k8s.io"
+	i := slices.IndexFunc(objs, func(o *unstructured.Unstructured) bool { return o.GetName() == gateways })
+	if i < 0 {
+		t.Fatalf("the embedded CRDs lack %s", gateways)
+	}
+
+	r := &gatewayCRDRecorder{crds: map[string]*unstructured.Unstructured{
+		gateways: foreignCRD(gateways, objs[i].GetAnnotations()[gatewayAPIBundleVersionAnnotation]),
+	}}
+
+	if err := applyGatewayAPICRDs(context.Background(), r, io.Discard); err != nil {
+		t.Fatalf("applyGatewayAPICRDs: %v", err)
+	}
+
+	if len(r.names) != 6 {
+		t.Fatalf("applied %d CRDs, want 6 (the foreign gateways CRD is left alone)", len(r.names))
+	}
+
+	for _, n := range r.names {
+		if named, ok := n.(interface{ GetName() *string }); ok && *named.GetName() == gateways {
+			t.Fatalf("applied %s, which Ichor did not install", gateways)
+		}
+	}
+}
+
+// TestApplyGatewayAPICRDsDoesNotForce: the apply carries no force, so a field another manager owns on an
+// existing CRD is never taken over.
+func TestApplyGatewayAPICRDsDoesNotForce(t *testing.T) {
+	r := &gatewayCRDRecorder{}
+
+	if err := applyGatewayAPICRDs(context.Background(), r, io.Discard); err != nil {
+		t.Fatalf("applyGatewayAPICRDs: %v", err)
+	}
+
+	for _, f := range r.forced {
+		if f {
+			t.Fatal("applied with force: a CRD another tool owns would be taken over")
 		}
 	}
 }

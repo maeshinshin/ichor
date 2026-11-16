@@ -23,8 +23,6 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
-	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -35,9 +33,7 @@ import (
 )
 
 const (
-	kindSysctlConfig       = "SysctlConfig"
-	kindKernelModuleConfig = "KernelModuleConfig"
-	kindResolverConfig     = "ResolverConfig"
+	kindResolverConfig = "ResolverConfig"
 
 	// pathNetworkInterfaces is the legacy network block of a node whose Talos config predates the
 	// multi-document form; spec.network renders the new form, so the block is captured as a patch.
@@ -126,8 +122,8 @@ func (o ownership) split(paths []string) (owned, rest []string) {
 // and stor[es] the difference as initial patches, so ownership transfers
 // with zero drift").
 //
-// Only SysctlConfig and KernelModuleConfig documents are ever captured
-// automatically. The legacy v1alpha1 Config document is deliberately never
+// Only the documents of a shipped kind (ichorv1alpha1.TalosConfigPatchDocumentKinds) are ever
+// captured automatically, whole, through their generated conversions. The legacy v1alpha1 Config document is deliberately never
 // captured: the mirror has no machine.token (secret material, which mirrorgen drops),
 // machine.type and machine.certSANs are omitempty, and there is no sparse way to patch
 // only e.g. cluster.network without also restating it. Differences confined to that
@@ -173,12 +169,12 @@ func buildAdoptPlan(
 	owned, rest := own.split(paths)
 	plan.Owned = owned
 
-	wantSysctl, wantKernelModule, captured, wantResolver, legacy := groupChangedPaths(rest)
+	kinds, captured, legacy := groupChangedPaths(rest)
 
 	// spec.network.dnsServers already renders the ResolverConfig and the render refuses a patch that
 	// carries one too (ADR 0138), so a difference there stays unrepresentable: set it in the spec.
-	if wantResolver && m.Spec.Network != nil && len(m.Spec.Network.DNSServers) > 0 {
-		wantResolver = false
+	if kinds[kindResolverConfig] && m.Spec.Network != nil && len(m.Spec.Network.DNSServers) > 0 {
+		delete(kinds, kindResolverConfig)
 
 		for _, p := range rest {
 			if strings.HasPrefix(p, kindResolverConfig+".") {
@@ -189,11 +185,11 @@ func buildAdoptPlan(
 
 	plan.UnrepresentablePaths = legacy
 
-	if !wantSysctl && !wantKernelModule && len(captured) == 0 && !wantResolver {
+	if len(kinds) == 0 && len(captured) == 0 {
 		return plan, nil
 	}
 
-	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, captured, wantResolver, cluster.Spec.CertSANs)
+	docs, err := captureDocuments(currentCfg, kinds, captured, cluster.Spec.CertSANs)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: capturing node %q's current documents: %w", m.Name, err)
 	}
@@ -306,8 +302,12 @@ func jwtIssuers(machine string, cfg []byte) ([]string, error) {
 // TalosConfigPatchDocument kind each path belongs to, using diff.go's own
 // rooting convention: a standalone document's paths are rooted at its kind
 // name, everything else (the legacy Config document's "machine.*",
-// "cluster.*" and top-level scalars) is not.
-func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, captured []string, wantResolver bool, legacy []string) {
+// "cluster.*" and top-level scalars) is not. A kind is any the generated
+// TalosConfigPatchDocumentKinds lists, so a new shipped kind needs no edit here.
+func groupChangedPaths(paths []string) (kinds map[string]bool, captured, legacy []string) {
+	kinds = map[string]bool{}
+	shipped := ichorv1alpha1.TalosConfigPatchDocumentKinds()
+
 	for _, p := range paths {
 		if slices.Contains([]string{pathNetworkInterfaces, pathMachineCertSANs, pathAPIServerCertSANs}, p) {
 			captured = append(captured, p)
@@ -315,24 +315,15 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, captu
 			continue
 		}
 
-		kind := p
-		if before, _, ok := strings.Cut(p, "."); ok {
-			kind = before
-		}
-
-		switch kind {
-		case kindSysctlConfig:
-			wantSysctl = true
-		case kindKernelModuleConfig:
-			wantKernelModule = true
-		case kindResolverConfig:
-			wantResolver = true
-		default:
+		kind, _, _ := strings.Cut(p, ".")
+		if slices.Contains(shipped, kind) {
+			kinds[kind] = true
+		} else {
 			legacy = append(legacy, p)
 		}
 	}
 
-	return wantSysctl, wantKernelModule, captured, wantResolver, legacy
+	return kinds, captured, legacy
 }
 
 // sansBeyond are the node's SANs that spec.certSANs does not render: a patch's list is appended to
@@ -341,13 +332,13 @@ func sansBeyond(node, spec []string) []string {
 	return slices.DeleteFunc(slices.Clone(node), func(s string) bool { return slices.Contains(spec, s) })
 }
 
-// captureDocuments decodes currentCfg with machinery's own loader and
-// converts every SysctlConfig/KernelModuleConfig document it finds (through their own generated FromMachinery
-// conversions) into TalosConfigPatchDocuments. Neither kind carries secret
-// material, so a whole-document capture is safe (unlike the legacy Config
-// document; see buildAdoptPlan's doc comment).
-func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, captured []string, wantResolver bool, specSANs []string) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
-	if !wantSysctl && !wantKernelModule && len(captured) == 0 && !wantResolver {
+// captureDocuments decodes currentCfg with machinery's own loader and converts every document of
+// a wanted kind it finds, through the generated TalosConfigPatchDocumentFromMachinery, into a
+// TalosConfigPatchDocument. The mirror types drop secret material (ADR 0138), so a whole-document
+// capture is safe (unlike the v1alpha1 Config document; see buildAdoptPlan's doc comment), and the
+// zero-drift check names whatever a mirror dropped.
+func captureDocuments(currentCfg []byte, kinds map[string]bool, captured []string, specSANs []string) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
+	if len(kinds) == 0 && len(captured) == 0 {
 		return nil, nil
 	}
 
@@ -383,48 +374,23 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, capt
 
 	// The API server's own SANs are the KubeAPIServerConfig document's setting in Ichor's schema.
 	//nolint:staticcheck // the legacy block is what the node runs
-	if slices.Contains(captured, pathAPIServerCertSANs) && raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
+	if slices.Contains(captured, pathAPIServerCertSANs) && !kinds["KubeAPIServerConfig"] && raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
 		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "KubeAPIServerConfig", KubeAPIServerConfig: &typedconfig.KubeAPIServerConfigV1Alpha1{
 			PodCertExtraSANs: sansBeyond(raw.ClusterConfig.APIServerConfig.ExtraCertSANs, specSANs),
 		}})
 	}
 
 	for _, d := range provider.Documents() {
-		switch v := d.(type) {
-		case *mruntime.SysctlConfigV1Alpha1:
-			if !wantSysctl {
-				continue
-			}
-
-			conv, err := typedconfig.SysctlConfigV1Alpha1FromMachinery(v)
-			if err != nil {
-				return nil, fmt.Errorf("converting SysctlConfig: %w", err)
-			}
-
-			docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: kindSysctlConfig, SysctlConfig: conv})
-		case *mruntime.KernelModuleConfigV1Alpha1:
-			if !wantKernelModule {
-				continue
-			}
-
-			conv, err := typedconfig.KernelModuleConfigV1Alpha1FromMachinery(v)
-			if err != nil {
-				return nil, fmt.Errorf("converting KernelModuleConfig: %w", err)
-			}
-
-			docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: kindKernelModuleConfig, KernelModuleConfig: conv})
-		case *mnetwork.ResolverConfigV1Alpha1:
-			if !wantResolver {
-				continue
-			}
-
-			conv, err := typedconfig.ResolverConfigV1Alpha1FromMachinery(v)
-			if err != nil {
-				return nil, fmt.Errorf("converting ResolverConfig: %w", err)
-			}
-
-			docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: kindResolverConfig, ResolverConfig: conv})
+		if !kinds[d.Kind()] {
+			continue
 		}
+
+		conv, err := ichorv1alpha1.TalosConfigPatchDocumentFromMachinery(d)
+		if err != nil {
+			return nil, fmt.Errorf("converting %s: %w", d.Kind(), err)
+		}
+
+		docs = append(docs, conv)
 	}
 
 	return docs, nil
@@ -434,8 +400,8 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, capt
 // against the live configuration.
 type contractProbe struct {
 	Contract string
-	// UnrepresentablePaths are the class C paths: changed paths that are neither
-	// a SysctlConfig nor a KernelModuleConfig difference.
+	// UnrepresentablePaths are the class C paths: changed paths outside every
+	// document of a shipped kind.
 	UnrepresentablePaths []string
 	// Err is why the render at this contract failed; such a contract is never chosen.
 	Err error
@@ -478,7 +444,7 @@ func probeVersionContract(
 
 			paths, err = controller.ChangedPaths(currentCfg, baseline)
 			if err == nil {
-				_, _, _, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
+				_, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
 			}
 		}
 

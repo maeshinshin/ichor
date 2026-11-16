@@ -214,6 +214,26 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 	return fmt.Errorf("%s@%s has no cosign signature: %w", img.Repository, img.Digest, ErrSignatureNotFound)
 }
 
+// VerifyBlob succeeds when bundleJSON, a Sigstore bundle, is a signature of the blob whose digest is
+// artifactDigest ("sha256:<hex>") for the identity. It reads no registry: the signature is in the bundle.
+func (s *Sigstore) VerifyBlob(bundleJSON []byte, artifactDigest string, id Identity) error {
+	digest, err := sha256Bytes(artifactDigest)
+	if err != nil {
+		return err
+	}
+
+	b := &bundle.Bundle{}
+	if err := b.UnmarshalJSON(bundleJSON); err != nil {
+		return fmt.Errorf("parsing the bundle: %w", err)
+	}
+
+	if err := s.check(b, digest, id); err != nil {
+		return fmt.Errorf("the blob %s is not signed by %s: %w", artifactDigest, id.SANRegexp, err)
+	}
+
+	return nil
+}
+
 // WithKeychain makes the verifier's registry requests authenticate with k (the docker config's default
 // keychain, for the release workflow); the controller reads anonymously.
 func (s *Sigstore) WithKeychain(k authn.Keychain) *Sigstore {

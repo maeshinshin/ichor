@@ -363,6 +363,23 @@ func TestVerifyReportsAnUnreadableSignatureAsRegistryFailure(t *testing.T) {
 	}
 }
 
+// TestVerifyBlobRefusesMalformedInput: the blob wrapper refuses a digest that is not sha256 and a bundle that
+// does not parse, before any trust decision is made.
+func TestVerifyBlobRefusesMalformedInput(t *testing.T) {
+	s, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.VerifyBlob([]byte(`{}`), "md5:00", IchorIdentity("v0.1.0")); err == nil || !strings.Contains(err.Error(), "is not sha256") {
+		t.Fatalf("a digest that is not sha256: err = %v", err)
+	}
+
+	if err := s.VerifyBlob([]byte("not a bundle"), testDigest, IchorIdentity("v0.1.0")); err == nil || !strings.Contains(err.Error(), "parsing the bundle") {
+		t.Fatalf("a bundle that does not parse: err = %v", err)
+	}
+}
+
 func TestResolveDigest(t *testing.T) {
 	srv := httptest.NewServer(registry.New())
 	t.Cleanup(srv.Close)

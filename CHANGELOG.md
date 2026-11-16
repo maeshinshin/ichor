@@ -856,7 +856,7 @@ command does. Each item is described where it is listed below.
   addition: an existing client that does not read it is unaffected, and discovery lists
   it under `claims_supported`. A refresh keeps `auth_time` and re-issues `iat`. A token
   issued before this release has no `auth_time`, so a forced change refuses it until
-  the tab refreshes or signs in again.
+  the person signs in again.
 
 ### Typed configuration
 

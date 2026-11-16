@@ -783,6 +783,13 @@ command does. Each item is described where it is listed below.
   names the three CLI commands that also write to a node.
 - The Helm install guide no longer calls the controller "the only writer to
   Talos nodes" when it explains the priority class.
+- ADR 0158 points at the omit tables in `internal/tools/mirrorgen/omits.go`
+  instead of enumerating fields and sizes, which had gone stale.
+- ADRs 0158 and 0165 point at `internal/tools/releaserecord/` as the procedure
+  that measures the Helm release record, which each had only in part. The
+  figures in them are of earlier trees; the tool re-measures them.
+- `CONTRIBUTING.md` names `GATE_CONTEXT` and `GATE_NAMESPACE`, the variables
+  `make remote-gate` takes its cluster and namespace from.
 
 ### CI
 
@@ -801,6 +808,11 @@ command does. Each item is described where it is listed below.
 - `make check-release-record` fails when the chart's Helm release record, which
   Helm stores in a Secret limited to 1,048,576 bytes, is over that limit, and
   prints the size and the headroom on every run. CI runs it with the tests.
+- `make remote-gate` fails when `GATE_NAMESPACE` is unset. The Makefile supplied
+  a default, which made the script's own check unreachable.
+- The Makefile's `go-install-tool` rebuilds an installed tool when the Go that
+  built it is not the Go in use. Outside `nix develop`, where the shell's Go is
+  older, the first `make` after this rebuilds all four installed tools.
 
 ## v0.2.4 (2026-11-13)
 

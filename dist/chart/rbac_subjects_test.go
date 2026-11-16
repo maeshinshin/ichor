@@ -48,7 +48,7 @@ func TestRoleBindingSubjectsExist(t *testing.T) {
 	}
 
 	renders := make([]render, 0, 1+len(valueSets))
-	renders = append(renders, render{"kustomize " + kustomizeInstallPath, loadYAMLDocs(t, kustomizeInstallPath)})
+	renders = append(renders, render{"kustomize " + kustomizeInstallPath, loadInstallManifest(t, kustomizeInstallPath)})
 
 	for _, sets := range valueSets {
 		label := "helm template ichor ."

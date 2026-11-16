@@ -1,6 +1,6 @@
 # 0167. Rook/Ceph is a second `TalosStorage` preset, `rook-v1`: it renders no Talos volume and has no evacuation hook
 
-Status: Accepted · Date: 2026-11-16 · Design section: Storage · Supersedes in part: 0023, 0025
+Status: Accepted, amended · Date: 2026-11-16 · Design section: Storage · Supersedes in part: 0023, 0025
 
 Decided: `TalosStorage` stays and `longhorn-v1` is not deprecated; `rook-v1` joins it as a second preset that renders no Talos volume document, reads no Rook object, and implements no evacuation hook; `diskSelector` becomes required per preset rather than for every `TalosStorage`
 
@@ -115,3 +115,29 @@ This ADR supersedes parts of two earlier records. Their Decision lines are not e
 - Whether the installer should refuse a downgrade that would drop an enum value (`rook-v1`) or a relaxed validation. Today it does not check either.
 - Whether `rook-v1` needs the RBD kernel module on Talos. Rook's prerequisites say Ceph requires an RBD-capable kernel; this ADR does not establish how Talos's kernel provides it and does not claim it.
 - Whether the status writer for `TalosConfigPatch` is wanted. Nothing in the current design asks for it.
+
+## Amendment (2026-11-17): the diskSelector rule is two object-level CEL rules, and `rook-v1` refuses a selector
+
+Decision 6 and the ADR 0023 entry under Supersession say that the rule is `self.diskPreset == 'rook-v1' || self.diskSelector != ''`, with the message "diskSelector is required for diskPreset longhorn-v1", and that `rook-v1` accepts a selector and ignores it. The code does not do that. This amendment replaces those statements; the Decision text above is not edited, and the Context keeps its account of `main` before this ADR was implemented.
+
+The rules on `TalosStorageSpec` in `api/v1alpha1/talosstorage_types.go`, as the generated CRD carries them, are these two and no others:
+
+```text
+rule: self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)
+message: diskSelector is required for longhorn-v1
+
+rule: self.diskPreset != 'rook-v1' || !has(self.diskSelector)
+message: rook-v1 writes no disk config, so a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStorage from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one update
+```
+
+As implemented, decision 6 reads:
+
+- The field-level rule `self != ''` is gone, and so is the `required` marker. `diskSelector` is `+optional` with `omitempty`, and the schema's `required` list no longer names it. The two object-level rules above are the only checks on the field.
+- `longhorn-v1` requires a non-empty selector. An empty string is refused, as `diskSelector: ""` is present and has size zero; a Go client that leaves the field empty omits it and is refused the same way.
+- `rook-v1` refuses a selector. A `diskSelector` on a `rook-v1` object is rejected at admission; it is not accepted and ignored. The preset's Go code still returns no documents for any selector, for a caller that does not go through admission.
+- Moving a `TalosStorage` from `longhorn-v1` to `rook-v1` is one update that changes `diskPreset` and removes `diskSelector`. Either change alone is refused, so the two cannot be made in separate updates.
+- The ADR 0023 supersession entry is corrected accordingly: the selector is required for `longhorn-v1` and refused for `rook-v1`.
+
+Compatibility: before this ADR, the CRD required a non-empty `diskSelector` on every object. The new rules require it on `longhorn-v1` with the same effect, and `rook-v1` had no accepted objects, so no stored object is refused by the new rules. The enum gains a value and loses no field. The statement in decision 6 that every object the old rule accepted, the new one accepts, holds for the rules as implemented.
+
+The message changed from "diskSelector is required" to the two messages quoted above.

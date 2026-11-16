@@ -23,8 +23,11 @@ Rules that are easy to get wrong:
 - Machine config is typed only (`TalosConfigPatch.spec.config` with the
   Talos machinery types). No raw-YAML escape hatch.
 - UI: preactcn only. No React, no `preact/compat`.
-- The controller is the only writer to Talos nodes and never mutates `spec`.
-  UI and CLI change the world by writing CRs.
+- The controller is the only writer to Talos nodes and never mutates `spec`, apart
+  from three CLI commands that cannot wait for it: `init`, `restore cluster` and
+  `reclaim node --talosconfig`. Nothing else, and nothing in the UI, writes to a
+  node; a fourth writer is a design change, not a shortcut. UI and CLI otherwise
+  change the world by writing CRs.
 - Ichor owns Cilium (its only CNI) as a Helm release. It does not install or
   operate Argo CD, Kokumi, Flux or any GitOps tooling, nor storage or
   monitoring.

@@ -15,7 +15,9 @@ Three deliverables come out of one repository:
   offers every operation the UI has. It is also the recovery path that does not
   depend on a running controller.
 - `ichor-controller` (plus `ichor-installer`, a Job image). The controller is
-  the only component that writes to Talos nodes. Two replicas, leader election.
+  the only component that writes to Talos nodes, apart from the three CLI
+  commands named above (`init`, `restore cluster`, `reclaim node --talosconfig`).
+  Two replicas, leader election.
 - `ichor-ui`, a Go backend that embeds the Preact SPA. It reads and writes CRs,
   reads logs and state from the Talos API, and never writes to nodes.
 
@@ -30,7 +32,8 @@ manifests, and the Helm chart in `dist/chart` is generated from it.
 
 Every write, from the UI, the CLI or a user's own tooling, is a change to a custom
 resource. The controller is the only thing that turns those into Talos API
-calls. This keeps validation, RBAC and audit identical regardless of how a
+calls; the three CLI commands that write to a node themselves (`init`,
+`restore cluster`, `reclaim node --talosconfig`) are the exceptions. This keeps validation, RBAC and audit identical regardless of how a
 change arrived. Reads come from two places: CR status (via the API
 server) and raw node state and logs (via the Talos API, read-only).
 

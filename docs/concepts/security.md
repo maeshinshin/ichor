@@ -12,11 +12,15 @@ This page summarises the trust model. The full text is the "Trust" section of
 
 ## Who can write to a node
 
-Only the controller holds a Talos identity that can change a node. The CLI and
-the UI change the world by writing custom resources, and the controller never
-changes `spec`. This keeps validation, RBAC and audit identical however a
-change arrives, including a hand-written resource: the admission webhooks
-enforce the same checks the UI makes.
+In steady state only the controller holds a Talos identity that can change a
+node. The CLI and the UI change the world by writing custom resources, and the
+controller never changes `spec`. This keeps validation, RBAC and audit identical
+however a change arrives, including a hand-written resource: the admission
+webhooks enforce the same checks the UI makes. Three CLI commands cannot wait
+for the controller and write to a node with a credential you hold: `init` and
+`restore cluster`, which run before the cluster exists or after it is lost, and
+`reclaim node --talosconfig`, which uses your own Talos credential, which Ichor
+never stores.
 
 The secrets bundle (the Talos, Kubernetes and etcd CA keys) is the root of
 trust. `ichor init` generates it locally, keeps your copy under

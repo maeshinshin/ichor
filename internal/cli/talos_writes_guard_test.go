@@ -19,7 +19,11 @@ package cli
 import (
 	"go/ast"
 	"go/types"
+	"io/fs"
+	"maps"
 	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -29,7 +33,8 @@ import (
 
 // talosWriters maps each method the CLI's own code calls on a Talos machinery client, and that changes a
 // node, to the command that makes the call. rootCmd's help and docs/design/architecture/cli-and-ui.md must
-// name every one of those commands, because both say the CLI never writes to a node otherwise.
+// name every one of those commands, because both say the CLI never writes to a node otherwise, and so must
+// every document that says the controller is the only writer (TestEveryDocThatClaimsASoleWriterNamesTheCLIExceptions).
 var talosWriters = map[string]string{
 	"ApplyConfiguration": "ichor init",
 	"Bootstrap":          "ichor init",
@@ -139,5 +144,71 @@ func TestTalosWritesAreNamedInTheExceptionList(t *testing.T) {
 			t.Errorf("%s is called (%v) but %q is missing from rootCmd's help or cli-and-ui.md's list of exceptions",
 				method, called[method], command)
 		}
+	}
+}
+
+// soleWriterClaim finds a sentence that says the controller alone writes to a node, however it is put:
+// "the only writer", "the only component that writes", "Only the controller holds a Talos identity that
+// can change a node", "the sole writer". Whitespace is normalised first, so a wrapped sentence matches.
+var soleWriterClaim = regexp.MustCompile(`(?i)\b(the only|only the|sole)\s+(\w+\s+){0,8}?(writer|writes|write|change a node|configures)\b`)
+
+// writerDocsSkipped are the documents that record history or are generated from the command tree.
+var writerDocsSkipped = map[string]bool{"adr": true, "reference": true, "images": true}
+
+// TestEveryDocThatClaimsASoleWriterNamesTheCLIExceptions walks the documentation, the README and the
+// instruction files and fails for each one that says the controller is the only writer to a node without
+// naming, as code, every command in talosWriters. That is the rule overview.md's caption states; this
+// keeps the next statement of it from dropping the exceptions.
+func TestEveryDocThatClaimsASoleWriterNamesTheCLIExceptions(t *testing.T) {
+	var files []string
+
+	err := filepath.WalkDir("../../docs", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() && writerDocsSkipped[d.Name()] {
+			return filepath.SkipDir
+		}
+
+		if !d.IsDir() && filepath.Ext(path) == ".md" {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	files = append(files, "../../README.md", "../../CLAUDE.md", "../../CONTRIBUTING.md")
+
+	claims := 0
+
+	for _, file := range files {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		text := strings.Join(strings.Fields(string(body)), " ")
+		if !soleWriterClaim.MatchString(text) {
+			continue
+		}
+
+		claims++
+
+		for _, command := range slices.Compact(slices.Sorted(maps.Values(talosWriters))) {
+			// a command in a code span, with or without "ichor ", followed by its end or its arguments
+			named := regexp.MustCompile("`(ichor )?" + regexp.QuoteMeta(strings.TrimPrefix(command, "ichor ")) + "[` ]")
+			if !named.MatchString(text) {
+				t.Errorf("%s says the controller is the only writer to a node but does not name `%s`, "+
+					"which writes to one", file, strings.TrimPrefix(command, "ichor "))
+			}
+		}
+	}
+
+	if claims == 0 {
+		t.Fatal("no document claims a sole writer; the pattern or the file list has gone stale")
 	}
 }

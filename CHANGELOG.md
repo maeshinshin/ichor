@@ -148,6 +148,13 @@ command does. Each item is described where it is listed below.
   they are too large for client-side apply (Typed configuration).
 
 ### CLI
+- **`ichor init --gateway-api` no longer overwrites Gateway API CRDs it did not
+  install.** It applied all seven with forced ownership, taking over fields
+  another manager owned and replacing a CRD at any release without a word. It
+  now reads each one first: absent, it applies without forcing; its own, it
+  updates; another manager's at the same bundle version, it leaves alone with a
+  warning; another manager's at a different version, it refuses the run before
+  writing anything, naming the CRD and both versions.
 - **`ichor create credentials --kube-server` refuses an address that is not an
   HTTPS URL.** It used to accept `host:port` and write it into the kubeconfig,
   where client-go accepts any non-empty server, so the credential was broken
@@ -900,6 +907,11 @@ command does. Each item is described where it is listed below.
   `secretsRef` names the whole secrets bundle, not only the CAs.
 
 ### CI
+- Renovate's configuration covers the Go modules, both npm trees, the workflow
+  actions, `flake.lock` and the distroless digest, grouped per ecosystem and
+  proposed weekly with majors held on the dashboard. The release-set modules are
+  proposed in their own labelled group and never merged automatically, as ADR
+  0151 decides; `make renovate-validate` checks the file.
 
 - `make cluster-gate` runs the full gate as one Kubernetes Job. A second run
   reuses the cache claim of the first, and stops with a message instead of

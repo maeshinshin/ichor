@@ -25,7 +25,8 @@
 // FULL=1 captures the whole page height (up to 4000px), not just the viewport.
 // WAIT=ms is a cap (default 20000), not a fixed delay: after each navigate, CLICK and SCROLLTO the
 // script polls until the page is loaded and shows no "Loading" text, skeleton or aria-busy element,
-// then waits 300 ms for paint. If the cap is hit it says so on stderr and shoots anyway.
+// then waits 300 ms for paint. If the cap is hit the run fails: the condition the page should reach never came,
+// so the screenshot would show something else.
 // Read-only: it only navigates (GET).
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -164,18 +165,12 @@ async function main() {
       if (url) {
         const rendered = `!!document.querySelector('#app > *') && !!document.querySelector('main')`
         while (!(await s('Runtime.evaluate', { expression: rendered, returnByValue: true })).result?.value) {
-          if (Date.now() >= deadline) {
-            console.error(`ui-shots: ${label} app did not render within ${cap} ms (WAIT cap); shooting anyway`)
-            break
-          }
+          if (Date.now() >= deadline) throw new Error(`FAILED ${label}: the app never rendered (no content in #app, no <main>) within ${cap} ms (WAIT). No screenshot was written.`)
           await sleep(200)
         }
       }
       while ((await s('Runtime.evaluate', { expression: LOADING, returnByValue: true })).result?.value) {
-        if (Date.now() >= deadline) {
-          console.error(`ui-shots: ${label} still loading after ${cap} ms (WAIT cap); shooting anyway`)
-          break
-        }
+        if (Date.now() >= deadline) throw new Error(`FAILED ${label}: the page was still loading (Loading text, a skeleton or aria-busy) after ${cap} ms (WAIT). No screenshot was written.`)
         await sleep(200)
       }
       await sleep(300)
@@ -212,7 +207,7 @@ async function main() {
             while (!(clicked = (await s('Runtime.evaluate', { expression: expr, returnByValue: true })).result?.value) && Date.now() < deadline) {
               await sleep(200)
             }
-            if (!clicked) console.error(`ui-shots: ${p} ${sizeName} ${theme}: button "${process.env.CLICK}" never appeared within ${cap} ms (WAIT cap)`)
+            if (!clicked) throw new Error(`FAILED ${p} ${sizeName} ${theme}: the button "${process.env.CLICK}" never appeared within ${cap} ms (WAIT). No screenshot was written.`)
             await settle(`${p} ${sizeName} ${theme} after CLICK`)
           }
           if (process.env.SCROLLTO) {

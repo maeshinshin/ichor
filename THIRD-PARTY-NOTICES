@@ -3708,7 +3708,7 @@ Upstream projects:
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2019 Material-UI SAS
 - Radix UI Primitives (https://github.com/radix-ui/primitives)
-    ui/src/lib/radix
+    ui/src/lib/radix and site/src/lib/radix
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 WorkOS
 - next-themes (https://github.com/pacocoursey/next-themes)

@@ -144,7 +144,20 @@ func (v localVerifier) Verify(ctx context.Context, raw string) (uiapi.TokenInfo,
 		return uiapi.TokenInfo{}, err
 	}
 
-	return uiapi.TokenInfo{Subject: tok.Subject, IssuedAt: tok.IssuedAt, Expires: tok.Expiry}, nil
+	// go-oidc has no field for auth_time (the sign-in). Absent means zero, which the forced change refuses.
+	var c struct {
+		AuthTime int64 `json:"auth_time"`
+	}
+	if err := tok.Claims(&c); err != nil {
+		return uiapi.TokenInfo{}, err
+	}
+
+	info := uiapi.TokenInfo{Subject: tok.Subject, IssuedAt: tok.IssuedAt, Expires: tok.Expiry}
+	if c.AuthTime != 0 {
+		info.AuthTime = time.Unix(c.AuthTime, 0)
+	}
+
+	return info, nil
 }
 
 // keysFile is the key list inside the mounted ichor-oidc-signing Secret.

@@ -52,6 +52,11 @@ import (
 // failure. Per replica by design.
 var changePasswordFailures = oidcissuer.NewBackoff()
 
+// forcedChangeSignInWindow is how old the sign-in may be for a forced change, which takes no
+// current password. The forced screen is reached at sign-in, so a few minutes is enough to type
+// a new password, and a stolen refresh token gets no more than this past the sign-in.
+const forcedChangeSignInWindow = 10 * time.Minute
+
 const (
 	kubeAPIPort       = "6443"
 	cliClientID       = "ichor-cli"
@@ -347,8 +352,13 @@ func (s *Server) ChangeOwnPassword(ctx context.Context, req *connect.Request[pb.
 
 	// The forced first-login change takes no current password: both the session and
 	// the stored entry must say must-change, read now. Every other change verifies it.
-	// shortcut: the forced path does not check the sign-in is recent; a must-change session refreshes for its whole refresh lifetime. Require the sign-in time here once the ID token carries the session start.
+	// So the sign-in must be recent. A refresh keeps the session open for its whole refresh
+	// lifetime (up to 30 days), so the window is the bound. It reads auth_time, the sign-in, not
+	// tok.IssuedAt: a refresh re-issues that, so a tab kept open would always look fresh.
 	forced := id.MustChange && found && cred.MustChange
+	if forced && (id.AuthTime.IsZero() || s.now().Sub(id.AuthTime) > forcedChangeSignInWindow) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("sign in again to change the password: the change needs a sign-in within the last %d minutes", int(forcedChangeSignInWindow.Minutes())))
+	}
 	if !forced {
 		// A missing entry is verified against an empty hash (a dummy inside the
 		// verifier), so the cost and the answer do not differ.

@@ -55,7 +55,7 @@ type fakeLocal map[string]string // token -> subject
 
 func (f fakeLocal) Verify(_ context.Context, raw string) (TokenInfo, error) {
 	if sub, ok := f[raw[strings.LastIndex(raw, ".")+1:]]; ok {
-		return TokenInfo{Subject: sub, IssuedAt: time.Now(), Expires: time.Now().Add(time.Hour)}, nil
+		return TokenInfo{Subject: sub, IssuedAt: time.Now(), Expires: time.Now().Add(time.Hour), AuthTime: time.Now().Add(-time.Minute)}, nil
 	}
 
 	return TokenInfo{}, errors.New("bad")
@@ -131,6 +131,10 @@ func TestAuthenticateLocalTokenReadsRolesFromTheCRAndRefusesDisabled(t *testing.
 
 	if id.User != "ichor:alice" || !slices.Equal(id.Groups, []string{ichorAdminGroup, "ichor:ops"}) || id.Source != SourceIchor {
 		t.Errorf("identity = %+v", id)
+	}
+
+	if id.AuthTime.IsZero() {
+		t.Error("the sign-in time did not reach the identity")
 	}
 
 	for _, tok := range []string{"tb", "tg", "nope"} {
@@ -365,7 +369,7 @@ func TestChangeOwnPasswordForcedRotationNeedsNoCurrentPassword(t *testing.T) {
 	}
 
 	// The session the forced first-login screen runs in: the interceptor marks it must-change.
-	forced := context.WithValue(context.Background(), identityKey{}, Identity{User: IchorUserPrefix + userAlice, Source: SourceIchor, MustChange: true})
+	forced := context.WithValue(context.Background(), identityKey{}, Identity{User: IchorUserPrefix + userAlice, Source: SourceIchor, MustChange: true, AuthTime: time.Now()})
 	if _, err := s.ChangeOwnPassword(forced, connect.NewRequest(&pb.ChangeOwnPasswordRequest{NewPassword: strongPass2})); err != nil {
 		t.Fatalf("forced change without a current password: %v", err)
 	}
@@ -373,6 +377,45 @@ func TestChangeOwnPasswordForcedRotationNeedsNoCurrentPassword(t *testing.T) {
 	cred, _ := readStored(t, s)
 	if cred.MustChange || !pwMatches(strongPass2, cred.Hash) {
 		t.Error("forced change did not store the new password, or left it must-change")
+	}
+}
+
+// The forced change takes no current password, so the sign-in must be recent. A stale one
+// and one with no sign-in time are refused and change nothing. A fresh one succeeds. Without
+// the check the stale case succeeds, so this fails.
+func TestForcedRotationNeedsARecentSignIn(t *testing.T) {
+	s := userServer(t, false, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, true); err != nil {
+		t.Fatal(err)
+	}
+
+	forcedAt := func(signedIn time.Time) context.Context {
+		return context.WithValue(context.Background(), identityKey{}, Identity{User: IchorUserPrefix + userAlice, Source: SourceIchor, MustChange: true, AuthTime: signedIn})
+	}
+	change := func(ctx context.Context) error {
+		_, err := s.ChangeOwnPassword(ctx, connect.NewRequest(&pb.ChangeOwnPasswordRequest{NewPassword: strongPass2}))
+		return err
+	}
+
+	stale := change(forcedAt(time.Now().Add(-forcedChangeSignInWindow - time.Minute)))
+	if connect.CodeOf(stale) != connect.CodeFailedPrecondition || !strings.Contains(stale.Error(), "sign in again") {
+		t.Fatalf("stale sign-in: %v", stale)
+	}
+
+	if err := change(forcedAt(time.Time{})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("no sign-in time: %v", err)
+	}
+
+	if cred, _ := readStored(t, s); !cred.MustChange || !pwMatches(strongPass, cred.Hash) {
+		t.Fatal("a refused forced change changed the password")
+	}
+
+	if err := change(forcedAt(time.Now().Add(-time.Minute))); err != nil {
+		t.Fatalf("fresh sign-in: %v", err)
+	}
+
+	if cred, _ := readStored(t, s); cred.MustChange || !pwMatches(strongPass2, cred.Hash) {
+		t.Fatal("fresh sign-in did not change the password")
 	}
 }
 

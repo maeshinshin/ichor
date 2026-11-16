@@ -47,6 +47,9 @@ type Identity struct {
 	// before anything else; AuthInterceptor then allows only the calls in
 	// mustChangeAllowed.
 	MustChange bool
+	// AuthTime is when the person signed in (the ID token's auth_time), zero when the token has
+	// none. It is not IssuedAt, which a refresh re-issues.
+	AuthTime time.Time
 	// Expires is when the ID token ends; a stream is closed then.
 	Expires time.Time
 }
@@ -75,6 +78,8 @@ type LocalVerifier interface {
 type TokenInfo struct {
 	Subject           string
 	IssuedAt, Expires time.Time
+	// AuthTime is the sign-in (the ID token's auth_time); zero when the token carries none.
+	AuthTime time.Time
 }
 
 type identityKey struct{}
@@ -220,7 +225,7 @@ func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Iden
 		return Identity{}, errors.New("invalid ID token")
 	}
 
-	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName, MustChange: mc, Expires: tok.Expires}
+	id := Identity{User: IchorUserPrefix + u.Name, Source: SourceIchor, DisplayName: u.Spec.DisplayName, MustChange: mc, AuthTime: tok.AuthTime, Expires: tok.Expires}
 	for _, r := range u.Spec.Roles {
 		id.Groups = append(id.Groups, IchorGroupPrefix+r)
 	}

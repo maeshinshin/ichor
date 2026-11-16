@@ -201,7 +201,7 @@ func setOf(names []string) map[string]bool {
 func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 	var clusterRoles, allRoles, nsRoles []string
 
-	for _, d := range loadYAMLDocs(t, "../install.yaml") {
+	for _, d := range loadInstallManifest(t, "../install.yaml") {
 		switch kindOf(d) {
 		case kindClusterRole:
 			clusterRoles = append(clusterRoles, nameOf(d))

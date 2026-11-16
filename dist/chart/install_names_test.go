@@ -70,7 +70,7 @@ func stringMap(v any) map[string]string {
 // refuses the policy otherwise, with "must have get permission on all objects of the
 // referenced paramKind"). It needs `make build-installer`.
 func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
-	install := loadYAMLDocs(t, "../install.yaml")
+	install := loadInstallManifest(t, "../install.yaml")
 	table := loadYAMLDocs(t, "testdata/install_resources.yaml")[0]
 	kinds, paramKinds := stringMap(table["kinds"]), stringMap(table["paramKinds"])
 
@@ -139,7 +139,7 @@ func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
 // ichor-ui-impersonate), and the controller's own role must name it for get, update and escalate.
 func TestControllerLooksUpNamesThatExist(t *testing.T) {
 	renders := map[string][]map[string]any{
-		kustomizeInstall: loadYAMLDocs(t, "../install.yaml"),
+		kustomizeInstall: loadInstallManifest(t, "../install.yaml"),
 		labelChart:       renderChartWithValues(t, "ichor", usersOn, usersURL),
 	}
 

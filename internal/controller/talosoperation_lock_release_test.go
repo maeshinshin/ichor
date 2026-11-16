@@ -17,8 +17,12 @@ limitations under the License.
 package controller
 
 import (
+	"errors"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 var _ = Describe("a paused TalosOperation and the cluster lock", func() {
@@ -38,5 +42,40 @@ var _ = Describe("a paused TalosOperation and the cluster lock", func() {
 		r, fake := newOpTestReconciler(nil)
 		mustReconcileOperation(r, second)
 		Expect(fake.calls).NotTo(BeEmpty(), "the second operation must run, not wait on the first")
+	})
+
+	It("gives the cluster lock back when a shutdown has no Talos client, and says why", func() {
+		f := newShutdownFixture()
+		f.r.TalosClient = nil
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		_, err := reconcileOperation(f.r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+		expectLeaseFree(opTestLock(f.cluster))
+		expectPausedBecause(fetchOperation(op), reasonOperationNoExecutor)
+	})
+
+	It("gives the cluster lock back when a shutdown cannot load the secrets bundle", func() {
+		f := newShutdownFixture()
+		f.r.ControllerNamespace = ""
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		_, err := reconcileOperation(f.r, op)
+
+		expectLeaseFree(opTestLock(f.cluster))
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("gives the cluster lock back when a shutdown's stop request fails, so the retry takes it again", func() {
+		f := newShutdownFixture()
+		f.fakes[f.workers[0].Name].shutdownErr = errors.New("rpc failed")
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		_, err := reconcileOperation(f.r, op)
+		Expect(err).To(HaveOccurred())
+
+		expectLeaseFree(opTestLock(f.cluster))
 	})
 })

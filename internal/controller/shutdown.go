@@ -436,7 +436,7 @@ func (r *TalosOperationReconciler) advanceShutdown(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
 ) (ctrl.Result, error) {
 	if r.TalosClient == nil {
-		return ctrl.Result{}, r.shutdownStatus(ctx, op, ichorv1alpha1.TalosOperationPhasePaused,
+		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused,
 			reasonOperationNoExecutor, "no Talos client is wired up for this controller")
 	}
 

@@ -26,9 +26,9 @@ import (
 )
 
 // amendmentHeading is a body heading that records an amendment, in the
-// forms the ADRs use: "## Amendment ...", "## Amendments ...", and
-// "### Amendment ..." (ADR 0120).
-var amendmentHeading = regexp.MustCompile(`(?m)^#{2,3} +(?:Second +)?Amendments?\b`)
+// forms the ADRs use: "## Amendment ...", "## Amendments ...", "### Amendment ..."
+// (ADR 0120), and "## Addendum ..." (ADRs 0009, 0054, 0055, 0063).
+var amendmentHeading = regexp.MustCompile(`(?m)^#{2,3} +(?:Second +)?(?:Amendments?|Addenda|Addendum)\b`)
 
 // selfMarker finds "amended" in a status value. "amended by ..." is
 // excluded by the group, because it says another ADR amended this one.

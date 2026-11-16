@@ -40,7 +40,9 @@ For `longhorn-v1` the write side of that hook is settled, from
 longhorn-manager v1.9.1's own type declarations rather than from the UI's
 labels: `nodes.longhorn.io/v1beta2`'s `NodeSpec` carries `allowScheduling`
 (bool) and `evictionRequested` (bool), and `DiskSpec` carries the same two
-under `spec.disks[<name>]`, so a hook can evict a whole node or one disk.
+under `spec.disks[<name>]`, so a hook can evict a whole node. Per-disk eviction
+through `spec.disks[<name>]` is not built: nothing writes it, and it will be built
+when a preset needs it.
 The order is not a preference: Longhorn's own documentation states eviction
 only takes effect on a node or disk whose scheduling is already disabled, so
 `allowScheduling: false` has to land first.
@@ -55,8 +57,8 @@ is in `VolumeController.cleanupEvictionRequestedReplicas`: once a volume
 has a healthy, non-evicting replica elsewhere, it deletes the `Replica`
 object whose `spec.evictionRequested` is true. So "no replica lives only
 there" is "no `replicas.longhorn.io` object remains with
-`spec.nodeID` (whole-node eviction) or `spec.diskID` (one-disk eviction)
-still naming the target" -- an absence of objects, not a counter reaching
+`spec.nodeID` still naming the target (whole-node eviction; the per-disk
+`spec.diskID` form is not built) -- an absence of objects, not a counter reaching
 zero. `EvacuationStatus` (`pkg/storage/evacuation.go`) takes that count
 already read by the caller, plus elapsed time against
 `TalosStorage.spec.evacuationTimeout`, and returns done, still-waiting, or

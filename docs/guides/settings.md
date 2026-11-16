@@ -94,8 +94,9 @@ the subresource for each part of the change:
 | `spec.users`, `spec.defaults`, `spec.updateCheck`, `spec.autoPatch` | `ichorinstallations/settings` |
 
 `ichor-admin` holds both on separate rule lines, so a custom role can hold
-fewer. The ichor-ui ServiceAccount holds `update` on `settings` for the users it
-impersonates.
+fewer. ichor-ui makes the change as the signed-in user, so that user's own
+`update` decides it. The ichor-ui ServiceAccount holds no settings verb:
+impersonating a user does not give the ServiceAccount that user's permissions.
 
 ## Read-only mode
 

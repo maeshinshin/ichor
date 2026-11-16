@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -164,5 +165,16 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 		reconcileOK(r, cp)
 		Expect(kube.Actions()).NotTo(BeEmpty(), "the drain must run: rook-v1 has no evacuation to wait for")
 		Expect(machineGone(cp)).To(BeTrue())
+	})
+
+	// A failed evacuation call is not a wait: nothing else wakes the machine, so it must ask to be tried again.
+	It("requeues after StorageEvacuationFailed", func() {
+		ev := &fakeStorageEvacuator{target: longhorn(time.Hour), beginErr: errors.New("begin failed")}
+		r, _, cp := evacuatingRemoval("node-rm-evac5", ev)
+
+		res, err := reconcileMachine(r, cp)
+		Expect(err).NotTo(HaveOccurred())
+		expectRemoval(fetchMachine(cp), reasonEvacuationFailed)
+		Expect(res.RequeueAfter).To(Equal(nodeWaitInterval))
 	})
 })

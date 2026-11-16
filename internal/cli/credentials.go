@@ -128,6 +128,7 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 		return nil, errors.New("refusing to overwrite the current kubeconfig or talosconfig; choose another output path")
 	}
 
+	// shortcut: the kubeconfig takes its server and names from the current context, so --bundle needs a current kubeconfig too, drop this when the bundle path can take them from --cluster or the flags
 	kube, err := src.Kubeconfig(*current)
 	if err != nil {
 		return nil, err

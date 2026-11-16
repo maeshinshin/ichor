@@ -827,5 +827,5 @@ func (r *CNIHandoverReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			GenericFunc: func(event.GenericEvent) bool { return false },
 		})).
 		Named("cnihandover").
-		Complete(r)
+		Complete(quietExpected(r))
 }

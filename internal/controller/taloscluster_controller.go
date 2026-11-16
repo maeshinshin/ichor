@@ -224,5 +224,5 @@ func (r *TalosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(clusterRequests(r.Client, nil)),
 			builder.WithPredicates(predicate.NewPredicateFuncs(isResetNode))).
 		Named("taloscluster").
-		Complete(r)
+		Complete(quietExpected(r))
 }

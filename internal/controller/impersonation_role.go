@@ -176,5 +176,5 @@ func (r *ImpersonationRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("impersonationrole").
 		Watches(&ichorv1alpha1.IchorUser{}, single).
-		Complete(r)
+		Complete(quietExpected(r))
 }

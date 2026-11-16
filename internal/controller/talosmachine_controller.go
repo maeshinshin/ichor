@@ -883,7 +883,7 @@ func (r *TalosMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&ichorv1alpha1.TalosCluster{}, enqueue, builder.WithPredicates(
 			predicate.Or(predicate.GenerationChangedPredicate{}, clusterStatusRenderInputChanged()))).
 		Named("talosmachine").
-		Complete(r)
+		Complete(quietExpected(r))
 }
 
 // clusterStatusRenderInputChanged fires on an update only when one of the two TalosCluster.status

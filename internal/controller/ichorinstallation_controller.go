@@ -190,5 +190,5 @@ func (r *IchorInstallationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.IchorInstallation{}).
 		Named("ichorinstallation").
-		Complete(r)
+		Complete(quietExpected(r))
 }

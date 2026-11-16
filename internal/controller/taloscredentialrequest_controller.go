@@ -187,5 +187,5 @@ func (r *TalosCredentialRequestReconciler) SetupWithManager(mgr ctrl.Manager) er
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCredentialRequest{}).
 		Named("taloscredentialrequest").
-		Complete(r)
+		Complete(quietExpected(r))
 }

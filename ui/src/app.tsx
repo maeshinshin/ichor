@@ -23,6 +23,7 @@ import { SignIn } from '@/pages/SignIn'
 import { passwordSignIn } from '@/lib/login'
 import { Users } from '@/pages/Users'
 import { Settings } from '@/pages/Settings'
+import { StorageList } from '@/pages/StorageList'
 import { matchRoute, replace, usePath } from '@/router'
 import { redirectFor } from '@/lib/routes'
 import { useCluster } from '@/lib/useCluster'
@@ -156,6 +157,7 @@ function renderRoute(path: string) {
   if (path === '/config') return <PatchList />
   if (path === '/config/new') return <PatchDetail />
   if (path === '/cilium') return <Cilium />
+  if (path === '/storage') return <StorageList />
 
   const node = matchRoute('/nodes/:name', path)
   if (node) return <NodeDetail name={node.name} />

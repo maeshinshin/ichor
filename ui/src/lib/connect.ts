@@ -12,6 +12,7 @@ import { UserService } from '@/gen/ichor/v1alpha1/user_pb'
 import { CniService } from '@/gen/ichor/v1alpha1/cni_pb'
 import { ReclaimService } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { SettingsService } from '@/gen/ichor/v1alpha1/settings_pb'
+import { StorageService } from '@/gen/ichor/v1alpha1/storage_pb'
 import { uiIsStale } from '@/lib/ichorVersion'
 import { notifyStale } from '@/lib/notify'
 
@@ -65,3 +66,4 @@ export const userClient = createClient(UserService, transport)
 export const cniClient = createClient(CniService, transport)
 export const reclaimClient = createClient(ReclaimService, transport)
 export const settingsClient = createClient(SettingsService, transport)
+export const storageClient = createClient(StorageService, transport)

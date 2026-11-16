@@ -1,7 +1,7 @@
 import { AppToaster } from '@/components/AppToaster'
 import type { ComponentChildren } from 'preact'
 import { Fragment } from 'preact'
-import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, SettingsIcon, UsersIcon } from 'lucide-preact'
+import { ArchiveIcon, BoxesIcon, CircleAlertIcon, CircleCheckIcon, LayoutDashboardIcon, LoaderCircleIcon, HardDriveIcon, LayersIcon, ListChecksIcon, NetworkIcon, ServerIcon, SettingsIcon, UsersIcon } from 'lucide-preact'
 import { AccountMenu } from '@/components/AccountMenu'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { IchorVersion } from '@/components/IchorVersion'
@@ -86,6 +86,7 @@ const overviewRoute: NavRoute = { path: '/', label: 'nav.overview', Icon: Layout
 const nodesRoute: NavRoute = { path: '/nodes', label: 'nav.machines', Icon: ServerIcon, section: '/nodes/' }
 const configRoute: NavRoute = { path: '/config', label: 'nav.config', Icon: LayersIcon, section: '/config/' }
 const ciliumRoute: NavRoute = { path: '/cilium', label: 'nav.cilium', Icon: NetworkIcon, section: '' }
+const storageRoute: NavRoute = { path: '/storage', label: 'nav.storage', Icon: HardDriveIcon, section: '' }
 const operationsRoute: NavRoute = { path: '/operations', label: 'nav.operations', Icon: ListChecksIcon, section: '/operations/' }
 const backupsRoute: NavRoute = { path: '/backups', label: 'nav.backups', Icon: ArchiveIcon, section: '' }
 // Users is shown only when ichor-ui has its own users.
@@ -94,7 +95,7 @@ const settingsRoute: NavRoute = { path: '/settings', label: 'nav.settings', Icon
 
 function navGroups(usersEnabled: boolean): { label: Key; routes: NavRoute[] }[] {
   return [
-    { label: 'nav.group.cluster', routes: [overviewRoute, nodesRoute, configRoute, ciliumRoute] },
+    { label: 'nav.group.cluster', routes: [overviewRoute, nodesRoute, configRoute, ciliumRoute, storageRoute] },
     { label: 'nav.group.activity', routes: [operationsRoute, backupsRoute] },
     { label: 'nav.group.admin', routes: [...(usersEnabled ? [usersRoute] : []), settingsRoute] },
   ]

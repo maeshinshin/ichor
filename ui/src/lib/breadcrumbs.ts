@@ -16,6 +16,7 @@ const top: Record<string, Key> = {
   '/config': 'config.title',
   '/operations': 'nav.operations',
   '/cilium': 'nav.cilium',
+  '/storage': 'nav.storage',
   '/backups': 'nav.backups',
   '/users': 'nav.users',
   '/settings': 'nav.settings',

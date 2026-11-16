@@ -42,6 +42,6 @@ The user decided this ships in v0.1.0.
 - A weak operator-chosen passphrase (12 characters or more, otherwise unchecked) is guessable offline at the cost of scrypt; the generated one is not.
 - Scripts that ran `ichor init` or `adopt --recover-secrets` non-interactively now fail until given a passphrase source or `--bundle-plaintext`. This is deliberate.
 
-## Amendment (2026-11-16): the bundle makes a kubeconfig only beside one that names the server
+## Amendment (2026-11-16): the bundle makes a kubeconfig given the server's address
 
-Decision 6 says the bundle "can mint a new one at any time" and advises deleting the kubeconfig and using the bundle to make a new one. Neither holds. `ichor create credentials --bundle` copies the server and the names from a kubeconfig, the current one or the one given with `--kubeconfig` (ADR 0091 decision 5); the bundle supplies the CAs, not the endpoint, and the command fails with "the current kubeconfig has no current context to copy the server from" when there is none. So a bundle makes new credentials only while some kubeconfig naming the server exists, and the kubeconfig to move offline is the one to keep. `docs/guides/users-and-login.md` and `docs/guides/hardening.md` say this. The rest of this ADR stands.
+Decision 6 says the bundle "can mint a new one at any time". It can once it has the API server's address, which the bundle does not hold: `ichor create credentials --bundle FILE --kube-server URL` writes the kubeconfig with no kubeconfig on disk, and `--talos-endpoints` supplies the Talos side (ADR 0091, amended). Without `--kube-server` the server is read from a current kubeconfig. The rest of this ADR stands.

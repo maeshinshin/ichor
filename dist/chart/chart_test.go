@@ -93,6 +93,7 @@ const (
 	ichorUIRoleName           = "ichor-ui-role"
 	ichorUIRoleBindingName    = "ichor-ui-rolebinding"
 	ichorUIDeploymentName     = "ichor-ui"
+	ichorUIContainerName      = "ichor-ui"
 
 	// ichorUISecretsRoleName is the chart's own name for the namespaced Role carrying
 	// the secrets rule (dist/chart/templates/rbac/ichor-ui-secrets-role.yaml): split into
@@ -806,7 +807,7 @@ func containerEnvValue(deployment map[string]any, name string) (string, bool) {
 	containers, _ := podSpec["containers"].([]any)
 	for _, c := range containers {
 		cm, _ := c.(map[string]any)
-		if cm["name"] != "ichor-ui" {
+		if cm["name"] != ichorUIContainerName {
 			continue
 		}
 		envs, _ := cm["env"].([]any)
@@ -1676,7 +1677,7 @@ func TestPodNamespaceFromDownwardAPI(t *testing.T) {
 		for _, c := range containers {
 			cm, _ := c.(map[string]any)
 			name, _ := cm["name"].(string)
-			if name != managerContainerName && name != ichorUIDeploymentName {
+			if name != managerContainerName && name != ichorUIContainerName {
 				continue
 			}
 			seen[name] = true
@@ -1685,7 +1686,7 @@ func TestPodNamespaceFromDownwardAPI(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{managerContainerName, ichorUIDeploymentName} {
+	for _, name := range []string{managerContainerName, ichorUIContainerName} {
 		if !seen[name] {
 			t.Errorf("no %q container rendered", name)
 		}

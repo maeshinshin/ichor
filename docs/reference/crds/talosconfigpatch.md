@@ -2278,7 +2278,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.layer` | `string` | yes | layer is where this patch applies in the bottom-up stack; "system" is absent because Ichor generates that layer itself. Allowed values: `cluster`, `role`, `selector`, `machine`. |
 | `spec.priority` | `integer` | no | priority orders patches within the same layer. Default: `0`. |
 | `spec.target` | `object` | no | target narrows which machines this patch applies to; required for every layer but "cluster", and its kind follows the layer: role -> role, selector -> labelSelector, machine -> machineRef. |
-| `spec.target.labelSelector` | `object` | no | labelSelector targets machines whose Kubernetes Node labels match. |
+| `spec.target.labelSelector` | `object` | no | labelSelector targets machines whose spec.nodeLabels match. The live Kubernetes Node's labels are not read. |
 | `spec.target.labelSelector.matchExpressions` | `[]object` | no | matchExpressions is a list of label selector requirements. The requirements are ANDed. |
 | `spec.target.labelSelector.matchExpressions[].key` | `string` | yes | key is the label key that the selector applies to. |
 | `spec.target.labelSelector.matchExpressions[].operator` | `string` | yes | operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist. |

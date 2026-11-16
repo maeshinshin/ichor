@@ -36,11 +36,39 @@ func (hungEvacuator) Resolve(ctx context.Context, _ *ichorv1alpha1.TalosCluster,
 	return nil, ctx.Err()
 }
 
-func TestEvacuationCallsAreBounded(t *testing.T) {
+// returnsAtOnce finishes every Resolve with nothing to evacuate, unless its context has already ended.
+type returnsAtOnce struct{ StorageEvacuator }
+
+func (returnsAtOnce) Resolve(ctx context.Context, _ *ichorv1alpha1.TalosCluster, _ string) (*evacuationTarget, error) {
+	return nil, ctx.Err()
+}
+
+// The storage bound is its own constant: with etcdDialTimeout at zero, a call that finishes at once still succeeds.
+func TestStorageCallBoundIsNotTheEtcdDialTimeout(t *testing.T) {
 	old := etcdDialTimeout
-	etcdDialTimeout = 50 * time.Millisecond
+	etcdDialTimeout = 0
 
 	t.Cleanup(func() { etcdDialTimeout = old })
+
+	m := &ichorv1alpha1.TalosMachine{}
+	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		Type: conditionStorageEvacuation, Status: metav1.ConditionTrue, Reason: reasonEvacuating,
+	})
+
+	if _, err := evacuateMachine(t.Context(), nil, returnsAtOnce{}, nil, m, "node", "test"); err != nil {
+		t.Errorf("evacuateMachine: %v", err)
+	}
+
+	if err := endMachineEvacuation(t.Context(), nil, returnsAtOnce{}, nil, m, "node"); err != nil {
+		t.Errorf("endMachineEvacuation: %v", err)
+	}
+}
+
+func TestEvacuationCallsAreBounded(t *testing.T) {
+	old := storageCallTimeout
+	storageCallTimeout = 50 * time.Millisecond
+
+	t.Cleanup(func() { storageCallTimeout = old })
 
 	m := &ichorv1alpha1.TalosMachine{}
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{

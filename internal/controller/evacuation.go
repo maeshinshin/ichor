@@ -42,6 +42,10 @@ import (
 // rollout pauses instead of draining.
 const defaultEvacuationTimeout = 10 * time.Minute
 
+// storageCallTimeout bounds one evacuation step's storage calls. It is its own constant, not etcdDialTimeout,
+// so tuning the etcd dial bound does not move this one (ADR 0057 gives Talos calls their own deadlines too).
+var storageCallTimeout = 15 * time.Second
+
 // defaultLonghornNamespace is Longhorn's documented default install namespace.
 //
 // shortcut: TalosStoragePresetSpec carries no namespace field, so Longhorn's Node is read and written only here.
@@ -312,7 +316,7 @@ func evacuateMachine(
 	}
 
 	// A hung storage or API call must not hold the reconcile worker; the caller requeues on the error.
-	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	ctx, cancel := context.WithTimeout(ctx, storageCallTimeout)
 	defer cancel()
 
 	target, err := ev.Resolve(ctx, cluster, node)
@@ -371,7 +375,7 @@ func endMachineEvacuation(
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	ctx, cancel := context.WithTimeout(ctx, storageCallTimeout)
 	defer cancel()
 
 	target, err := ev.Resolve(ctx, cluster, node)

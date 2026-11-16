@@ -819,7 +819,9 @@ command does. Each item is described where it is listed below.
   retry` and `ichor self-upgrade`, and a test keeps those three out. The same
   test keeps `ichor gitops export`, `gitops handoff`, `images list`, `stack
   apply` and `machine reprovision` out of every ADR except those that decided,
-  built or recorded the removal of that command. Commit
+  built or recorded the removal of that command. Another test applies the same
+  list to the guides, the README and `CONTRIBUTING.md`. The architecture diagram
+  labels the controller the writer to nodes in steady state. Commit
   references in ADRs and tests point at commits on `main`, not at the earlier
   copies of them.
 - The documentation home page, the architecture overview, the security concept

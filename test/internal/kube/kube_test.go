@@ -103,3 +103,15 @@ func TestInnerArgs(t *testing.T) {
 		t.Fatalf("got %v err %v", got, err)
 	}
 }
+
+// TestStorageClass: the default is the lab's class; ICHOR_E2E_STORAGE_CLASS overrides it.
+func TestStorageClass(t *testing.T) {
+	t.Setenv(StorageClassEnv, "")
+	if got := StorageClass(); got != defaultStorageClass {
+		t.Fatalf("unset: got %q, want %q", got, defaultStorageClass)
+	}
+	t.Setenv(StorageClassEnv, " fast-wffc ")
+	if got := StorageClass(); got != "fast-wffc" {
+		t.Fatalf("override: got %q, want %q", got, "fast-wffc")
+	}
+}

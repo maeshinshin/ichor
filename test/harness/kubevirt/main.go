@@ -77,6 +77,8 @@ spec:
   dataVolumeTemplates:
     - metadata:
         name: %[1]s-iso
+        annotations:
+          cdi.kubevirt.io/storage.bind.immediate.requested: "true"
       spec:
         source:
 %[2]s
@@ -89,6 +91,8 @@ spec:
           storageClassName: %[5]s
     - metadata:
         name: %[1]s-system
+        annotations:
+          cdi.kubevirt.io/storage.bind.immediate.requested: "true"
       spec:
         source:
           blank: {}

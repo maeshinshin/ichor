@@ -23,6 +23,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+
+	"github.com/maeshinshin/ichor/test/internal/kube"
 )
 
 // TestAssertEndpoint proves the endpoint assertion actually fails loudly on a mismatch,
@@ -120,7 +122,8 @@ func TestVMManifestISOSource(t *testing.T) {
 			t.Fatalf("%s: old path wrong:\n%s", name, old)
 		}
 		cached := renderVM("x-0", name, clonedISO(baseCacheName(), "2Gi"))
-		for _, want := range []string{"pvc:", "name: " + baseCacheName(), "namespace: ichor-e2e", "storage: 2Gi"} {
+		for _, want := range []string{"pvc:", "name: " + baseCacheName(), "namespace: ichor-e2e", "storage: 2Gi",
+			"cdi.kubevirt.io/storage.bind.immediate.requested", "storageClassName: " + kube.StorageClass()} {
 			if !strings.Contains(cached, want) {
 				t.Fatalf("%s: cached manifest lacks %q:\n%s", name, want, cached)
 			}

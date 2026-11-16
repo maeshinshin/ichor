@@ -101,6 +101,7 @@ metadata:
     ichor.maesh.dev/e2e-harness: base-cache
   annotations:
     cdi.kubevirt.io/storage.deleteAfterCompletion: "false"
+    cdi.kubevirt.io/storage.bind.immediate.requested: "true"
 spec:
   source:
     http:

@@ -955,20 +955,21 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 	return s.unfinishedOperationFor(ctx, cluster, false)
 }
 
-// conditionTransitioning and reasonOperationTransitioning mirror the controller's names (removal.go,
+// conditionTransitioning and the pause reasons mirror the controller's names (removal.go,
 // talosoperation_controller.go).
 const (
 	conditionTransitioning       = "Transitioning"
 	reasonOperationTransitioning = "ClusterTransitioning"
+	reasonOperationOwnNodeUnread = "OwnNodeUnread"
 )
 
-// pausedForTransitioning reports an operation the controller parked before it took the cluster lock because
-// the control-plane count is even. It holds nothing and resumes by itself when the count is odd.
-func pausedForTransitioning(o *ichorv1alpha1.TalosOperation) bool {
+// pausedWith reports an operation the controller paused for reason, with no failed step behind it: a
+// pause that lifts itself never carries a failureReason.
+func pausedWith(o *ichorv1alpha1.TalosOperation, reason string) bool {
 	c := apimeta.FindStatusCondition(o.Status.Conditions, "Paused")
 
 	return o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Status.FailureReason == "" &&
-		c != nil && c.Reason == reasonOperationTransitioning
+		c != nil && c.Reason == reason
 }
 
 // unfinishedOperationFor is unfinishedOperation; resolvesTransition is set by the removal of a control
@@ -998,7 +999,7 @@ func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alp
 				o.Name, o.Name, o.Name), nil
 		}
 
-		if pausedForTransitioning(o) {
+		if pausedWith(o, reasonOperationTransitioning) {
 			if resolvesTransition {
 				continue
 			}
@@ -1006,6 +1007,14 @@ func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alp
 			return fmt.Sprintf("operation %q (%s) on this cluster waits for the control-plane count to be odd again (%s); "+
 				"it resumes by itself then. Remove or approve a control plane to end the replacement",
 				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, "Paused").Message), nil
+		}
+
+		// The controller lifts this pause itself once the machine is named (ownNodeUnread), and setPhase has already
+		// released the lock, so there is nothing for the operator to resume.
+		if pausedWith(o, reasonOperationOwnNodeUnread) {
+			return fmt.Sprintf("operation %q (%s) on this cluster is paused (%s); it resumes by itself when that clears, "+
+				"so there is nothing to resume. Or delete it with 'ichor delete operation %s'",
+				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, "Paused").Message, o.Name), nil
 		}
 
 		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused {

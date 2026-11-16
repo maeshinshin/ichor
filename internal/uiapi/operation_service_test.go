@@ -827,6 +827,21 @@ func TestUnfinishedOperationTellsAFailedIchorUpgradeToBeDeleted(t *testing.T) {
 	}
 }
 
+func TestUnfinishedOperationPausedOnOwnNodeUnreadSaysItResumesByItself(t *testing.T) {
+	op := pausedOp("OwnNodeUnread")
+	op.Status.Conditions[0].Message = `cannot tell which machine runs this controller (node "n1"): not found`
+	s, k8s := opServer(t, append(opObjects(), op)...)
+
+	got, err := s.unfinishedOperation(t.Context(), getCluster(t, k8s))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(got, "resumes by itself") || strings.Contains(got, "ichor resume operation") {
+		t.Errorf("message = %q", got)
+	}
+}
+
 func TestResumeAnnotatesOnlyAFailedOperation(t *testing.T) {
 	newOp := func(name, phase, reason string) *ichorv1alpha1.TalosOperation {
 		return &ichorv1alpha1.TalosOperation{

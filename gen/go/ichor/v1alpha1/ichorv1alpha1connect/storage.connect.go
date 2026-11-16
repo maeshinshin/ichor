@@ -3,8 +3,8 @@
 // Source: ichor/v1alpha1/storage.proto
 
 // StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. Read only. A TalosStorage is written as a custom resource, and this
-// service does not write it.
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 package ichorv1alpha1connect
 
 import (
@@ -39,12 +39,17 @@ const (
 	// StorageServiceListStoragesProcedure is the fully-qualified name of the StorageService's
 	// ListStorages RPC.
 	StorageServiceListStoragesProcedure = "/ichor.v1alpha1.StorageService/ListStorages"
+	// StorageServiceCreateStorageProcedure is the fully-qualified name of the StorageService's
+	// CreateStorage RPC.
+	StorageServiceCreateStorageProcedure = "/ichor.v1alpha1.StorageService/CreateStorage"
 )
 
 // StorageServiceClient is a client for the ichor.v1alpha1.StorageService service.
 type StorageServiceClient interface {
 	// ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
 	ListStorages(context.Context, *connect.Request[v1alpha1.ListStoragesRequest]) (*connect.Response[v1alpha1.ListStoragesResponse], error)
+	// CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
+	CreateStorage(context.Context, *connect.Request[v1alpha1.CreateStorageRequest]) (*connect.Response[v1alpha1.CreateStorageResponse], error)
 }
 
 // NewStorageServiceClient constructs a client for the ichor.v1alpha1.StorageService service. By
@@ -64,12 +69,19 @@ func NewStorageServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(storageServiceMethods.ByName("ListStorages")),
 			connect.WithClientOptions(opts...),
 		),
+		createStorage: connect.NewClient[v1alpha1.CreateStorageRequest, v1alpha1.CreateStorageResponse](
+			httpClient,
+			baseURL+StorageServiceCreateStorageProcedure,
+			connect.WithSchema(storageServiceMethods.ByName("CreateStorage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // storageServiceClient implements StorageServiceClient.
 type storageServiceClient struct {
-	listStorages *connect.Client[v1alpha1.ListStoragesRequest, v1alpha1.ListStoragesResponse]
+	listStorages  *connect.Client[v1alpha1.ListStoragesRequest, v1alpha1.ListStoragesResponse]
+	createStorage *connect.Client[v1alpha1.CreateStorageRequest, v1alpha1.CreateStorageResponse]
 }
 
 // ListStorages calls ichor.v1alpha1.StorageService.ListStorages.
@@ -77,10 +89,17 @@ func (c *storageServiceClient) ListStorages(ctx context.Context, req *connect.Re
 	return c.listStorages.CallUnary(ctx, req)
 }
 
+// CreateStorage calls ichor.v1alpha1.StorageService.CreateStorage.
+func (c *storageServiceClient) CreateStorage(ctx context.Context, req *connect.Request[v1alpha1.CreateStorageRequest]) (*connect.Response[v1alpha1.CreateStorageResponse], error) {
+	return c.createStorage.CallUnary(ctx, req)
+}
+
 // StorageServiceHandler is an implementation of the ichor.v1alpha1.StorageService service.
 type StorageServiceHandler interface {
 	// ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
 	ListStorages(context.Context, *connect.Request[v1alpha1.ListStoragesRequest]) (*connect.Response[v1alpha1.ListStoragesResponse], error)
+	// CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
+	CreateStorage(context.Context, *connect.Request[v1alpha1.CreateStorageRequest]) (*connect.Response[v1alpha1.CreateStorageResponse], error)
 }
 
 // NewStorageServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -96,10 +115,18 @@ func NewStorageServiceHandler(svc StorageServiceHandler, opts ...connect.Handler
 		connect.WithSchema(storageServiceMethods.ByName("ListStorages")),
 		connect.WithHandlerOptions(opts...),
 	)
+	storageServiceCreateStorageHandler := connect.NewUnaryHandler(
+		StorageServiceCreateStorageProcedure,
+		svc.CreateStorage,
+		connect.WithSchema(storageServiceMethods.ByName("CreateStorage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.StorageService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case StorageServiceListStoragesProcedure:
 			storageServiceListStoragesHandler.ServeHTTP(w, r)
+		case StorageServiceCreateStorageProcedure:
+			storageServiceCreateStorageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -111,4 +138,8 @@ type UnimplementedStorageServiceHandler struct{}
 
 func (UnimplementedStorageServiceHandler) ListStorages(context.Context, *connect.Request[v1alpha1.ListStoragesRequest]) (*connect.Response[v1alpha1.ListStoragesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.StorageService.ListStorages is not implemented"))
+}
+
+func (UnimplementedStorageServiceHandler) CreateStorage(context.Context, *connect.Request[v1alpha1.CreateStorageRequest]) (*connect.Response[v1alpha1.CreateStorageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.StorageService.CreateStorage is not implemented"))
 }

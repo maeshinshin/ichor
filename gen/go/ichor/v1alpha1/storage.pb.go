@@ -5,8 +5,8 @@
 // source: ichor/v1alpha1/storage.proto
 
 // StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. Read only. A TalosStorage is written as a custom resource, and this
-// service does not write it.
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 
 package ichorv1alpha1
 
@@ -71,8 +71,10 @@ func (x *ListStoragesRequest) GetCluster() *ObjectRef {
 }
 
 type ListStoragesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Storages      []*Storage             `protobuf:"bytes,1,rep,name=storages,proto3" json:"storages,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Storages []*Storage             `protobuf:"bytes,1,rep,name=storages,proto3" json:"storages,omitempty"`
+	// presets are every disk preset this build knows, in the order of the CRD's enum.
+	Presets       []*StoragePreset `protobuf:"bytes,2,rep,name=presets,proto3" json:"presets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -114,6 +116,201 @@ func (x *ListStoragesResponse) GetStorages() []*Storage {
 	return nil
 }
 
+func (x *ListStoragesResponse) GetPresets() []*StoragePreset {
+	if x != nil {
+		return x.Presets
+	}
+	return nil
+}
+
+// StoragePreset is one value of TalosStorage.spec.diskPreset, and whether the page may create one.
+type StoragePreset struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// creatable is true when CreateStorage accepts this preset.
+	Creatable bool `protobuf:"varint,2,opt,name=creatable,proto3" json:"creatable,omitempty"`
+	// unavailable_reason says what to do instead when creatable is false. Empty when creatable.
+	UnavailableReason string `protobuf:"bytes,3,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *StoragePreset) Reset() {
+	*x = StoragePreset{}
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StoragePreset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StoragePreset) ProtoMessage() {}
+
+func (x *StoragePreset) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StoragePreset.ProtoReflect.Descriptor instead.
+func (*StoragePreset) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_storage_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *StoragePreset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StoragePreset) GetCreatable() bool {
+	if x != nil {
+		return x.Creatable
+	}
+	return false
+}
+
+func (x *StoragePreset) GetUnavailableReason() string {
+	if x != nil {
+		return x.UnavailableReason
+	}
+	return ""
+}
+
+type CreateStorageRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster is required: the TalosStorage is written in its namespace with this clusterRef.
+	Cluster *ObjectRef `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	// name is the TalosStorage's metadata.name. It is required; the page does not generate one.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// disk_preset is spec.diskPreset. Only a creatable preset is accepted.
+	DiskPreset string `protobuf:"bytes,3,opt,name=disk_preset,json=diskPreset,proto3" json:"disk_preset,omitempty"`
+	// node_selector is a label selector in the form key=value,key2=value2 for spec.nodes. It must
+	// select at least one label: an empty selector would select every node.
+	NodeSelector  string `protobuf:"bytes,4,opt,name=node_selector,json=nodeSelector,proto3" json:"node_selector,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateStorageRequest) Reset() {
+	*x = CreateStorageRequest{}
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateStorageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateStorageRequest) ProtoMessage() {}
+
+func (x *CreateStorageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateStorageRequest.ProtoReflect.Descriptor instead.
+func (*CreateStorageRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_storage_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CreateStorageRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+func (x *CreateStorageRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateStorageRequest) GetDiskPreset() string {
+	if x != nil {
+		return x.DiskPreset
+	}
+	return ""
+}
+
+func (x *CreateStorageRequest) GetNodeSelector() string {
+	if x != nil {
+		return x.NodeSelector
+	}
+	return ""
+}
+
+type CreateStorageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Storage       *Storage               `protobuf:"bytes,1,opt,name=storage,proto3" json:"storage,omitempty"`
+	Audit         *AuditRecord           `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateStorageResponse) Reset() {
+	*x = CreateStorageResponse{}
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateStorageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateStorageResponse) ProtoMessage() {}
+
+func (x *CreateStorageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateStorageResponse.ProtoReflect.Descriptor instead.
+func (*CreateStorageResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_storage_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CreateStorageResponse) GetStorage() *Storage {
+	if x != nil {
+		return x.Storage
+	}
+	return nil
+}
+
+func (x *CreateStorageResponse) GetAudit() *AuditRecord {
+	if x != nil {
+		return x.Audit
+	}
+	return nil
+}
+
 // Storage is one TalosStorage, trimmed to what the page shows.
 type Storage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -141,7 +338,7 @@ type Storage struct {
 
 func (x *Storage) Reset() {
 	*x = Storage{}
-	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -153,7 +350,7 @@ func (x *Storage) String() string {
 func (*Storage) ProtoMessage() {}
 
 func (x *Storage) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_storage_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -166,7 +363,7 @@ func (x *Storage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Storage.ProtoReflect.Descriptor instead.
 func (*Storage) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_storage_proto_rawDescGZIP(), []int{2}
+	return file_ichor_v1alpha1_storage_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Storage) GetRef() *ObjectRef {
@@ -238,9 +435,23 @@ const file_ichor_v1alpha1_storage_proto_rawDesc = "" +
 	"\n" +
 	"\x1cichor/v1alpha1/storage.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"J\n" +
 	"\x13ListStoragesRequest\x123\n" +
-	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"K\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x84\x01\n" +
 	"\x14ListStoragesResponse\x123\n" +
-	"\bstorages\x18\x01 \x03(\v2\x17.ichor.v1alpha1.StorageR\bstorages\"\xa7\x03\n" +
+	"\bstorages\x18\x01 \x03(\v2\x17.ichor.v1alpha1.StorageR\bstorages\x127\n" +
+	"\apresets\x18\x02 \x03(\v2\x1d.ichor.v1alpha1.StoragePresetR\apresets\"p\n" +
+	"\rStoragePreset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\tcreatable\x18\x02 \x01(\bR\tcreatable\x12-\n" +
+	"\x12unavailable_reason\x18\x03 \x01(\tR\x11unavailableReason\"\xa5\x01\n" +
+	"\x14CreateStorageRequest\x123\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
+	"\vdisk_preset\x18\x03 \x01(\tR\n" +
+	"diskPreset\x12#\n" +
+	"\rnode_selector\x18\x04 \x01(\tR\fnodeSelector\"}\n" +
+	"\x15CreateStorageResponse\x121\n" +
+	"\astorage\x18\x01 \x01(\v2\x17.ichor.v1alpha1.StorageR\astorage\x121\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xa7\x03\n" +
 	"\aStorage\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12\x1f\n" +
 	"\vdisk_preset\x18\x02 \x01(\tR\n" +
@@ -253,9 +464,10 @@ const file_ichor_v1alpha1_storage_proto_rawDesc = "" +
 	"conditions\x12F\n" +
 	"\x11governed_machines\x18\a \x03(\v2\x19.ichor.v1alpha1.ObjectRefR\x10governedMachines\x12/\n" +
 	"\x13required_extensions\x18\b \x03(\tR\x12requiredExtensions\x12!\n" +
-	"\fpreset_error\x18\t \x01(\tR\vpresetError2k\n" +
+	"\fpreset_error\x18\t \x01(\tR\vpresetError2\xc9\x01\n" +
 	"\x0eStorageService\x12Y\n" +
-	"\fListStorages\x12#.ichor.v1alpha1.ListStoragesRequest\x1a$.ichor.v1alpha1.ListStoragesResponseB\xbd\x01\n" +
+	"\fListStorages\x12#.ichor.v1alpha1.ListStoragesRequest\x1a$.ichor.v1alpha1.ListStoragesResponse\x12\\\n" +
+	"\rCreateStorage\x12$.ichor.v1alpha1.CreateStorageRequest\x1a%.ichor.v1alpha1.CreateStorageResponseB\xbd\x01\n" +
 	"\x12com.ichor.v1alpha1B\fStorageProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (
@@ -270,27 +482,37 @@ func file_ichor_v1alpha1_storage_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_storage_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_ichor_v1alpha1_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_ichor_v1alpha1_storage_proto_goTypes = []any{
-	(*ListStoragesRequest)(nil),  // 0: ichor.v1alpha1.ListStoragesRequest
-	(*ListStoragesResponse)(nil), // 1: ichor.v1alpha1.ListStoragesResponse
-	(*Storage)(nil),              // 2: ichor.v1alpha1.Storage
-	(*ObjectRef)(nil),            // 3: ichor.v1alpha1.ObjectRef
-	(*Condition)(nil),            // 4: ichor.v1alpha1.Condition
+	(*ListStoragesRequest)(nil),   // 0: ichor.v1alpha1.ListStoragesRequest
+	(*ListStoragesResponse)(nil),  // 1: ichor.v1alpha1.ListStoragesResponse
+	(*StoragePreset)(nil),         // 2: ichor.v1alpha1.StoragePreset
+	(*CreateStorageRequest)(nil),  // 3: ichor.v1alpha1.CreateStorageRequest
+	(*CreateStorageResponse)(nil), // 4: ichor.v1alpha1.CreateStorageResponse
+	(*Storage)(nil),               // 5: ichor.v1alpha1.Storage
+	(*ObjectRef)(nil),             // 6: ichor.v1alpha1.ObjectRef
+	(*AuditRecord)(nil),           // 7: ichor.v1alpha1.AuditRecord
+	(*Condition)(nil),             // 8: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_storage_proto_depIdxs = []int32{
-	3, // 0: ichor.v1alpha1.ListStoragesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	2, // 1: ichor.v1alpha1.ListStoragesResponse.storages:type_name -> ichor.v1alpha1.Storage
-	3, // 2: ichor.v1alpha1.Storage.ref:type_name -> ichor.v1alpha1.ObjectRef
-	4, // 3: ichor.v1alpha1.Storage.conditions:type_name -> ichor.v1alpha1.Condition
-	3, // 4: ichor.v1alpha1.Storage.governed_machines:type_name -> ichor.v1alpha1.ObjectRef
-	0, // 5: ichor.v1alpha1.StorageService.ListStorages:input_type -> ichor.v1alpha1.ListStoragesRequest
-	1, // 6: ichor.v1alpha1.StorageService.ListStorages:output_type -> ichor.v1alpha1.ListStoragesResponse
-	6, // [6:7] is the sub-list for method output_type
-	5, // [5:6] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	6,  // 0: ichor.v1alpha1.ListStoragesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	5,  // 1: ichor.v1alpha1.ListStoragesResponse.storages:type_name -> ichor.v1alpha1.Storage
+	2,  // 2: ichor.v1alpha1.ListStoragesResponse.presets:type_name -> ichor.v1alpha1.StoragePreset
+	6,  // 3: ichor.v1alpha1.CreateStorageRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	5,  // 4: ichor.v1alpha1.CreateStorageResponse.storage:type_name -> ichor.v1alpha1.Storage
+	7,  // 5: ichor.v1alpha1.CreateStorageResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	6,  // 6: ichor.v1alpha1.Storage.ref:type_name -> ichor.v1alpha1.ObjectRef
+	8,  // 7: ichor.v1alpha1.Storage.conditions:type_name -> ichor.v1alpha1.Condition
+	6,  // 8: ichor.v1alpha1.Storage.governed_machines:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 9: ichor.v1alpha1.StorageService.ListStorages:input_type -> ichor.v1alpha1.ListStoragesRequest
+	3,  // 10: ichor.v1alpha1.StorageService.CreateStorage:input_type -> ichor.v1alpha1.CreateStorageRequest
+	1,  // 11: ichor.v1alpha1.StorageService.ListStorages:output_type -> ichor.v1alpha1.ListStoragesResponse
+	4,  // 12: ichor.v1alpha1.StorageService.CreateStorage:output_type -> ichor.v1alpha1.CreateStorageResponse
+	11, // [11:13] is the sub-list for method output_type
+	9,  // [9:11] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_storage_proto_init() }
@@ -305,7 +527,7 @@ func file_ichor_v1alpha1_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_storage_proto_rawDesc), len(file_ichor_v1alpha1_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

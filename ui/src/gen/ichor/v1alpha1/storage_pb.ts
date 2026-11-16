@@ -3,12 +3,12 @@
 /* eslint-disable */
 
 // StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. Read only. A TalosStorage is written as a custom resource, and this
-// service does not write it.
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Condition, ObjectRef } from "./common_pb";
+import type { AuditRecord, Condition, ObjectRef } from "./common_pb";
 import { file_ichor_v1alpha1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/storage.proto.
  */
 export const file_ichor_v1alpha1_storage: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9zdG9yYWdlLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0U3RvcmFnZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiQQoUTGlzdFN0b3JhZ2VzUmVzcG9uc2USKQoIc3RvcmFnZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5TdG9yYWdlIqgCCgdTdG9yYWdlEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhITCgtkaXNrX3ByZXNldBgCIAEoCRIVCg1kaXNrX3NlbGVjdG9yGAMgASgJEhUKDW5vZGVfc2VsZWN0b3IYBCABKAkSGgoSZXZhY3VhdGlvbl90aW1lb3V0GAUgASgJEi0KCmNvbmRpdGlvbnMYBiADKAsyGS5pY2hvci52MWFscGhhMS5Db25kaXRpb24SNAoRZ292ZXJuZWRfbWFjaGluZXMYByADKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSGwoTcmVxdWlyZWRfZXh0ZW5zaW9ucxgIIAMoCRIUCgxwcmVzZXRfZXJyb3IYCSABKAkyawoOU3RvcmFnZVNlcnZpY2USWQoMTGlzdFN0b3JhZ2VzEiMuaWNob3IudjFhbHBoYTEuTGlzdFN0b3JhZ2VzUmVxdWVzdBokLmljaG9yLnYxYWxwaGExLkxpc3RTdG9yYWdlc1Jlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDFN0b3JhZ2VQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9zdG9yYWdlLnByb3RvEg5pY2hvci52MWFscGhhMSJBChNMaXN0U3RvcmFnZXNSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYicQoUTGlzdFN0b3JhZ2VzUmVzcG9uc2USKQoIc3RvcmFnZXMYASADKAsyFy5pY2hvci52MWFscGhhMS5TdG9yYWdlEi4KB3ByZXNldHMYAiADKAsyHS5pY2hvci52MWFscGhhMS5TdG9yYWdlUHJlc2V0IkwKDVN0b3JhZ2VQcmVzZXQSDAoEbmFtZRgBIAEoCRIRCgljcmVhdGFibGUYAiABKAgSGgoSdW5hdmFpbGFibGVfcmVhc29uGAMgASgJInwKFENyZWF0ZVN0b3JhZ2VSZXF1ZXN0EioKB2NsdXN0ZXIYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDAoEbmFtZRgCIAEoCRITCgtkaXNrX3ByZXNldBgDIAEoCRIVCg1ub2RlX3NlbGVjdG9yGAQgASgJIm0KFUNyZWF0ZVN0b3JhZ2VSZXNwb25zZRIoCgdzdG9yYWdlGAEgASgLMhcuaWNob3IudjFhbHBoYTEuU3RvcmFnZRIqCgVhdWRpdBgCIAEoCzIbLmljaG9yLnYxYWxwaGExLkF1ZGl0UmVjb3JkIqgCCgdTdG9yYWdlEiYKA3JlZhgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhITCgtkaXNrX3ByZXNldBgCIAEoCRIVCg1kaXNrX3NlbGVjdG9yGAMgASgJEhUKDW5vZGVfc2VsZWN0b3IYBCABKAkSGgoSZXZhY3VhdGlvbl90aW1lb3V0GAUgASgJEi0KCmNvbmRpdGlvbnMYBiADKAsyGS5pY2hvci52MWFscGhhMS5Db25kaXRpb24SNAoRZ292ZXJuZWRfbWFjaGluZXMYByADKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSGwoTcmVxdWlyZWRfZXh0ZW5zaW9ucxgIIAMoCRIUCgxwcmVzZXRfZXJyb3IYCSABKAkyyQEKDlN0b3JhZ2VTZXJ2aWNlElkKDExpc3RTdG9yYWdlcxIjLmljaG9yLnYxYWxwaGExLkxpc3RTdG9yYWdlc1JlcXVlc3QaJC5pY2hvci52MWFscGhhMS5MaXN0U3RvcmFnZXNSZXNwb25zZRJcCg1DcmVhdGVTdG9yYWdlEiQuaWNob3IudjFhbHBoYTEuQ3JlYXRlU3RvcmFnZVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5DcmVhdGVTdG9yYWdlUmVzcG9uc2VCvQEKEmNvbS5pY2hvci52MWFscGhhMUIMU3RvcmFnZVByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.ListStoragesRequest
@@ -45,6 +45,13 @@ export type ListStoragesResponse = Message<"ichor.v1alpha1.ListStoragesResponse"
    * @generated from field: repeated ichor.v1alpha1.Storage storages = 1;
    */
   storages: Storage[];
+
+  /**
+   * presets are every disk preset this build knows, in the order of the CRD's enum.
+   *
+   * @generated from field: repeated ichor.v1alpha1.StoragePreset presets = 2;
+   */
+  presets: StoragePreset[];
 };
 
 /**
@@ -53,6 +60,102 @@ export type ListStoragesResponse = Message<"ichor.v1alpha1.ListStoragesResponse"
  */
 export const ListStoragesResponseSchema: GenMessage<ListStoragesResponse> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_storage, 1);
+
+/**
+ * StoragePreset is one value of TalosStorage.spec.diskPreset, and whether the page may create one.
+ *
+ * @generated from message ichor.v1alpha1.StoragePreset
+ */
+export type StoragePreset = Message<"ichor.v1alpha1.StoragePreset"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * creatable is true when CreateStorage accepts this preset.
+   *
+   * @generated from field: bool creatable = 2;
+   */
+  creatable: boolean;
+
+  /**
+   * unavailable_reason says what to do instead when creatable is false. Empty when creatable.
+   *
+   * @generated from field: string unavailable_reason = 3;
+   */
+  unavailableReason: string;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.StoragePreset.
+ * Use `create(StoragePresetSchema)` to create a new message.
+ */
+export const StoragePresetSchema: GenMessage<StoragePreset> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_storage, 2);
+
+/**
+ * @generated from message ichor.v1alpha1.CreateStorageRequest
+ */
+export type CreateStorageRequest = Message<"ichor.v1alpha1.CreateStorageRequest"> & {
+  /**
+   * cluster is required: the TalosStorage is written in its namespace with this clusterRef.
+   *
+   * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
+   */
+  cluster?: ObjectRef | undefined;
+
+  /**
+   * name is the TalosStorage's metadata.name. It is required; the page does not generate one.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * disk_preset is spec.diskPreset. Only a creatable preset is accepted.
+   *
+   * @generated from field: string disk_preset = 3;
+   */
+  diskPreset: string;
+
+  /**
+   * node_selector is a label selector in the form key=value,key2=value2 for spec.nodes. It must
+   * select at least one label: an empty selector would select every node.
+   *
+   * @generated from field: string node_selector = 4;
+   */
+  nodeSelector: string;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.CreateStorageRequest.
+ * Use `create(CreateStorageRequestSchema)` to create a new message.
+ */
+export const CreateStorageRequestSchema: GenMessage<CreateStorageRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_storage, 3);
+
+/**
+ * @generated from message ichor.v1alpha1.CreateStorageResponse
+ */
+export type CreateStorageResponse = Message<"ichor.v1alpha1.CreateStorageResponse"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.Storage storage = 1;
+   */
+  storage?: Storage | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.AuditRecord audit = 2;
+   */
+  audit?: AuditRecord | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.CreateStorageResponse.
+ * Use `create(CreateStorageResponseSchema)` to create a new message.
+ */
+export const CreateStorageResponseSchema: GenMessage<CreateStorageResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_storage, 4);
 
 /**
  * Storage is one TalosStorage, trimmed to what the page shows.
@@ -128,7 +231,7 @@ export type Storage = Message<"ichor.v1alpha1.Storage"> & {
  * Use `create(StorageSchema)` to create a new message.
  */
 export const StorageSchema: GenMessage<Storage> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_storage, 2);
+  messageDesc(file_ichor_v1alpha1_storage, 5);
 
 /**
  * @generated from service ichor.v1alpha1.StorageService
@@ -143,6 +246,16 @@ export const StorageService: GenService<{
     methodKind: "unary";
     input: typeof ListStoragesRequestSchema;
     output: typeof ListStoragesResponseSchema;
+  },
+  /**
+   * CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
+   *
+   * @generated from rpc ichor.v1alpha1.StorageService.CreateStorage
+   */
+  createStorage: {
+    methodKind: "unary";
+    input: typeof CreateStorageRequestSchema;
+    output: typeof CreateStorageResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_storage, 0);

@@ -1,8 +1,8 @@
 syntax = "proto3";
 
 // StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
-// disk preset it applies. Read only. A TalosStorage is written as a custom resource, and this
-// service does not write it.
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
+// user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 package ichor.v1alpha1;
 
 import "ichor/v1alpha1/common.proto";
@@ -10,6 +10,8 @@ import "ichor/v1alpha1/common.proto";
 service StorageService {
   // ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
   rpc ListStorages(ListStoragesRequest) returns (ListStoragesResponse);
+  // CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
+  rpc CreateStorage(CreateStorageRequest) returns (CreateStorageResponse);
 }
 
 message ListStoragesRequest {
@@ -19,6 +21,34 @@ message ListStoragesRequest {
 
 message ListStoragesResponse {
   repeated Storage storages = 1;
+  // presets are every disk preset this build knows, in the order of the CRD's enum.
+  repeated StoragePreset presets = 2;
+}
+
+// StoragePreset is one value of TalosStorage.spec.diskPreset, and whether the page may create one.
+message StoragePreset {
+  string name = 1;
+  // creatable is true when CreateStorage accepts this preset.
+  bool creatable = 2;
+  // unavailable_reason says what to do instead when creatable is false. Empty when creatable.
+  string unavailable_reason = 3;
+}
+
+message CreateStorageRequest {
+  // cluster is required: the TalosStorage is written in its namespace with this clusterRef.
+  ObjectRef cluster = 1;
+  // name is the TalosStorage's metadata.name. It is required; the page does not generate one.
+  string name = 2;
+  // disk_preset is spec.diskPreset. Only a creatable preset is accepted.
+  string disk_preset = 3;
+  // node_selector is a label selector in the form key=value,key2=value2 for spec.nodes. It must
+  // select at least one label: an empty selector would select every node.
+  string node_selector = 4;
+}
+
+message CreateStorageResponse {
+  Storage storage = 1;
+  AuditRecord audit = 2;
 }
 
 // Storage is one TalosStorage, trimmed to what the page shows.

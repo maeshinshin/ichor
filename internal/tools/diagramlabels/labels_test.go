@@ -64,7 +64,8 @@ func walk(src []byte) (cells []cell, foreign int, content string, err error) {
 	}
 }
 
-// htmlLabel reports whether a draw.io style sets html=1, the flag that makes a cell's label HTML.
+// htmlLabel reports whether a draw.io style sets html=1, the flag that makes a cell's label HTML. A style that
+// has no html key is plain: draw.io reads a missing key as the default, which is not HTML, so only html=1 is tested.
 func htmlLabel(style string) bool {
 	for token := range strings.SplitSeq(style, ";") {
 		if token == "html=1" {
@@ -74,8 +75,16 @@ func htmlLabel(style string) bool {
 	return false
 }
 
-// problems returns one line per break of the rule in a diagram file: a cell with html=1, named by its id and
-// value, and any foreignObject in the SVG. A file without a readable model is an error, not a pass.
+// htmlBreak reports whether a label value holds an HTML line break. Its line break must be a real newline (&#xa;
+// in the XML), which is what draw.io writes; a <br> or <div> in the text is HTML written into a plain label.
+func htmlBreak(value string) bool {
+	v := strings.ToLower(value)
+	return strings.Contains(v, "<br") || strings.Contains(v, "<div")
+}
+
+// problems returns one line per break of the rule in a diagram file: a cell with html=1 or an HTML line break in
+// its value, named by its id and value, and any foreignObject in the SVG. A file without a readable model is an
+// error, not a pass.
 func problems(name string, src []byte) ([]string, error) {
 	cells, foreign, content, err := walk(src)
 	if err != nil {
@@ -93,6 +102,9 @@ func problems(name string, src []byte) ([]string, error) {
 	for _, c := range cells {
 		if htmlLabel(c.style) {
 			out = append(out, fmt.Sprintf("%s: cell %q (value %q) has html=1; a label must be plain SVG text, html=0", name, c.id, c.value))
+		}
+		if htmlBreak(c.value) {
+			out = append(out, fmt.Sprintf("%s: cell %q (value %q) has an HTML line break (<br> or <div>); use a real newline (&#xa;)", name, c.id, c.value))
 		}
 	}
 	if foreign > 0 {
@@ -146,5 +158,16 @@ func TestProblemsNamesTheCellAndTheForeignObject(t *testing.T) {
 
 	if _, err := problems("y.drawio", []byte(`<mxfile><diagram>compressed-text</diagram></mxfile>`)); err == nil {
 		t.Error("a file with no readable model passed; it must be an error")
+	}
+}
+
+// TestProblemsFlagsHTMLLineBreaksAndPassesAMissingHTMLKey pins two of the rule's edges. A label with <br> or <div>
+// is an HTML label in a plain cell, so it is named. A cell whose style has no html key passes: draw.io takes a missing
+// key as the default, which is plain, so the test looks only for html=1.
+func TestProblemsFlagsHTMLLineBreaksAndPassesAMissingHTMLKey(t *testing.T) {
+	model := `<mxfile><diagram><mxGraphModel><root><mxCell id="0"/><mxCell id="br" value="a&lt;br&gt;b" style="text;html=0;"/><mxCell id="nokey" value="plain" style="text;fontFamily=Helvetica;"/></root></mxGraphModel></diagram></mxfile>`
+	got, err := problems("x.drawio", []byte(model))
+	if err != nil || len(got) != 1 || !strings.Contains(got[0], `cell "br"`) || !strings.Contains(got[0], "line break") {
+		t.Errorf("got %q, %v; want one line-break problem naming cell \"br\"", got, err)
 	}
 }

@@ -52,7 +52,7 @@ GitOps tools, and does not target air-gapped installs.
 
 | Piece | Role |
 |---|---|
-| **Custom resources** | The API. `TalosCluster`, `TalosMachine`, `TalosConfigPatch`, `TalosOperation`, `TalosEtcdBackup`, `TalosStorage`, `MachineReclaim`, `TalosCredentialRequest`, `IchorInstallation` and `IchorUser`. See the [CRD reference](reference/crds/taloscluster.md). |
+| **Custom resources** | The API. `TalosCluster`, `TalosMachine`, `TalosConfigPatch`, `TalosOperation`, `TalosEtcdBackup`, `TalosStoragePreset`, `MachineReclaim`, `TalosCredentialRequest`, `IchorInstallation` and `IchorUser`. See the [CRD reference](reference/crds/taloscluster.md). |
 | **`ichor-controller`** | The only component that writes to Talos nodes, apart from three CLI commands (`ichor init`, `ichor restore cluster`, `ichor reclaim node --talosconfig`). It reconciles the resources, keeps the state machine of long-running work in resource status, and never changes `spec`. |
 | **`ichor` CLI** | Bootstraps the first node (`ichor init`), adopts existing clusters, and does everything the UI does. See the [CLI reference](reference/cli/ichor.md). |
 | **`ichor-ui`** | A Preact web UI with its Go backend. It changes the world only by writing resources, reads node state from the Talos API read-only, and holds no CA key. |

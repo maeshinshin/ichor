@@ -14,7 +14,7 @@ The work splits into four layers; Ichor owns the first and the last.
 | 3 | Volumes, replicas, disks, settings | The storage system's controller |
 | 4 | Coordination around node operations: evacuate before drain, remove or upgrade | Ichor |
 
-`TalosStorage` stays thin: which nodes, which disk preset, how disks are
+`TalosStoragePreset` stays thin: which nodes, which disk preset, how disks are
 handed to the storage system, and evacuation settings. The storage system's
 own configuration is yours. Presets start with `longhorn-v1`
 (verify the `iscsi-tools` and `util-linux-tools` extensions are in the node's
@@ -24,7 +24,7 @@ which renders no Talos volume and leaves the disk to Rook (ADR 0167; the
 and `filesystem` follow. `diskSelector` is required by `longhorn-v1` and refused
 by `rook-v1`.
 Missing extensions are reported by the informational `ExtensionsPresent`
-condition on `TalosStorage`, read from the Nodes' `extensions.talos.dev/*`
+condition on `TalosStoragePreset`, read from the Nodes' `extensions.talos.dev/*`
 labels; it never gates `Ready`. Adding one is an installer-image
 change: a new schematic, which the Talos upgrade treats as an upgrade even when
 the version does not move.
@@ -66,11 +66,11 @@ there" is "no `replicas.longhorn.io` object remains with
 `spec.diskID` form is not built) -- an absence of objects, not a counter reaching
 zero. `EvacuationStatus` (`pkg/storage/evacuation.go`) takes that count
 already read by the caller, plus elapsed time against
-`TalosStorage.spec.evacuationTimeout`, and returns done, still-waiting, or
+`TalosStoragePreset.spec.evacuationTimeout`, and returns done, still-waiting, or
 paused -- paused, never proceeding to drain, once the timeout is reached
 with replicas still remaining.
 
 **The supported Longhorn version range is not stated.** Longhorn versions appear in this document and in the code without a range. Ichor does not install Longhorn; that is layer 2. The `longhorn-v1` preset and the evacuation hook use the `nodes.longhorn.io`, `replicas.longhorn.io` and `settings.longhorn.io` objects at `v1beta2`, and nothing in `pkg/storage` or `internal/controller` reads a Longhorn version or gates on one. The version-specific statements above cite longhorn-manager v1.9.1 and the Longhorn 1.12.1 and 1.13.0 documentation. ADR 0025's amendments cite webhook lines in v1.11.0, v1.12.1 and v1.13.0. The code states no lower or upper bound, so this document states none. The webhook line numbers in ADR 0025's amendment are that ADR's own citations, and the comment in `pkg/storage/longhornv1.go` that the API is unchanged since 1.12.1 is that comment's claim; this document does not adopt either.
 
-`TalosStorage` reports health, so whatever installs the storage system can wait
+`TalosStoragePreset` reports health, so whatever installs the storage system can wait
 until the Talos side is ready.

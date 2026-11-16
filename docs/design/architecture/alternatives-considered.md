@@ -13,7 +13,7 @@ Ichor installing storage and monitoring itself. It would double the surface
 area, duplicate what the storage controllers already do, and keep
 us on the upgrade treadmill of every project we wrap. Ichor installs Cilium only.
 
-Fewer CRDs. `TalosEtcdBackup` and `TalosStorage` could fold into
+Fewer CRDs. `TalosEtcdBackup` and `TalosStoragePreset` could fold into
 `TalosCluster`. They are kept separate so their RBAC and Git diffs stay
 focused; merging later would need a migration, splitting later wouldn't.
 

@@ -168,7 +168,7 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		Expect(changed).To(BeFalse())
 
 		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: egressNS, Name: DefaultTalosEgressPolicyName}, cnpGVK())
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the static policy is absent, so no Talos egress rule is written"))
 	})
 
 	// Every spec that needs the static policy calls this, so none depends on an earlier spec having created it.

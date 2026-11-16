@@ -335,7 +335,7 @@ func upstreamComponents() []component {
 		return component{Kind: kindUpstream, Name: name, URL: url, Note: note, RefLabel: "MIT", Copyright: []string{copyright}}
 	}
 	return []component{
-		mit("shadcn/ui", "https://github.com/shadcn-ui/ui", "Copyright (c) 2023 shadcn", "ui/src/components/ui and the @shadcn/react ports"),
+		mit("shadcn/ui", "https://github.com/shadcn-ui/ui", "Copyright (c) 2023 shadcn", "ui/src/components/ui, site/src/components/ui and the @shadcn/react ports"),
 		mit("Radix UI Primitives", "https://github.com/radix-ui/primitives", "Copyright (c) 2022 WorkOS", "ui/src/lib/radix and site/src/lib/radix"),
 		mit("Base UI", "https://github.com/mui/base-ui", "Copyright (c) 2019 Material-UI SAS", "the Combobox in ui/src/lib/shims"),
 		mit("cmdk", "https://github.com/pacocoursey/cmdk", "Copyright (c) 2022 Paco Coursey", "ui/src/lib/shims/cmdk.tsx and site/src/lib/shims/cmdk.tsx"),

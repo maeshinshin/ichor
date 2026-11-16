@@ -3728,7 +3728,7 @@ Upstream projects:
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 Paco Coursey
 - shadcn/ui (https://github.com/shadcn-ui/ui)
-    ui/src/components/ui and the @shadcn/react ports
+    ui/src/components/ui, site/src/components/ui and the @shadcn/react ports
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2023 shadcn
 - sonner (https://github.com/emilkowalski/sonner)

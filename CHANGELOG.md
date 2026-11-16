@@ -611,6 +611,29 @@ command does. Each item is described where it is listed below.
   the restore and skipping the CA and key rotation guards. The aggregator CA
   rotation guard likewise fails on a version contract it cannot parse.
 
+### Storage
+
+- **`TalosStorage` takes a second disk preset, `rook-v1`, for Rook/Ceph.** A node
+  that `rook-v1` governs gets no Talos volume, no kubelet mount and no node label.
+  Talos writes no disk configuration for it, and the disk is left for Rook to take
+  as a raw device. Ichor writes no `UserVolumeConfig` for it, because Talos formats
+  what that document provisions and Rook cannot use a formatted disk. The preset
+  has no evacuation hook, because Rook's own operator blocks the eviction of its
+  OSDs during a drain while the chart's `managePodBudgets` is on, as it is by
+  default. A raw partition is still available, written by you as a
+  `TalosConfigPatch` (ADR 0167).
+- **A node that `rook-v1` governs drains, upgrades or is removed without an evacuation
+  step.** Ichor moves nothing off such a node first, since the preset has no evacuation
+  hook; the drain itself runs, and Rook's disruption budgets decide when each OSD may
+  leave. A node that no `TalosStorage` governs, or that `longhorn-v1` governs, is
+  unchanged.
+- **`diskSelector` is required for `longhorn-v1` and refused for `rook-v1`.** A
+  `rook-v1` object that sets it is refused with "rook-v1 writes no disk config, so
+  a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStorage
+  from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one
+  update". To move a node from `longhorn-v1` to `rook-v1`, change `diskPreset` and
+  remove `diskSelector` in one update: either change alone is refused.
+
 ### Etcd backups and restore
 
 - Retention never deletes the snapshot a run just uploaded. It ranks snapshots
@@ -645,6 +668,9 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
+- **The Storage page lists each `TalosStorage` with the nodes it governs and the
+  disk preset it uses.** It is read-only: a `TalosStorage` is still changed as a
+  custom resource, and the page writes nothing.
 - **The UI asks you to reload when the server has moved on.** ichor-ui sends its
   version in an `X-Ichor-Version` header on the responses to signed-in calls, and
   the page compares it with the version its own bundle was built from. When they
@@ -888,6 +914,14 @@ command does. Each item is described where it is listed below.
   the same two cmdk ports carry at their end, with its MIT copyright line.
 
 ### Docs
+- **A new guide, Prepare Talos nodes for Rook/Ceph, covers the Talos side of a
+  Rook/Ceph node.** It says which disk Rook needs unformatted, how the `rook-v1`
+  preset differs from the raw-partition alternative, what the Pod Security exemption
+  is for, and what Rook's drain gate does. Naming the devices Rook takes is yours.
+  Rook and Ceph themselves are out of scope.
+- **ADR 0167 records Rook/Ceph as a second storage preset.** ADRs 0023 and 0025 are
+  superseded in part by it, and the storage design section names `rook-v1`. Its
+  amendment states the two `diskSelector` rules as the API enforces them.
 - **Twenty amendment paragraphs across twelve ADRs carry a dated heading and the
   index marker.** The index reads amendments from the heading, so these were
   recorded but invisible to it. Each kept its original date.

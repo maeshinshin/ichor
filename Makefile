@@ -231,9 +231,11 @@ check-embed-images:
 	  esac; \
 	done
 
-# .WAIT: under make -j, build-installer must not start (and rewrite dist/install.yaml with placeholders) before the refusal has finished.
+# build-installer runs from the recipe, not as a prerequisite: under make -k a failed check does not stop a prerequisite
+# from running, and build-installer would rewrite dist/install.yaml with the placeholders.
 .PHONY: build-ichor-embed
-build-ichor-embed: check-embed-images .WAIT build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
+build-ichor-embed: check-embed-images ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
+	$(MAKE) build-installer
 	cp dist/install.yaml internal/installmanifest/install.yaml
 	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	go build -tags installembed -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor

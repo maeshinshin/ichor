@@ -38,6 +38,22 @@ const (
 	talosConfigPatchesCRD = "talosconfigpatches.ichor.maesh.dev"
 )
 
+// retiredKind names a kind this release no longer ships. checkCRDs compares only the CRDs the target
+// bundle carries and the installer never deletes a CRD, so a kind that leaves the bundle keeps its
+// objects, and the render stops reading them: checkRetiredKinds refuses the install while any remain.
+// One entry per removal, citing its ADR.
+type retiredKind struct {
+	crd, group, version, kind string
+}
+
+const talosStoragesCRD = "talosstorages.ichor.maesh.dev"
+
+// retiredKinds is the whole list.
+var retiredKinds = []retiredKind{
+	// ADR 0168: TalosStorage is renamed TalosStoragePreset; its objects must be recreated by hand first.
+	{crd: talosStoragesCRD, group: "ichor.maesh.dev", version: "v1alpha1", kind: "TalosStorage"},
+}
+
 // retiredFields is the whole list.
 var retiredFields = []retiredField{
 	// GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.

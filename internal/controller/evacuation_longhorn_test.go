@@ -26,6 +26,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -137,5 +138,53 @@ var _ = Describe("LonghornEvacuator Begin and End", func() {
 
 		e := &LonghornEvacuator{Client: failing}
 		Expect(e.Begin(ctx, longhornTestTarget(), longhornTestNode)).To(MatchError(boom))
+	})
+})
+
+// longhornElsewhere is the API as seen when Longhorn is installed outside longhorn-system: no Longhorn Node
+// object is found for node (the one in longhorn-system is NotFound), and a replica in another namespace still
+// names node. Every other object is the real envtest API, so TalosStorage and Node resolve as they do in production.
+type longhornElsewhere struct {
+	client.Client
+
+	replica unstructured.Unstructured
+}
+
+func newLonghornElsewhere(node string) longhornElsewhere {
+	replica := unstructured.Unstructured{Object: map[string]any{keySpec: map[string]any{"nodeID": node}}}
+	replica.SetNamespace("longhorn-elsewhere")
+	replica.SetName("replica-elsewhere")
+
+	return longhornElsewhere{Client: k8sClient, replica: replica}
+}
+
+func (l longhornElsewhere) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if obj.GetObjectKind().GroupVersionKind().Group == longhornGroup {
+		return apierrors.NewNotFound(schema.GroupResource{Group: longhornGroup, Resource: "nodes"}, key.Name)
+	}
+
+	return l.Client.Get(ctx, key, obj, opts...)
+}
+
+func (l longhornElsewhere) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if ul, ok := list.(*unstructured.UnstructuredList); ok && ul.GroupVersionKind().Group == longhornGroup {
+		ul.Items = []unstructured.Unstructured{l.replica}
+
+		return nil
+	}
+
+	return l.Client.List(ctx, list, opts...)
+}
+
+var _ = Describe("storage evacuation refuses a drain it cannot evacuate", func() {
+	It("refuses the drain when a TalosStorage governs the node, Longhorn's Node is not in longhorn-system, and a replica still names it", func() {
+		cluster := newOpTestCluster()
+		newTestStorageNode("node-refuse1", map[string]string{testStorageLabelKey: testStorageLabelValue})
+		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
+		m := newOpTestMachine(cluster.Name, roleControlPlane, "refuse1")
+
+		_, err := evacuateMachine(ctx, k8sClient, &LonghornEvacuator{Client: newLonghornElsewhere("node-refuse1")},
+			cluster, m, "node-refuse1", "removal")
+		Expect(err).To(MatchError(ContainSubstring("refusing to evacuate node \"node-refuse1\"")))
 	})
 })

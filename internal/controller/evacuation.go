@@ -43,8 +43,10 @@ const defaultEvacuationTimeout = 10 * time.Minute
 
 // defaultLonghornNamespace is Longhorn's documented default install namespace.
 //
-// shortcut: TalosStorageSpec carries no namespace field, so a Longhorn in another namespace cannot be
-// evacuated. Add one to TalosStorageSpec if that is ever needed; nothing else assumes "longhorn-system".
+// shortcut: TalosStorageSpec carries no namespace field, so Longhorn's Node is read and written only here.
+// With Longhorn elsewhere, a node that replicas still name is refused (never drained with them on it), but a
+// node no replica names is treated as nothing to evacuate, and no eviction is ever requested. Add a namespace
+// field to TalosStorageSpec when a second install must be evacuated.
 const defaultLonghornNamespace = "longhorn-system"
 
 // evacuationTarget is what StorageEvacuator.Resolve found for one node: the storage.EvacuationHook to
@@ -173,28 +175,43 @@ type nodeField struct {
 	value bool
 }
 
-// absent reports whether err means Longhorn is not there to evacuate: its CRD is not installed, or it has
-// no Node object for this machine (e.g. longhorn-manager is crash-looping for want of iscsi-tools). A
-// TalosStorage legitimately exists before Longhorn does, so this is "nothing to evacuate", not a failure.
-// The first sighting per node is logged at info level.
-func (e *LonghornEvacuator) absent(ctx context.Context, node string, err error) bool {
-	if !apimeta.IsNoMatchError(err) && !apierrors.IsNotFound(err) {
-		return false
+// absent reports whether err means Longhorn has nothing to act on for this node: its CRD is not installed, or
+// it has no Node object in the namespace this evacuator writes to (e.g. longhorn-manager is crash-looping for
+// want of iscsi-tools). A TalosStorage legitimately exists before Longhorn does, so absent is not a failure
+// by itself; missingNode decides whether it is nothing to evacuate.
+func absent(err error) bool {
+	return apimeta.IsNoMatchError(err) || apierrors.IsNotFound(err)
+}
+
+// missingNode is what writeNodeEvacuation answers when absent holds. With no replica naming node there is
+// nothing to evacuate, and the first sighting per node is logged at info level. A replica that names node
+// lives where this evacuator does not write, so no eviction can be requested for it: the step is refused,
+// and the drain that follows never starts with that replica still on the node.
+func (e *LonghornEvacuator) missingNode(ctx context.Context, node string, cause error) error {
+	n, err := e.replicasOn(ctx, node)
+	if err != nil {
+		return err
+	}
+
+	if n > 0 {
+		return fmt.Errorf("refusing to evacuate node %q: %d Longhorn replica(s) name it, but Longhorn has no Node "+
+			"object for it in namespace %q, the only namespace this controller writes to, so eviction cannot be requested",
+			node, n, defaultLonghornNamespace)
 	}
 
 	if _, seen := e.noted.LoadOrStore(node, struct{}{}); !seen {
 		logf.FromContext(ctx).Info("Longhorn has no Node object for this node (CRD or object absent); nothing to evacuate",
-			"node", node, "reason", err.Error())
+			"node", node, "reason", cause.Error())
 	}
 
-	return true
+	return nil
 }
 
 // writeNodeEvacuation writes the two fields to node's nodes.longhorn.io object as two separate
 // updates, in the order given (a field already holding its value is not rewritten). Longhorn's
 // admission webhook rejects a write that leaves evictionRequested true while allowScheduling is
-// also true, so the order differs for Begin and End. A missing CRD
-// or Node object is nothing to evacuate and returns nil.
+// also true, so the order differs for Begin and End. A missing CRD or Node object is nothing to
+// evacuate unless replicas still name node (missingNode).
 func (e *LonghornEvacuator) writeNodeEvacuation(
 	ctx context.Context, target *evacuationTarget, node string, fields [2]nodeField,
 ) error {
@@ -202,11 +219,11 @@ func (e *LonghornEvacuator) writeNodeEvacuation(
 	obj.SetGroupVersionKind(longhornNodeGVK)
 
 	if err := e.Get(ctx, types.NamespacedName{Namespace: target.namespace, Name: node}, &obj); err != nil {
-		if e.absent(ctx, node, err) {
-			return nil
+		if !absent(err) {
+			return fmt.Errorf("reading Longhorn node %q: %w", node, err)
 		}
 
-		return fmt.Errorf("reading Longhorn node %q: %w", node, err)
+		return e.missingNode(ctx, node, err)
 	}
 
 	for _, f := range fields {
@@ -229,13 +246,19 @@ func (e *LonghornEvacuator) writeNodeEvacuation(
 // ReplicasRemaining implements StorageEvacuator: it counts replicas.longhorn.io objects whose spec.nodeID
 // still names node; longhorn-manager v1.9.1's VolumeController.cleanupEvictionRequestedReplicas deletes
 // exactly that object once a healthy replacement exists elsewhere. Whole-node eviction only,
-// never per disk (spec.diskID).
-func (e *LonghornEvacuator) ReplicasRemaining(ctx context.Context, target *evacuationTarget, node string) (int, error) {
+// never per disk (spec.diskID). Counted in every namespace: a replica's namespace does not change what
+// a drain would do to it.
+func (e *LonghornEvacuator) ReplicasRemaining(ctx context.Context, _ *evacuationTarget, node string) (int, error) {
+	return e.replicasOn(ctx, node)
+}
+
+// replicasOn counts the replicas in any namespace that name node. No CRD means no replicas anywhere: zero.
+func (e *LonghornEvacuator) replicasOn(ctx context.Context, node string) (int, error) {
 	var list unstructured.UnstructuredList
 	list.SetGroupVersionKind(longhornReplicaListGVK)
 
-	if err := e.List(ctx, &list, client.InNamespace(target.namespace)); err != nil {
-		if e.absent(ctx, node, err) {
+	if err := e.List(ctx, &list); err != nil {
+		if absent(err) {
 			return 0, nil
 		}
 

@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -92,9 +93,18 @@ func TestParseADRsIsDeterministic(t *testing.T) {
 // removedCommandPaths are the CLI command paths that the verb-first surface
 // (b0a9823cc) retired. An ADR names the current command, so none of these may
 // appear in one, as `ichor <path>` or as a `<path>` code span. A later rename adds
-// its old path here. The ADR that removed a command (removedBy) may name it: that is
-// the removal's own record.
-var removedBy = map[string]string{"node reset": "0135", "operation retry": "0095"}
+// its old path here. A command with no replacement is listed too: the ADRs that decided it,
+// built it or recorded its removal (removedBy, by number) may name it, since a record that
+// cannot say what it recorded is no record, and any other document that names it fails.
+var removedBy = map[string]string{
+	"gitops export":       "0015 0026 0027 0028 0044 0046 0047 0048 0051 0055 0056 0098 0099",
+	"gitops handoff":      "0024 0028 0048",
+	"images list":         "0027 0036 0048 0090",
+	"machine reprovision": "0076", // a rejected alternative: it was never built
+	"node reset":          "0135",
+	"operation retry":     "0095",
+	"stack apply":         "0099 0101",
+}
 
 var removedCommandPaths = []string{
 	"auth kubeconfig",
@@ -132,6 +142,11 @@ var removedCommandPaths = []string{
 	"machine list",
 	"machine reclaim",
 	"machine reject",
+	"gitops export",
+	"gitops handoff",
+	"images list",
+	"machine reprovision",
+	"stack apply",
 	"node get",
 	"node logs",
 	"node pcap",
@@ -175,15 +190,22 @@ func TestNoADRNamesARemovedCommand(t *testing.T) {
 		re := regexp.MustCompile("(ichor |`)" + regexp.QuoteMeta(cmd) + "([^a-z-]|$)")
 		for _, path := range paths {
 			// The index repeats each ADR's Decided line, so its source is the file to fix.
-			if base := filepath.Base(path); base == "README.md" || strings.HasPrefix(base, removedBy[cmd]+"-") {
+			base := filepath.Base(path)
+			if base == "README.md" {
 				continue
 			}
 			body, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("reading %s: %v", path, err)
 			}
-			if n := len(re.FindAll(body, -1)); n > 0 {
-				t.Errorf("%s names the removed command %q (%d time(s))", path, cmd, n)
+			n := len(re.FindAll(body, -1))
+			if !slices.ContainsFunc(strings.Fields(removedBy[cmd]), func(num string) bool { return strings.HasPrefix(base, num+"-") }) {
+				if n > 0 {
+					t.Errorf("%s names the removed command %q (%d time(s))", path, cmd, n)
+				}
+			} else if n == 0 {
+				// An excuse nobody uses is a hole for the next document to fall through.
+				t.Errorf("%s is excused for %q but does not name it; drop it from removedBy", path, cmd)
 			}
 		}
 	}

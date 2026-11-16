@@ -129,7 +129,7 @@ func (r *rig) machine(t *testing.T, verb string, args ...string) (string, error)
 
 func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error) {
 	t.Helper()
-	return r.machine(t, append([]string{"reclaim", addr, "--talosconfig", "/tmp/foreign-talosconfig", "--kubeconfig", podKC}, extra...)...)
+	return r.machine(t, "reclaim", append([]string{addr, "--talosconfig", "/tmp/foreign-talosconfig", "--kubeconfig", podKC}, extra...)...)
 }
 
 func (r *rig) ui(t *testing.T, op string, extra ...string) (string, error) {

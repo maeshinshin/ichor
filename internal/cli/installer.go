@@ -17,6 +17,11 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
+	"io"
+	"os"
+	"unicode/utf8"
+
 	"github.com/spf13/cobra"
 
 	"github.com/maeshinshin/ichor/internal/installer"
@@ -30,6 +35,15 @@ var installerCmd = &cobra.Command{
 	Short:  "Commands the installer Job runs",
 	Hidden: true,
 }
+
+// installerTerminationLog is the file the kubelet mounts as the container's termination message
+// path (the default). A variable, not a flag: the command's surface stays the same and tests
+// point it at a file of their own.
+var installerTerminationLog = "/dev/termination-log"
+
+// terminationMessageLimit stays under the node's 4096-byte cut, so the node never truncates the
+// message in the middle of a sentence.
+const terminationMessageLimit = 4095
 
 var installerRunOpts struct {
 	Namespace string
@@ -49,7 +63,7 @@ var installerRunCmd = &cobra.Command{
 			return err
 		}
 
-		return installer.Run(cmd.Context(), c, installer.Options{
+		err = installer.Run(cmd.Context(), c, installer.Options{
 			Namespace: installerRunOpts.Namespace,
 			RunID:     installerRunOpts.RunID,
 			Manifest:  installmanifest.Manifest,
@@ -59,7 +73,43 @@ var installerRunCmd = &cobra.Command{
 			SkipCiliumPolicies: installerRunOpts.NoPolicies,
 			Log:                cmd.ErrOrStderr(),
 		})
+		if err != nil {
+			// The pod log keeps the full record; the termination message is the summary the
+			// controller shows on the paused operation. A failed write must not hide err.
+			if werr := writeTerminationMessage(installerTerminationLog, err); werr != nil {
+				_, _ = io.WriteString(cmd.ErrOrStderr(), "installer: could not write the termination message: "+werr.Error()+"\n")
+			}
+		}
+
+		return err
 	},
+}
+
+// writeTerminationMessage puts err's text at the start of path. It opens an existing file only
+// (no O_CREATE): the kubelet mounts the file, and nothing else should ever be created here.
+func writeTerminationMessage(path string, err error) error {
+	f, openErr := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+	if openErr != nil {
+		return openErr
+	}
+
+	_, writeErr := io.WriteString(f, truncateAtRune(err.Error(), terminationMessageLimit))
+
+	return errors.Join(writeErr, f.Close())
+}
+
+// truncateAtRune returns the longest prefix of s, at most limit bytes, that ends on a rune boundary.
+func truncateAtRune(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+
+	return s[:cut]
 }
 
 func init() {

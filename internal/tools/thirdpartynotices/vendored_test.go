@@ -4,9 +4,13 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// repoRoot is the repository root, seen from this package.
+const repoRoot = "../../.."
 
 // TestVendoredRadixCopiesAreInNotices fails when a tracked directory holds a copy of Radix UI Primitives that
 // THIRD-PARTY-NOTICES does not name, which is how a second vendored copy goes unattributed.
@@ -18,7 +22,7 @@ func TestVendoredRadixCopiesAreInNotices(t *testing.T) {
 	}
 
 	list := exec.Command("git", "ls-files", "-z")
-	list.Dir = "../../.."
+	list.Dir = repoRoot
 
 	out, err := list.Output()
 	if err != nil {
@@ -40,5 +44,54 @@ func TestVendoredRadixCopiesAreInNotices(t *testing.T) {
 		if !strings.Contains(string(notices), d) {
 			t.Errorf("%s is a vendored copy of Radix UI Primitives, which THIRD-PARTY-NOTICES does not name", d)
 		}
+	}
+}
+
+// shimHeader matches the first-line comment a port opens with: "// cmdk 1.1.1 on Preact hooks" or "// Port of sonner 2.0.8 to Preact".
+var shimHeader = regexp.MustCompile(`(?i)^// (?:port of )?([a-z][a-z0-9._-]*) v?[0-9]+\.[0-9]+\.[0-9]+\b`)
+
+// TestShimUpstreamsAreInNotices fails when a file under src/lib/shims names the upstream it ports in its header and
+// THIRD-PARTY-NOTICES does not name that upstream, which is how the cmdk port shipped unattributed.
+// shortcut: it reads only a header that opens "<name> <x.y.z>" or "Port of <name> <x.y.z>" and matches the name, not the path;
+// a port with no such header (next-themes.tsx has none) is invisible here, so drop this for a header every shim must carry.
+func TestShimUpstreamsAreInNotices(t *testing.T) {
+	notices, err := os.ReadFile("../../../THIRD-PARTY-NOTICES")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list := exec.Command("git", "ls-files", "-z", "--", "ui/src/lib/shims", "site/src/lib/shims")
+	list.Dir = repoRoot
+
+	out, err := list.Output()
+	if err != nil {
+		t.Fatalf("git ls-files: %v", err)
+	}
+
+	seen := 0
+	for f := range strings.SplitSeq(string(out), "\x00") {
+		if !strings.HasSuffix(f, ".ts") && !strings.HasSuffix(f, ".tsx") {
+			continue
+		}
+
+		b, err := os.ReadFile(repoRoot + "/" + f)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, l := range strings.SplitN(string(b), "\n", 40) {
+			if m := shimHeader.FindStringSubmatch(l); m != nil {
+				seen++
+				if !strings.Contains(string(notices), m[1]) {
+					t.Errorf("%s names %s as its upstream, which THIRD-PARTY-NOTICES does not name", f, m[1])
+				}
+
+				break
+			}
+		}
+	}
+
+	if seen == 0 {
+		t.Fatal("no shim header names an upstream; the check has nothing to look at")
 	}
 }

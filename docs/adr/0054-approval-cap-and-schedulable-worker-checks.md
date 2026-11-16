@@ -1,6 +1,6 @@
 # 0054. Approving control planes is capped at count+1, and schedulable false needs a worker
 
-Status: Accepted · Date: 2026-10-26 · Design section: Validation, Nodes
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Validation, Nodes
 Decided: The TalosMachine webhook refuses an approval (update to `approved`, or create already `approved`) that would leave more than `spec.controlPlane.count`+1 approved control planes, counted by `deleteguard.CountApprovedControlPlanes`; the TalosCluster webhook refuses `schedulable` turning `"false"` with no approved worker, and the TalosMachine webhook refuses an approved worker leaving (delete, un-approve, re-role, move) when that would leave none; both webhooks now match CREATE/UPDATE as needed, not DELETE only; the race admission cannot close is closed by a controller-side hold of the newest surplus approvals (`ControlPlaneOverCap`)
 
 ## Context

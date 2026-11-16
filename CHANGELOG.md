@@ -370,6 +370,12 @@ command does. Each item is described where it is listed below.
   raises the `InstallerSignatureSkipped` Warning Event, as an Ichor upgrade
   does. The record is replaced by the next upgrade, so it does not outlast one
   (ADR 0122).
+- **`ichor init` finishes when the controller seeded the installation first.** The
+  controller's `Seed` creates the `IchorInstallation` singleton with no installer digest
+  or signature mode, and `init` used to fail on `AlreadyExists`, leaving the object
+  unpinned. `init` now accepts that object and fills in the pin it was given. It refuses,
+  before it writes anything, an object that names another version or manager, or a
+  digest or signature mode that differs from the pin, rather than re-pointing the cluster.
 
 ### Adopt
 
@@ -639,6 +645,18 @@ command does. Each item is described where it is listed below.
   is forbidden` before the new role could take effect. The issuer URL is now read after the
   installer's namespaced Role is in effect, and that Role grants `list` on `TalosClusters`
   in the release's namespace only.
+- **A failed installer Job pauses with the installer's own error.** On failure the
+  installer writes its error to the container's termination message file,
+  `/dev/termination-log`, so the reason survives the pod. The controller reads that message
+  from the Job's pod status, not the pod log, and puts it in the paused operation. A Job
+  whose pod has no termination message keeps the pointer to the pod log.
+- **A failed Cilium Helm Job pauses with its own error too.** The Job's pod carries the
+  run's error as its termination message, and the paused operation names it in place of the
+  pointer to the pod log. A pod with no message keeps the pointer.
+- **The hand-over's failure condition names the same error as the operation.** It read the
+  Job's last log line, while the operation's message carried the termination message. The
+  condition now prefers the termination message, falls back to the last log line, then to the
+  Job's own reason.
 
 ### Storage
 
@@ -685,6 +703,9 @@ command does. Each item is described where it is listed below.
   named the failed evacuation, but nothing returned to the removal until the controller's
   periodic resync, so a machine could stay in deletion until then. The removal now asks to
   be tried again after ten seconds.
+- **The storage calls of an evacuation step keep their own 15-second bound.** They were
+  bounded by `etcdDialTimeout`, so tuning the etcd dial bound moved the storage bound too.
+  They now use `storageCallTimeout`, which is still 15 seconds.
 
 ### Etcd backups and restore
 

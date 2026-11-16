@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"time"
 
@@ -100,6 +101,12 @@ it. 'ichor rotate ca' does all of this itself.`,
 			return fmt.Errorf("--ttl must be between 0 and %s", credentials.MaxLifetime)
 		}
 
+		if o.KubeServer != "" {
+			if err := checkKubeServer(o.KubeServer); err != nil {
+				return err
+			}
+		}
+
 		req := credentialRequest{
 			Cluster: args[0], Namespace: apiOpts.Namespace, IchorNamespace: apiOpts.IchorNamespace,
 			BundleFile: o.Bundle, KubeconfigIn: kubeconfigPath, TalosconfigIn: talosconfigPath,
@@ -145,6 +152,19 @@ it. 'ichor rotate ca' does all of this itself.`,
 
 		return acknowledgeWithChecks(cmd.Context(), k8s, defaultHandoffChecks(), req, files, o.Operation, cmd.ErrOrStderr())
 	},
+}
+
+// checkKubeServer refuses an API server address that is not an https URL. The same rule as init's
+// --kube-api-server-url, except that a path prefix stays allowed.
+// shortcut: syntax only, so a well-formed address for the wrong host is written unchecked; drop when
+// the command can probe the server without a cluster, which --bundle does not have.
+func checkKubeServer(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != schemeHTTPS || u.Hostname() == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return fmt.Errorf("--kube-server %q must be an https URL with a host, for example https://10.0.0.2:6443", raw)
+	}
+
+	return nil
 }
 
 // handoffChecks are the checks made on the written files before the controller is told it may go on.

@@ -904,3 +904,34 @@ func TestCreateCredentialsBundleHelpSaysTheBundleAndAServerAreEnough(t *testing.
 		t.Error("create credentials has no --kube-server flag")
 	}
 }
+
+// A malformed --kube-server is refused where the flag is read: client-go writes any non-empty server
+// into the kubeconfig unchanged, so a typo would come out as a credential that fails only when used.
+func TestCreateCredentialsRefusesAKubeServerThatIsNotAnHTTPSURL(t *testing.T) {
+	f := newCredFixture(t, false, "")
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("TALOSCONFIG", "")
+	createCredentialsCmd.SetContext(context.Background())
+
+	saved := clusterCredentialsOpts
+	t.Cleanup(func() { clusterCredentialsOpts = saved })
+
+	out := t.TempDir()
+	clusterCredentialsOpts.Bundle = saveTestBundle(t, "server-check", f.old, "")
+	clusterCredentialsOpts.TalosEndpoints = []string{testOtherAddr}
+	clusterCredentialsOpts.KubeconfigOut = filepath.Join(out, "kubeconfig")
+	clusterCredentialsOpts.TalosconfigOut = filepath.Join(out, "talosconfig")
+
+	for _, server := range []string{"10.0.0.2:6443", "http://10.0.0.2:6443", "https://", "https://:6443", "https://10.0.0.2:6443 ", "https://10.0.0.2:6443?x=1", "https://user@10.0.0.2:6443"} {
+		clusterCredentialsOpts.KubeServer = server
+		if err := createCredentialsCmd.RunE(createCredentialsCmd, []string{"prod"}); err == nil || !strings.Contains(err.Error(), "--kube-server") {
+			t.Errorf("--kube-server %q: got %v, want a refusal that names --kube-server", server, err)
+		}
+	}
+
+	// A legitimate address with a port, an IPv6 literal and a path prefix must still be accepted.
+	clusterCredentialsOpts.KubeServer = "https://[fd00::1]:6443/k8s"
+	if err := createCredentialsCmd.RunE(createCredentialsCmd, []string{"prod"}); err != nil {
+		t.Errorf("--kube-server %q refused: %v", clusterCredentialsOpts.KubeServer, err)
+	}
+}

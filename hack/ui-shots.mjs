@@ -57,8 +57,9 @@ const AUTH_STATE = (expectText) => `({
 })`
 
 // authProblem names why the page is not the signed-in UI, or returns '' when it is.
-function authProblem(st, expectText, hint) {
+function authProblem(st, expectText, hint, seeded) {
   if (st.signIn) return `the sign-in form is showing (${hint})`
+  if (!st.token && !seeded) return `no ID token was given (${hint})`
   if (!st.token) return `the ID token is gone from sessionStorage: the UI dropped it because the backend refused it (${hint})`
   if (!st.shell) return `the signed-in shell did not render; the page says: "${st.snippet}"`
   if (!st.hasText) return `the backend's data (${expectText}) is not on the page`
@@ -220,7 +221,7 @@ async function main() {
           }
           if (needsSignIn) {
             const st = (await s('Runtime.evaluate', { expression: AUTH_STATE(expectText), returnByValue: true })).result?.value ?? {}
-            const problem = authProblem(st, expectText, hint)
+            const problem = authProblem(st, expectText, hint, !!token)
             if (problem) throw new Error(`FAILED ${p} ${sizeName} ${theme}: ${problem}. No screenshot was written.`)
           }
           const shot = { format: 'png' }

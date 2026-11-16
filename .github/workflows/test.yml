@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release-*"]
   pull_request:
 
 permissions: {}
@@ -18,8 +18,8 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # The README version guard in make test reads the release tags; without them it skips.
-          fetch-tags: true
+          # The README version guard in make test reads the release tags and the history they sit in; in CI it fails without them.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Nix

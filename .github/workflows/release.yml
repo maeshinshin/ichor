@@ -30,6 +30,9 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          # make test runs the README version guard (internal/tools/readmeversion), which reads the release tags and
+          # the history they sit in; a tag push checks out that one tag only.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install Nix

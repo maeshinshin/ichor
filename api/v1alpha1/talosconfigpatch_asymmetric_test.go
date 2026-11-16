@@ -33,8 +33,8 @@ var asymmetricBondSettings = []struct {
 }{
 	{"hardwareAddr", `"hardwareAddr":"LjxNXm9w"`, kindBondConfig, "hardwareAddr"},
 	{"nsIp6Targets", `"nsIp6Targets":["fd00::1"]`, kindBondConfig, "nsIp6Targets"},
-	{"adLACPActive", `"adLACPActive":1`, kindBondConfig, "adLACPActive"},
-	{"missedMax", `"missedMax":2`, kindBondConfig, "missedMax"},
+	{adLACPActiveName, `"adLACPActive":1`, kindBondConfig, adLACPActiveName},
+	{"missedMax", missedMaxJSON, kindBondConfig, "missedMax"},
 	{"up", `"up":true`, kindBondConfig, "up"},
 	{"multicast", `"multicast":true`, kindBondConfig, "multicast"},
 	{"addresses[].routePriority", `"addresses":[{"address":"10.0.0.2/24","routePriority":100}]`, kindBondConfig, "addresses.0.routePriority"},

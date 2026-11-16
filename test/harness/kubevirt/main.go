@@ -86,7 +86,7 @@ spec:
           resources:
             requests:
               storage: %[3]s
-          storageClassName: ceph-block
+          storageClassName: %[5]s
     - metadata:
         name: %[1]s-system
       spec:
@@ -98,7 +98,7 @@ spec:
           resources:
             requests:
               storage: 10Gi
-          storageClassName: ceph-block
+          storageClassName: %[5]s
   template:
     metadata:
       labels:

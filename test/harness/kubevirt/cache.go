@@ -73,9 +73,9 @@ func clonedISO(cache, size string) isoSource {
 	}
 }
 
-// renderVM fills vmManifestTmpl with the VM name, ISO source and harness label value.
+// renderVM fills vmManifestTmpl with the VM name, ISO source, harness label value and StorageClass.
 func renderVM(name, harness string, iso isoSource) string {
-	return fmt.Sprintf(vmManifestTmpl, name, iso.yaml, iso.size, harness)
+	return fmt.Sprintf(vmManifestTmpl, name, iso.yaml, iso.size, harness, kube.StorageClass())
 }
 
 // resolveISO returns the ISO source every VM of this run uses.
@@ -111,7 +111,7 @@ spec:
     resources:
       requests:
         storage: 1Gi
-    storageClassName: ceph-block
+    storageClassName: %s
 `
 
 // ensureBaseCache creates the cache DataVolume if it is missing (kubectl apply is idempotent:
@@ -122,7 +122,7 @@ func ensureBaseCache() (string, error) {
 	name := baseCacheName()
 	started := time.Now()
 
-	if err := kube.Apply(fmt.Sprintf(baseCacheManifestTmpl, name, talosFactorySchematic, talosVersion)); err != nil {
+	if err := kube.Apply(fmt.Sprintf(baseCacheManifestTmpl, name, talosFactorySchematic, talosVersion, kube.StorageClass())); err != nil {
 		return "", fmt.Errorf("creating the base cache DataVolume %s: %w", name, err)
 	}
 

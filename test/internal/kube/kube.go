@@ -38,10 +38,22 @@ const (
 	ContextEnv = "ICHOR_E2E_KUBE_CONTEXT"
 	// Namespace is the only namespace the harness may delete from.
 	Namespace = "ichor-e2e"
+	// StorageClassEnv overrides the StorageClass the harness's DataVolumes and PVCs request.
+	StorageClassEnv = "ICHOR_E2E_STORAGE_CLASS"
+
+	defaultStorageClass = "ceph-block"
 
 	flagContext    = "--context"
 	flagKubeconfig = "--kubeconfig"
 )
+
+// StorageClass returns the StorageClass the harness requests: ICHOR_E2E_STORAGE_CLASS, else the default.
+func StorageClass() string {
+	if c := strings.TrimSpace(os.Getenv(StorageClassEnv)); c != "" {
+		return c
+	}
+	return defaultStorageClass
+}
 
 // flagsWithValue are the kubectl flags (as separate args) whose next arg is a value, so
 // verb detection does not mistake that value for the verb.

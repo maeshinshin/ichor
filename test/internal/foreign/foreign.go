@@ -201,7 +201,7 @@ spec:
           resources:
             requests:
               storage: %[3]s
-          storageClassName: ceph-block
+          storageClassName: %[7]s
     - metadata:
         name: %[1]s-system
         labels:
@@ -215,7 +215,7 @@ spec:
           resources:
             requests:
               storage: 10Gi
-          storageClassName: ceph-block
+          storageClassName: %[7]s
   template:
     metadata:
       labels:
@@ -266,7 +266,7 @@ func isoSource(version string) (src, size string) {
 
 func renderVM(name, prefix, mem, version string, dataDisk bool) string {
 	src, size := isoSource(version)
-	m := fmt.Sprintf(vmTmpl, name, src, size, prefix, Label, mem)
+	m := fmt.Sprintf(vmTmpl, name, src, size, prefix, Label, mem, kube.StorageClass())
 	if !dataDisk {
 		return m
 	}
@@ -283,9 +283,9 @@ func renderVM(name, prefix, mem, version string, dataDisk bool) string {
           resources:
             requests:
               storage: 3Gi
-          storageClassName: ceph-block
+          storageClassName: %[4]s
   template:
-`, name, Label, prefix)
+`, name, Label, prefix, kube.StorageClass())
 	m = strings.Replace(m, "  template:\n", dv, 1)
 	m = strings.Replace(m, "              bootOrder: 2\n", "              bootOrder: 2\n            - name: data\n              disk:\n                bus: virtio\n", 1)
 	return m + "        - name: data\n          dataVolume:\n            name: " + name + "-data\n"

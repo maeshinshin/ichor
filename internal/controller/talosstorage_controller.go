@@ -95,10 +95,6 @@ type TalosStorageReconciler struct {
 	// start an informer on a Longhorn kind whose CRD may not exist.
 	APIReader client.Reader
 
-	// LonghornNamespace is where the storage system's settings live; defaults to
-	// defaultLonghornNamespace.
-	LonghornNamespace string
-
 	// ControllerNamespace is where registry auth Secrets are read.
 	ControllerNamespace string
 }
@@ -331,21 +327,16 @@ func (r *TalosStorageReconciler) systemCondition(
 		return cond, err
 	}
 
-	ns := r.LonghornNamespace
-	if ns == "" {
-		ns = defaultLonghornNamespace
-	}
-
 	var setting unstructured.Unstructured
 	setting.SetGroupVersionKind(longhornSettingGVK)
 
-	err = r.APIReader.Get(ctx, types.NamespacedName{Namespace: ns, Name: longhornCreateDefaultDiskLabeledNodes}, &setting)
+	err = r.APIReader.Get(ctx, types.NamespacedName{Namespace: defaultLonghornNamespace, Name: longhornCreateDefaultDiskLabeledNodes}, &setting)
 
 	switch {
 	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
 		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageSystemAbsent
 		cond.Message = fmt.Sprintf("the storage system is not installed (no %s setting in namespace %q)",
-			longhornCreateDefaultDiskLabeledNodes, ns)
+			longhornCreateDefaultDiskLabeledNodes, defaultLonghornNamespace)
 
 		return cond, nil
 	case err != nil:

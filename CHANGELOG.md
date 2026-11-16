@@ -146,6 +146,10 @@ command does. Each item is described where it is listed below.
   (Cluster, ADR 0163).
 - **Applying the CRDs yourself** with `kubectl apply` needs `--server-side`;
   they are too large for client-side apply (Typed configuration).
+- **A drain no longer goes ahead on a node that a Longhorn replica still names,
+  where Longhorn is installed outside `longhorn-system`.** Ichor does not request
+  eviction of such a replica in that install, so it has to leave the node by other
+  means first (Operations).
 
 ### CLI
 - **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The
@@ -512,6 +516,15 @@ command does. Each item is described where it is listed below.
   Reset says the wipe is unconfirmed until the node answers in maintenance mode.
 
 ### Operations
+- **A drain is refused while a Longhorn replica still names the node, even when
+  Longhorn is installed outside `longhorn-system`.** Since v0.1.2 the evacuation
+  step found no Longhorn Node in that case and read it as nothing to evacuate. It
+  counted replicas only in `longhorn-system`, reported the node evacuated, and the
+  drain went ahead with replicas still on it. The step now counts replicas in every
+  namespace and refuses while one names the node. With none naming it, the node is
+  still nothing to evacuate. Ichor does not request eviction outside
+  `longhorn-system`, so a replica still on the node has to leave it some other way
+  before the drain goes ahead.
 - **A registry that cannot be read is no longer reported as an unsigned image.**
   An unreachable registry, or one that refuses the signature manifest, used to
   pause with `InstallerImageUnverified` and a message saying the image "is not
@@ -889,6 +902,9 @@ command does. Each item is described where it is listed below.
   disk is not Ready, so it cannot tell a finished eviction from a disk that went away,
   and that Longhorn's node webhook judges the object a write leaves, not the number
   of writes. Ichor still writes the two eviction values as two updates, in order.
+- **ADR 0025 and the storage design no longer say that a hook can evict one disk.**
+  Only whole-node eviction is built: nothing writes a Longhorn disk entry, and
+  per-disk eviction is recorded as not built, with no promise that it will be.
 
 - The guides, concepts, getting started, the design document, the diagrams and
   the README name the verb-first commands, and say that `adopt` takes Talos

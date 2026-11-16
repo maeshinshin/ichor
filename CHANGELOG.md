@@ -816,9 +816,18 @@ command does. Each item is described where it is listed below.
   old address stops working.
 - ADRs name `ichor delete node`, `ichor resume operation` and `ichor upgrade
   ichor` where they named the removed `ichor node reset`, `ichor operation
-  retry` and `ichor self-upgrade`, and a test keeps those three out. Commit
+  retry` and `ichor self-upgrade`, and a test keeps those three out. The same
+  test keeps `ichor gitops export`, `gitops handoff`, `images list`, `stack
+  apply` and `machine reprovision` out of every ADR except those that decided,
+  built or recorded the removal of that command. Commit
   references in ADRs and tests point at commits on `main`, not at the earlier
   copies of them.
+- The documentation home page, the architecture overview, the security concept
+  page and `CLAUDE.md` say that the controller is the only writer to a node
+  apart from `init`, `restore cluster` and `reclaim node --talosconfig`, and a
+  test fails for any document that claims a sole writer without naming all
+  three. ADRs 0014, 0047, 0076, 0085, 0089, 0106 and 0118 are amended where
+  they name `restore --recover-cluster` or `restore --live`.
 - A test in `pkg/release` fails when a guide states a Talos, Kubernetes or
   Cilium version that is not the one `pkg/release` pins.
 - The architecture page on nodes states the removal rules and no longer carries

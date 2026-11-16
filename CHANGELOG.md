@@ -16,6 +16,8 @@ configuration). With `--endpoint-type vip`, each control plane now holds the
 endpoint address on its primary link, and `ichor init` takes the first node's
 network for it.
 
+v0.3.0 is the last release with changes of this size. No further large change is planned after it.
+
 ### Upgrade notes
 
 What in this release can refuse something that used to work, or change what a
@@ -159,6 +161,16 @@ command does. Each item is described where it is listed below.
   forbidden`.** The installer's own Role now grants `list` on `TalosClusters` in the
   release's namespace, and the installer reads the issuer URL after that Role is in
   effect. An upgrade that stopped with that message can be run again (Operations).
+
+- **`TalosStorage` is renamed `TalosStoragePreset`, and the installer refuses to install
+  while any `TalosStorage` object remains anywhere in the cluster.** This is a breaking
+  change in one release, with no conversion: this release does not read or copy the old
+  kind. Before it applies the release's own objects, the installer lists `TalosStorage`
+  objects in every namespace and stops with an error that gives their count and
+  namespaces; it refuses rather than warns. A Helm install or upgrade runs the same
+  check as a chart hook. To move an object, recreate it as a `TalosStoragePreset` with
+  the same name, namespace and spec, confirm the node configuration is what you expect,
+  delete the `TalosStorage`, and run the install again (Storage, ADR 0168).
 
 ### CLI
 - **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The

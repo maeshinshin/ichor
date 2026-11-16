@@ -1,6 +1,6 @@
 # 0080. Reboot-requiring configuration changes roll out through an explicit `config` operation
 
-Status: Accepted · Date: 2026-10-26 · Design section: Configuration reconcile (step 4), Upgrades
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Configuration reconcile (step 4), Upgrades
 
 Decided: a new `TalosOperation` kind `config` applies the pending reboot-requiring changes of the approved machines, one at a time (control planes first with an etcd membership check before each, then workers within `maxUnavailable`, the controller's own node last), staged and then rebooted; the machine reconciler only reports them, now naming the fields, and never reboots a node
 
@@ -160,3 +160,7 @@ A worker has no kube-apiserver, so on a worker the class is applied like a safe 
 
 Known limits: the probe assumes the local API port 6443. The container-ID signal is the kubelet's view and can lag; the one-minute fallback covers a change that never alters the pod.
 
+
+## Amendment (2026-11-16): the marker is set to Converged, not cleared
+
+Step 6 says the rollout will "clear the marker". It does not remove the `ConfigRollout` condition. When a node is verified on the rendered configuration, whether after a reboot or after a kube-apiserver restart, `setRollout` rewrites the condition to status `False` with reason `Converged` (message "running the rendered configuration", or "... kube-apiserver is ready" after a restart). The condition stays on the `TalosMachine` in that state until the next rollout sets it `True` again, so a machine that has ever been rolled out carries `ConfigRollout=False/Converged`. The executor reads only the `True` state as a rollout in flight, so `False/Converged` and an absent condition both mean none is. The reason is part of the observable status and is not renamed; the CRD's description of `status.conditions` now says what it means.

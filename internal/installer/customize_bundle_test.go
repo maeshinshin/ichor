@@ -37,7 +37,7 @@ func realBundle(t *testing.T) (manifest, policies []*unstructured.Unstructured) 
 	read := func(name string) []*unstructured.Unstructured {
 		b, err := os.ReadFile(filepath.Join("..", "..", "dist", name))
 		if err != nil {
-			t.Skipf("%v; run `make build-installer`", err)
+			t.Fatalf("%v: run make build-installer first (make test runs it)", err)
 		}
 
 		objs, err := Decode(b)

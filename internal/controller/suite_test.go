@@ -18,18 +18,13 @@ package controller
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"golang.org/x/mod/modfile"
-	"golang.org/x/mod/semver"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/envtestbin"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -88,10 +84,12 @@ var _ = BeforeSuite(func() {
 		ErrorIfCRDPathMissing: false,
 	}
 
-	// Retrieve the first found binary directory to allow running tests from IDEs
-	if getFirstFoundEnvTestBinaryDir() != "" {
-		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
+	// Retrieve the binary directory for the Makefile's Kubernetes version, to allow running tests from IDEs
+	dir, err := envtestbin.Dir(filepath.Join("..", ".."))
+	if err != nil {
+		logf.Log.Error(err, "no envtest binaries for the Makefile's Kubernetes version under bin/k8s")
 	}
+	testEnv.BinaryAssetsDirectory = dir
 
 	// cfg is defined in this file globally.
 	cfg, err = testEnv.Start()
@@ -114,67 +112,3 @@ var _ = AfterSuite(func() {
 		return testEnv.Stop()
 	}, time.Minute, time.Second).Should(Succeed())
 })
-
-// getFirstFoundEnvTestBinaryDir returns the bin/k8s directory of the Kubernetes minor that the
-// Makefile's ENVTEST_K8S_VERSION names, the highest patch of it, as `setup-envtest use` would pick.
-// It returns "" when there is none: envtest then fails and names KUBEBUILDER_ASSETS, rather than
-// running another minor (1.34.0 sorts before 1.36.2, so the name order is not a choice of version).
-//
-// This function streamlines the process by finding the required binaries, similar to
-// setting the 'KUBEBUILDER_ASSETS' environment variable. To ensure the binaries are
-// properly set up, run 'make setup-envtest' beforehand.
-func getFirstFoundEnvTestBinaryDir() string {
-	basePath := filepath.Join("..", "..", "bin", "k8s")
-	entries, err := os.ReadDir(basePath)
-	if err != nil {
-		logf.Log.Error(err, "Failed to read directory", "path", basePath)
-		return ""
-	}
-	want, err := envTestMinor(filepath.Join("..", "..", "go.mod"))
-	if err != nil {
-		logf.Log.Error(err, "Failed to read the Kubernetes version from go.mod")
-		return ""
-	}
-	best, bestVer := "", ""
-	for _, entry := range entries {
-		ver, _, _ := strings.Cut(entry.Name(), "-")
-		v := "v" + ver
-		if !entry.IsDir() || semver.MajorMinor(v) != want || (best != "" && semver.Compare(v, bestVer) <= 0) {
-			continue
-		}
-		best, bestVer = entry.Name(), v
-	}
-	if best == "" {
-		return ""
-	}
-	return filepath.Join(basePath, best)
-}
-
-// envTestMinor returns the minor of the Kubernetes version the Makefile's ENVTEST_K8S_VERSION names, as
-// "v1.36". The Makefile takes it from the k8s.io/api version in go.mod (v0.36.6 gives 1.36), and so does
-// this, following a replace the way `go list -m` does.
-func envTestMinor(goMod string) (string, error) {
-	data, err := os.ReadFile(goMod)
-	if err != nil {
-		return "", err
-	}
-	f, err := modfile.Parse(goMod, data, nil)
-	if err != nil {
-		return "", err
-	}
-	var v string
-	for _, r := range f.Require {
-		if r.Mod.Path == "k8s.io/api" {
-			v = r.Mod.Version
-		}
-	}
-	for _, r := range f.Replace {
-		if r.Old.Path == "k8s.io/api" {
-			v = r.New.Version
-		}
-	}
-	if !semver.IsValid(v) {
-		return "", fmt.Errorf("k8s.io/api in %s has no version to read the Kubernetes minor from (%q)", goMod, v)
-	}
-	return "v1." + strings.TrimPrefix(semver.MajorMinor(v), "v0."), nil
-}

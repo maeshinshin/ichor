@@ -33,6 +33,8 @@ export const en = {
   'version.unverified': 'Installer not verified',
   'version.unverifiedLast': 'The signature of the installer image {digest} was not checked.',
   'version.unverifiedNext': 'The next Ichor upgrade will not check the signature of the installer image.',
+  'version.reload': 'A newer Ichor runs on this cluster. Reload to get the page that matches it.',
+  'version.reloadNow': 'Reload',
   'version.updateHint': 'This cluster is set to run Ichor {version}. Start "Upgrade Ichor" on a cluster page to move to it.',
 
   'app.signingIn': 'Signing in...',

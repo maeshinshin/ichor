@@ -14,6 +14,8 @@ const proxy = api ? { '/ichor.': proxyTo, '/auth/config': proxyTo } : undefined
 export default defineConfig({
   server: { proxy },
   preview: { proxy },
+  // The version the bundle was built from; the backend's X-Ichor-Version header is compared with it.
+  define: { __ICHOR_VERSION__: JSON.stringify(process.env.ICHOR_VERSION || 'dev') },
   plugins: [
     preact(),
     tailwindcss(),

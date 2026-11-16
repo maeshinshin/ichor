@@ -12,6 +12,8 @@ import { UserService } from '@/gen/ichor/v1alpha1/user_pb'
 import { CniService } from '@/gen/ichor/v1alpha1/cni_pb'
 import { ReclaimService } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { SettingsService } from '@/gen/ichor/v1alpha1/settings_pb'
+import { uiIsStale } from '@/lib/ichorVersion'
+import { notifyStale } from '@/lib/notify'
 
 // "the browser talks only to the backend" (architecture.md, "CLI and UI"):
 // the transport's baseUrl is this page's own origin, never a third-party
@@ -44,7 +46,14 @@ const withToken: Interceptor = (next) => async (req) => {
   }
 }
 
-const transport = createConnectTransport({ baseUrl: window.location.origin, interceptors: [withToken] })
+// withVersion asks for a reload when the backend that answered runs another Ichor than this bundle.
+const withVersion: Interceptor = (next) => async (req) => {
+  const res = await next(req)
+  if (uiIsStale(__ICHOR_VERSION__, res.header.get('X-Ichor-Version'))) notifyStale()
+  return res
+}
+
+const transport = createConnectTransport({ baseUrl: window.location.origin, interceptors: [withVersion, withToken] })
 
 export const clusterClient = createClient(ClusterService, transport)
 export const machineClient = createClient(MachineService, transport)

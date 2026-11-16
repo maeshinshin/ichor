@@ -23,3 +23,13 @@ export function notifyWarning(message: string): void {
 export function notifyWrite(done: Key, params?: Record<string, string | number>): void {
   toast.success(t(done, params))
 }
+
+// notifyStale asks for a reload when the backend runs another Ichor than this page was built from. One id,
+// so the prompt shows once per page load, and it stays until the person acts on it.
+export function notifyStale(): void {
+  toast(t('version.reload'), {
+    id: 'ichor-stale',
+    duration: Infinity,
+    action: { label: t('version.reloadNow'), onClick: () => window.location.reload() },
+  })
+}

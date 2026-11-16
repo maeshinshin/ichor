@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { installerUnverified, releaseNotice, versionLabel } from './ichorVersion.ts'
+import { installerUnverified, releaseNotice, uiIsStale, versionLabel } from './ichorVersion.ts'
 
 test('shows nothing without an installation or a reported version', () => {
   assert.equal(versionLabel(null), null)
@@ -44,4 +44,13 @@ test('says nothing about a verified installer image, and names an unchecked one 
     digest: '',
     pending: true,
   })
+})
+
+test('a page is stale only when its bundle and the backend are both versioned and differ', () => {
+  assert.equal(uiIsStale('v0.1.0', 'v0.2.0'), true)
+  assert.equal(uiIsStale('v0.2.0', 'v0.2.0'), false)
+  // No header from an older backend, and an unversioned build, are not a judgement.
+  assert.equal(uiIsStale('v0.1.0', null), false)
+  assert.equal(uiIsStale('dev', 'v0.2.0'), false)
+  assert.equal(uiIsStale('v0.1.0', 'dev'), false)
 })

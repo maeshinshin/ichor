@@ -48,3 +48,10 @@ export function installerUnverified(
   if (!last && !info.installerSignatureSkip) return null
   return { digest: last ? info.installerDigest : '', pending: info.installerSignatureSkip }
 }
+
+// uiIsStale says the page runs a bundle built from another Ichor version than the backend that answered it.
+// A missing header (an older backend) or an unversioned build ("dev") is no judgement, as in the CLI's skew check.
+export function uiIsStale(bundle: string, served: string | null): boolean {
+  if (served === null || bundle === 'dev' || served === 'dev') return false
+  return bundle !== served
+}

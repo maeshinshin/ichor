@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/values"
 )
@@ -32,6 +34,11 @@ type KubePrism struct {
 	Port int
 }
 
+// gatewayAPIMinimum is the Gateway API release Cilium 1.20 needs at minimum: "Cilium's Gateway API support now
+// requires Gateway API v1.6.1 at a minimum to work correctly" (docs.cilium.io/en/stable/operations/upgrade, 1.20
+// Upgrade Notes, Action Required). ChartVersion is 1.20.4; a new Cilium minor sets its own minimum.
+const gatewayAPIMinimum = "v1.6.1"
+
 // ValidationContext carries what the caller knows. A nil fact is unknown and
 // its guard passes: the webhook cannot see the cluster. The controller
 // re-checks with live facts before every Job; internal/cnifacts builds them.
@@ -43,6 +50,8 @@ type ValidationContext struct {
 
 	// GatewayAPICRDs is whether the Gateway API CRDs exist in the cluster.
 	GatewayAPICRDs *bool
+	// GatewayAPIRelease is the bundle-version annotation of the gateways CRD, "" when it records none.
+	GatewayAPIRelease string
 	// ForwardKubeDNSToHost is machine.features.hostDNS.forwardKubeDNSToHost
 	// in the effective machine config.
 	ForwardKubeDNSToHost *bool
@@ -117,6 +126,21 @@ func guards(effective map[string]any, c ValidationContext) error {
 	if on, _ := values.Get(effective, "gatewayAPI.enabled"); on == true &&
 		c.GatewayAPICRDs != nil && !*c.GatewayAPICRDs {
 		errs = append(errs, errors.New("gatewayAPI.enabled=true needs the Gateway API CRDs installed first"))
+	}
+
+	// An old or unrecorded release passes only when the CRDs are unknown: the guard names what it found.
+	if on, _ := values.Get(effective, "gatewayAPI.enabled"); on == true &&
+		c.GatewayAPICRDs != nil && *c.GatewayAPICRDs &&
+		(c.GatewayAPIRelease == "" || semver.Compare(c.GatewayAPIRelease, gatewayAPIMinimum) < 0) {
+		found := "the gateways CRD records no bundle-version"
+		if c.GatewayAPIRelease != "" {
+			found = "the gateways CRD is at " + c.GatewayAPIRelease
+		}
+
+		errs = append(errs, fmt.Errorf("gatewayAPI.enabled=true needs Gateway API %s or newer on the cluster: %s, "+
+			"and Cilium 1.20 needs at least %s (docs.cilium.io/en/stable/operations/upgrade, 1.20 Upgrade Notes); "+
+			"see docs/guides/lan-load-balancers.md, \"Gateway API on a cluster init did not set up\"",
+			gatewayAPIMinimum, found, gatewayAPIMinimum))
 	}
 
 	// Cilium's Gateway API prerequisites: "Cilium must be configured with the kube-proxy replacement, using

@@ -114,7 +114,23 @@ func TestValidateValues(t *testing.T) {
 		}), user: gw, wantErr: []string{"Gateway API CRDs"}},
 		{name: "gateway API with CRDs", ctx: with(replaced, func(c *ValidationContext) {
 			c.GatewayAPICRDs = ptr.To(true)
+			c.GatewayAPIRelease = gatewayAPIMinimum
 		}), user: gw},
+		{name: "gateway API below the Cilium 1.20 minimum is refused", ctx: with(replaced, func(c *ValidationContext) {
+			c.GatewayAPICRDs = ptr.To(true)
+			c.GatewayAPIRelease = "v1.5.1"
+		}), user: gw, wantErr: []string{"v1.5.1", gatewayAPIMinimum}},
+		{name: "gateway API at the Cilium 1.20 minimum passes", ctx: with(replaced, func(c *ValidationContext) {
+			c.GatewayAPICRDs = ptr.To(true)
+			c.GatewayAPIRelease = gatewayAPIMinimum
+		}), user: gw},
+		{name: "gateway API at a later release passes", ctx: with(replaced, func(c *ValidationContext) {
+			c.GatewayAPICRDs = ptr.To(true)
+			c.GatewayAPIRelease = "v1.6.3"
+		}), user: gw},
+		{name: "gateway API CRD recording no release is refused", ctx: with(replaced, func(c *ValidationContext) {
+			c.GatewayAPICRDs = ptr.To(true)
+		}), user: gw, wantErr: []string{"bundle-version", gatewayAPIMinimum}},
 		{name: "gateway API, CRDs unknown passes", ctx: replaced, user: gw},
 		// Cilium's Gateway API prerequisites (docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api):
 		// "Cilium must be configured with the kube-proxy replacement, using kubeProxyReplacement=true".

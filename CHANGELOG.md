@@ -831,6 +831,13 @@ command does. Each item is described where it is listed below.
   prints the size and the headroom on every run. CI runs it with the tests.
 - `make remote-gate` fails when `GATE_NAMESPACE` is unset. The Makefile supplied
   a default, which made the script's own check unreachable.
+- `make docs-check` runs `make docs-audit` first, which fails on a high or
+  critical advisory in the docs site's production dependencies, as the admin UI's
+  audit does. `npm ci` no longer prints its own count for the site. The site pins
+  `postcss-selector-parser` and `minimatch` to their patched versions with
+  `overrides`, which cleared five of the eight advisories `npm ci` reported; the
+  rest are `deepmerge`, which has no fixed version, and two packages that depend on
+  it, all reached only through the `shadcn` command line tool.
 - The Makefile's `go-install-tool` rebuilds an installed tool when the Go that
   built it is not the Go in use. Outside `nix develop`, where the shell's Go is
   older, the first `make` after this rebuilds all four installed tools.

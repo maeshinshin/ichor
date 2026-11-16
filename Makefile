@@ -136,6 +136,9 @@ vet: ## Run go vet against code.
 	# file is never type-checked by a plain "go vet ./..." (or "go build"/"go test"). This
 	# is the one place that compiles it, so a syntax or type error in it is still caught.
 	go vet -tags ichorui_rbac ./internal/uiapi/...
+	# The e2e tree is behind the e2e tag, so a plain "go vet ./..." never type-checks it. A call
+	# that no longer matches a helper's signature fails here, not on a cluster run.
+	go vet -tags e2e ./test/...
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest build-installer ## Run tests.

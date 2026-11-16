@@ -66,10 +66,17 @@ func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, ob
 	return v.validate(ctx, obj)
 }
 
-// validate runs the conversion of spec.config, the Talos API access rule, then the dry render.
+// validate runs the conversion of spec.config, the bond rule, the Talos API access rule, then the dry render.
 func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
 	// spec.config must convert; a machine on an older Talos version is checked by the dry render below.
-	if _, err := p.Spec.EffectiveDocuments(true); err != nil {
+	docs, err := p.Spec.EffectiveDocuments(true)
+	if err != nil {
+		return nil, err
+	}
+
+	// A bond written in both spellings is refused here, not in the renderer: an object stored before the rule
+	// still renders, and adopt, which renders a node's own bonds, is not refused by it.
+	if err := ichorv1alpha1.CheckBondSpellings(docs); err != nil {
 		return nil, err
 	}
 

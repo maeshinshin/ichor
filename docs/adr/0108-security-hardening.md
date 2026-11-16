@@ -344,3 +344,13 @@ That webhook check is not an independent guard against the ServiceAccount. It as
 With sign-in forced (ADR 0094, same amendment), `readOnlyProcedures` is removed too: nothing is served to an anonymous caller, and the interceptor without an authenticator refuses every call, so a new RPC cannot be reachable by default.
 
 The ServiceAccount keeps its other write verbs (`create`, `update` and `delete` on `talosoperations`, `update` on `talosmachines` and `ichorinstallations/settings`). They were granted for the same reason, and what ichor-ui serves without a sign-in only reads. Narrowing them is a separate change.
+
+## Amendment (2026-11-16): the ServiceAccount holds no write verb on the CRs a user changes
+
+The paragraph above is superseded: the narrowing it deferred is built. It was deferred because the ServiceAccount was the caller of the writes in the open mode, and that mode is removed (ADR 0094). Every RPC now carries a signed-in user, and `cl(ctx)` makes each write as that user, by impersonation, so the user's own RBAC and the validating webhook judge it, and the ServiceAccount is not its caller.
+
+The ServiceAccount's role (`internal/uiapi/rbac_markers.go`, generated into `config/rbac/ichor-ui/role.yaml` and mirrored by the chart's `ichor-ui-role.yaml` and `ichor-ui-secrets-role.yaml`) no longer holds: `update` on `talosclusters`, `ichorinstallations` and `talosmachines`; `update` on `talosetcdbackups`; `create`, `update` and `delete` on `talosoperations` and `talosconfigpatches`; `update` on `ichorinstallations/settings` (the rule is gone); `create`, `update` and `delete` on `machinereclaims`; and `update` on the `ichor-user-credentials` Secret. Reads are unchanged.
+
+It keeps the writes it makes itself: `create` on Events (an override or a download is recorded), `create` and `get` on `taloscredentialrequests` (it asks the controller for a certificate or a cluster's public facts), `issue` on `talosclusters/public` and `talosclusters/node-reader`, `patch` on the `ichor-user-credentials` Secret, and `create` on the reclaim Secret in `ichor-system`. The metrics filter's `tokenreviews` and `subjectaccessreviews` `create` stay.
+
+Each write removed above was already made through `cl(ctx)`, so as the signed-in user; the grant only mattered for a request with no identity, which sign-in now refuses. Removing it changes which identity the write is judged as, and nothing else.

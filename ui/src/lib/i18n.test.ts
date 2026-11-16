@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { timestampFromDate, type Timestamp } from '@bufbuild/protobuf/wkt'
 import { enumLabel } from './enum.ts'
@@ -69,4 +70,23 @@ test('usage shows used of total, and a dash when the total or the sample is unkn
   assert.equal(formatCores(1.234, true), '1.23')
   assert.equal(formatCores(0, false), '-')
   assert.equal(formatCores(-24.99, true), '-')
+})
+
+// The UI's own source, test files left out, as [path under src, text].
+const srcRoot = new URL('../', import.meta.url)
+const sources = (readdirSync(srcRoot, { recursive: true }) as string[])
+  .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+  .map((f) => [f, readFileSync(new URL(f, srcRoot), 'utf8')] as const)
+
+test('the overview node count is read from overview.nodesReady, and the table defines that key', () => {
+  assert.equal(typeof en['overview.nodesReady'], 'string')
+  const overview = sources.find(([f]) => f === 'pages/Overview.tsx')?.[1] ?? ''
+  assert.match(overview, /\bt\('overview\.nodesReady'/)
+})
+
+test('every literal t(\'key\') call in the UI names a key the table defines', () => {
+  // shortcut: reads only literal single-quoted t('...') calls; a key built from a template string (ops.start.${kind}) or carried as data (labelKey, a label field) is not seen. Replace with a real call-site extractor when a reviewer cannot check those by eye.
+  const calls = sources.flatMap(([, text]) => [...text.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))
+  assert.notEqual(calls.length, 0)
+  assert.deepEqual([...new Set(calls)].filter((k) => !keys.includes(k as Key)), [])
 })

@@ -620,8 +620,17 @@ ui-shots: ## Screenshot UI pages (desktop+phone, light+dark): make ui-shots OUT=
 # a release tag vX.Y.Z); docs-site-all builds them all.
 
 .PHONY: docs-install
-docs-install: ## Install the docs site's dependencies (npm ci).
-	cd site && npm ci --ignore-scripts
+docs-install: ## Install the docs site's dependencies (npm ci; docs-audit reports advisories, so npm ci's own count is off).
+	cd site && npm ci --ignore-scripts --no-audit
+
+# Production dependencies only, high and above, as the ui job in test.yml does: the build runs Astro and
+# Tailwind, which are production dependencies here, and devDependencies (the shadcn CLI) never run in CI.
+# Accepted, below the threshold and dev-only: deepmerge 4.3.1 (GHSA-gcqx-w48m-w2h4, no fixed version) via
+# shadcn, which runs only on the maintainer's machine when a component is added. site/package.json
+# overrides pin postcss-selector-parser and minimatch to their patched versions under their parents.
+.PHONY: docs-audit
+docs-audit: ## Fail on a high or critical advisory in the docs site's production dependencies.
+	cd site && npm audit --omit=dev --audit-level=high
 
 .PHONY: docs-diagrams
 docs-diagrams: ## Re-export the draw.io diagrams in docs/images (NAME.light.drawio.svg is the source) as the light and dark SVG pair: make docs-diagrams [SOURCE=docs/images/NAME.light.drawio.svg].
@@ -644,7 +653,7 @@ docs-preview: ## Serve site/dist under its base path, as GitHub Pages would (run
 	cd site && npm run preview
 
 .PHONY: docs-check
-docs-check: docs-site-all ## Build all versions of the docs site, then drive them in headless Chromium (search, sidebar, links, Copy page, version switcher and banner, phone width): make docs-check OUT=.docs-shots.
+docs-check: docs-audit docs-site-all ## Build all versions of the docs site, then drive them in headless Chromium (search, sidebar, links, Copy page, version switcher and banner, phone width): make docs-check OUT=.docs-shots.
 	node hack/docs-shots.mjs "$(or $(OUT),.docs-shots)" site/dist-all
 
 include test/harness/harness.mk

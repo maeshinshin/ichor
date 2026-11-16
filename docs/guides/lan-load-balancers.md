@@ -41,12 +41,13 @@ same values.
 does not install the Gateway API CRDs, and it refuses `gatewayAPI.enabled` until
 the `gateways` CRD exists. Install them yourself, then turn the setting on:
 
-1. Apply the seven CRDs from Gateway API v1.6.1, the release Cilium 1.20 requires
+1. Apply the seven CRDs from Gateway API v1.6.3, the release Cilium's install page
+   points at; v1.6.1 is the floor Cilium 1.20 requires
    at minimum (Cilium's Gateway API documentation):
 
    ```sh
    for crd in backendtlspolicies gatewayclasses gateways grpcroutes httproutes referencegrants tlsroutes; do
-     kubectl apply --server-side -f "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_${crd}.yaml"
+     kubectl apply --server-side -f "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.3/config/crd/standard/gateway.networking.k8s.io_${crd}.yaml"
    done
    ```
 
@@ -57,12 +58,13 @@ the `gateways` CRD exists. Install them yourself, then turn the setting on:
    whole layer of Cilium's values, so start from `ichor get cni-values` and keep
    what is already there.
 
-Ichor does not check the CRDs' release or their other six members. It checks only
-that the `gateways` CRD exists, so a set at an older release passes the check, and
-Cilium 1.20 does not support it. If you have `TLSRoute` objects at `v1alpha2`, use
-the experimental `TLSRoute` CRD from v1.6.1 instead of the standard one, as Cilium's
-upgrade notes say, or those objects become unreadable. Ichor never deletes or
-upgrades CRDs it did not install.
+Ichor checks the release of the `gateways` CRD: it must be v1.6.1 or newer, the
+minimum Cilium 1.20's upgrade notes give, and a CRD that records no release is
+refused. Ichor does not check the other six CRDs, so a set with one of them
+missing still passes the check, and Cilium then fails later. If you have
+`TLSRoute` objects at `v1alpha2`, use the experimental `TLSRoute` CRD instead of
+the standard one, as Cilium's upgrade notes say, or those objects become
+unreadable. Ichor never deletes or upgrades CRDs it did not install.
 
 ## What you write
 

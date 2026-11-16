@@ -657,6 +657,16 @@ command does. Each item is described where it is listed below.
   ichor-ui's role and the CRDs are unchanged. `KubeStaticPodConfig` has a row for the
   collection and one for its key, and none for the fields of the `Pod` inside it.
   The Config column of the patch list shows the sections a patch sets.
+- The Configuration page has a tree of `spec.config` beside the search. Each level
+  opens under its parent, a map asks for the name of each entry, and a list takes
+  its first item, with a note that a second item goes in the JSON box.
+- Choosing a setting in the patch editor names what its parent still needs. The
+  Impact card lists the required settings the parent lacks, and Save stays off until
+  each one is set. Before, a missing parent was created silently. A value that stands
+  in a setting's way, such as a parent that is not an object, is kept, and the setting
+  is refused with its path instead of replacing the value. The required check reads
+  the schema's `required` lists only, so a rule that Talos checks at render time is
+  not checked here; the server still checks on save.
 - `PatchService` carries a patch's `spec.config` as JSON in `Patch.config`, and no
   longer converts to and from Talos documents. `Patch.documents` is deprecated and
   never set (see the upgrade notes). `ichor get patches` lists the sections of a patch's
@@ -889,6 +899,18 @@ command does. Each item is described where it is listed below.
   Each page shows the interactive, `init.yaml` and flag forms as its sections.
   Getting started is one page per step, and the architecture reference is one
   page per section.
+- Four guides are sections now, not single long pages, and each has a diagram.
+  Install with Helm, Adopt a cluster, Hardening and Users and login keep an
+  orientation page with the overview, the list of their pages and the path drawn:
+  the install path, the five adoption phases, what each hardening option does to the
+  nodes, and the sign-in path. The steps and options are pages under
+  `install-with-helm/`, `adopt-a-cluster/`, `hardening/` and `users-and-login/`. The
+  anchors other pages link to stay on the orientation pages: `#network-policies` and
+  `#the-installer-image-on-an-upgrade` on Install with Helm,
+  `#what-you-have-in-front-of-you` and `#add-a-machine-that-is-already-in-the-cluster`
+  on Adopt a cluster, and `#client-addresses-behind-a-load-balancer` on Users and
+  login. Another heading of those guides is now on a page of its own, so a link to it
+  no longer reaches it.
 - A new page, Certificate names, states what each serving certificate holds by
   default and what changing the names costs.
 - The CNI concept page and `ichor bootstrap cni --help` say that Cilium reaches
@@ -997,6 +1019,13 @@ command does. Each item is described where it is listed below.
   naming `make ui-fieldindex`, when the index has not been written, where they
   failed with `ENOENT`. A test fails for a `t()` call that passes its key through
   a type assertion.
+- `make test` fails when a diagram in `docs/images` has a label that is HTML rather
+  than plain SVG text, naming the file and the cell. ADR 0132 records the rule and
+  its cause, and the contributing guide's Diagrams section says how to fix a cell.
+- `make test` fails when a write the ichor-ui ServiceAccount makes through its own
+  client has no grant in `config/rbac/ichor-ui/role.yaml`. The one write the role
+  does not grant is an exception that names its reason, and the check fails once it
+  matches nothing. A grant's `resourceNames` and namespace are not compared.
 
 ## v0.2.4 (2026-11-13)
 

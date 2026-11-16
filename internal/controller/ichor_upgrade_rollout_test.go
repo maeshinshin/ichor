@@ -171,6 +171,34 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		Expect(err).To(MatchError(ContainSubstring("installer Job")))
 		Expect(err).To(MatchError(ContainSubstring("pod log")))
 	})
+
+	It("names the installer's own error, from its termination message, when the Job failed", func() {
+		job := startJob()
+		deployment("rollout-controller", controllerLabels, true)
+		deployment("rollout-ui", uiLabels, true)
+		setJobCondition(&job, batchv1.JobFailed, "")
+
+		// The pod the Job ran, as the kubelet reports a container that wrote its error to its
+		// termination message file.
+		pod := &corev1.Pod{
+			Namespace: ns, Name: job.Name + "-pod", Labels: map[string]string{"job-name": job.Name},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "installer", Image: "registry.example/installer:v1"}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, pod))).To(Succeed()) })
+
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: "installer",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: 1, Reason: "Error", FinishedAt: metav1.Now(),
+				Message: `upgrade failed (listing talosclusters: cannot list resource "talosclusters" in API group "ichor.maesh.dev"); rolled back to the previous manifests`,
+			}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		_, err := advance(ctx, nil, nil, op)
+		Expect(err).To(MatchError(ContainSubstring(`cannot list resource "talosclusters" in API group "ichor.maesh.dev"`)))
+	})
 })
 
 // createDeployment creates a one-replica Deployment; its status says whether the rollout is finished.

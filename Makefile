@@ -630,7 +630,7 @@ docs-install: ## Install the docs site's dependencies (npm ci; docs-audit report
 # overrides in site/package.json pin postcss-selector-parser and minimatch to their patched versions.
 .PHONY: docs-audit
 docs-audit: ## Fail on a high or critical advisory in the docs site's dependencies, dev included.
-	@echo "docs-audit: the low deepmerge report below is accepted (no fixed version, shadcn CLI only); see the Makefile."
+	@echo "docs-audit: advisories below the high threshold are reported and do not fail this target; the Makefile records which are accepted and why."
 	cd site && npm audit --audit-level=high
 
 .PHONY: docs-diagrams

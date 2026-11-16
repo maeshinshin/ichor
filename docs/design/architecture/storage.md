@@ -18,8 +18,11 @@ The work splits into four layers; Ichor owns the first and the last.
 handed to the storage system, and evacuation settings. The storage system's
 own configuration is yours. Presets start with `longhorn-v1`
 (verify the `iscsi-tools` and `util-linux-tools` extensions are in the node's
-installer image, create the `UserVolumeConfig` Longhorn expects), followed by
-`longhorn-v2`, `raw` (for Rook/Ceph-style consumers) and `filesystem`.
+installer image, create the `UserVolumeConfig` Longhorn expects) and `rook-v1`,
+which renders no Talos volume and leaves the disk to Rook (ADR 0167; the
+[Rook/Ceph guide](../../guides/rook-ceph.md) has the Talos side). `longhorn-v2`
+and `filesystem` follow. `diskSelector` is required by `longhorn-v1` and ignored
+by `rook-v1`.
 Missing extensions are reported by the informational `ExtensionsPresent`
 condition on `TalosStorage`, read from the Nodes' `extensions.talos.dev/*`
 labels; it never gates `Ready`. Adding one is an installer-image
@@ -34,7 +37,9 @@ The node-operation hook is shared by removal, upgrades and reboot-requiring
 config changes: mark the node unschedulable in the storage system, request
 evacuation, wait until no replica lives only there (with a timeout that pauses
 the rollout rather than proceeding), then drain; afterwards, re-enable
-scheduling. The hook is an interface so other integrations can use it.
+scheduling. The hook is an interface so other integrations can use it. A preset may have
+no hook: `rook-v1` has none, and a node it governs goes straight to the drain,
+which Rook's own disruption budgets gate (ADR 0167).
 
 For `longhorn-v1` the write side of that hook is settled, from
 longhorn-manager v1.9.1's own type declarations rather than from the UI's

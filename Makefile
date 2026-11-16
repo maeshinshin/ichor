@@ -106,6 +106,10 @@ check-claims: ## Fail when a Markdown file or Go comment states that something w
 check-release-record: ## Fail when the chart's Helm release record exceeds the 1,048,576 bytes a Secret holds; prints the size and headroom (internal/tools/releaserecord).
 	go run ./internal/tools/releaserecord
 
+.PHONY: renovate-validate
+renovate-validate: ## Validate renovate.json with the Renovate config validator at the pinned version (renovate@44.198.3, strict); needs the npm registry on first run. Not part of lint: CI does not run it.
+	npx --yes --package renovate@44.198.3 -- renovate-config-validator --strict
+
 .PHONY: docs-reference
 docs-reference: ## Regenerate docs/reference/cli (from the ichor command tree) and docs/reference/crds (from config/crd/bases); run after manifests.
 	go run ./internal/tools/gendocs

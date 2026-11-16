@@ -339,6 +339,18 @@ try {
         await ev(`(() => { const b = ${cliRoot}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
         await idle()
         await branchCheck('Custom resources', null, 'Custom resources', 'reference/crds/taloscluster/')
+        // The four guides split into child directories: each page is one row until it opens, its steps shown once it does.
+        await branchCheck('Adopt a cluster', 'guides/adopt-a-cluster/', 'Adopt a cluster', 'guides/adopt-a-cluster/run/')
+        await branchCheck('Hardening', 'guides/hardening/', 'Hardening', 'guides/hardening/cilium/')
+        await branchCheck('Install with Helm', 'guides/install-with-helm/', 'Install with Helm', 'guides/install-with-helm/install/')
+        // Expose Ichor UI is a branch inside Users and login, so Users and login is open for its pass and closed again after it.
+        await branchCheck('Users and login', 'guides/users-and-login/', 'Users and login', 'guides/users-and-login/sign-in/')
+        const usersRow = trigger('guides/users-and-login/', 'Users and login')
+        await ev(`(() => { const b = ${usersRow}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+        await idle()
+        await branchCheck('Expose Ichor UI', 'guides/users-and-login/expose-ichor-ui/', 'Expose Ichor UI', 'guides/users-and-login/expose-ichor-ui/gateway-api/')
+        await ev(`(() => { const b = ${usersRow}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
+        await idle()
         // Each sidebar_group of Concepts and Design is one row until it opens, and its pages show once it does. Design's groups are
         // inside its architecture branch, which is open for their pass and closed again after it.
         const conceptGroups = [['What Ichor manages', 'concepts/clusters-and-machines/'], ['Changes over time', 'concepts/operations/'], ['Trust and access', 'concepts/security/']]

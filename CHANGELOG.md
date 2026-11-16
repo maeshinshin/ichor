@@ -776,6 +776,12 @@ command does. Each item is described where it is listed below.
   three commands that write to a Talos node, `init`, `restore cluster` and
   `reclaim node --talosconfig`. `adopt` only reads from nodes. ADR 0014 is
   amended: its list of exceptions named `adopt` and left out `reclaim`.
+- The alt text of the architecture diagram, in the overview and on the
+  documentation home page, says "in steady state only the controller configures
+  the Talos machines", so it no longer contradicts the caption under it, which
+  names the three CLI commands that also write to a node.
+- The Helm install guide no longer calls the controller "the only writer to
+  Talos nodes" when it explains the priority class.
 
 ### CI
 

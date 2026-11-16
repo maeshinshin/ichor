@@ -613,7 +613,7 @@ ui-proto-generate: ui-install ## Regenerate the TS Connect client into ui/src/ge
 	buf generate
 
 .PHONY: ui-shots
-ui-shots: ## Screenshot UI pages (desktop+phone, light+dark): make ui-shots OUT=.ui-shots/x URL=http://host/ [PATHS="/ /machines"].
+ui-shots: ui-fieldindex ## Screenshot signed-in UI pages (desktop+phone, light+dark): make ui-shots OUT=.ui-shots/x [PATHS="/config"]; URL=http://host/ TOKEN=<ID token> shoots a running server instead. Fails rather than shoot a sign-in page.
 	node hack/ui-shots.mjs "$(OUT)" "$(URL)" $(PATHS)
 
 # Documentation site: the Markdown in docs/ rendered by Astro in

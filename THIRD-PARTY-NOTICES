@@ -3724,7 +3724,7 @@ Upstream projects:
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2016 Superhuman
 - next-themes (https://github.com/pacocoursey/next-themes)
-    ui/src/lib/shims/next-themes.tsx
+    ui/src/lib/shims/next-themes.tsx and site/src/lib/shims/next-themes.tsx
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2022 Paco Coursey
 - shadcn/ui (https://github.com/shadcn-ui/ui)
@@ -3732,7 +3732,7 @@ Upstream projects:
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2023 shadcn
 - sonner (https://github.com/emilkowalski/sonner)
-    ui/src/lib/shims/sonner.tsx
+    ui/src/lib/shims/sonner.tsx, ui/src/lib/shims/internal/sonner-styles.ts, site/src/lib/shims/sonner.tsx and site/src/lib/shims/internal/sonner-styles.ts
     Licence: MIT (variant 1 of 8) (text in section 3)
     Copyright (c) 2023 Emil Kowalski
 

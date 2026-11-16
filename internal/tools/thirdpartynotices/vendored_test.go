@@ -159,3 +159,39 @@ func TestComponentCopiesAreInNotices(t *testing.T) {
 		}
 	}
 }
+
+// namesCopiesOf fails when a tracked TypeScript file holding needle is not named by its full path in THIRD-PARTY-NOTICES,
+// which is how the site's copies of sonner and next-themes went unnamed beside the UI's.
+// shortcut: the copies are found by a string only they hold, so a copy that renames it escapes; drop this for a per-file list once a copy turns up that holds none.
+func namesCopiesOf(t *testing.T, needle string) {
+	t.Helper()
+
+	notices, err := os.ReadFile("../../../THIRD-PARTY-NOTICES")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	grep := exec.Command("git", "grep", "-l", "-z", needle, "--", "*.ts", "*.tsx")
+	grep.Dir = repoRoot
+
+	out, err := grep.Output()
+	if err != nil {
+		t.Fatalf("git grep: %v", err) // exit 1 (no match) lands here too: the check would have nothing to look at
+	}
+
+	for f := range strings.SplitSeq(strings.TrimRight(string(out), "\x00"), "\x00") {
+		if !strings.Contains(string(notices), f) {
+			t.Errorf("%s holds a copy of an upstream, which THIRD-PARTY-NOTICES does not name", f)
+		}
+	}
+}
+
+// TestSonnerCopiesAreInNotices fails when a copy of sonner's shim or its styles is not named by path.
+func TestSonnerCopiesAreInNotices(t *testing.T) {
+	namesCopiesOf(t, "data-sonner-toaster")
+}
+
+// TestNextThemesCopiesAreInNotices fails when a copy of the next-themes shim is not named by path.
+func TestNextThemesCopiesAreInNotices(t *testing.T) {
+	namesCopiesOf(t, "UseThemeProps")
+}

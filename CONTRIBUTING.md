@@ -192,6 +192,33 @@ release.
 A new Cilium minor is never bumped by the script: change the pin and the values
 by hand.
 
+## Dependency updates
+
+Renovate (`renovate.json` at the repository root) proposes weekly, grouped pull
+requests for the Go modules, the npm packages of `ui/` and `site/`, the GitHub
+Actions, the Nix flake lock and the distroless base image digest in `.ko.yaml`.
+The Go modules that match the pinned Talos and Kubernetes (`pkg/machinery` and
+the `k8s.io` libraries) are proposed in their own `release-set` group. Major
+versions wait for a tick on its dependency dashboard. Nothing is merged
+automatically. Renovate only runs once its GitHub App is installed on the
+repository.
+
+A proposal does not move the pinned set. The Talos, Kubernetes and Cilium
+versions in `pkg/release` are changed by a person, and a Talos or Kubernetes
+bump ships under ADR 0148.
+
+Some things are not proposed, and are changed by hand:
+
+- The `go` directive in `go.mod`, moved together with the Go override in
+  `flake.nix`.
+- The GitHub-hosted runner images, and the kind binary that `test-chart.yml`
+  pins by version and checksum.
+- The Cilium chart pins, which `hack/bump-cilium-patch.sh` moves (see above).
+
+Check the configuration with `make renovate-validate` before you change it. It
+runs the Renovate validator at a pinned version. It is not part of `make lint`
+or CI.
+
 ## Licensing
 
 Apache-2.0, copyright maeshinshin. A file that contains content derived from

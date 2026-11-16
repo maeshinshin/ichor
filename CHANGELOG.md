@@ -376,6 +376,11 @@ command does. Each item is described where it is listed below.
 
 ### Cluster
 
+- **`kubectl get talosclusters` shows the `Transitioning` condition instead of an empty
+  `Ready` column.** No controller sets a `Ready` condition on a `TalosCluster`; the
+  column now reads `Transitioning`, which is `True` while the control-plane count is
+  even during a replacement. The `secretsRef` description says the Secret holds the
+  whole Talos secrets bundle, not only the CA certificates.
 - **`--endpoint-type vip` puts the endpoint address on the control planes.**
   Ichor renders a `Layer2VIPConfig` for the address on each control plane's
   primary link. A `LinkAliasConfig` selects that link by its permanent MAC
@@ -481,6 +486,10 @@ command does. Each item is described where it is listed below.
   holds it back to last only in the kubelet stage. Each stage now names its machines in
   order, with the controller's node marked, and the machine list is the kubelet stage's.
   The plan of a config operation is unchanged.
+- **ADR 0080 says what the `ConfigRollout` marker does when a rollout ends.** The ADR
+  said the rollout clears the marker. It sets the `TalosMachine` condition to `False`
+  with reason `Converged` and leaves it there until the next rollout. The reason is not
+  renamed, and `kubectl explain talosmachine.status.conditions` now explains it.
 - A missing cosign signature of the installer image now says what was looked
   for: the signature referrer, through the referrers API or the
   `sha256-<hex>` tag of the digest. It used to say only that the image had no

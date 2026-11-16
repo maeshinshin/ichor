@@ -8,7 +8,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { userClient } from '@/lib/connect'
 import { signInAgain } from '@/lib/login'
-import { clearToken } from '@/lib/oidc'
+import { clearToken, signOut } from '@/lib/oidc'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
 import { t } from '@/lib/i18n'
 
@@ -102,6 +102,10 @@ export function MustChangePassword() {
         </CardHeader>
         <CardContent>
           <ChangePasswordForm forced />
+          {/* A refused change (a sign-in too old for it) asks the person to sign in again; this is how. */}
+          <Button variant="ghost" onClick={signOut}>
+            {t('account.signOut')}
+          </Button>
         </CardContent>
       </Card>
     </main>

@@ -239,6 +239,12 @@ rules:
   - get
   - list
 - apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - list
+- apiGroups:
   # The Cilium policies of config/cilium-network-policy, applied only when Cilium's CRD exists.
   - cilium.io
   resources:

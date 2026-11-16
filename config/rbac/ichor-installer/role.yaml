@@ -1,6 +1,7 @@
 # The installer Job's permissions: exactly the kinds dist/install.yaml
 # contains, and nothing the installer does not do (it never deletes a CRD, never reads or
-# writes a Secret, never touches a TalosCluster or any other custom resource).
+# writes a Secret, and reads no custom resource but the TalosClusters of its own namespace, for
+# the issuer URL, granted by the namespaced Role below).
 #
 # Not narrowable further: the clusterroles and clusterrolebindings
 # rules, with escalate and bind. Applying a ClusterRole that grants more than the applier
@@ -226,6 +227,15 @@ rules:
   - create
   - delete
   - get
+  - list
+# The issuer URL: the installer lists the TalosClusters of its own namespace and takes the sign-in
+# issuer from the one that enables it. Read after this Role is effective, never before (install.go,
+# withIssuerURL), so a previous release's role, which has no such rule, never reaches the list.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
   - list
 - apiGroups:
   # The Cilium policies of config/cilium-network-policy, applied only when Cilium's CRD exists.

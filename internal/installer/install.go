@@ -174,6 +174,15 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		return failWithRollback(c, opts, snap, err)
 	}
 
+	// The issuer URL is a TalosCluster read, which the namespaced Role just applied grants and an
+	// older release's role does not. It is read only now, so no step before the RBAC is effective needs it.
+	if customized, err := withIssuerURL(ctx, c, opts, uiSettings); err != nil {
+		return failWithRollback(c, opts, snap, err)
+	} else if customized != nil {
+		q := classify(customized)
+		p.crds, p.controller, p.ui = q.crds, q.controller, q.ui
+	}
+
 	// Stage 2: everything else, now readable under the new rights. A failure here leaves nothing
 	// but the RBAC applied, which the stage-0 snapshot restores.
 	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 2, slices.Concat(p.crds, p.controller, p.ui, policies))

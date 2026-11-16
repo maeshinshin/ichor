@@ -464,14 +464,36 @@ func toUnstructured(obj any, kind, apiVersion string) (*unstructured.Unstructure
 	return u, nil
 }
 
-func namespaceOf(deps ...*appsv1.Deployment) string {
-	for _, d := range deps {
-		if d != nil {
-			return d.Namespace
-		}
+// withIssuerURL applies the issuer URL of the TalosCluster that enables Ichor's sign-in, when there is one
+// and it differs from the live ichor-ui's, to a fresh customized copy of the manifest; nil means nothing
+// changes. The issuer is spec.authentication.ichor.url, set at init and changeable later, so a URL changed
+// on the cluster reaches the Deployments on the next install or upgrade. Run calls it after the namespaced
+// RBAC of this release is effective: the list is a right only that Role grants.
+func withIssuerURL(ctx context.Context, c client.Client, opts Options, s UISettings) ([]*unstructured.Unstructured, error) {
+	url, err := clusterIssuerURL(ctx, c, opts.Namespace)
+	if err != nil {
+		return nil, err
 	}
 
-	return ""
+	if url == "" || url == s.ExternalURL {
+		return nil, nil
+	}
+
+	s.ExternalURL = url
+
+	objs, err := Decode(opts.Manifest)
+	if err != nil {
+		return nil, fmt.Errorf("decoding the embedded manifest: %w", err)
+	}
+
+	objs, err = CustomizeObjects(objs, s)
+	if err != nil {
+		return nil, err
+	}
+
+	markInstalled(objs)
+
+	return objs, nil
 }
 
 // clusterIssuerURL returns spec.authentication.ichor.url of the one TalosCluster in ns that enables
@@ -568,19 +590,6 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	// way (a hand-written TalosOperation, the controller's own patch upgrades) stops here, with the instruction.
 	if uiDep != nil && !s.SignedIn {
 		return nil, UISettings{}, errNoSignInToUpgrade
-	}
-
-	// The issuer is the TalosCluster's spec.authentication.ichor.url, set at init and changeable later,
-	// so a URL changed on the cluster reaches the Deployments on the next install or upgrade.
-	if ns := namespaceOf(uiDep, ctrlDep); ns != "" {
-		url, err := clusterIssuerURL(ctx, c, ns)
-		if err != nil {
-			return nil, UISettings{}, err
-		}
-
-		if url != "" {
-			s.ExternalURL = url
-		}
 	}
 
 	if s.WasPlaintext != "" {

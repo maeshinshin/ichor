@@ -1817,3 +1817,22 @@ func TestRetiredKindsGuardPullsLikeTheManager(t *testing.T) {
 		t.Fatalf("retired-kinds guard imagePullPolicy = %v, want the manager's %v", got, want)
 	}
 }
+
+// TestRetiredKindsGuardCanReadTheCRDItChecks: the guard gets the CRD before it lists, and without get on it the
+// API server answers Forbidden, which the guard refuses. The rule is scoped to that one CRD name.
+func TestRetiredKindsGuardCanReadTheCRDItChecks(t *testing.T) {
+	docs := renderChart(t, "ichor")
+	role := find(docs, kindClusterRole, "ichor-retired-kinds-guard")
+	if role == nil {
+		t.Fatal("no ichor-retired-kinds-guard ClusterRole")
+	}
+	rules, _ := role["rules"].([]any)
+	for _, r := range rules {
+		rule, _ := r.(map[string]any)
+		if containsStr(rule["apiGroups"], "apiextensions.k8s.io") && containsStr(rule["resources"], "customresourcedefinitions") &&
+			containsStr(rule["verbs"], "get") && containsStr(rule["resourceNames"], "talosstorages.ichor.maesh.dev") {
+			return
+		}
+	}
+	t.Fatalf("retired-kinds guard ClusterRole has no get on customresourcedefinitions talosstorages.ichor.maesh.dev: %v", rules)
+}

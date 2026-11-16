@@ -39,6 +39,15 @@ metadata:
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 rules:
+# get on the one CRD the guard checks: CheckRetiredKinds reads the CRD before it lists, and a missing get is a Forbidden refusal.
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  resourceNames:
+  - talosstorages.ichor.maesh.dev
+  verbs:
+  - get
 - apiGroups:
   - ichor.maesh.dev
   resources:

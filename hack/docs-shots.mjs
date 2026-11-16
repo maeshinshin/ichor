@@ -343,6 +343,7 @@ try {
         await branchCheck('Adopt a cluster', 'guides/adopt-a-cluster/', 'Adopt a cluster', 'guides/adopt-a-cluster/run/')
         await branchCheck('Hardening', 'guides/hardening/', 'Hardening', 'guides/hardening/cilium/')
         await branchCheck('Install with Helm', 'guides/install-with-helm/', 'Install with Helm', 'guides/install-with-helm/install/')
+        await branchCheck('Settings', 'guides/settings/', 'Settings', ['guides/settings/changing/', 'guides/settings/updates/', 'guides/settings/automatic-patching/'])
         // Expose Ichor UI is a branch inside Users and login, so Users and login is open for its pass and closed again after it.
         await branchCheck('Users and login', 'guides/users-and-login/', 'Users and login', 'guides/users-and-login/sign-in/')
         const usersRow = trigger('guides/users-and-login/', 'Users and login')

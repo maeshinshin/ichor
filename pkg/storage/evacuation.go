@@ -16,7 +16,10 @@ limitations under the License.
 
 package storage
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // EvacuationHook is the storage-system side of the design's shared
 // node-operation hook (docs/design/architecture.md, "Storage"): mark a
@@ -53,7 +56,18 @@ func NewEvacuationHook(diskPreset string) (EvacuationHook, error) {
 		return nil, err
 	}
 
-	return p.(EvacuationHook), nil
+	return evacuationHookOf(diskPreset, p)
+}
+
+// evacuationHookOf is NewEvacuationHook's assertion, split out so a Preset without the hook methods can be tested
+// without a second real preset.
+func evacuationHookOf(diskPreset string, p Preset) (EvacuationHook, error) {
+	h, ok := p.(EvacuationHook)
+	if !ok {
+		return nil, fmt.Errorf("storage: preset %q does not implement EvacuationHook", diskPreset)
+	}
+
+	return h, nil
 }
 
 // EvacuationProgress is what EvacuationStatus reports about an

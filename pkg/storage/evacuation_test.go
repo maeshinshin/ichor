@@ -17,6 +17,7 @@ limitations under the License.
 package storage
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -74,5 +75,20 @@ func TestEvacuationStatus(t *testing.T) {
 				t.Errorf("EvacuationStatus(%d, %v, %v) = %v, want %v", tc.replicasRemaining, tc.elapsed, timeout, got, tc.want)
 			}
 		})
+	}
+}
+
+// notAHook is a Preset without BeginEvacuation or EndEvacuation: what a second preset is if it is written
+// without the hook. Its Preset methods are never called.
+type notAHook struct{ Preset }
+
+func TestEvacuationHookOf_PresetWithoutHookIsAnError(t *testing.T) {
+	h, err := evacuationHookOf("stub-v1", notAHook{})
+	if err == nil {
+		t.Fatalf("evacuationHookOf(preset without hook) = %T, nil error; want an error", h)
+	}
+
+	if !strings.Contains(err.Error(), `"stub-v1"`) {
+		t.Fatalf("evacuationHookOf error %q does not name the preset", err)
 	}
 }

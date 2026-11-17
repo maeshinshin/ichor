@@ -50,12 +50,14 @@ const (
 	// conditionRemoval), True from the moment the Upgrade API call is acknowledged until the node
 	// is confirmed on the target version. Message carries the boot ID recorded just before the
 	// call, the only way to tell "hasn't rebooted yet" from "rebooted and fell back to the same
-	// old version". It turns False with reasonUpgradeFellBack when the node fell back: no request
-	// is outstanding then, so a resumed operation issues a new one.
-	conditionTalosUpgrade  = "TalosUpgrade"
-	reasonUpgradeRequested = "UpgradeRequested"
-	reasonUpgradeConverged = "Converged"
-	reasonUpgradeFellBack  = "FellBack"
+	// old version". It turns False when no request is outstanding any more, so a resumed operation
+	// issues a new one: with reasonUpgradeFellBack when the node fell back, or with
+	// reasonUpgradeVerifyTimedOut when the verify window ran out before the node came back.
+	conditionTalosUpgrade       = "TalosUpgrade"
+	reasonUpgradeRequested      = "UpgradeRequested"
+	reasonUpgradeConverged      = "Converged"
+	reasonUpgradeFellBack       = "FellBack"
+	reasonUpgradeVerifyTimedOut = "VerifyTimedOut"
 
 	// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls and
 	// installs the installer image.
@@ -281,8 +283,18 @@ func (a *talosUpgradeAdvancer) afterReboot(
 			return false, endErr
 		}
 
-		return false, fmt.Errorf("node %q did not come back on Talos %s within %s of its upgrade request",
+		// False, not left True: the Upgrade request is no longer outstanding, so a resumed operation reaches
+		// beginUpgrade. A True left here keeps this request's LastTransitionTime and fails that resume at once.
+		msg := fmt.Sprintf("node %q did not come back on Talos %s within %s of its upgrade request",
 			m.Name, target, talosUpgradeVerifyTimeout)
+
+		if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
+			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeVerifyTimedOut, Message: msg,
+		}); err != nil {
+			return false, fmt.Errorf("recording %q's verify timeout: %w", m.Name, err)
+		}
+
+		return false, errors.New(msg)
 	}
 
 	bootID, err := talos.BootID(dialCtx)

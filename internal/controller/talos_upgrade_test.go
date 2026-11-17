@@ -466,3 +466,31 @@ var _ = Describe("talosUpgradeAdvancer after a fallback", func() {
 			"is now running " + testOldTalosVersion + " with schematic " + testOldSchematic + ", want " + testNewSchematic)))
 	})
 })
+
+var _ = Describe("talosUpgradeAdvancer after a verify timeout", func() {
+	It("calls the Upgrade API again when a timed-out operation is resumed", func() {
+		cluster, cp := newUpgradeNode("vt1", true)
+		fake := &fakeTalosClient{
+			version: testOldTalosVersion, bootID: testBootIDBefore, etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-vt1"}},
+		}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: newUpgradeAdvancer(fake, nil).Advance}
+		op := newOpTestOperation(cluster.Name)
+
+		mustReconcileOperation(r, op)
+		Expect(fake.upgradeCalls).To(HaveLen(1))
+
+		// The node never reboots: the verify window runs out with the boot ID unchanged.
+		setAckedClock(fetchMachine(cp), conditionTalosUpgrade, time.Now().Add(-talosUpgradeVerifyTimeout-time.Minute))
+
+		mustReconcileOperation(r, op)
+		Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("did not come back"))
+
+		// What `ichor resume operation` writes on a failed step.
+		got := fetchOperation(op)
+		got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		mustReconcileOperation(r, op)
+		Expect(fake.upgradeCalls).To(HaveLen(2), "a resumed timed-out upgrade must issue the upgrade again")
+	})
+})

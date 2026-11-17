@@ -1,6 +1,6 @@
 # 0023. `TalosStorage` and the `longhorn-v1` disk preset
 
-Status: Accepted, amended; superseded in part by ADR 0167 and ADR 0168 · Date: 2026-10-25 · Design section: 4.4 (Storage)
+Status: Accepted, amended; superseded in part by ADR 0167 · Date: 2026-10-25 · Design section: 4.4 (Storage)
 
 Decided: Keep `TalosStorage` to layer 1 only -- a `longhorn-v1` preset emitting the Talos-side config a node needs, never the storage system itself
 

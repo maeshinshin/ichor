@@ -1,6 +1,6 @@
 # 0168. `TalosStorage` is renamed `TalosStoragePreset`, and the installer refuses the release that drops the old kind while any object of it remains
 
-Status: Accepted, amended · Date: 2026-11-17 · Design section: Storage · Supersedes in part: 0023
+Status: Superseded by ADR 0169, amended · Date: 2026-11-17 · Design section: Storage · Supersedes in part: 0023
 
 Decided: `TalosStorage` is renamed `TalosStoragePreset` in one release, with no migration command and no dual read; `internal/installer` refuses that release while the old CRD still holds any object, and the operator recreates such objects by hand as `TalosStoragePreset`
 

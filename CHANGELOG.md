@@ -612,6 +612,11 @@ command does. Each item is described where it is listed below.
 - A Talos upgrade whose node does not come back within 20 minutes of the
   acknowledged Upgrade fails that node and pauses the operation. It used to wait
   with no limit and hold the cluster lock.
+- **`ichor resume operation` retries a Talos upgrade whose node booted its previous A/B slot.**
+  The operation used to pause again on the same fallback without calling the Upgrade API, so
+  the upgrade could not be retried. A machine whose upgrade fell back now shows as failed in
+  `ichor`'s output, not as done. Where the version is the same and only the schematic differs,
+  the fallback message names both schematic values.
 - The lock is renewed while an operation's Advance loop runs, every minute and
   only up to the step's own bound, and during a cluster or node stop pass; a
   step or pass that is stuck past its bound lets the lease lapse and pauses the

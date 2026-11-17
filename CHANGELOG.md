@@ -16,6 +16,8 @@ configuration). With `--endpoint-type vip`, each control plane now holds the
 endpoint address on its primary link, and `ichor init` takes the first node's
 network for it.
 
+v0.3.0 is the last release with changes of this size. No further large change is planned after it.
+
 ### Upgrade notes
 
 What in this release can refuse something that used to work, or change what a

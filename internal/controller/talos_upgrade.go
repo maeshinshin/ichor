@@ -26,6 +26,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -49,10 +50,12 @@ const (
 	// conditionRemoval), True from the moment the Upgrade API call is acknowledged until the node
 	// is confirmed on the target version. Message carries the boot ID recorded just before the
 	// call, the only way to tell "hasn't rebooted yet" from "rebooted and fell back to the same
-	// old version".
+	// old version". It turns False with reasonUpgradeFellBack when the node fell back: no request
+	// is outstanding then, so a resumed operation issues a new one.
 	conditionTalosUpgrade  = "TalosUpgrade"
 	reasonUpgradeRequested = "UpgradeRequested"
 	reasonUpgradeConverged = "Converged"
+	reasonUpgradeFellBack  = "FellBack"
 
 	// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls and
 	// installs the installer image.
@@ -169,7 +172,7 @@ func (a *talosUpgradeAdvancer) Advance(
 
 	switch {
 	case rebooting:
-		return a.afterReboot(ctx, dialCtx, talos, cluster, m, upToDate, currentVersion, target)
+		return a.afterReboot(ctx, dialCtx, talos, cluster, m, upToDate, currentVersion, currentSchematic, target)
 	case !upToDate:
 		return a.beginUpgrade(ctx, talos, cluster, m, currentVersion, target)
 	default:
@@ -266,7 +269,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 // failure, never a success -- or verifies and finishes.
 func (a *talosUpgradeAdvancer) afterReboot(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	upToDate bool, currentVersion, target string,
+	upToDate bool, currentVersion, currentSchematic, target string,
 ) (bool, error) {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade)
 
@@ -296,12 +299,35 @@ func (a *talosUpgradeAdvancer) afterReboot(
 			return false, endErr
 		}
 
-		return false, fmt.Errorf(
-			"node %q rebooted after an upgrade to %s but is now running %s: it fell back to its previous A/B slot",
-			m.Name, target, currentVersion)
+		// False, not left True: the Upgrade request is no longer outstanding. A resumed operation then
+		// reaches beginUpgrade again (Advance's rebooting is false), and its True starts a fresh clock; a
+		// stale True would keep this request's LastTransitionTime.
+		msg := fmt.Sprintf("node %q rebooted after an upgrade to %s but %s: it fell back to its previous A/B slot",
+			m.Name, target, fellBackDetail(currentVersion, target, currentSchematic, targetSchematic(cluster)))
+
+		if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
+			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeFellBack, Message: msg,
+		}); err != nil {
+			return false, fmt.Errorf("recording %q's fallback: %w", m.Name, err)
+		}
+
+		return false, errors.New(msg)
 	}
 
 	return a.finish(ctx, dialCtx, talos, cluster, m)
+}
+
+// fellBackDetail names what a node that fell back runs instead of the target: its version, its schematic, or both.
+// A schematic-only fallback keeps the version, so the schematic is named with both of its values.
+func fellBackDetail(currentVersion, target, currentSchematic, wantSchematic string) string {
+	switch {
+	case currentSchematic == wantSchematic:
+		return "is now running " + currentVersion
+	case currentVersion == target:
+		return fmt.Sprintf("is now running schematic %s, want %s", currentSchematic, wantSchematic)
+	default:
+		return fmt.Sprintf("is now running %s with schematic %s, want %s", currentVersion, currentSchematic, wantSchematic)
+	}
 }
 
 // finish verifies readiness and (for a control plane) etcd membership,

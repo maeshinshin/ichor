@@ -124,24 +124,25 @@ func (f *fakeStorageEvacuator) End(context.Context, *evacuationTarget, string) e
 	return f.endErr
 }
 
-var _ = Describe("talosUpgradeAdvancer schematic", func() {
-	const (
-		oldSchematic = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		newSchematic = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	)
+// testOldSchematic and testNewSchematic are the two Image Factory schematics the schematic tests switch between.
+const (
+	testOldSchematic = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testNewSchematic = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
 
+var _ = Describe("talosUpgradeAdvancer schematic", func() {
 	It("upgrades a machine whose version matches but whose running schematic differs, and finishes on the new one", func() {
 		cluster, cp := newUpgradeNode("sc1", true)
-		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: testNewSchematic}
 
-		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
+		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: testOldSchematic, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
 		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.upgradeCalls).To(HaveLen(1))
-		Expect(fake.upgradeCalls[0]).To(ContainSubstring(newSchematic + ":" + cluster.Spec.TalosVersion))
+		Expect(fake.upgradeCalls[0]).To(ContainSubstring(testNewSchematic + ":" + cluster.Spec.TalosVersion))
 
-		fake.bootID, fake.schematic = testBootIDAfter, newSchematic
+		fake.bootID, fake.schematic = testBootIDAfter, testNewSchematic
 		fake.etcdMembers = []EtcdMember{{ID: 1, Hostname: "node-sc1"}}
 
 		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
@@ -149,9 +150,9 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 
 	It("fails when the node reboots onto the right version but still the old schematic", func() {
 		cluster, cp := newUpgradeNode("sc2", true)
-		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: testNewSchematic}
 
-		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
+		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: testOldSchematic, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
 		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
@@ -164,10 +165,10 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 
 	It("does nothing for a machine already on the target version and schematic", func() {
 		cluster, cp := newUpgradeNode("sc3", true)
-		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: testNewSchematic}
 
 		fake := &fakeTalosClient{
-			version: cluster.Spec.TalosVersion, schematic: newSchematic, bootID: testBootIDBefore,
+			version: cluster.Spec.TalosVersion, schematic: testNewSchematic, bootID: testBootIDBefore,
 			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-sc3"}},
 		}
 
@@ -401,5 +402,67 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 
 		got := fetchMachine(cp)
 		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionStorageEvacuation)).To(BeTrue())
+	})
+})
+
+var _ = Describe("talosUpgradeAdvancer after a fallback", func() {
+	It("calls the Upgrade API again when a fallen-back operation is resumed", func() {
+		cluster, cp := newUpgradeNode("rt1", true)
+		fake := &fakeTalosClient{
+			version: testOldTalosVersion, bootID: testBootIDBefore, etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-rt1"}},
+		}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: newUpgradeAdvancer(fake, nil).Advance}
+		op := newOpTestOperation(cluster.Name)
+
+		mustReconcileOperation(r, op)
+		Expect(fake.upgradeCalls).To(HaveLen(1))
+
+		// The node boots its previous slot: same version, new boot ID.
+		fake.bootID = testBootIDAfter
+
+		mustReconcileOperation(r, op)
+		Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("fell back to its previous A/B slot"))
+
+		// What `ichor resume operation` writes on a failed step.
+		got := fetchOperation(op)
+		got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		mustReconcileOperation(r, op)
+		Expect(fake.upgradeCalls).To(HaveLen(2), "a resumed fallback must issue the upgrade again")
+		Expect(apimeta.IsStatusConditionTrue(fetchMachine(cp).Status.Conditions, conditionTalosUpgrade)).To(BeTrue(),
+			"the retried upgrade must record its request")
+	})
+
+	It("names the schematic with both values when a fallback keeps the version", func() {
+		cluster, cp := newUpgradeNode("msg1", true)
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: testNewSchematic}
+
+		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: testOldSchematic, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, nil)
+
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
+
+		fake.bootID = testBootIDAfter
+
+		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).To(MatchError(ContainSubstring(
+			"is now running schematic " + testOldSchematic + ", want " + testNewSchematic)))
+	})
+
+	It("names the version and the schematic when a fallback differs in both", func() {
+		cluster, cp := newUpgradeNode("msg2", true)
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: testNewSchematic}
+
+		fake := &fakeTalosClient{version: testOldTalosVersion, schematic: testOldSchematic, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, nil)
+
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
+
+		fake.bootID = testBootIDAfter
+
+		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).To(MatchError(ContainSubstring(
+			"is now running " + testOldTalosVersion + " with schematic " + testOldSchematic + ", want " + testNewSchematic)))
 	})
 })

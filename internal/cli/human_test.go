@@ -206,9 +206,21 @@ func TestConditionMarkKnowsWhichWayAConditionReads(t *testing.T) {
 		{"CNIHandover", condFalse, markPending},
 		{"NetworkPoliciesApplied", condFalse, markWarning},
 	} {
-		if got := conditionMark(tc.typ, tc.status); got != tc.want {
+		if got := conditionMark(tc.typ, tc.status, ""); got != tc.want {
 			t.Errorf("conditionMark(%s, %s) = %d, want %d", tc.typ, tc.status, got, tc.want)
 		}
+	}
+}
+
+// A progress condition that is False is done or failed by its reason: a completed upgrade reads OK, a fallen-back
+// one does not.
+func TestConditionMarkReadsTheReasonOfAFinishedProgressCondition(t *testing.T) {
+	if got := conditionMark("TalosUpgrade", condFalse, "Converged"); got != markOK {
+		t.Errorf("TalosUpgrade False/Converged = %d, want markOK (%d)", got, markOK)
+	}
+
+	if got := conditionMark("TalosUpgrade", condFalse, "FellBack"); got != markFailed {
+		t.Errorf("TalosUpgrade False/FellBack = %d, want markFailed (%d)", got, markFailed)
 	}
 }
 

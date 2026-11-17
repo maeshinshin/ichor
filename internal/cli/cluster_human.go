@@ -33,7 +33,7 @@ import (
 func conditionsOf(conds []*pb.Condition) []conditionRow {
 	rows := make([]conditionRow, len(conds))
 	for i, c := range conds {
-		rows[i] = conditionRow{Mark: conditionMark(c.GetType(), c.GetStatus()), Type: c.GetType(), Reason: c.GetReason(), Message: c.GetMessage()}
+		rows[i] = conditionRow{Mark: conditionMark(c.GetType(), c.GetStatus(), c.GetReason()), Type: c.GetType(), Reason: c.GetReason(), Message: c.GetMessage()}
 	}
 
 	return rows
@@ -106,7 +106,7 @@ func (h *human) clusterReadyMark(cl *pb.Cluster) string {
 func (h *human) readyMark(conds []*pb.Condition) string {
 	for _, c := range conds {
 		if c.GetType() == conditionReady {
-			return h.Mark(conditionMark(conditionReady, c.GetStatus()))
+			return h.Mark(conditionMark(conditionReady, c.GetStatus(), c.GetReason()))
 		}
 	}
 

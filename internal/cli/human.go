@@ -285,10 +285,13 @@ var (
 		"Transitioning": true, "VerifyingNewSide": true, "ConfigRollout": true, "KubernetesUpgrade": true,
 		"TalosUpgrade": true, "CARotation": true, "KeyRotation": true, "Removal": true, "Shutdown": true,
 	}
+	// progressFailedWhenFalse are the reasons a progress condition is False for a failure rather than a
+	// completed step: the node booted its previous slot (the controller's reasonUpgradeFellBack).
+	progressFailedWhenFalse = map[string]bool{"FellBack": true}
 )
 
-// conditionMark is the glyph of a condition of type typ and status "True", "False" or "Unknown".
-func conditionMark(typ, status string) mark {
+// conditionMark is the glyph of a condition of type typ, status "True", "False" or "Unknown", and reason.
+func conditionMark(typ, status, reason string) mark {
 	switch {
 	case status != condTrue && status != condFalse:
 		return markPending
@@ -301,6 +304,10 @@ func conditionMark(typ, status string) mark {
 	case progressWhenTrue[typ]:
 		if status == condTrue {
 			return markPending
+		}
+
+		if progressFailedWhenFalse[reason] {
+			return markFailed
 		}
 
 		return markOK

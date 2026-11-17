@@ -617,6 +617,10 @@ command does. Each item is described where it is listed below.
   the upgrade could not be retried. A machine whose upgrade fell back now shows as failed in
   `ichor`'s output, not as done. Where the version is the same and only the schematic differs,
   the fallback message names both schematic values.
+- **`ichor resume operation` retries a Talos upgrade whose node did not come back in time.**
+  The step failed at the verify timeout with the upgrade still marked outstanding, so a resume
+  failed again on the same expired clock without calling the Upgrade API. The machine now shows
+  as failed in `ichor`'s output, and a resume issues the upgrade again.
 - The lock is renewed while an operation's Advance loop runs, every minute and
   only up to the step's own bound, and during a cluster or node stop pass; a
   step or pass that is stuck past its bound lets the lease lapse and pauses the

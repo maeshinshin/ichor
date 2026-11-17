@@ -343,7 +343,7 @@ func fellBackDetail(currentVersion, target, currentSchematic, wantSchematic stri
 }
 
 // finish verifies readiness and (for a control plane) etcd membership,
-// and once both pass, ends evacuation and clears conditionTalosUpgrade --
+// and once both pass, ends evacuation and sets conditionTalosUpgrade to Converged --
 // the one place both the already-converged fast path (Advance's default
 // case) and afterReboot's success path land.
 func (a *talosUpgradeAdvancer) finish(
@@ -382,7 +382,9 @@ func (a *talosUpgradeAdvancer) finish(
 		return false, err
 	}
 
-	if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionTalosUpgrade) {
+	// Verified on the target, so any reason but Converged is stale: True while the request was outstanding,
+	// or False with FellBack or VerifyTimedOut from a node that came back late or converged by itself.
+	if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade); cond != nil && cond.Reason != reasonUpgradeConverged {
 		if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeConverged,
 			Message: fmt.Sprintf("running %s (schematic %s)", cluster.Spec.TalosVersion, targetSchematic(cluster)),

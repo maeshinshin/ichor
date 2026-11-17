@@ -494,3 +494,58 @@ var _ = Describe("talosUpgradeAdvancer after a verify timeout", func() {
 		Expect(fake.upgradeCalls).To(HaveLen(2), "a resumed timed-out upgrade must issue the upgrade again")
 	})
 })
+
+// setUpgradeCondition writes the TalosUpgrade condition of cp, as a previous Advance pass would have left it.
+func setUpgradeCondition(cp *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason string) {
+	GinkgoHelper()
+
+	m := fetchMachine(cp)
+	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+		Type: conditionTalosUpgrade, Status: status, Reason: reason, Message: "test",
+	})
+	Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+}
+
+var _ = Describe("talosUpgradeAdvancer finish after a failed upgrade", func() {
+	DescribeTable("a node verified on the target ends Converged, whichever failure reason it carried",
+		func(suffix, reason string) {
+			cluster, cp := newUpgradeNode(suffix, true)
+			fake := &fakeTalosClient{
+				version: cluster.Spec.TalosVersion, bootID: testBootIDAfter,
+				etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-" + suffix}},
+			}
+			adv := newUpgradeAdvancer(fake, nil)
+			setUpgradeCondition(cp, metav1.ConditionFalse, reason)
+
+			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
+			Expect(fake.upgradeCalls).To(BeEmpty(), "a node already on the target is not upgraded again")
+
+			got := apimeta.FindStatusCondition(fetchMachine(cp).Status.Conditions, conditionTalosUpgrade)
+			Expect(got).NotTo(BeNil())
+			Expect(got.Status).To(Equal(metav1.ConditionFalse))
+			Expect(got.Reason).To(Equal(reasonUpgradeConverged), "a verified node must not keep its failure reason")
+		},
+		Entry("after a fallback", "fin1", reasonUpgradeFellBack),
+		Entry("after a verify timeout", "fin2", reasonUpgradeVerifyTimedOut),
+	)
+
+	DescribeTable("a node on the target that is not Ready yet keeps its failure reason",
+		func(suffix, reason string) {
+			cluster, cp := newUpgradeNode(suffix, false)
+			fake := &fakeTalosClient{
+				version: cluster.Spec.TalosVersion, bootID: testBootIDAfter,
+				etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-" + suffix}},
+			}
+			adv := newUpgradeAdvancer(fake, nil)
+			setUpgradeCondition(cp, metav1.ConditionFalse, reason)
+
+			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
+
+			got := apimeta.FindStatusCondition(fetchMachine(cp).Status.Conditions, conditionTalosUpgrade)
+			Expect(got).NotTo(BeNil())
+			Expect(got.Reason).To(Equal(reason), "a node not yet verified is not converged")
+		},
+		Entry("after a fallback", "fin3", reasonUpgradeFellBack),
+		Entry("after a verify timeout", "fin4", reasonUpgradeVerifyTimedOut),
+	)
+})

@@ -286,8 +286,9 @@ var (
 		"TalosUpgrade": true, "CARotation": true, "KeyRotation": true, "Removal": true, "Shutdown": true,
 	}
 	// progressFailedWhenFalse are the reasons a progress condition is False for a failure rather than a
-	// completed step: the node booted its previous slot (the controller's reasonUpgradeFellBack).
-	progressFailedWhenFalse = map[string]bool{"FellBack": true}
+	// completed step: the node booted its previous slot (the controller's reasonUpgradeFellBack), or it did
+	// not come back within the verify window (reasonUpgradeVerifyTimedOut).
+	progressFailedWhenFalse = map[string]bool{"FellBack": true, "VerifyTimedOut": true}
 )
 
 // conditionMark is the glyph of a condition of type typ, status "True", "False" or "Unknown", and reason.

@@ -620,7 +620,8 @@ command does. Each item is described where it is listed below.
 - **`ichor resume operation` retries a Talos upgrade whose node did not come back in time.**
   The step failed at the verify timeout with the upgrade still marked outstanding, so a resume
   failed again on the same expired clock without calling the Upgrade API. The machine now shows
-  as failed in `ichor`'s output, and a resume issues the upgrade again.
+  as failed in `ichor`'s output, and a resume issues the upgrade again. A node that a resume
+  then finds on the target shows as converged, after a timeout or after a fallback.
 - The lock is renewed while an operation's Advance loop runs, every minute and
   only up to the step's own bound, and during a cluster or node stop pass; a
   step or pass that is stuck past its bound lets the lease lapse and pauses the

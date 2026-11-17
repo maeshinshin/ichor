@@ -1,19 +1,22 @@
----
+{{- if .Values.crd.enabled }}
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    {{- if .Values.crd.keep }}
+    "helm.sh/resource-policy": keep
+    {{- end }}
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: talosstoragepresets.ichor.maesh.dev
+  name: talosstorages.ichor.maesh.dev
 spec:
   group: ichor.maesh.dev
   names:
-    kind: TalosStoragePreset
-    listKind: TalosStoragePresetList
-    plural: talosstoragepresets
+    kind: TalosStorage
+    listKind: TalosStorageList
+    plural: talosstorages
     shortNames:
-    - tsp
-    singular: talosstoragepreset
+    - tsto
+    singular: talosstorage
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -29,8 +32,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TalosStoragePreset is the Schema for the talosstoragepresets
-          API
+        description: TalosStorage is the Schema for the talosstorages API
         properties:
           apiVersion:
             description: |-
@@ -50,7 +52,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of TalosStoragePreset
+            description: spec defines the desired state of TalosStorage
             properties:
               clusterRef:
                 description: clusterRef names the TalosCluster this storage configuration
@@ -84,7 +86,7 @@ spec:
                   diskSelector is a Talos disk-selector CEL expression (the same language
                   provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
                   document) choosing which disk on each selected node is handed to the storage system. Required
-                  for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStoragePresetSpec).
+                  for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStorageSpec).
                 type: string
               evacuationTimeout:
                 description: |-
@@ -97,7 +99,7 @@ spec:
                   nodes selects which nodes get storage prepared. Rendering matches the machine's spec.nodeLabels;
                   evacuation matches the live Kubernetes Node's labels. The two select the same nodes only when the
                   selector names labels set through spec.nodeLabels; a label the Node carries from elsewhere (a kubelet
-                  preset label, or one set with kubectl) makes the TalosStoragePreset govern evacuation without rendering.
+                  preset label, or one set with kubectl) makes the TalosStorage govern evacuation without rendering.
                 properties:
                   matchExpressions:
                     description: matchExpressions is a list of label selector requirements.
@@ -152,16 +154,15 @@ spec:
               rule: self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) &&
                 size(self.diskSelector) > 0)
             - message: 'rook-v1 writes no disk config, so a diskSelector would do
-                nothing: remove spec.diskSelector. To move a TalosStoragePreset from
-                longhorn-v1 to rook-v1, change diskPreset and remove diskSelector
-                in one update'
+                nothing: remove spec.diskSelector. To move a TalosStorage from longhorn-v1
+                to rook-v1, change diskPreset and remove diskSelector in one update'
               rule: self.diskPreset != 'rook-v1' || !has(self.diskSelector)
           status:
-            description: status defines the observed state of TalosStoragePreset
+            description: status defines the observed state of TalosStorage
             properties:
               conditions:
                 description: |-
-                  conditions represent the current state of the TalosStoragePreset resource, kstatus-compatible.
+                  conditions represent the current state of the TalosStorage resource, kstatus-compatible.
                   Ready reports whether the Talos side (layer 1) is prepared, so Argo CD's sync wave can hold
                   the storage system's Application until this is true (design section "Storage").
                 items:
@@ -235,3 +236,4 @@ spec:
     storage: true
     subresources:
       status: {}
+{{- end }}

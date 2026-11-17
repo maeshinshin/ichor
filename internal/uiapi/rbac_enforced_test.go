@@ -53,7 +53,7 @@ import (
 // envtest's kube-apiserver enforces RBAC, so these specs run handlers as the real ichor-ui
 // ServiceAccount identity bound to the generated role (config/rbac/ichor-ui/role.yaml, from
 // rbac_markers.go). A read the markers do not grant surfaces as Forbidden here instead of in a
-// live cluster (the missing talosstoragepresets rule).
+// live cluster (the missing talosstorages rule).
 var _ = Describe("ichor-ui generated RBAC", func() {
 	const user = "system:serviceaccount:ichor-system:ichor-ui"
 
@@ -99,7 +99,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("lets GetEffectiveConfig render, including its TalosStoragePreset and registry-secret reads", func() {
+	It("lets GetEffectiveConfig render, including its TalosStorage and registry-secret reads", func() {
 		secret := newTestSecret(newTestBundle())
 		cluster := newTestCluster(secret.Name)
 		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-rbac"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)

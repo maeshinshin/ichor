@@ -30,10 +30,10 @@ const (
 	selRoleVal = "storage"
 )
 
-func selStorage(ns, name, cluster string, match map[string]string) ichorv1alpha1.TalosStoragePreset {
-	return ichorv1alpha1.TalosStoragePreset{
+func selStorage(ns, name, cluster string, match map[string]string) ichorv1alpha1.TalosStorage {
+	return ichorv1alpha1.TalosStorage{
 		Namespace: ns, Name: name,
-		Spec: ichorv1alpha1.TalosStoragePresetSpec{
+		Spec: ichorv1alpha1.TalosStorageSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster},
 			Nodes:      metav1.LabelSelector{MatchLabels: match},
 		},
@@ -43,7 +43,7 @@ func selStorage(ns, name, cluster string, match map[string]string) ichorv1alpha1
 func TestSelect(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{Namespace: "ns", Name: "c1"}
 	nodeLabels := map[string]string{selRoleKey: selRoleVal}
-	storages := []ichorv1alpha1.TalosStoragePreset{
+	storages := []ichorv1alpha1.TalosStorage{
 		selStorage("ns", "b", "c1", map[string]string{selRoleKey: selRoleVal}),
 		selStorage("ns", "a", "c1", map[string]string{selRoleKey: selRoleVal}),
 		selStorage("ns", "other-cluster", "c2", map[string]string{selRoleKey: selRoleVal}),
@@ -66,7 +66,7 @@ func TestSelect(t *testing.T) {
 		{Key: "k", Operator: "bogus"},
 	}}
 
-	if _, err = Select(cluster, []ichorv1alpha1.TalosStoragePreset{bad}, nodeLabels); err == nil {
+	if _, err = Select(cluster, []ichorv1alpha1.TalosStorage{bad}, nodeLabels); err == nil {
 		t.Fatal("Select with an invalid selector returned no error")
 	}
 }

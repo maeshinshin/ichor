@@ -37,7 +37,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
-// defaultEvacuationTimeout is used when the matching TalosStoragePreset's spec.evacuationTimeout is unset. No fixed number
+// defaultEvacuationTimeout is used when the matching TalosStorage's spec.evacuationTimeout is unset. No fixed number
 // exists; ten minutes is a generous wait for one Longhorn replica to rebuild elsewhere before the
 // rollout pauses instead of draining.
 const defaultEvacuationTimeout = 10 * time.Minute
@@ -48,10 +48,10 @@ var storageCallTimeout = 15 * time.Second
 
 // defaultLonghornNamespace is Longhorn's documented default install namespace.
 //
-// shortcut: TalosStoragePresetSpec carries no namespace field, so Longhorn's Node is read and written only here.
+// shortcut: TalosStorageSpec carries no namespace field, so Longhorn's Node is read and written only here.
 // With Longhorn elsewhere, a node that replicas still name is refused (never drained with them on it), but a
 // node no replica names is treated as nothing to evacuate, and no eviction is ever requested. Add a namespace
-// field to TalosStoragePresetSpec when a second install must be evacuated.
+// field to TalosStorageSpec when a second install must be evacuated.
 const defaultLonghornNamespace = "longhorn-system"
 
 // evacuationTarget is what StorageEvacuator.Resolve found for one node: the storage.EvacuationHook to
@@ -63,11 +63,11 @@ type evacuationTarget struct {
 }
 
 // StorageEvacuator is the caller-side counterpart to pkg/storage's EvacuationHook/EvacuationStatus split:
-// pkg/storage makes no cluster call, so this finds the TalosStoragePreset that applies to a node and
+// pkg/storage makes no cluster call, so this finds the TalosStorage that applies to a node and
 // reads and writes the storage system's own resources. Declared by its consumer (talosUpgradeAdvancer), as
 // And AdvanceMachineFunc do.
 type StorageEvacuator interface {
-	// Resolve finds the TalosStoragePreset (if any) in cluster whose node selector matches node's live Kubernetes
+	// Resolve finds the TalosStorage (if any) in cluster whose node selector matches node's live Kubernetes
 	// Node labels (rendering matches spec.nodeLabels instead; see storage.Select). nil, nil means
 	// none does: nothing to evacuate, the common case for a cluster with no storage system. A preset with no
 	// evacuation hook (rook-v1) is nil, nil too.
@@ -86,7 +86,7 @@ type StorageEvacuator interface {
 	End(ctx context.Context, target *evacuationTarget, node string) error
 }
 
-// LonghornEvacuator is the StorageEvacuator for TalosStoragePreset.spec.diskPreset "longhorn-v1" (pkg/storage's
+// LonghornEvacuator is the StorageEvacuator for TalosStorage.spec.diskPreset "longhorn-v1" (pkg/storage's
 // only preset). It reads and writes Longhorn's nodes and replicas (longhorn.io/v1beta2) as
 // unstructured.Unstructured, never as a typed dependency on longhorn-manager's API types, which
 // rejected.
@@ -105,22 +105,22 @@ var (
 )
 
 // Longhorn's own objects, in whichever namespace it is installed in: the verbs Begin, End and
-// ReplicasRemaining use and no more; talosstoragepresets is read by Resolve.
+// ReplicasRemaining use and no more; talosstorages is read by Resolve.
 //
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstoragepresets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
 // +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;update
 // +kubebuilder:rbac:groups=longhorn.io,resources=replicas,verbs=list
 
-// Resolve implements StorageEvacuator. It reads only TalosStoragePreset and the Node, so a test needs no Longhorn CRDs.
+// Resolve implements StorageEvacuator. It reads only TalosStorage and the Node, so a test needs no Longhorn CRDs.
 func (e *LonghornEvacuator) Resolve(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, node string,
 ) (*evacuationTarget, error) {
 	var n corev1.Node
 	if err := e.Get(ctx, types.NamespacedName{Name: node}, &n); err != nil {
-		return nil, fmt.Errorf("reading node %q to match it against TalosStoragePreset: %w", node, err)
+		return nil, fmt.Errorf("reading node %q to match it against TalosStorage: %w", node, err)
 	}
 
-	var storages ichorv1alpha1.TalosStoragePresetList
+	var storages ichorv1alpha1.TalosStorageList
 	if err := e.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ type nodeField struct {
 
 // absent reports whether err means Longhorn has nothing to act on for this node: its CRD is not installed, or
 // it has no Node object in the namespace this evacuator writes to (e.g. longhorn-manager is crash-looping for
-// want of iscsi-tools). A TalosStoragePreset legitimately exists before Longhorn does, so absent is not a failure
+// want of iscsi-tools). A TalosStorage legitimately exists before Longhorn does, so absent is not a failure
 // by itself; missingNode decides whether it is nothing to evacuate.
 func absent(err error) bool {
 	return apimeta.IsNoMatchError(err) || apierrors.IsNotFound(err)
@@ -305,7 +305,7 @@ const (
 // reboot, or a removal) decides when scheduling is meaningful again. purpose completes "evacuating node X
 // before <purpose>" in the condition message.
 //
-// ev nil, no matching TalosStoragePreset, or the Node already gone all mean nothing to evacuate: EvacuationDone,
+// ev nil, no matching TalosStorage, or the Node already gone all mean nothing to evacuate: EvacuationDone,
 // not an error.
 func evacuateMachine(
 	ctx context.Context, c client.Client, ev StorageEvacuator,

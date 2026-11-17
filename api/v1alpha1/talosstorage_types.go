@@ -22,14 +22,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// TalosStoragePresetSpec defines the desired state of TalosStoragePreset. It stays thin on purpose (design
+// TalosStorageSpec defines the desired state of TalosStorage. It stays thin on purpose (design
 // section "Storage"): which nodes, which disk preset, how disks are handed to the storage
 // system, and evacuation settings. The storage system's own configuration (Longhorn's Helm
 // values, replica counts, and so on) lives in Argo CD, not here -- Ichor only owns layer 1
 // (Talos-side preparation) and layer 4 (node-operation coordination, a separate work unit).
 // +kubebuilder:validation:XValidation:rule="self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)",message="diskSelector is required for longhorn-v1"
-// +kubebuilder:validation:XValidation:rule="self.diskPreset != 'rook-v1' || !has(self.diskSelector)",message="rook-v1 writes no disk config, so a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStoragePreset from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one update"
-type TalosStoragePresetSpec struct {
+// +kubebuilder:validation:XValidation:rule="self.diskPreset != 'rook-v1' || !has(self.diskSelector)",message="rook-v1 writes no disk config, so a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStorage from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one update"
+type TalosStorageSpec struct {
 	// clusterRef names the TalosCluster this storage configuration applies to.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
 	// +required
@@ -38,7 +38,7 @@ type TalosStoragePresetSpec struct {
 	// nodes selects which nodes get storage prepared. Rendering matches the machine's spec.nodeLabels;
 	// evacuation matches the live Kubernetes Node's labels. The two select the same nodes only when the
 	// selector names labels set through spec.nodeLabels; a label the Node carries from elsewhere (a kubelet
-	// preset label, or one set with kubectl) makes the TalosStoragePreset govern evacuation without rendering.
+	// preset label, or one set with kubectl) makes the TalosStorage govern evacuation without rendering.
 	// +required
 	Nodes metav1.LabelSelector `json:"nodes"`
 
@@ -52,7 +52,7 @@ type TalosStoragePresetSpec struct {
 	// diskSelector is a Talos disk-selector CEL expression (the same language
 	// provisioning.diskSelector.match uses in a VolumeConfig/UserVolumeConfig/RawVolumeConfig
 	// document) choosing which disk on each selected node is handed to the storage system. Required
-	// for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStoragePresetSpec).
+	// for longhorn-v1 and refused for rook-v1, which writes no disk config (see TalosStorageSpec).
 	// +optional
 	DiskSelector string `json:"diskSelector,omitempty"`
 
@@ -63,9 +63,9 @@ type TalosStoragePresetSpec struct {
 	EvacuationTimeout *metav1.Duration `json:"evacuationTimeout,omitempty"`
 }
 
-// TalosStoragePresetStatus defines the observed state of TalosStoragePreset.
-type TalosStoragePresetStatus struct {
-	// conditions represent the current state of the TalosStoragePreset resource, kstatus-compatible.
+// TalosStorageStatus defines the observed state of TalosStorage.
+type TalosStorageStatus struct {
+	// conditions represent the current state of the TalosStorage resource, kstatus-compatible.
 	// Ready reports whether the Talos side (layer 1) is prepared, so Argo CD's sync wave can hold
 	// the storage system's Application until this is true (design section "Storage").
 	// +patchMergeKey=type
@@ -82,40 +82,40 @@ type TalosStoragePresetStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=tsp
+// +kubebuilder:resource:shortName=tsto
 // +kubebuilder:printcolumn:name="Preset",type=string,JSONPath=".spec.diskPreset"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
-// TalosStoragePreset is the Schema for the talosstoragepresets API
-type TalosStoragePreset struct {
+// TalosStorage is the Schema for the talosstorages API
+type TalosStorage struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of TalosStoragePreset
+	// spec defines the desired state of TalosStorage
 	// +required
-	Spec TalosStoragePresetSpec `json:"spec"`
+	Spec TalosStorageSpec `json:"spec"`
 
-	// status defines the observed state of TalosStoragePreset
+	// status defines the observed state of TalosStorage
 	// +optional
-	Status TalosStoragePresetStatus `json:"status,omitzero"`
+	Status TalosStorageStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// TalosStoragePresetList contains a list of TalosStoragePreset
-type TalosStoragePresetList struct {
+// TalosStorageList contains a list of TalosStorage
+type TalosStorageList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []TalosStoragePreset `json:"items"`
+	Items           []TalosStorage `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(func(s *runtime.Scheme) error {
-		s.AddKnownTypes(GroupVersion, &TalosStoragePreset{}, &TalosStoragePresetList{})
+		s.AddKnownTypes(GroupVersion, &TalosStorage{}, &TalosStorageList{})
 		return nil
 	})
 }

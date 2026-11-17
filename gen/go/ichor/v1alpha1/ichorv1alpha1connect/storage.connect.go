@@ -2,8 +2,8 @@
 //
 // Source: ichor/v1alpha1/storage.proto
 
-// StorageService backs the Storage page: which TalosStoragePreset governs each node of a cluster, and the
-// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStoragePreset as the signed-in
+// StorageService backs the Storage page: which TalosStorage governs each node of a cluster, and the
+// disk preset it applies. ListStorages reads. CreateStorage writes one TalosStorage as the signed-in
 // user, for the presets the page may create (see StoragePreset); it never sets a disk selector.
 package ichorv1alpha1connect
 
@@ -46,9 +46,9 @@ const (
 
 // StorageServiceClient is a client for the ichor.v1alpha1.StorageService service.
 type StorageServiceClient interface {
-	// ListStorages returns every TalosStoragePreset of one TalosCluster, with the machines each one governs.
+	// ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
 	ListStorages(context.Context, *connect.Request[v1alpha1.ListStoragesRequest]) (*connect.Response[v1alpha1.ListStoragesResponse], error)
-	// CreateStorage writes one TalosStoragePreset in the cluster's namespace, as the signed-in user.
+	// CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
 	CreateStorage(context.Context, *connect.Request[v1alpha1.CreateStorageRequest]) (*connect.Response[v1alpha1.CreateStorageResponse], error)
 }
 
@@ -96,9 +96,9 @@ func (c *storageServiceClient) CreateStorage(ctx context.Context, req *connect.R
 
 // StorageServiceHandler is an implementation of the ichor.v1alpha1.StorageService service.
 type StorageServiceHandler interface {
-	// ListStorages returns every TalosStoragePreset of one TalosCluster, with the machines each one governs.
+	// ListStorages returns every TalosStorage of one TalosCluster, with the machines each one governs.
 	ListStorages(context.Context, *connect.Request[v1alpha1.ListStoragesRequest]) (*connect.Response[v1alpha1.ListStoragesResponse], error)
-	// CreateStorage writes one TalosStoragePreset in the cluster's namespace, as the signed-in user.
+	// CreateStorage writes one TalosStorage in the cluster's namespace, as the signed-in user.
 	CreateStorage(context.Context, *connect.Request[v1alpha1.CreateStorageRequest]) (*connect.Response[v1alpha1.CreateStorageResponse], error)
 }
 

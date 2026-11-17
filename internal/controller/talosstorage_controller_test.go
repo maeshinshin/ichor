@@ -84,10 +84,10 @@ func newStorageTestMachine(clusterName string, nodeLabels map[string]string) *ic
 	return m
 }
 
-func newRealStorage(clusterName string) *ichorv1alpha1.TalosStoragePreset {
-	s := &ichorv1alpha1.TalosStoragePreset{
+func newRealStorage(clusterName string) *ichorv1alpha1.TalosStorage {
+	s := &ichorv1alpha1.TalosStorage{
 		GenerateName: "storage-", Namespace: tmNamespace,
-		Spec: ichorv1alpha1.TalosStoragePresetSpec{
+		Spec: ichorv1alpha1.TalosStorageSpec{
 			ClusterRef:   corev1.LocalObjectReference{Name: clusterName},
 			Nodes:        metav1.LabelSelector{MatchLabels: map[string]string{storageNodeKey: storageNodeValue}},
 			DiskPreset:   storage.LonghornV1,
@@ -100,7 +100,7 @@ func newRealStorage(clusterName string) *ichorv1alpha1.TalosStoragePreset {
 }
 
 // convergeMachine reconciles m against a node whose running config is exactly what the
-// controller renders for it now (including TalosStoragePresets), so it records convergence.
+// controller renders for it now (including TalosStorages), so it records convergence.
 func convergeMachine(
 	m *ichorv1alpha1.TalosMachine, current []byte,
 ) {
@@ -113,17 +113,17 @@ func convergeMachine(
 	Expect(fake.applyCalls).To(BeEmpty(), "the node already runs the rendered config; nothing to apply")
 }
 
-func reconcileStorage(r *TalosStoragePresetReconciler, s *ichorv1alpha1.TalosStoragePreset) *ichorv1alpha1.TalosStoragePreset {
+func reconcileStorage(r *TalosStorageReconciler, s *ichorv1alpha1.TalosStorage) *ichorv1alpha1.TalosStorage {
 	_, err := r.Reconcile(ctx, ctrl.Request{Namespace: s.Namespace, Name: s.Name})
 	Expect(err).NotTo(HaveOccurred())
 
-	var got ichorv1alpha1.TalosStoragePreset
+	var got ichorv1alpha1.TalosStorage
 	Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(s), &got)).To(Succeed())
 
 	return &got
 }
 
-var _ = Describe("TalosStoragePreset layer 1 and status", func() {
+var _ = Describe("TalosStorage layer 1 and status", func() {
 	var (
 		bundleRaw = newTestBundle("v1.14")
 	)
@@ -136,7 +136,7 @@ var _ = Describe("TalosStoragePreset layer 1 and status", func() {
 		return sys
 	}
 
-	It("renders the preparation into the machine a TalosStoragePreset selects, and into no other", func() {
+	It("renders the preparation into the machine a TalosStorage selects, and into no other", func() {
 		secret := newTestSecret(bundleRaw)
 		cluster := newTestCluster(secret.Name, "v1.14")
 		selected := newStorageTestMachine(cluster.Name, map[string]string{storageNodeKey: storageNodeValue})
@@ -152,7 +152,7 @@ var _ = Describe("TalosStoragePreset layer 1 and status", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(wantOther)).NotTo(ContainSubstring("UserVolumeConfig"))
 
-		// The node already runs exactly that config: if the controller ignored TalosStoragePreset the
+		// The node already runs exactly that config: if the controller ignored TalosStorage the
 		// hashes would differ and it would dry-run and apply.
 		convergeMachine(selected, wantSelected)
 		convergeMachine(other, wantOther)
@@ -162,11 +162,11 @@ var _ = Describe("TalosStoragePreset layer 1 and status", func() {
 	})
 
 	Describe("status", func() {
-		newReconciler := func(setting string) *TalosStoragePresetReconciler {
-			return &TalosStoragePresetReconciler{Client: k8sClient, APIReader: fakeSettingReader{value: setting}}
+		newReconciler := func(setting string) *TalosStorageReconciler {
+			return &TalosStorageReconciler{Client: k8sClient, APIReader: fakeSettingReader{value: setting}}
 		}
 
-		cond := func(s *ichorv1alpha1.TalosStoragePreset, t string) *metav1.Condition {
+		cond := func(s *ichorv1alpha1.TalosStorage, t string) *metav1.Condition {
 			return apimeta.FindStatusCondition(s.Status.Conditions, t)
 		}
 
@@ -196,7 +196,7 @@ var _ = Describe("TalosStoragePreset layer 1 and status", func() {
 			selected := newStorageTestMachine(cluster.Name, map[string]string{storageNodeKey: storageNodeValue})
 			other := newStorageTestMachine(cluster.Name, nil)
 
-			// The selected machine converged before the TalosStoragePreset existed.
+			// The selected machine converged before the TalosStorage existed.
 			before, _, err := render.Render(cluster, selected, bundleRaw, nil, systemInputs(cluster))
 			Expect(err).NotTo(HaveOccurred())
 			convergeMachine(selected, before)
@@ -204,7 +204,7 @@ var _ = Describe("TalosStoragePreset layer 1 and status", func() {
 			s := newRealStorage(cluster.Name)
 			r := newReconciler("")
 
-			// That convergence does not count: it predates this TalosStoragePreset.
+			// That convergence does not count: it predates this TalosStorage.
 			ready := cond(reconcileStorage(r, s), conditionStorageReady)
 			Expect(ready.Status).To(Equal(metav1.ConditionFalse))
 			Expect(ready.Reason).To(Equal(reasonStorageNodesNotReady))
@@ -215,7 +215,7 @@ var _ = Describe("TalosStoragePreset layer 1 and status", func() {
 			Expect(err).NotTo(HaveOccurred())
 			convergeMachine(selected, after)
 
-			// `other` never converged, but no TalosStoragePreset governs it, so it does not block Ready.
+			// `other` never converged, but no TalosStorage governs it, so it does not block Ready.
 			ready = cond(reconcileStorage(r, s), conditionStorageReady)
 			Expect(ready.Status).To(Equal(metav1.ConditionTrue), "message: %s", ready.Message)
 			Expect(ready.Reason).To(Equal(reasonStoragePrepared))

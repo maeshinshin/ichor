@@ -42,10 +42,10 @@ import (
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
-// TalosStoragePreset status condition types and reasons.
+// TalosStorage status condition types and reasons.
 const (
 	// conditionStorageReady is the condition Argo CD's health check reads: True once every
-	// approved machine this TalosStoragePreset governs has converged on a render that includes it.
+	// approved machine this TalosStorage governs has converged on a render that includes it.
 	conditionStorageReady = "Ready"
 
 	// conditionStorageSystem is informational and never gates Ready: whether the storage
@@ -53,7 +53,7 @@ const (
 	conditionStorageSystem = "StorageSystemConsistent"
 
 	// conditionStorageExtensions is informational and never gates Ready: whether every node this
-	// TalosStoragePreset governs runs the Talos system extensions its preset needs.
+	// TalosStorage governs runs the Talos system extensions its preset needs.
 	conditionStorageExtensions = "ExtensionsPresent"
 
 	// talosExtensionLabelPrefix is the Node label prefix Talos sets for each installed system
@@ -73,7 +73,7 @@ const (
 	reasonStorageSystemAbsent     = "NotInstalled"
 
 	// storageRequeueInterval re-reads the storage system's setting, which cannot be watched
-	// (its CRDs may not exist at all). Machine and TalosStoragePreset changes are watched instead.
+	// (its CRDs may not exist at all). Machine and TalosStorage changes are watched instead.
 	storageRequeueInterval = 2 * time.Minute
 
 	// longhornCreateDefaultDiskLabeledNodes is the name of Longhorn's setting that makes it
@@ -85,10 +85,10 @@ const (
 
 var longhornSettingGVK = longhornNodeGVK.GroupVersion().WithKind("Setting")
 
-// TalosStoragePresetReconciler reports whether the Talos side of a TalosStoragePreset (layer 1) is ready.
+// TalosStorageReconciler reports whether the Talos side of a TalosStorage (layer 1) is ready.
 // It writes status only; the preparation itself reaches nodes through TalosMachineReconciler,
 // which renders it as the system layer (pkg/render). It never writes a Longhorn object.
-type TalosStoragePresetReconciler struct {
+type TalosStorageReconciler struct {
 	client.Client
 
 	// APIReader reads the storage system's own setting uncached: the manager's cache would
@@ -99,17 +99,17 @@ type TalosStoragePresetReconciler struct {
 	ControllerNamespace string
 }
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstoragepresets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstoragepresets/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=longhorn.io,resources=settings,resourceNames=create-default-disk-labeled-nodes,verbs=get
 
-// Reconcile computes Ready and StorageSystemConsistent for one TalosStoragePreset.
-func (r *TalosStoragePresetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var ts ichorv1alpha1.TalosStoragePreset
+// Reconcile computes Ready and StorageSystemConsistent for one TalosStorage.
+func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var ts ichorv1alpha1.TalosStorage
 	if err := r.Get(ctx, req.NamespacedName, &ts); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -143,13 +143,13 @@ func (r *TalosStoragePresetReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 // readyCondition is True when at least one approved machine is governed by ts and every such
 // machine is converged. "Governed" is render.StorageFor -- the same call Render makes, over the
-// same TalosStoragePresets -- and "converged" is the machine's Ready condition plus an
+// same TalosStorages -- and "converged" is the machine's Ready condition plus an
 // observedInputsHash equal to the one TalosMachineReconciler would compute now (so a machine
-// that converged before this TalosStoragePreset existed or changed does not count). It lists machines
+// that converged before this TalosStorage existed or changed does not count). It lists machines
 // to report on, not to count control planes or gate a disruptive action, so a cached read is
 // fine (countplanes_guard_test.go).
-func (r *TalosStoragePresetReconciler) readyCondition(
-	ctx context.Context, ts *ichorv1alpha1.TalosStoragePreset,
+func (r *TalosStorageReconciler) readyCondition(
+	ctx context.Context, ts *ichorv1alpha1.TalosStorage,
 ) (metav1.Condition, []*ichorv1alpha1.TalosMachine, error) {
 	cond := metav1.Condition{Type: conditionStorageReady}
 
@@ -168,7 +168,7 @@ func (r *TalosStoragePresetReconciler) readyCondition(
 	}
 
 	var (
-		storages ichorv1alpha1.TalosStoragePresetList
+		storages ichorv1alpha1.TalosStorageList
 		patches  ichorv1alpha1.TalosConfigPatchList
 	)
 
@@ -222,11 +222,11 @@ func (r *TalosStoragePresetReconciler) readyCondition(
 	switch {
 	case len(governed) == 0:
 		cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageNoNodes
-		cond.Message = "no approved node is governed by this TalosStoragePreset " +
-			"(spec.nodes matches each node's spec.nodeLabels; a node matched by several TalosStoragePresets belongs to the first by name)"
+		cond.Message = "no approved node is governed by this TalosStorage " +
+			"(spec.nodes matches each node's spec.nodeLabels; a node matched by several TalosStorages belongs to the first by name)"
 	case len(pending) > 0:
 		cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageNodesNotReady
-		cond.Message = fmt.Sprintf("%d of %d nodes have not converged on a configuration that includes this TalosStoragePreset: %s",
+		cond.Message = fmt.Sprintf("%d of %d nodes have not converged on a configuration that includes this TalosStorage: %s",
 			len(pending), len(governed), strings.Join(pending, ", "))
 	default:
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonStoragePrepared
@@ -242,8 +242,8 @@ func (r *TalosStoragePresetReconciler) readyCondition(
 // credentials here and reflect what is actually booted, not what a schematic ID says. A machine
 // whose Node cannot be found yet is skipped; if no Node could be observed at all the condition is
 // Unknown. It never gates Ready and never blocks the rest of the reconcile.
-func (r *TalosStoragePresetReconciler) extensionsCondition(
-	ctx context.Context, ts *ichorv1alpha1.TalosStoragePreset, governed []*ichorv1alpha1.TalosMachine,
+func (r *TalosStorageReconciler) extensionsCondition(
+	ctx context.Context, ts *ichorv1alpha1.TalosStorage, governed []*ichorv1alpha1.TalosMachine,
 ) (metav1.Condition, error) {
 	cond := metav1.Condition{Type: conditionStorageExtensions}
 
@@ -317,8 +317,8 @@ func (r *TalosStoragePresetReconciler) extensionsCondition(
 // systemCondition reads the storage system's own setting through the preset's consistency check.
 // An absent storage system is Unknown/NotInstalled, not an error: installing it is Argo CD's job
 // (layer 2), and this condition does not gate Ready.
-func (r *TalosStoragePresetReconciler) systemCondition(
-	ctx context.Context, ts *ichorv1alpha1.TalosStoragePreset,
+func (r *TalosStorageReconciler) systemCondition(
+	ctx context.Context, ts *ichorv1alpha1.TalosStorage,
 ) (metav1.Condition, error) {
 	cond := metav1.Condition{Type: conditionStorageSystem}
 
@@ -359,22 +359,22 @@ func (r *TalosStoragePresetReconciler) systemCondition(
 
 // SetupWithManager sets up the controller with the Manager. Own-status writes do not retrigger
 // it (generation filter); TalosMachine changes -- a machine converging is what flips Ready --
-// map to every TalosStoragePreset in the machine's namespace and cluster.
-func (r *TalosStoragePresetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+// map to every TalosStorage in the machine's namespace and cluster.
+func (r *TalosStorageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ichorv1alpha1.TalosStoragePreset{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&ichorv1alpha1.TalosStorage{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(r.storagesForMachine)).
-		Named("talosstoragepreset").
-		Complete(quietExpected(r, "talosstoragepreset"))
+		Named("talosstorage").
+		Complete(quietExpected(r, "talosstorage"))
 }
 
-func (r *TalosStoragePresetReconciler) storagesForMachine(ctx context.Context, obj client.Object) []reconcile.Request {
+func (r *TalosStorageReconciler) storagesForMachine(ctx context.Context, obj client.Object) []reconcile.Request {
 	m, ok := obj.(*ichorv1alpha1.TalosMachine)
 	if !ok {
 		return nil
 	}
 
-	var list ichorv1alpha1.TalosStoragePresetList
+	var list ichorv1alpha1.TalosStorageList
 	if err := r.List(ctx, &list, client.InNamespace(m.Namespace)); err != nil {
 		return nil
 	}

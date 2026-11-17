@@ -18,7 +18,7 @@ rules:
   - talosetcdbackups
   - talosmachines
   - talosoperations
-  - talosstoragepresets
+  - talosstorages
   verbs:
   - get
   - list

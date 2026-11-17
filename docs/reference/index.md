@@ -41,7 +41,7 @@ a field an installed build had, and are unused.
 | [TalosConfigPatch](crds/talosconfigpatch.md) | A typed layer of machine configuration |
 | [TalosOperation](crds/talosoperation.md) | An upgrade, rotation or node action in progress |
 | [TalosEtcdBackup](crds/talosetcdbackup.md) | Scheduled etcd snapshots and their storage |
-| [TalosStoragePreset](crds/talosstoragepreset.md) | Disk preparation for a storage system |
+| [TalosStorage](crds/talosstorage.md) | Disk preparation for a storage system |
 | [MachineReclaim](crds/machinereclaim.md) | Resetting a machine that another cluster configured |
 | [TalosCredentialRequest](crds/taloscredentialrequest.md) | A short-lived request for one certificate |
 | [IchorInstallation](crds/ichorinstallation.md) | Ichor's own version and runtime settings |

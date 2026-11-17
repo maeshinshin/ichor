@@ -61,9 +61,9 @@ package uiapi
 // An etcd restore is planned and chosen from the backups' status: get/list, nothing written. The backup
 // request is written as the signed-in user.
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list
-// GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStoragePresets with
+// GetEffectiveConfig renders through render.ResolveSystemInputs, which lists TalosStorages with
 // the ServiceAccount; the caller's own list follows. List only, no informer.
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstoragepresets,verbs=list
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=list
 // The secrets bundle and every other Secret are out of reach of this role: whatever needs a CA
 // key is the controller's. The backend asks it for a certificate or a cluster's public facts by creating a
 // TalosCredentialRequest, in the cluster's namespace, and reads the answer back (get). With Ichor users on

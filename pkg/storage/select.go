@@ -25,16 +25,16 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// Select is the one rule for which TalosStoragePreset governs a node: the storages
+// Select is the one rule for which TalosStorage governs a node: the storages
 // belonging to cluster (same namespace, same clusterRef) whose spec.nodes selector matches
 // nodeLabels; when several do, the first by name wins, the same on every call. nil, nil means
 // none applies. Layer 1 (pkg/render, matched against the machine's declared nodeLabels) and
 // layer 4 (internal/controller's evacuation, matched against the live Node's labels) both go
 // through it so they cannot disagree about the rule, only about the label source.
 func Select(
-	cluster *ichorv1alpha1.TalosCluster, storages []ichorv1alpha1.TalosStoragePreset, nodeLabels map[string]string,
-) (*ichorv1alpha1.TalosStoragePreset, error) {
-	var first *ichorv1alpha1.TalosStoragePreset
+	cluster *ichorv1alpha1.TalosCluster, storages []ichorv1alpha1.TalosStorage, nodeLabels map[string]string,
+) (*ichorv1alpha1.TalosStorage, error) {
+	var first *ichorv1alpha1.TalosStorage
 
 	for i := range storages {
 		s := &storages[i]
@@ -44,7 +44,7 @@ func Select(
 
 		sel, err := metav1.LabelSelectorAsSelector(&s.Spec.Nodes)
 		if err != nil {
-			return nil, fmt.Errorf("parsing TalosStoragePreset %q's node selector: %w", s.Name, err)
+			return nil, fmt.Errorf("parsing TalosStorage %q's node selector: %w", s.Name, err)
 		}
 
 		if sel.Matches(labels.Set(nodeLabels)) && (first == nil || s.Name < first.Name) {

@@ -82,7 +82,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstoragepresets
+  - talosstorages
   verbs:
   - list
 {{- if or .Values.ichorUI.oidc.enabled .Values.ichorUI.users.enabled }}

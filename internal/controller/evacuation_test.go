@@ -30,13 +30,13 @@ import (
 )
 
 // testStorageLabelKey and testStorageLabelValue are the Node label every
-// test below selects (or doesn't) a TalosStoragePreset's spec.nodes on (goconst).
+// test below selects (or doesn't) a TalosStorage's spec.nodes on (goconst).
 const (
 	testStorageLabelKey   = "storage"
 	testStorageLabelValue = "yes"
 )
 
-// newTestStorageNode creates a Node carrying labels, for TalosStoragePreset's
+// newTestStorageNode creates a Node carrying labels, for TalosStorage's
 // own node selector to match against.
 func newTestStorageNode(name string, labels map[string]string) {
 	n := &corev1.Node{}
@@ -45,17 +45,17 @@ func newTestStorageNode(name string, labels map[string]string) {
 	Expect(k8sClient.Create(ctx, n)).To(Succeed())
 }
 
-// newTestStorage creates a longhorn-v1 TalosStoragePreset for clusterName, selecting nodes by selector.
+// newTestStorage creates a longhorn-v1 TalosStorage for clusterName, selecting nodes by selector.
 func newTestStorage(clusterName string, selector metav1.LabelSelector, timeout *metav1.Duration) {
 	newTestStorageOf(clusterName, storage.LonghornV1, selector, timeout)
 }
 
-// newTestStorageOf creates a TalosStoragePreset with preset. Only longhorn-v1 takes a diskSelector: the CRD refuses
+// newTestStorageOf creates a TalosStorage with preset. Only longhorn-v1 takes a diskSelector: the CRD refuses
 // one on rook-v1.
 func newTestStorageOf(clusterName, preset string, selector metav1.LabelSelector, timeout *metav1.Duration) {
-	s := &ichorv1alpha1.TalosStoragePreset{
+	s := &ichorv1alpha1.TalosStorage{
 		GenerateName: "storage-", Namespace: tmNamespace,
-		Spec: ichorv1alpha1.TalosStoragePresetSpec{
+		Spec: ichorv1alpha1.TalosStorageSpec{
 			ClusterRef:        corev1.LocalObjectReference{Name: clusterName},
 			Nodes:             selector,
 			DiskPreset:        preset,
@@ -69,7 +69,7 @@ func newTestStorageOf(clusterName, preset string, selector metav1.LabelSelector,
 }
 
 var _ = Describe("LonghornEvacuator.Resolve", func() {
-	It("finds the TalosStoragePreset whose node selector matches the given node, with the hook's own default timeout", func() {
+	It("finds the TalosStorage whose node selector matches the given node, with the hook's own default timeout", func() {
 		cluster := newOpTestCluster()
 		newTestStorageNode("node-resolve1", map[string]string{testStorageLabelKey: testStorageLabelValue})
 		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
@@ -82,7 +82,7 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 		Expect(target.namespace).To(Equal(defaultLonghornNamespace))
 	})
 
-	It("uses the TalosStoragePreset's own evacuationTimeout when set", func() {
+	It("uses the TalosStorage's own evacuationTimeout when set", func() {
 		cluster := newOpTestCluster()
 		newTestStorageNode("node-resolve2", map[string]string{testStorageLabelKey: testStorageLabelValue})
 		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}},
@@ -94,7 +94,7 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 		Expect(target.timeout).To(Equal(3 * time.Minute))
 	})
 
-	It("returns nil, nil when no TalosStoragePreset selects the node -- nothing to evacuate", func() {
+	It("returns nil, nil when no TalosStorage selects the node -- nothing to evacuate", func() {
 		cluster := newOpTestCluster()
 		newTestStorageNode("node-resolve3", map[string]string{testStorageLabelKey: "no"})
 		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
@@ -105,7 +105,7 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 		Expect(target).To(BeNil())
 	})
 
-	It("returns nil, nil when no TalosStoragePreset exists at all for the cluster -- the common, no-storage-system case", func() {
+	It("returns nil, nil when no TalosStorage exists at all for the cluster -- the common, no-storage-system case", func() {
 		cluster := newOpTestCluster()
 		newTestStorageNode("node-resolve4", nil)
 
@@ -115,7 +115,7 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 		Expect(target).To(BeNil())
 	})
 
-	It("returns nil, nil for a node a rook-v1 TalosStoragePreset governs -- rook-v1 has no evacuation hook", func() {
+	It("returns nil, nil for a node a rook-v1 TalosStorage governs -- rook-v1 has no evacuation hook", func() {
 		cluster := newOpTestCluster()
 		newTestStorageNode("node-resolve5", map[string]string{testStorageLabelKey: testStorageLabelValue})
 		newTestStorageOf(cluster.Name, storage.RookV1,

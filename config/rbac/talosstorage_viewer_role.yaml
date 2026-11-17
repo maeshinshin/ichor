@@ -11,12 +11,12 @@ metadata:
   labels:
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
-  name: talosstoragepreset-viewer-role
+  name: talosstorage-viewer-role
 rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstoragepresets
+  - talosstorages
   verbs:
   - get
   - list
@@ -24,6 +24,6 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstoragepresets/status
+  - talosstorages/status
   verbs:
   - get

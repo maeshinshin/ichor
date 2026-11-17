@@ -1,10 +1,10 @@
 apiVersion: ichor.maesh.dev/v1alpha1
-kind: TalosStoragePreset
+kind: TalosStorage
 metadata:
   labels:
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
-  name: talosstoragepreset-sample
+  name: talosstorage-sample
 spec:
   clusterRef:
     name: taloscluster-sample

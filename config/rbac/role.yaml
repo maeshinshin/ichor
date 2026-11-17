@@ -165,7 +165,7 @@ rules:
   - talosetcdbackups/status
   - talosmachines/status
   - talosoperations/status
-  - talosstoragepresets/status
+  - talosstorages/status
   verbs:
   - get
   - patch
@@ -177,7 +177,7 @@ rules:
   - talosclusters
   - talosconfigpatches
   - talosetcdbackups
-  - talosstoragepresets
+  - talosstorages
   verbs:
   - get
   - list

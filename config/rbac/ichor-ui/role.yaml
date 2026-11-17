@@ -83,7 +83,7 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
-  - talosstoragepresets
+  - talosstorages
   verbs:
   - list
 ---

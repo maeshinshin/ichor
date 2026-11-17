@@ -13,7 +13,7 @@ import { storageClient } from '@/lib/connect'
 import { t } from '@/lib/i18n'
 import { notifyDone } from '@/lib/notify'
 
-// CreateStorageDialog writes one TalosStoragePreset as the signed-in user (StorageService.CreateStorage). Only a
+// CreateStorageDialog writes one TalosStorage as the signed-in user (StorageService.CreateStorage). Only a
 // preset the server marks creatable can be chosen; the others stay listed, with the reason they are not made here.
 export function CreateStorageDialog({ cluster, presets, onDone }: { cluster?: ObjectRef; presets: StoragePreset[]; onDone: () => void }) {
   const first = presets.find((p) => p.creatable)?.name ?? ''

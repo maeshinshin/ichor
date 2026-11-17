@@ -10,7 +10,7 @@ node ready.
 
 Ichor does:
 
-- Render a `TalosStoragePreset` with `diskPreset: rook-v1` as a node that leaves its
+- Render a `TalosStorage` with `diskPreset: rook-v1` as a node that leaves its
   disks alone. Rook then consumes the raw device. The
   [Storage](../design/architecture/storage.md) page describes the layers.
 - Render a labelled raw partition on a node if you write one as a
@@ -70,7 +70,7 @@ spec:
     storage: rook
 ---
 apiVersion: ichor.maesh.dev/v1alpha1
-kind: TalosStoragePreset
+kind: TalosStorage
 metadata:
   name: rook
   namespace: <the TalosCluster's namespace>

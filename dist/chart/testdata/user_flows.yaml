@@ -8,7 +8,7 @@ flows:
 - name: list and read every Ichor resource (ichor get nodes, cluster pages)
   role: viewer
   needs: [talosclusters get, talosclusters list, talosmachines watch, talosoperations list, talosetcdbackups list,
-    talosstoragepresets list, ichorinstallations get, talosconfigpatches list]
+    talosstorages list, ichorinstallations get, talosconfigpatches list]
 - name: start an operation (ichor rollout config, upgrade, reboot)
   role: operator
   needs: [talosoperations create, talosoperations update]

@@ -126,13 +126,13 @@ func (s *Server) GetEffectiveConfig(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// ResolveSystemInputs lists TalosStoragePreset with the ServiceAccount; the
+	// ResolveSystemInputs lists TalosStorage with the ServiceAccount; the
 	// presets end up in the (unmasked) rendering, so the caller's own list
 	// decides which of them they see. Registry credentials
 	// stay on the ServiceAccount: they only leave as masked secrets.
-	var storages ichorv1alpha1.TalosStoragePresetList
+	var storages ichorv1alpha1.TalosStorageList
 	if err := s.List(ctx, &storages, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, mapListError("TalosStoragePreset", err)
+		return nil, mapListError("TalosStorage", err)
 	}
 
 	sys.Storage = storages.Items

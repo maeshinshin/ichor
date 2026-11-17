@@ -136,7 +136,7 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 		Entry("TalosMachine", &ichorv1alpha1.TalosMachine{}),
 		Entry("TalosOperation", &ichorv1alpha1.TalosOperation{}),
 		Entry("TalosConfigPatch", &ichorv1alpha1.TalosConfigPatch{}),
-		Entry("TalosStoragePreset", &ichorv1alpha1.TalosStoragePreset{}),
+		Entry("TalosStorage", &ichorv1alpha1.TalosStorage{}),
 		Entry("TalosEtcdBackup", &ichorv1alpha1.TalosEtcdBackup{}),
 		Entry("IchorInstallation", &ichorv1alpha1.IchorInstallation{}),
 	)

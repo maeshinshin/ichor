@@ -16,8 +16,6 @@ configuration). With `--endpoint-type vip`, each control plane now holds the
 endpoint address on its primary link, and `ichor init` takes the first node's
 network for it.
 
-v0.3.0 is the last release with changes of this size. No further large change is planned after it.
-
 ### Upgrade notes
 
 What in this release can refuse something that used to work, or change what a
@@ -161,16 +159,6 @@ command does. Each item is described where it is listed below.
   forbidden`.** The installer's own Role now grants `list` on `TalosClusters` in the
   release's namespace, and the installer reads the issuer URL after that Role is in
   effect. An upgrade that stopped with that message can be run again (Operations).
-
-- **`TalosStorage` is renamed `TalosStoragePreset`, and the installer refuses to install
-  while any `TalosStorage` object remains anywhere in the cluster.** This is a breaking
-  change in one release, with no conversion: this release does not read or copy the old
-  kind. Before it applies the release's own objects, the installer lists `TalosStorage`
-  objects in every namespace and stops with an error that gives their count and
-  namespaces; it refuses rather than warns. A Helm install or upgrade runs the same
-  check as a chart hook. To move an object, recreate it as a `TalosStoragePreset` with
-  the same name, namespace and spec, confirm the node configuration is what you expect,
-  delete the `TalosStorage`, and run the install again (Storage, ADR 0168).
 
 ### CLI
 - **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The
@@ -660,7 +648,7 @@ command does. Each item is described where it is listed below.
 
 ### Storage
 
-- **`TalosStoragePreset` takes a second disk preset, `rook-v1`, for Rook/Ceph.** A node
+- **`TalosStorage` takes a second disk preset, `rook-v1`, for Rook/Ceph.** A node
   that `rook-v1` governs gets no Talos volume, no kubelet mount and no node label.
   Talos writes no disk configuration for it, and the disk is left for Rook to take
   as a raw device. Ichor writes no `UserVolumeConfig` for it, because Talos formats
@@ -672,15 +660,15 @@ command does. Each item is described where it is listed below.
 - **A node that `rook-v1` governs drains, upgrades or is removed without an evacuation
   step.** Ichor moves nothing off such a node first, since the preset has no evacuation
   hook; the drain itself runs, and Rook's disruption budgets decide when each OSD may
-  leave. A node that no `TalosStoragePreset` governs, or that `longhorn-v1` governs, is
+  leave. A node that no `TalosStorage` governs, or that `longhorn-v1` governs, is
   unchanged.
 - **`diskSelector` is required for `longhorn-v1` and refused for `rook-v1`.** A
   `rook-v1` object that sets it is refused with "rook-v1 writes no disk config, so
-  a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStoragePreset
+  a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStorage
   from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one
   update". To move a node from `longhorn-v1` to `rook-v1`, change `diskPreset` and
   remove `diskSelector` in one update: either change alone is refused.
-- **The Storage page creates a `rook-v1` `TalosStoragePreset`.** It takes a name, a cluster
+- **The Storage page creates a `rook-v1` `TalosStorage`.** It takes a name, a cluster
   and a node selector, and writes the object as the signed-in user, so only the
   `ichor-admin` role can create one. The page writes no disk selector, because
   `rook-v1` takes none. It lists `longhorn-v1` as unavailable, and does not create it,
@@ -688,13 +676,13 @@ command does. Each item is described where it is listed below.
   checks only that the selector is not empty, not that it is a valid Talos expression.
   Apply that object yourself with `kubectl`, as an `ichor-admin`, after checking the
   selector against the disks of the nodes it will prepare.
-- **`TalosStoragePreset.spec.nodes` and `TalosConfigPatch.labelSelector` read different
+- **`TalosStorage.spec.nodes` and `TalosConfigPatch.labelSelector` read different
   labels.** Rendering matches a machine's `spec.nodeLabels`, and a `TalosConfigPatch`
-  selector reads only that. Evacuation, which a `TalosStoragePreset` also drives, matches the
+  selector reads only that. Evacuation, which a `TalosStorage` also drives, matches the
   labels on the live Kubernetes Node. A selector that names only labels set through
   `spec.nodeLabels` picks the same nodes in both. A label the Node carries from
   elsewhere, such as a kubelet preset label or one set with `kubectl`, makes a
-  `TalosStoragePreset` evacuate a node it renders nothing for, where there is no volume to
+  `TalosStorage` evacuate a node it renders nothing for, where there is no volume to
   evacuate. The other direction can lose data: a node that the selector matches through
   `spec.nodeLabels` is rendered before its live Node carries the label, and evacuation
   does not run for it until the label is there.
@@ -741,8 +729,8 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
-- **The Storage page lists each `TalosStoragePreset` with the nodes it governs and the
-  disk preset it uses.** It is read-only: a `TalosStoragePreset` is still changed as a
+- **The Storage page lists each `TalosStorage` with the nodes it governs and the
+  disk preset it uses.** It is read-only: a `TalosStorage` is still changed as a
   custom resource, and the page writes nothing.
 - **The UI asks you to reload when the server has moved on.** ichor-ui sends its
   version in an `X-Ichor-Version` header on the responses to signed-in calls, and

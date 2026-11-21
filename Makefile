@@ -252,6 +252,8 @@ build-ichor-embed: check-embed-images ## Build the ichor CLI with Ichor's own in
 	cp dist/install.yaml internal/installmanifest/install.yaml
 	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	go build -tags installembed -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor
+	@# A dynamically linked ichor needs its loader, so it does not run in a minimal container (a busybox pod). file says so only for ELF, so a macOS build passes.
+	@if file -b bin/ichor | grep -q 'dynamically linked'; then echo "build-ichor-embed: bin/ichor is dynamically linked and will not run in a minimal container: $$(file -b bin/ichor)" >&2; exit 1; fi
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

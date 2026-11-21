@@ -70,6 +70,7 @@
               drawio # exports the docs diagrams to SVG (make docs-diagrams)
               xvfb-run # draw.io is an Electron app and wants a display
               gnumake
+              file # build-ichor-embed reads the linkage of bin/ichor with it
               openssl # self-signed ichor-ui cert for the UI demo (test/harness/ui-demo/README.md)
               git
               asciinema # records a terminal session

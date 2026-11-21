@@ -1,6 +1,7 @@
 ---
 sidebar_group: "Cluster lifecycle"
 sidebar_order: 11
+sidebar_label: "Architecture: Cilium"
 ---
 
 # Cilium

@@ -1,6 +1,7 @@
 ---
 sidebar_group: "Configuration"
 sidebar_order: 6
+sidebar_label: "Architecture: API"
 ---
 
 # API

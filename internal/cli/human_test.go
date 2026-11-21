@@ -280,3 +280,10 @@ func wantText(t *testing.T, got, want string) {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+// A node waiting out its verify window is in progress, not done.
+func TestConditionMarkReadsAWaitingUpgradeAsPending(t *testing.T) {
+	if got := conditionMark("TalosUpgradeWaiting", condTrue, "Verifying"); got != markPending {
+		t.Errorf("TalosUpgradeWaiting True = %d, want markPending (%d)", got, markPending)
+	}
+}

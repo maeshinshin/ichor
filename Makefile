@@ -649,7 +649,9 @@ docs-install: ## Install the docs site's dependencies (npm ci; docs-audit report
 # All dependencies, high and above. The ui step in test.yml uses --omit=dev; this one does not, on purpose:
 # the build tools (Astro, Tailwind, Pagefind) are what the CI build runs, and the devDependency, the shadcn CLI,
 # runs on the maintainer's machine when a component is added, so a high advisory in it matters too.
-# Reported but accepted, low and no fixed version: deepmerge 4.3.1 (GHSA-gcqx-w48m-w2h4) via shadcn. The
+# Reported but accepted (maintainer, 2026-11-22), low and no fixed version: deepmerge 4.3.1 (GHSA-gcqx-w48m-w2h4)
+# via shadcn. A build-time dev dependency that is not shipped in site/dist. Upgrade when shadcn drops deepmerge or
+# deepmerge publishes a fix, and remove this note. The
 # overrides in site/package.json pin postcss-selector-parser and minimatch to their patched versions.
 .PHONY: docs-audit
 docs-audit: ## Fail on a high or critical advisory in the docs site's dependencies, dev included.

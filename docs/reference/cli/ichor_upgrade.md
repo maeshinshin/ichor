@@ -64,6 +64,7 @@ ichor upgrade [command]
 ### SEE ALSO
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
+* [ichor upgrade cli](ichor_upgrade_cli.md)	 - Replace this ichor binary with a verified release
 * [ichor upgrade cni](ichor_upgrade_cni.md)	 - Upgrade Cilium to the chart this Ichor ships
 * [ichor upgrade ichor](ichor_upgrade_ichor.md)	 - Upgrade Ichor itself (IchorInstallation.spec.version)
 * [ichor upgrade kubernetes](ichor_upgrade_kubernetes.md)	 - Upgrade Kubernetes on a cluster (no reboot)

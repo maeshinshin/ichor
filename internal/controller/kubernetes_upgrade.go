@@ -228,7 +228,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	talos, err := a.TalosClient(dialCtx, cluster, m, bundle)
 	if err != nil {
-		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
+		if upgradeApplied(m) {
 			return false, a.waiting(ctx, m, cluster, "dialing the node: "+err.Error()) // restarting services
 		}
 
@@ -239,7 +239,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	// The node is read first: what its kubelet runs is what the staged render pins.
 	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
 	if err != nil {
-		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
+		if upgradeApplied(m) {
 			return false, a.waiting(ctx, m, cluster, err.Error())
 		}
 
@@ -248,7 +248,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	var node corev1.Node
 	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
-		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
+		if upgradeApplied(m) {
 			return false, a.waiting(ctx, m, cluster, fmt.Sprintf("reading node %q: %v", nodeName, err)) // API server restarting
 		}
 
@@ -269,7 +269,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	current, err := talos.CurrentConfig(dialCtx)
 	if err != nil {
-		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionKubernetesUpgrade) {
+		if upgradeApplied(m) {
 			return false, a.waiting(ctx, m, cluster, "reading the node's configuration: "+err.Error())
 		}
 
@@ -734,6 +734,16 @@ func (a *kubernetesUpgradeAdvancer) kubeProxyNotReady(ctx context.Context, targe
 	}
 
 	return ""
+}
+
+// upgradeApplied is whether this machine's step was applied and not yet verified: the marker is True, or
+// False with VerifyTimedOut, which a resumed operation finds on its first pass. Either way a transient
+// error is a wait on the marker's clock (waiting restarts it), not a failed step. Absent or Converged
+// means nothing is applied for this step, so an error is a real failure.
+func upgradeApplied(m *ichorv1alpha1.TalosMachine) bool {
+	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade)
+
+	return cond != nil && (cond.Status == metav1.ConditionTrue || cond.Reason == reasonKubernetesVerifyTimedOut)
 }
 
 // waiting is the "not converged yet" outcome: it starts the verification clock if no marker exists

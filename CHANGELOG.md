@@ -612,6 +612,8 @@ command does. Each item is described where it is listed below.
 - A Talos upgrade whose node does not come back within 20 minutes of the
   acknowledged Upgrade fails that node and pauses the operation. It used to wait
   with no limit and hold the cluster lock.
+- A resumed Kubernetes upgrade whose node cannot be reached on its first pass waits on a fresh clock. It used
+  to fail the step again and pause the operation.
 - **`ichor resume operation` retries a Talos upgrade whose node booted its previous A/B slot.**
   The operation used to pause again on the same fallback without calling the Upgrade API, so
   the upgrade could not be retried. A machine whose upgrade fell back now shows as failed in

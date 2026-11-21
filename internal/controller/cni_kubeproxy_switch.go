@@ -62,6 +62,7 @@ const (
 	conditionVerifyingNewSide = "VerifyingNewSide"
 
 	reasonCiliumNotSwitched = "CiliumNotSwitched"
+	reasonCiliumNoRelease   = "CiliumNoRelease"
 	reasonNewSideNotReady   = "NewSideNotReady"
 	reasonSideVerified      = "Verified"
 

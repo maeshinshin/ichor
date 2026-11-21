@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -117,6 +118,19 @@ func pauseReason(err error) string {
 	return reasonOperationStepFailed
 }
 
+// transientFailure is true for an API server or network failure, which a later attempt may not meet; any other error is
+// a refusal or a failed step that stays until someone changes something.
+func transientFailure(err error) bool {
+	if apierrors.IsServerTimeout(err) || apierrors.IsTimeout(err) || apierrors.IsTooManyRequests(err) ||
+		apierrors.IsServiceUnavailable(err) || apierrors.IsInternalError(err) || apierrors.IsConflict(err) {
+		return true
+	}
+
+	_, network := errors.AsType[net.Error](err)
+
+	return network
+}
+
 // The operation does not need the installer Job after jobTTL: once the upgrade succeeded the new
 // controller's version equals spec.version, which the executor checks before it looks for a Job.
 // (If an expired failed Job is resumed, the executor starts a fresh attempt; the installer
@@ -210,6 +224,11 @@ func (r *TalosOperationReconciler) advanceIchor(
 	}
 
 	done, err := r.Advance(ctx, cluster, nil, op)
+	// An API server or network failure clears on its own: it is retried, where a failure that can persist pauses for a person.
+	if err != nil && pauseReason(err) == reasonOperationStepFailed && transientFailure(err) {
+		return ctrl.Result{}, err
+	}
+
 	if err != nil {
 		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, pauseReason(err), err.Error())
 	}
@@ -333,7 +352,9 @@ func pinInstallerImage(
 		if digest, err = images.Resolve(ctx, repo, tag); err != nil {
 			return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnresolved,
 				err: fmt.Errorf("the installer image %s:%s was not resolved to a digest, so no installer Job was created "+
-					"(check that the registry is reachable from the controller, or pin spec.installerDigest): %w", repo, tag, err)}
+					"(check that the registry is reachable from the controller; if it cannot be, `ichor upgrade ichor VERSION "+
+					"--installer-digest sha256:... --skip-signature-check` pins the digest of the installer image you pushed "+
+					"and skips the signature check, which reads the same registry): %w", repo, tag, err)}
 		}
 	}
 

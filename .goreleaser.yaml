@@ -66,8 +66,10 @@ signs:
 
 # The release body is the tag's section of CHANGELOG.md, which the release workflow passes with
 # --release-notes. There is no changelog block on purpose: disabling the changelog would make
-# goreleaser ignore that flag too, and a generated commit log needs the previous tag to be an
-# ancestor of this one, which a tag cut from a release branch is not.
+# goreleaser ignore that flag too. goreleaser 2.17.1 (internal/pipe/git/git.go, previousTagSha) takes the
+# previous tag from `git describe --tags` run on the tag's parent, the nearest tag among the tag's own
+# ancestors, not the next lower version. A tag cut from a release branch never sees a tag on main's line,
+# and a generated commit log would span whatever ancestor tag is nearest, or be empty with a warning.
 
 release:
   # Name the repo explicitly so goreleaser doesn't need to read it from

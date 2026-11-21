@@ -19,12 +19,15 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -67,6 +70,37 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(got.Status.FailureReason).To(ContainSubstring("job failed"))
 		Expect(got.Status.Machines).To(BeEmpty())
+	})
+
+	It("retries an API server or network failure instead of pausing for a person", func() {
+		op := newIchorOp(newOpTestCluster().Name)
+
+		var failure error
+
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: testIchorNamespace, Advance: func(
+			context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *ichorv1alpha1.TalosOperation,
+		) (bool, error) {
+			return false, failure
+		}}
+
+		mustReconcileOperation(r, op)
+
+		for _, transient := range []error{
+			fmt.Errorf("reading the Deployments: %w", apierrors.NewServiceUnavailable("the API server is restarting")),
+			fmt.Errorf("reading IchorInstallation: %w", &net.OpError{Op: "dial", Err: errors.New("connection refused")}),
+		} {
+			failure = transient
+			_, err := reconcileOperation(r, op)
+			Expect(err).To(MatchError(transient), "the error is returned, so the reconcile is retried")
+
+			got := fetchOperation(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+			Expect(got.Status.FailureReason).To(BeEmpty())
+		}
+
+		failure = &installerImageError{reason: reasonInstallerImageUnresolved, err: fmt.Errorf("registry: %w", context.DeadlineExceeded)}
+		mustReconcileOperation(r, op)
+		expectPausedBecause(fetchOperation(op), reasonInstallerImageUnresolved)
 	})
 
 	It("pauses with the installer image's reason and a failureReason, so it is not retried by itself", func() {

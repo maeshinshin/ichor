@@ -43,13 +43,14 @@ import (
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
+var namespace = kube.Namespace
+
 const (
 	// Label marks every outer-cluster object this package creates; its value is the prefix.
 	Label = "ichor.maesh.dev/e2e-foreign"
 	// PrefixRoot is what every prefix must start with, so Down cannot be pointed at another run's objects.
 	PrefixRoot = "ichor-e2e-f"
 
-	namespace = kube.Namespace
 	schematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
 	// cachedVersion is the Talos version whose ISO is already cached as a DataVolume: the release set's.
 	cachedVersion = "v1.14.5"
@@ -182,7 +183,7 @@ const vmTmpl = `apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: %[1]s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     %[5]s: %[4]s
 spec:
@@ -323,7 +324,7 @@ const registryTmpl = `apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: %[1]s-registry
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     %[2]s: %[1]s
 spec:
@@ -348,7 +349,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: %[1]s-registry
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     %[2]s: %[1]s
 spec:
@@ -719,7 +720,7 @@ func (c *Cluster) startRelay() error {
 kind: Pod
 metadata:
   name: %s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     %s: %s
 spec:
@@ -752,7 +753,7 @@ func ToolsPod(prefix string) (string, error) {
 kind: Pod
 metadata:
   name: %s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     %s: %s
 spec:

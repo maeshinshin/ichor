@@ -50,8 +50,9 @@ import (
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
+var ns = kube.Namespace
+
 const (
-	ns      = "ichor-e2e"
 	crNS    = "ichor-system"
 	prefixE = "ICHOR_E2E_F_PREFIX"
 	// foreignK8sUpgradeStart is where the cases that upgrade Kubernetes to the release set (v1.36.6) start: one

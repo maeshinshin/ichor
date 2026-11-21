@@ -25,8 +25,7 @@ and prints its generated password once (must change on first login). It needs an
 ## Steps
 
 `P=ichor-ui-demo3`, `C=OUTER_CONTEXT` (your outer cluster's kube context), `NS=ichor-e2e` (the outer namespace).
-`NS` is the lab's value and must be the namespace the harness uses (`Namespace` in `test/internal/kube`, `ichor-e2e` today):
-the harness has no namespace parameter of its own. Run inside `nix develop`. Replace `__PREFIX__` with `$P` and
+`NS` must be the namespace the harness uses: export it as `ICHOR_E2E_NAMESPACE` (default `ichor-e2e`). Run inside `nix develop`. Replace `__PREFIX__` with `$P` and
 `__NAMESPACE__` with `$NS`.
 
 `outer-service.yaml` takes no address from the manifest: Cilium hands the Service one from the
@@ -56,13 +55,12 @@ select all of one demo's VMs. `ICHOR_UI_DEMO_HA=extra` creates only a fourth con
 value also deletes `-cp2`, `-cp3` and `-cp4` and their DataVolumes.
 
 ```sh
-export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P
 NS=ichor-e2e   # the outer namespace; see Steps
+export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_NAMESPACE=$NS
 go build -o bin/kubevirt-harness ./test/harness/kubevirt
 
 # 1. registry + images (no container runtime: ko builds them, crane pushes them)
-# registry.yaml still names ichor-e2e in its manifest, so NS must be that value until it takes __NAMESPACE__ too.
-sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n $NS apply -f -
+sed -e s/__PREFIX__/$P/ -e s/__NAMESPACE__/$NS/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n $NS apply -f -
 REG=$(kubectl --context $C -n $NS get svc $P-registry -o jsonpath={.spec.clusterIP})
 kubectl --context $C -n $NS port-forward svc/$P-registry 5000:5000 &   # leave it running while you push
 make demo-images VERSION=v0.0.0-demo REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests.txt   # builds and pushes manager, ichor-ui, installer; prints digests

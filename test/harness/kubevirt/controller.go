@@ -56,15 +56,16 @@ const (
 // outer cluster -- not from POD_NAMESPACE).
 const (
 	controllerWebhookCertSecret       = "ichor-webhook-server-cert"
-	controllerLeaderElectionNamespace = namespace
 	controllerValidatingWebhookConfig = "ichor-validating-webhook-configuration"
 )
+
+var controllerLeaderElectionNamespace = namespace
 
 const controllerPodManifestTmpl = `apiVersion: v1
 kind: Pod
 metadata:
   name: %[1]s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     ichor.maesh.dev/e2e-harness: kubevirt-ha
 spec:

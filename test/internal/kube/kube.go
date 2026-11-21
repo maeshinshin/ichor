@@ -33,11 +33,21 @@ import (
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
+// Namespace is the only namespace the harness may delete from; manifests name it __NAMESPACE__ and Apply fills it in.
+var Namespace = namespaceFromEnv()
+
+func namespaceFromEnv() string {
+	if v := os.Getenv(NamespaceEnv); v != "" {
+		return v
+	}
+	return "ichor-e2e"
+}
+
 const (
 	// ContextEnv names the kubeconfig context every outer-cluster kubectl call targets.
 	ContextEnv = "ICHOR_E2E_KUBE_CONTEXT"
-	// Namespace is the only namespace the harness may delete from.
-	Namespace = "ichor-e2e"
+	// NamespaceEnv overrides the outer namespace the harness works in.
+	NamespaceEnv = "ICHOR_E2E_NAMESPACE"
 	// StorageClassEnv overrides the StorageClass the harness's DataVolumes and PVCs request.
 	StorageClassEnv = "ICHOR_E2E_STORAGE_CLASS"
 
@@ -196,6 +206,7 @@ func checkDelete(args []string) error {
 
 // Apply runs `kubectl apply -f -` against the outer cluster with manifest on stdin.
 func Apply(manifest string) error {
+	manifest = strings.ReplaceAll(manifest, "__NAMESPACE__", Namespace)
 	cmd := Command("apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
 	_, err := utils.Run(cmd)

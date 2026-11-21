@@ -42,7 +42,7 @@ import (
 )
 
 // namespace is the only namespace this suite creates anything in.
-const namespace = "ichor-e2e"
+var namespace = kube.Namespace
 
 // e2eLabel marks every CEL-fixture object this run creates, so AfterAll can find and
 // delete exactly what it made.

@@ -38,7 +38,7 @@ import (
 	"github.com/maeshinshin/ichor/test/utils"
 )
 
-const namespace = "ichor-e2e"
+var namespace = kube.Namespace
 
 // vmName is fixed, not random: "up" and "down" are separate process invocations (separate
 // `make`/CI steps) with no shared state between them, so cleanup must be able to find what
@@ -69,7 +69,7 @@ const vmManifestTmpl = `apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: %[1]s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     ichor.maesh.dev/e2e-harness: %[4]s
 spec:
@@ -149,7 +149,7 @@ const relayManifestTmpl = `apiVersion: v1
 kind: Pod
 metadata:
   name: %[1]s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     ichor.maesh.dev/e2e-harness: kubevirt
 spec:

@@ -96,7 +96,7 @@ const baseCacheManifestTmpl = `apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume
 metadata:
   name: %s
-  namespace: ichor-e2e
+  namespace: __NAMESPACE__
   labels:
     ichor.maesh.dev/e2e-harness: base-cache
   annotations:

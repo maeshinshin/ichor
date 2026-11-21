@@ -27,7 +27,7 @@ import (
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
 )
 
-const namespace = "ichor-e2e"
+var namespace = kube.Namespace
 
 func main() {
 	if len(os.Args) < 4 {

@@ -115,3 +115,14 @@ func TestStorageClass(t *testing.T) {
 		t.Fatalf("override: got %q, want %q", got, "fast-wffc")
 	}
 }
+
+func TestNamespaceFromEnv(t *testing.T) {
+	t.Setenv(NamespaceEnv, "")
+	if got := namespaceFromEnv(); got != "ichor-e2e" {
+		t.Fatalf("default = %q", got)
+	}
+	t.Setenv(NamespaceEnv, "lab-ns")
+	if got := namespaceFromEnv(); got != "lab-ns" {
+		t.Fatalf("override = %q", got)
+	}
+}

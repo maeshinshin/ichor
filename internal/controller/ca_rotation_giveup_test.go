@@ -45,6 +45,26 @@ func stepUntilGivesUp(
 	return cur
 }
 
+// A request no passage of time can make runnable is a failed step at once; waiting out the give-up window would
+// hold the cluster lock for thirty minutes first.
+var _ = Describe("a CA rotation that can never start", func() {
+	It("pauses on a failed step at once and gives the cluster lock back", func() {
+		f := newCARotFixture()
+		f.targets = []string{aggregatorCAName}
+		f.cluster.Spec.VersionContract = "v1.13"
+		Expect(k8sClient.Update(ctx, f.cluster)).To(Succeed())
+
+		op := f.step(f.newOp())
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(ContainSubstring("the aggregator CA has an accepted list only from version contract v1.14"))
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name},
+			clusterlock.DefaultDuration)
+		Expect(lock.Acquire(ctx, "ichor-controller/test/next-holder")).To(Succeed())
+		Expect(lock.Release(ctx, "ichor-controller/test/next-holder")).To(Succeed())
+	})
+})
+
 var _ = Describe("a CA rotation whose step keeps failing", func() {
 	BeforeEach(func() {
 		saved := rotationGiveUpAfter

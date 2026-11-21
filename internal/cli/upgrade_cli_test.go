@@ -271,7 +271,7 @@ func TestUpgradeCLIVersionSelectsTheRelease(t *testing.T) {
 	}
 
 	if got := content(t, exe); got != "binary 0.2.5" {
-		t.Errorf("--version v0.2.5 installed %q", got)
+		t.Errorf("VERSION v0.2.5 installed %q", got)
 	}
 
 	exe = installedBinary(t)
@@ -280,7 +280,7 @@ func TestUpgradeCLIVersionSelectsTheRelease(t *testing.T) {
 	}
 
 	if got := content(t, exe); got != "binary 0.3.0" {
-		t.Errorf("without --version installed %q, want the newest", got)
+		t.Errorf("without VERSION installed %q, want the newest", got)
 	}
 }
 
@@ -343,5 +343,41 @@ func TestUpgradeCLIOfflineNamesTheManualSteps(t *testing.T) {
 	_, err := runUpgrader(t, u, "y\n")
 	if err == nil || !strings.Contains(err.Error(), "air-gapped") || !strings.Contains(err.Error(), "sha256sum -c") {
 		t.Errorf("want the offline message with manual steps, got %v", err)
+	}
+}
+
+// TestRealV024ChecksumsVerifyWithTheRealVerifier runs imagesig.New on the checksums file and bundle the v0.2.4
+// release workflow published (testdata/release-v0.2.4, unmodified): they verify for v0.2.4's identity and for
+// no other tag, and a changed checksums file does not.
+func TestRealV024ChecksumsVerifyWithTheRealVerifier(t *testing.T) {
+	t.Parallel()
+
+	sums, err := os.ReadFile("testdata/release-v0.2.4/ichor_0.2.4_checksums.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bundle, err := os.ReadFile("testdata/release-v0.2.4/ichor_0.2.4_checksums.txt.sigstore.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := imagesig.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	digest := func(b []byte) string { s := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(s[:]) }
+
+	if err := v.VerifyBlob(bundle, digest(sums), imagesig.IchorIdentity("v0.2.4")); err != nil {
+		t.Fatalf("the real v0.2.4 checksums do not verify: %v", err)
+	}
+
+	if err := v.VerifyBlob(bundle, digest(sums), imagesig.IchorIdentity("v0.2.5")); err == nil {
+		t.Error("the v0.2.4 bundle verified for the v0.2.5 identity")
+	}
+
+	if err := v.VerifyBlob(bundle, digest(append([]byte("x"), sums...)), imagesig.IchorIdentity("v0.2.4")); err == nil {
+		t.Error("the v0.2.4 bundle verified a changed checksums file")
 	}
 }

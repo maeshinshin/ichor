@@ -11,7 +11,7 @@ Replace this ichor binary with a verified release
 
 Download a release of the ichor binary from its GitHub release and replace this one with it.
 
-Without --version the newest release is used. The checksums file of the release is verified against its
+Without VERSION the newest release is used. The checksums file of the release is verified against its
 Sigstore bundle (the identity of the release workflow of that tag), the archive against the checksums, and
 only then is the binary written next to this one and renamed over it. Any mismatch stops the command;
 there is no way to skip the check. A development build is never replaced. --check shows what would be
@@ -21,22 +21,21 @@ The command reaches ghcr.io (to find the newest release) and github.com (the rel
 that cannot, it prints the steps to do the same by hand. It does not read a cluster.
 
 ```sh
-ichor upgrade cli [flags]
+ichor upgrade cli [VERSION] [flags]
 ```
 
 ### Examples
 
 ```sh
   ichor upgrade cli --check
-  ichor upgrade cli --version v0.3.0 --yes
+  ichor upgrade cli v0.3.0 --yes
 ```
 
 ### Options
 
 ```text
-      --check            show which release would replace this binary and change nothing
-  -h, --help             help for cli
-      --version string   the release to install (default: the newest)
+      --check   show which release would replace this binary and change nothing
+  -h, --help    help for cli
 ```
 
 ### Options inherited from parent commands

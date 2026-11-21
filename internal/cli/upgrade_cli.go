@@ -65,7 +65,7 @@ type blobVerifier interface {
 type cliUpgrade struct {
 	Current  string // version.Version of the running binary
 	Exe      string // the running executable
-	Version  string // --version; empty means the newest release
+	Version  string // the VERSION argument; empty means the newest release
 	Check    bool
 	BaseURL  string
 	OS, Arch string
@@ -74,16 +74,14 @@ type cliUpgrade struct {
 	Verifier blobVerifier
 }
 
-var upgradeCLIVersion string
-
 var upgradeCLICheck bool
 
 var upgradeCLICmd = &cobra.Command{
-	Use:   "cli",
+	Use:   "cli [VERSION]",
 	Short: "Replace this ichor binary with a verified release",
 	Long: `Download a release of the ichor binary from its GitHub release and replace this one with it.
 
-Without --version the newest release is used. The checksums file of the release is verified against its
+Without VERSION the newest release is used. The checksums file of the release is verified against its
 Sigstore bundle (the identity of the release workflow of that tag), the archive against the checksums, and
 only then is the binary written next to this one and renamed over it. Any mismatch stops the command;
 there is no way to skip the check. A development build is never replaced. --check shows what would be
@@ -92,11 +90,14 @@ replaced and changes nothing. It asks for confirmation unless --yes.
 The command reaches ghcr.io (to find the newest release) and github.com (the release assets); on a machine
 that cannot, it prints the steps to do the same by hand. It does not read a cluster.`,
 	Example: `  ichor upgrade cli --check
-  ichor upgrade cli --version v0.3.0 --yes`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		if upgradeCLIVersion != "" {
-			if err := version.CheckSemver(upgradeCLIVersion); err != nil {
+  ichor upgrade cli v0.3.0 --yes`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var want string
+		if len(args) == 1 {
+			want = args[0]
+
+			if err := version.CheckSemver(want); err != nil {
 				return err
 			}
 		}
@@ -112,7 +113,7 @@ that cannot, it prints the steps to do the same by hand. It does not read a clus
 		}
 
 		u := &cliUpgrade{
-			Current: version.Version, Exe: exe, Version: upgradeCLIVersion, Check: upgradeCLICheck,
+			Current: version.Version, Exe: exe, Version: want, Check: upgradeCLICheck,
 			Latest: func() (string, error) {
 				tags, err := releasecheck.RegistryLister(false)(releasecheck.DefaultRepository)
 				if err != nil {
@@ -130,7 +131,6 @@ that cannot, it prints the steps to do the same by hand. It does not read a clus
 
 func init() {
 	upgradeCmd.AddCommand(upgradeCLICmd)
-	upgradeCLICmd.Flags().StringVar(&upgradeCLIVersion, "version", "", "the release to install (default: the newest)")
 	upgradeCLICmd.Flags().BoolVar(&upgradeCLICheck, "check", false, "show which release would replace this binary and change nothing")
 }
 
@@ -219,7 +219,7 @@ func (u *cliUpgrade) run(ctx context.Context, in io.Reader, out, errw io.Writer)
 	return nil
 }
 
-// target is the release to install: --version, else the newest, which must be newer than this binary.
+// target is the release to install: VERSION, else the newest, which must be newer than this binary.
 func (u *cliUpgrade) target() (string, error) {
 	if u.Version != "" {
 		return u.Version, nil
@@ -227,7 +227,7 @@ func (u *cliUpgrade) target() (string, error) {
 
 	latest, err := u.Latest()
 	if err != nil {
-		return "", fmt.Errorf("upgrade cli: cannot find the newest release (%w); name one with --version, or install it by hand:\n%s", err, manualSteps("vX.Y.Z"))
+		return "", fmt.Errorf("upgrade cli: cannot find the newest release (%w); name one as ichor upgrade cli VERSION, or install it by hand:\n%s", err, manualSteps("vX.Y.Z"))
 	}
 
 	if latest == "" || !releasecheck.Newer(u.Current, latest) {

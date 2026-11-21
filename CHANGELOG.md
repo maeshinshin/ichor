@@ -165,8 +165,8 @@ command does. Each item is described where it is listed below.
 ### CLI
 - **`ichor upgrade cli` replaces the `ichor` binary with a release.** It downloads the
   release archive, verifies the signed checksums file and the archive against it
-  (no way to skip), and renames the binary over the running one; `--version` picks
-  the release, `--check` changes nothing. The update notice now names it (ADR 0171).
+  (no way to skip), and renames the binary over the running one; `ichor upgrade cli VERSION` picks
+  that release, `--check` changes nothing. The update notice now names it (ADR 0171).
 - **A second `ichor init` says the cluster is already initialised.** It used to
   fail with the raw Kubernetes "already exists" error on the secrets bundle Secret;
   it now names the cluster as initialised and the Secret that exists.

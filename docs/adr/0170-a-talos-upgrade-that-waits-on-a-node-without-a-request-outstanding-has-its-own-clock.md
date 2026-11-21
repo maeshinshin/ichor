@@ -17,16 +17,18 @@ Making the wait True again, as `kubernetesUpgradeAdvancer.waiting` does, would w
 ## Decision
 
 1. `finish` wraps its three waits in one helper. While `TalosUpgrade` is True the wait is unchanged: that clock is already checked by `afterReboot`. Otherwise the helper sets a TalosMachine condition `TalosUpgradeWaiting` (True, reason `Verifying`, message the TalosOperation's UID) if it is absent or carries another operation's UID. Its `LastTransitionTime` is the start of the wait.
-2. Once that clock is older than `talosUpgradeVerifyTimeout`, the helper ends any evacuation, sets `TalosUpgrade` to False with `VerifyTimedOut` and a message naming the wait, removes `TalosUpgradeWaiting`, and returns an error. The operation pauses with `StepFailed`. A resume starts a fresh clock because the condition is gone.
-3. `finish` removes `TalosUpgradeWaiting` when it verifies the node.
-4. `stepRenewUntil` bounds the lock renewal by `TalosUpgradeWaiting` plus the same timeout while `TalosUpgrade` is not True.
-5. The CLI needs nothing new: `VerifyTimedOut` is already in its failure set, and `TalosUpgradeWaiting` is True while the wait runs.
-6. The Kubernetes side is unchanged. Every wait in `kubernetesUpgradeAdvancer.verify` goes through `waiting`, which turns a non-True condition True with a fresh clock and fails past `kubernetesVerifyTimeout`; its other waits are the evacuation, which has its own timeout. It has none of the three unbounded waits.
+2. Once that clock is older than `talosUpgradeVerifyTimeout`, the helper ends any evacuation, sets `TalosUpgrade` to False with `VerifyTimedOut` and a message naming the wait, removes `TalosUpgradeWaiting`, and returns an error. The operation pauses with `StepFailed`.
+3. Whatever pauses a Talos operation (a failed step, `spec.paused`), `setPhase` removes `TalosUpgradeWaiting` from the machines the operation has selected, so a resume starts a fresh clock. It is done where the pause is entered because nothing records the moment of a resume: `spec.paused` being lifted leaves no timestamp, and the Paused condition is simply removed.
+4. `finish` removes `TalosUpgradeWaiting` when it verifies the node.
+5. `stepRenewUntil` bounds the lock renewal by `TalosUpgradeWaiting` plus the same timeout while `TalosUpgrade` is not True, and only when the condition carries this operation's UID.
+6. The CLI lists `TalosUpgradeWaiting` among the progress conditions, so a True one reads as pending; `VerifyTimedOut` is already in its failure set.
+7. The Kubernetes side is unchanged. Every wait in `kubernetesUpgradeAdvancer.verify` goes through `waiting`, which turns a non-True condition True with a fresh clock and fails past `kubernetesVerifyTimeout`; its other waits are the evacuation, which has its own timeout. It has none of the three unbounded waits.
 
 ## Consequences
 
+- The waits for a Ready node and for the control plane to rejoin etcd are bounded whenever `TalosUpgrade` is not True, including when it is absent or Converged. This is deliberate: a node that stays not Ready after an operation selected it is a failed step.
 - No CRD field is added: a condition is an element of `status.conditions`, which exists. The Helm release record does not grow.
-- The wait counts time spent paused by `spec.paused`, as the True clock does.
+- A lock loss that does not pause the operation does not reset the clock.
 - A different operation's UID restarts the clock, so a wait abandoned by a deleted operation cannot fail the next one at once.
 - A `VerifyTimedOut` raised here says the node did not verify within the window, which is accurate: it is on the target but not Ready or not in etcd.
 

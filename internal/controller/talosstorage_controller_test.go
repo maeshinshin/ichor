@@ -313,6 +313,37 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 			got := reconcileStorage(newReconciler(""), s)
 			Expect(cond(got, conditionStorageReady)).NotTo(BeNil())
 			Expect(cond(got, conditionStorageSystem)).To(BeNil())
+			Expect(cond(got, conditionStorageExtensions)).To(BeNil(), "rook-v1 names no extension to check")
+		})
+
+		It("counts the governed set in ExtensionsPresent and reads a node with no Node yet as unknown", func() {
+			secret := newTestSecret(bundleRaw)
+			cluster := newTestCluster(secret.Name, "v1.14")
+			labels := map[string]string{storageNodeKey: storageNodeValue}
+			s := newRealStorage(cluster.Name)
+
+			for i := range 3 {
+				m := newStorageTestMachine(cluster.Name, labels)
+				m.Spec.Hostname = "node-" + m.Name
+				Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+				if i == 2 {
+					continue // a NotReady node after a reboot: its Node facts cannot be read
+				}
+
+				n := &corev1.Node{}
+				n.Name = m.Spec.Hostname
+				n.Labels = map[string]string{
+					talosExtensionLabelPrefix + "iscsi-tools":      "present",
+					talosExtensionLabelPrefix + "util-linux-tools": "present",
+				}
+				Expect(k8sClient.Create(ctx, n)).To(Succeed())
+				DeferCleanup(func() { _ = k8sClient.Delete(ctx, n) })
+			}
+
+			ext := cond(reconcileStorage(newReconciler(""), s), conditionStorageExtensions)
+			Expect(ext.Status).To(Equal(metav1.ConditionUnknown), "message: %s", ext.Message)
+			Expect(ext.Message).To(ContainSubstring("2 of 3 governed nodes reported"))
 		})
 	})
 })

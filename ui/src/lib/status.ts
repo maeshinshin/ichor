@@ -13,6 +13,7 @@ export function opStateTone(state: OpState): Tone {
     case 'running':
       return 'progress'
     case 'paused':
+    case 'blocked':
       return 'warn'
     default:
       return 'neutral'

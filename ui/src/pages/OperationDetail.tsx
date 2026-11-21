@@ -59,7 +59,7 @@ export function OperationDetail({ name }: { name: string }) {
         if (cancelled) return
         setOp(res.operation ?? null)
         setError(null)
-        const next = res.operation ? pollIntervalMs(operationState(res.operation.phase, res.operation.failureReason)) : null
+        const next = res.operation ? pollIntervalMs(operationState(res.operation.phase, res.operation.failureReason, res.operation.conditions)) : null
         if (next !== null) timer = setTimeout(load, next)
       } catch (err) {
         if (cancelled) return
@@ -77,7 +77,7 @@ export function OperationDetail({ name }: { name: string }) {
   }, [namespace, name])
 
   // The activity log refreshes every 5 s while the operation can still change, and once more when it stops.
-  const active = op !== null && pollIntervalMs(operationState(op.phase, op.failureReason)) !== null
+  const active = op !== null && pollIntervalMs(operationState(op.phase, op.failureReason, op.conditions)) !== null
   const loaded = op !== null
   useEffect(() => {
     if (!namespace || !loaded) return
@@ -110,7 +110,7 @@ export function OperationDetail({ name }: { name: string }) {
   if (error && !op) return <ErrorAlert {...error} />
   if (!op) return <PageSkeleton label={t('ops.loading')} />
 
-  const state = operationState(op.phase, op.failureReason)
+  const state = operationState(op.phase, op.failureReason, op.conditions)
   const shownEvents = visibleEvents(events ?? [], warningsOnly)
   const title = op.summary || summaryFallback(op.ref?.name ?? name, enumLabel(OperationKind, op.kind), op.nodeMachine?.name)
   const { done, running } = progressCounts(op.machines)
@@ -199,6 +199,17 @@ export function OperationDetail({ name }: { name: string }) {
             <InfoIcon />
             <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>
             <AlertDescription>{t('ops.plan.bundleStale', { name: op.cluster?.name ?? '' })}</AlertDescription>
+          </Alert>
+        )}
+        {state === 'blocked' && (
+          <Alert>
+            <InfoIcon />
+            <AlertTitle>{t('ops.blocked')}</AlertTitle>
+            <AlertDescription>
+              {op.message}
+              <br />
+              {t('ops.blockedHint')}
+            </AlertDescription>
           </Alert>
         )}
         {state === 'failed' && (

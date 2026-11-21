@@ -615,3 +615,43 @@ func TestNodeActionAndOperationDeleteMachineFormatsAreUnchanged(t *testing.T) {
 		t.Errorf("stdout:\n%s\nstderr:\n%s", out.String(), errw.String())
 	}
 }
+
+const opOwnNodeMessage = `cannot tell which machine runs this controller (node "cp1"): the Node object is not readable`
+
+func opOwnNodeUnread() *pb.Operation {
+	op := opHumanTalosOp(condPaused)
+	op.CreatedAt, op.Machines = nil, nil
+	op.Message = opOwnNodeMessage
+	op.Conditions = []*pb.Condition{cond(condPaused, condTrue, "OwnNodeUnread", opOwnNodeMessage, time.Minute)}
+
+	return op
+}
+
+func TestWatchHumanShowsAnOwnNodeUnreadPauseAsBlockedNotResumable(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+	useWatchClock(t)
+
+	var errw bytes.Buffer
+
+	w := newOpWatch(&errw)
+	w.show(opOwnNodeUnread())
+	_ = w.abort(nil, true) // the plain view prints the detail when the step ends
+
+	got := errw.String()
+	if strings.Contains(got, "ichor resume operation") || !strings.Contains(got, opOwnNodeMessage) || !strings.Contains(got, "resumes by itself") {
+		t.Fatalf("watch line must carry the message and say it resumes by itself, not offer a resume:\n%s", got)
+	}
+}
+
+func TestOperationGetHumanOutputOfAnOwnNodeUnreadPauseSaysBlocked(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+
+	var out bytes.Buffer
+	if err := renderOperationGet(newHuman(&out), &pb.GetOperationResponse{Operation: opOwnNodeUnread()}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "Phase        ! Paused (blocked)") || !strings.Contains(out.String(), opOwnNodeMessage) {
+		t.Fatalf("get must say the operation is blocked and why:\n%s", out.String())
+	}
+}

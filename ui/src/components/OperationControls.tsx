@@ -26,7 +26,7 @@ export function OperationControls({
   const { busy, error, run } = useAction()
   const [open, setOpen] = useState(false)
   const [resumeOpen, setResumeOpen] = useState(false)
-  const state = operationState(op.phase, op.failureReason)
+  const state = operationState(op.phase, op.failureReason, op.conditions)
   // A restore that has started is half done; the server refuses to pause it, so only a failed one gets a button (Resume).
   const action = op.kind === OperationKind.ETCD_RESTORE && state !== 'failed' ? null : pauseAction(op.paused, state)
 

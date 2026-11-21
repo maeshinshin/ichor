@@ -61,7 +61,8 @@ func TestDemoMemory(t *testing.T) {
 	if err != nil || got != "2560Mi" {
 		t.Fatalf("unset: got %q, %v; want 2560Mi", got, err)
 	}
-	if m := demoVMManifest("x-cp", "x", got, httpISO()); !strings.Contains(m, "guest: 2560Mi") {
+	disks := demoDisks{system: defaultDemoSystemDisk}
+	if m := demoVMManifest("x-cp", "x", got, httpISO(), disks); !strings.Contains(m, "guest: 2560Mi") {
 		t.Fatalf("default manifest lost 2560Mi:\n%s", m)
 	}
 
@@ -70,7 +71,7 @@ func TestDemoMemory(t *testing.T) {
 	if err != nil || got != "3Gi" {
 		t.Fatalf("override: got %q, %v; want 3Gi", got, err)
 	}
-	m := demoVMManifest("x-cp", "x", got, httpISO())
+	m := demoVMManifest("x-cp", "x", got, httpISO(), disks)
 	if !strings.Contains(m, "guest: 3Gi") || strings.Contains(m, "2560Mi") {
 		t.Fatalf("override manifest wrong:\n%s", m)
 	}
@@ -134,5 +135,44 @@ func TestVMManifestISOSource(t *testing.T) {
 		if !strings.Contains(cached, "blank: {}") {
 			t.Fatalf("%s: the system disk must stay blank so Ichor installs:\n%s", name, cached)
 		}
+	}
+}
+
+// TestDemoDisks: spare disks become N emptyDisk volumes of the given size on a worker, the system disk
+// follows its parameter, and the defaults leave the manifest as it was.
+func TestDemoDisks(t *testing.T) {
+	d, err := demoDiskConfig()
+	if err != nil || d.system != "10Gi" || d.spare != 0 {
+		t.Fatalf("defaults: %+v, %v", d, err)
+	}
+	m := demoVMManifest("x-w", "x", "2560Mi", httpISO(), d)
+	if strings.Contains(m, "emptyDisk") || !strings.Contains(m, "storage: 10Gi") {
+		t.Fatalf("defaults changed the manifest:\n%s", m)
+	}
+
+	t.Setenv(demoSpareDisksEnv, "3")
+	t.Setenv(demoSpareSizeEnv, "20Gi")
+	t.Setenv(demoSystemDiskEnv, "40Gi")
+	d, err = demoDiskConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = demoVMManifest("x-w", "x", "2560Mi", httpISO(), d)
+	if n := strings.Count(m, "emptyDisk:"); n != 3 {
+		t.Fatalf("emptyDisk volumes = %d, want 3:\n%s", n, m)
+	}
+	if n := strings.Count(m, "capacity: 20Gi"); n != 3 {
+		t.Fatalf("capacity: 20Gi count = %d, want 3", n)
+	}
+	if strings.Contains(m, "storage: 10Gi") || !strings.Contains(m, "storage: 40Gi") {
+		t.Fatalf("system disk not 40Gi:\n%s", m)
+	}
+	if strings.Count(m, "name: spare") != 6 { // a disk and a volume each
+		t.Fatalf("spare disks not wired as disk + volume:\n%s", m)
+	}
+
+	t.Setenv(demoSpareDisksEnv, "x")
+	if _, err := demoDiskConfig(); err == nil {
+		t.Fatal("accepted a junk count")
 	}
 }

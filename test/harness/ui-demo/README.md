@@ -42,6 +42,23 @@ The first run creates it and waits for the import; no `down*` deletes it, so del
 version changes. `ICHOR_E2E_BASE_CACHE=0` restores the per-VM import. The VMs still boot the ISO in maintenance
 mode and Ichor still installs Talos, so the install step stays exercised. Both VMs are created together.
 
+**Storage lab (Rook, Longhorn).** Three knobs, all off by default. `ICHOR_UI_DEMO_SYSTEM_DISK` sets every VM's system
+disk (default `10Gi`; Rook hits DiskPressure on that, use `40Gi`). `ICHOR_UI_DEMO_WORKER_SPARE_DISKS` (0 to 8, default 0)
+and `ICHOR_UI_DEMO_WORKER_SPARE_DISK_SIZE` (default `20Gi`) add that many blank `emptyDisk`s to each worker, as `vdb`,
+`vdc` and so on. An `emptyDisk` needs no PV and is blank by construction; control planes get none. One control plane
+and three workers, each worker with one spare 20Gi disk:
+
+```sh
+ICHOR_UI_DEMO_SCALE=1x3 ICHOR_UI_DEMO_SYSTEM_DISK=40Gi ICHOR_UI_DEMO_WORKER_SPARE_DISKS=1 \
+  ./bin/kubevirt-harness up-demo
+```
+
+**No-provisioner outer storage.** The cache PVC asks for 1Gi, but on static `no-provisioner` PVs (e.g. 200Gi `vmstore`)
+it binds a whole PV, so its capacity is 200Gi. Each VM's clone must request at least that capacity, and CDI adds its
+filesystem overhead on top (apparently 200Gi / 0.945, about 212Gi), which no 200Gi PV can satisfy: the clone never
+binds. Set `ICHOR_E2E_BASE_CACHE=0` for such outer clusters; every VM then imports its own ISO (a 1Gi request). On
+`Retain` PVs each import leaves a `Released` scratch PV behind: clear its `claimRef` or delete it by hand before reuse.
+
 **Boot order.** Each VM boots its system disk first and the ISO second. A blank disk is not bootable, so the
 first boot falls through to the ISO (maintenance mode); after Ichor installs Talos every cold boot (a VM stopped
 and started) comes up from the disk. With the ISO first Talos halts on a cold boot ("already installed to disk

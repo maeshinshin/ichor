@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,48 @@ const (
 	demoCPMemoryEnv   = "ICHOR_UI_DEMO_CP_MEMORY"
 	demoWorkerMemEnv  = "ICHOR_UI_DEMO_WORKER_MEMORY"
 )
+
+// Storage-lab knobs. The system disk size applies to every demo VM (default 10Gi, the template's);
+// the spare disks are blank emptyDisks (no PV needed) on workers only, vdb, vdc and so on.
+const (
+	defaultDemoSystemDisk = "10Gi"
+	demoSystemDiskEnv     = "ICHOR_UI_DEMO_SYSTEM_DISK"
+	demoSpareDisksEnv     = "ICHOR_UI_DEMO_WORKER_SPARE_DISKS"
+	demoSpareSizeEnv      = "ICHOR_UI_DEMO_WORKER_SPARE_DISK_SIZE"
+	defaultDemoSpareSize  = "20Gi"
+)
+
+// demoDisks is the disk layout of a demo VM beyond the ISO: system disk size and spare disks.
+type demoDisks struct {
+	system, spareSize string
+	spare             int
+}
+
+// demoDiskConfig reads the disk envs; a worker gets the spare disks, a control plane none.
+func demoDiskConfig() (demoDisks, error) {
+	d := demoDisks{system: defaultDemoSystemDisk, spareSize: defaultDemoSpareSize}
+
+	for env, dst := range map[string]*string{demoSystemDiskEnv: &d.system, demoSpareSizeEnv: &d.spareSize} {
+		if v := os.Getenv(env); v != "" {
+			if !demoMemoryPattern.MatchString(v) {
+				return d, fmt.Errorf("%s=%q must be a quantity like 40Gi", env, v)
+			}
+
+			*dst = v
+		}
+	}
+
+	if v := os.Getenv(demoSpareDisksEnv); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 8 {
+			return d, fmt.Errorf("%s=%q must be a number from 0 to 8", demoSpareDisksEnv, v)
+		}
+
+		d.spare = n
+	}
+
+	return d, nil
+}
 
 var demoMemoryPattern = regexp.MustCompile(`^[1-9][0-9]*(Mi|Gi)$`)
 
@@ -114,12 +157,21 @@ func demoMemory(env string) (string, error) {
 	return v, nil
 }
 
-func demoVMManifest(name, group, memory string, iso isoSource) string {
+func demoVMManifest(name, group, memory string, iso isoSource, disks demoDisks) string {
 	m := renderVM(name, "kubevirt-ui-demo", iso)
 	// A group label on the launcher pod, so an outer Service can select all of one demo's VMs.
 	m = strings.Replace(m, "  template:\n    metadata:\n      labels:\n",
 		"  template:\n    metadata:\n      labels:\n        ichor.maesh.dev/e2e-group: "+group+"\n", 1)
 	m = strings.Replace(m, "guest: "+defaultDemoMemory, "guest: "+memory, 1)
+
+	m = strings.Replace(m, "storage: "+defaultDemoSystemDisk, "storage: "+disks.system, 1)
+
+	for i := range disks.spare {
+		id := fmt.Sprintf("spare%d", i)
+		m = strings.Replace(m, "              bootOrder: 1\n",
+			"              bootOrder: 1\n            - name: "+id+"\n              disk:\n                bus: virtio\n", 1)
+		m += "        - name: " + id + "\n          emptyDisk:\n            capacity: " + disks.spareSize + "\n"
+	}
 
 	if c, _ := demoScale(); c > 0 {
 		m = strings.Replace(m, "    spec:\n      domain:\n", "    spec:\n      affinity:\n        nodeAffinity:\n          requiredDuringSchedulingIgnoredDuringExecution:\n            nodeSelectorTerms:\n              - matchExpressions:\n                  - {key: kubernetes.io/hostname, operator: NotIn, values: [talos02]}\n      domain:\n", 1) //nolint:lll
@@ -140,6 +192,11 @@ func upDemo() error {
 	}
 
 	workerMem, err := demoMemory(demoWorkerMemEnv)
+	if err != nil {
+		return err
+	}
+
+	disks, err := demoDiskConfig()
 	if err != nil {
 		return err
 	}
@@ -184,7 +241,12 @@ func upDemo() error {
 	}
 
 	for _, n := range names {
-		if err := kube.Apply(demoVMManifest(n, group, memory[n], iso)); err != nil {
+		d := disks
+		if strings.HasPrefix(n, cp) { // control planes get no spare disks
+			d.spare = 0
+		}
+
+		if err := kube.Apply(demoVMManifest(n, group, memory[n], iso, d)); err != nil {
 			return fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}

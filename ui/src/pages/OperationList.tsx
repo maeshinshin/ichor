@@ -31,7 +31,7 @@ export function OperationList() {
   if (!ops) return <PageSkeleton label={t('ops.loading')} />
 
   const rows = ops.filter((o) =>
-    matchesQuery(query, o.ref?.name, o.summary, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason)}`)),
+    matchesQuery(query, o.ref?.name, o.summary, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason, o.conditions)}`)),
   )
 
   return (
@@ -67,7 +67,7 @@ export function OperationList() {
 }
 
 function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void }) {
-  const state = operationState(op.phase, op.failureReason)
+  const state = operationState(op.phase, op.failureReason, op.conditions)
   const { done, running } = progressCounts(op.machines)
 
   return (

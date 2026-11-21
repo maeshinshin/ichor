@@ -4,20 +4,22 @@
 // The kinds an operation can have, as the screens name them.
 export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation' | 'config' | 'key-rotation'
 
-export type OpState = 'pending' | 'running' | 'paused' | 'failed' | 'shutdown' | 'done'
+export type OpState = 'pending' | 'running' | 'paused' | 'blocked' | 'failed' | 'shutdown' | 'done'
 
 // operationState folds TalosOperation.status.phase and failureReason into what
 // a person needs to know. A pause with a failure reason is the controller
 // stopping after a machine failed; it never retries by itself. A pause
-// without one is somebody's spec.paused.
-export function operationState(phase: string, failureReason: string): OpState {
+// without one is somebody's spec.paused, unless the Paused condition's reason is OwnNodeUnread: the controller
+// cannot tell which machine it runs on, nothing is to be resumed, and it lifts the pause itself.
+export function operationState(phase: string, failureReason: string, conditions: readonly { type: string; reason: string }[] = []): OpState {
   switch (phase) {
     case 'Completed':
       return 'done'
     case 'ShutDown':
       return 'shutdown'
     case 'Paused':
-      return failureReason !== '' ? 'failed' : 'paused'
+      if (failureReason !== '') return 'failed'
+      return conditions.some((c) => c.type === 'Paused' && c.reason === 'OwnNodeUnread') ? 'blocked' : 'paused'
     case 'InProgress':
       return 'running'
     default:
@@ -35,6 +37,7 @@ export function pollIntervalMs(state: OpState): number | null {
     case 'failed':
       return null
     case 'paused':
+    case 'blocked':
     case 'shutdown':
       return 10_000
     default:
@@ -55,7 +58,7 @@ export function progressCounts(machines: readonly { phase: string }[]): { done: 
 // pauseAction is the button an operation row shows: nothing once it is over,
 // "resume" while paused by a person or after a failed step (resume then runs that step again).
 export function pauseAction(paused: boolean, state: OpState): 'pause' | 'resume' | null {
-  if (state === 'done' || state === 'shutdown') return null
+  if (state === 'done' || state === 'shutdown' || state === 'blocked') return null
   return paused || state === 'failed' ? 'resume' : 'pause'
 }
 

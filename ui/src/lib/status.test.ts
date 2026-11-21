@@ -7,6 +7,7 @@ test('operation states map to tones', () => {
   assert.equal(opStateTone('failed'), 'bad')
   assert.equal(opStateTone('running'), 'progress')
   assert.equal(opStateTone('paused'), 'warn')
+  assert.equal(opStateTone('blocked'), 'warn')
   assert.equal(opStateTone('pending'), 'neutral')
   assert.equal(opStateTone('shutdown'), 'neutral')
 })

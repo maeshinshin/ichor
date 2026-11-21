@@ -678,6 +678,10 @@ command does. Each item is described where it is listed below.
   OSDs during a drain while the chart's `managePodBudgets` is on, as it is by
   default. A raw partition is still available, written by you as a
   `TalosConfigPatch` (ADR 0167).
+- **A `rook-v1` `TalosStorage` no longer reports `StorageSystemConsistent`.** It read
+  Longhorn's settings, so with Rook it showed `Unknown (NotInstalled)` for a Longhorn
+  namespace and never became True. Only `longhorn-v1` has a setting to check, so
+  the condition is now absent for `rook-v1`, and a stale one is removed.
 - **A node that `rook-v1` governs drains, upgrades or is removed without an evacuation
   step.** Ichor moves nothing off such a node first, since the preset has no evacuation
   hook; the drain itself runs, and Rook's disruption budgets decide when each OSD may

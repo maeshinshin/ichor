@@ -296,5 +296,23 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 			Expect(system.Status).To(Equal(metav1.ConditionTrue))
 			Expect(system.Reason).To(Equal(reasonStorageSystemConsistent))
 		})
+
+		It("has no StorageSystemConsistent condition on rook-v1, which has no Longhorn setting to check", func() {
+			secret := newTestSecret(bundleRaw)
+			cluster := newTestCluster(secret.Name, "v1.14")
+			s := &ichorv1alpha1.TalosStorage{
+				GenerateName: "rook-", Namespace: tmNamespace,
+				Spec: ichorv1alpha1.TalosStorageSpec{
+					ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
+					Nodes:      metav1.LabelSelector{MatchLabels: map[string]string{storageNodeKey: storageNodeValue}},
+					DiskPreset: storage.RookV1,
+				},
+			}
+			Expect(k8sClient.Create(ctx, s)).To(Succeed())
+
+			got := reconcileStorage(newReconciler(""), s)
+			Expect(cond(got, conditionStorageReady)).NotTo(BeNil())
+			Expect(cond(got, conditionStorageSystem)).To(BeNil())
+		})
 	})
 })

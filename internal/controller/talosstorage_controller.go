@@ -119,9 +119,14 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	system, err := r.systemCondition(ctx, &ts)
-	if err != nil {
-		return ctrl.Result{}, err
+	// Only longhorn-v1 has a setting to compare; rook-v1's CheckConsistency has nothing to report
+	// (pkg/storage/rookv1.go), so the condition is absent there, and a stale one is removed.
+	var system metav1.Condition
+
+	if ts.Spec.DiskPreset == storage.LonghornV1 {
+		if system, err = r.systemCondition(ctx, &ts); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	extensions, err := r.extensionsCondition(ctx, &ts, governed)
@@ -131,7 +136,13 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	apimeta.SetStatusCondition(&ts.Status.Conditions, ready)
 	apimeta.SetStatusCondition(&ts.Status.Conditions, extensions)
-	apimeta.SetStatusCondition(&ts.Status.Conditions, system)
+
+	if system.Type == "" {
+		apimeta.RemoveStatusCondition(&ts.Status.Conditions, conditionStorageSystem)
+	} else {
+		apimeta.SetStatusCondition(&ts.Status.Conditions, system)
+	}
+
 	ts.Status.ObservedGeneration = ts.Generation
 
 	if err := r.Status().Update(ctx, &ts); err != nil {

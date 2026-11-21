@@ -49,7 +49,8 @@ it reads Longhorn's `settings.longhorn.io` object `create-default-disk-labeled-n
 the preset's `CheckConsistency`. Longhorn or its CRD absent is `Unknown/NotInstalled`, not an error.
 It must not gate `Ready`: the setting lives in the storage Application's values, which the held
 wave delivers. The read goes through `mgr.GetAPIReader()` (no informer on a possibly absent
-CRD) and is repolled every two minutes. Ichor writes no Longhorn object here.
+CRD) and is repolled every two minutes. Ichor writes no Longhorn object here. Only `longhorn-v1` carries the condition: `rook-v1` has no
+setting to check (its `CheckConsistency` reports no mismatch), so the condition is absent there.
 Not done: the extension check (`CheckExtensions`). Nothing in Ichor knows a node's installed
 extensions (the cluster only holds an opaque schematic ID); it needs a Talos API read and is
 left for that work. Argo CD's Lua health check for `TalosStorage` ships with this (ADR 0046).

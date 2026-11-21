@@ -11,7 +11,7 @@ import (
 
 // notFailures are the reason constants of the upgrade files that are not a failure of a progress condition.
 var notFailures = map[string]bool{
-	"reasonUpgradeRequested": true, "reasonUpgradeConverged": true, "reasonKubernetesApplied": true,
+	"reasonUpgradeRequested": true, "reasonUpgradeConverged": true, "reasonUpgradeVerifying": true, "reasonKubernetesApplied": true,
 	"reasonKubernetesConverged": true, "reasonRemovedAPIsInUse": true, "reasonRemovedAPIsNone": true,
 	"reasonRemovedAPIsUnknown": true,
 }

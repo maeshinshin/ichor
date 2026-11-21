@@ -177,6 +177,31 @@ func TestPatchFromTheEditorRefusesWhatSpecConfigDoesNotCarry(t *testing.T) {
 	}
 }
 
+// The nine not-carried leaves that have a field at their own path in spec.config are not refused by name. Sent in the
+// shape the v1alpha1 document gives them, five are refused as the wrong type, and four decode to the field of the same
+// path and meaning (the document spells them the same way), so the value is carried, not dropped.
+func TestNotCarriedLeavesAtAnotherShapeAreRefusedOrCarried(t *testing.T) {
+	_, elsewhere := notCarried(t)
+	if len(elsewhere) != 9 {
+		t.Fatalf("%d not-carried leaves are spelled at their path in spec.config, want the nine this test lists: %v", len(elsewhere), elsewhere)
+	}
+
+	for config, wantRefusal := range map[string]bool{
+		`{"cluster":{"apiServer":{"authorizationConfig":[{"name":"a","type":"Webhook","webhook":{}}]}}}`: false,
+		`{"cluster":{"extraManifests":["https://x"]}}`:                                                   true,
+		`{"machine":{"kernel":{"modules":[{"name":"m","parameters":["a=b"]}]}}}`:                         true,
+		`{"machine":{"network":{"nameservers":["1.1.1.1"]}}}`:                                            true,
+		`{"machine":{"network":{"searchDomains":["a.b"]}}}`:                                              true,
+		`{"machine":{"registries":{"mirrors":{"docker.io":{"endpoints":["https://m"]}}}}}`:               true,
+		`{"machine":{"registries":{"mirrors":{"docker.io":{"skipFallback":true}}}}}`:                     false,
+	} {
+		_, err := configFromPB(config)
+		if (err != nil) != wantRefusal {
+			t.Errorf("%s: refused is %v, want %v (%v)", config, err != nil, wantRefusal, err)
+		}
+	}
+}
+
 // A client that still writes documents, or does not know config, is refused rather than read as an empty patch.
 func TestPatchFromAnOlderClientIsRefused(t *testing.T) {
 	for name, wire := range map[string]*pb.Patch{

@@ -303,3 +303,20 @@ carries Talos configuration (ADR 0165), so the wire and the editor move to it.
   description and the allowed values are still read from the Talos tables by the
   generator, which keeps the document in memory for its own tests. The search no
   longer matches a document's kind name.
+
+## Amendment: the nine not-carried leaves at another shape are refused or carried (2026-11-21)
+
+Nine of the 23 leaves in `pkg/ichorconfig/testdata/not_carried.txt` have a field at
+their own path in `spec.config`, so they cannot be refused by name. None is dropped:
+
+- Five are a different shape in the `v1alpha1` document and in `spec.config`
+  (`cluster.extraManifests`, `machine.kernel.modules.parameters`,
+  `machine.network.nameservers`, `machine.network.searchDomains`,
+  `machine.registries.mirrors.endpoints`), so a value in the `v1alpha1` shape is
+  refused as the wrong type, naming the field.
+- Four are the same shape at the same path
+  (`cluster.apiServer.authorizationConfig.name`, `.type`, `.webhook`, and
+  `machine.registries.mirrors.skipFallback`), and the field of `spec.config` is the
+  same setting with the same meaning. The value is accepted because it is carried.
+
+`TestNotCarriedLeavesAtAnotherShapeAreRefusedOrCarried` pins both halves.

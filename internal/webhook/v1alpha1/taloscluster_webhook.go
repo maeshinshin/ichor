@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"golang.org/x/mod/semver"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -371,6 +373,13 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 		return nil, err
 	}
 
+	vipWarns, err := v.vipLinkWarnings(ctx, oldObj, newObj)
+	if err != nil {
+		return nil, err
+	}
+
+	warns = append(warns, vipWarns...)
+
 	// Only the transition to "false" is checked: a cluster created
 	// unschedulable has no workers yet (they are discovered afterwards), and
 	// unrelated edits to one that lost its workers must not be blocked.
@@ -384,6 +393,43 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	}
 
 	return warns, nil
+}
+
+// vipLinkWarnings names the approved control planes that cannot hold a VIP this update gives the cluster: the
+// renderer puts it on the link spec.network names, so a control plane without one never joins it. A warning and
+// not a refusal, since each node's network is set after the endpoint and a vip that a hardware load balancer holds
+// needs none.
+func (v *TalosClusterCustomValidator) vipLinkWarnings(
+	ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster,
+) (admission.Warnings, error) {
+	e := newObj.Spec.Endpoint
+	if e.Type != ichorv1alpha1.EndpointTypeVIP || e == oldObj.Spec.Endpoint || v.APIReader == nil {
+		return nil, nil
+	}
+
+	cps, err := deleteguard.ApprovedMachines(ctx, v.APIReader, newObj.Namespace, newObj.Name,
+		deleteguard.MachineFilter{Role: "controlplane"})
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+
+	for i := range cps {
+		if cps[i].Spec.Network == nil {
+			names = append(names, cps[i].Name)
+		}
+	}
+
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	slices.Sort(names)
+
+	return admission.Warnings{fmt.Sprintf("control plane(s) %s have no spec.network, so the VIP %s is not put on them and they never "+
+		"hold it: give each its primary link and address (`ichor approve node` takes --nic and --address; the node's "+
+		"spec.network on an approved one)", strings.Join(names, ", "), e.Address)}, nil
 }
 
 // validateChangedVersions checks only the version fields an update changes: each changed value must

@@ -426,6 +426,11 @@ command does. Each item is described where it is listed below.
 
 ### Cluster
 
+- **Changing a cluster's endpoint to `vip` warns about control planes that cannot
+  hold it.** The VIP goes on the link a node's `spec.network` names, so an
+  approved control plane without one (the first node of a cluster made with a
+  node endpoint) never holds it. The webhook names each such control plane; set
+  its `spec.network` (ADR 0092).
 - **`gatewayAPI.enabled` is refused when only some of the Gateway API CRDs are installed.** The check read
   the `gateways` CRD alone, so a cluster missing `httproutes` passed it. It now reads all seven and names
   the missing ones; the controller and ichor-ui roles may `get` the six extra CRDs by name.

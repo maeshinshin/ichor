@@ -17,8 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -64,5 +67,51 @@ func TestValidateEndpoint(t *testing.T) {
 				t.Fatalf("err = %v, want one containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// Switching an endpoint to vip warns about each approved control plane that has no spec.network: the renderer puts the
+// VIP on a link, so such a node never holds it.
+func TestVIPEndpointWarnsOfControlPlanesWithoutANetwork(t *testing.T) {
+	const ns, cluster = "default", "c"
+
+	node := func(name, role string, n *ichorv1alpha1.TalosMachineNetwork) *ichorv1alpha1.TalosMachine {
+		m := &ichorv1alpha1.TalosMachine{Name: name, Namespace: ns}
+		m.Spec.ClusterRef.Name, m.Spec.Role, m.Spec.Network = cluster, role, n
+		m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
+
+		return m
+	}
+
+	reader := fake.NewClientBuilder().WithScheme(schemeOf(t)).WithObjects(
+		node("talos02", "controlplane", nil),
+		node("talos01", "controlplane", &ichorv1alpha1.TalosMachineNetwork{MAC: "aa:bb:cc:dd:ee:01"}),
+		node("worker", "worker", nil),
+	).Build()
+	v := &TalosClusterCustomValidator{APIReader: reader}
+
+	update := func(oldObj, newObj *ichorv1alpha1.TalosCluster) []string {
+		oldObj.Namespace, oldObj.Name, newObj.Namespace, newObj.Name = ns, cluster, ns, cluster
+
+		warns, err := v.ValidateUpdate(context.Background(), oldObj, newObj)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return warns
+	}
+
+	warns := update(endpointCluster("node", "192.168.0.202"), endpointCluster("vip", "192.168.0.210"))
+	if len(warns) != 1 || !strings.Contains(warns[0], "talos02") || strings.Contains(warns[0], "talos01") ||
+		strings.Contains(warns[0], "worker") {
+		t.Fatalf("warnings = %q, want one naming only talos02", warns)
+	}
+
+	if warns := update(endpointCluster("vip", "192.168.0.210"), endpointCluster("vip", "192.168.0.210")); len(warns) != 0 {
+		t.Fatalf("an update that leaves the endpoint alone warned: %q", warns)
+	}
+
+	if warns := update(endpointCluster("vip", "192.168.0.210"), endpointCluster("node", "192.168.0.202")); len(warns) != 0 {
+		t.Fatalf("a node endpoint warned: %q", warns)
 	}
 }

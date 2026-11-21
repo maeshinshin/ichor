@@ -1,6 +1,6 @@
 # 0092. Approval sets the primary NIC, its addressing and extra disk roles as typed spec fields
 
-Status: Accepted · Date: 2026-10-27 · Design section: Nodes (approval, disk roles)
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Nodes (approval, disk roles)
 
 Decided: `TalosMachine.spec.network` (one primary link chosen by permanent MAC, DHCP or static addressing, optional VLAN, DNS servers) and `TalosMachine.spec.disks` (roles `ephemeral` and `userVolume` on disks identified like `spec.install.disk`) are written at approval by the UI form and `ichor approve node` flags; `pkg/render` emits a `LinkAliasConfig` alias `net0` with a CEL selector on the permanent MAC and refers to the alias from `DHCPv4Config`, `LinkConfig`, `VLANConfig` and `ResolverConfig`, a `VolumeConfig` for EPHEMERAL and a `UserVolumeConfig` per volume, and the legacy `machine.network.interfaces` before the multi-document contract; link addressing documents are classified live in `pkg/fieldmeta`, aliases and everything else keep the reboot-required default; bonds, the `storage` role and `unused` are not done
 
@@ -70,3 +70,16 @@ node with a second disk could not put EPHEMERAL or a data volume on it.
   of this change; `VolumeConfig.provisioning` is already classified install-time-only.
 - The details RPC only reports links of a maintenance-mode node through the insecure API, so a node whose Talos API is
   unreachable gets a typed MAC.
+
+## Amendment, 2026-11-22: etcd advertises from a static control plane's subnet, and a VIP needs the link
+
+A control plane with static `spec.network.addresses` also renders `cluster.etcd.advertisedSubnets`, each address
+masked to its subnet. Talos documents the unset default as the first routable address of the node, and a control plane
+approved on DHCP and then given a static address still held its DHCP lease, which etcd advertised as its peer URL. A
+DHCP control plane has no address to name, so it renders nothing and approval warns (`DiscoveryWarnings`): give it a
+static address. A machine already running etcd keeps its peer URL until etcd restarts with the new config.
+
+The VIP is put on the link `spec.network` names (`requireVIPLink` refuses approving a control plane without one into
+a VIP cluster). Changing a cluster's endpoint to `vip` could leave an already approved control plane with no
+`spec.network`, which never holds the VIP; the TalosCluster webhook now warns, naming those control planes, and does
+not refuse, since each node's network is set after the endpoint.

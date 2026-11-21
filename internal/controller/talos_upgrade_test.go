@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -547,5 +548,24 @@ var _ = Describe("talosUpgradeAdvancer finish after a failed upgrade", func() {
 		},
 		Entry("after a fallback", "fin3", reasonUpgradeFellBack),
 		Entry("after a verify timeout", "fin4", reasonUpgradeVerifyTimedOut),
+	)
+
+	DescribeTable("a node whose name is unreadable keeps waiting while it carries a failure reason",
+		func(suffix, reason string) {
+			cluster, cp := newUpgradeNode(suffix, true)
+			m := fetchMachine(cp)
+			m.Spec.Hostname = ""
+			Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+			fake := &fakeTalosClient{
+				version: cluster.Spec.TalosVersion, bootID: testBootIDAfter, nodeNameErr: errors.New("not reporting yet"),
+			}
+			adv := newUpgradeAdvancer(fake, nil)
+			setUpgradeCondition(cp, metav1.ConditionFalse, reason)
+
+			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
+		},
+		Entry("after a fallback", "fin5", reasonUpgradeFellBack),
+		Entry("after a verify timeout", "fin6", reasonUpgradeVerifyTimedOut),
 	)
 })

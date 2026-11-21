@@ -351,8 +351,10 @@ func (a *talosUpgradeAdvancer) finish(
 ) (bool, error) {
 	node, err := resolveNodeName(ctx, a.Client, talos, m)
 	if err != nil {
-		if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionTalosUpgrade) {
-			return false, nil // right after the reboot the node may not report its name yet
+		// Any reason but Converged is an upgrade not yet verified: True while outstanding, or False with
+		// FellBack or VerifyTimedOut for a node that came back late. Its name may not be readable yet.
+		if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade); cond != nil && cond.Reason != reasonUpgradeConverged {
+			return false, nil
 		}
 
 		return false, err

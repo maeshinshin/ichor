@@ -623,6 +623,9 @@ command does. Each item is described where it is listed below.
   as failed in `ichor`'s output, and a resume issues the upgrade again. A node that a resume
   then finds on the target shows as converged, after a timeout or after a fallback.
   If its node name cannot be read at that moment, the step waits instead of pausing again.
+  That wait, and the waits for the node to be Ready and for a control plane to rejoin etcd, now
+  end after 20 minutes: the step fails as `VerifyTimedOut`, the operation pauses and the cluster
+  lock is released, where before it waited and renewed the lock for ever.
 - **`ichor resume operation` retries a Kubernetes upgrade whose node did not converge in time.**
   The step failed at the verify timeout with the upgrade still marked outstanding, so a resume
   failed again on the same expired clock, and the cluster lock stopped being renewed from that

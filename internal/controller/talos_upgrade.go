@@ -59,6 +59,12 @@ const (
 	reasonUpgradeFellBack       = "FellBack"
 	reasonUpgradeVerifyTimedOut = "VerifyTimedOut"
 
+	// conditionTalosUpgradeWaiting is the clock of finish's waits while conditionTalosUpgrade is not True: True from
+	// the moment finish first waited, Message the TalosOperation's UID. It is removed when the node is verified or
+	// the clock runs out, so a resume starts a new one. See ADR 0170.
+	conditionTalosUpgradeWaiting = "TalosUpgradeWaiting"
+	reasonUpgradeVerifying       = "Verifying"
+
 	// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls and
 	// installs the installer image.
 	upgradeCallTimeout = 10 * time.Minute
@@ -115,7 +121,7 @@ func NewTalosUpgradeAdvancer(
 // controller resumes exactly where the live node and m.status already say
 // it was.
 func (a *talosUpgradeAdvancer) Advance(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *ichorv1alpha1.TalosOperation,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
 	target := cluster.Spec.TalosVersion
 
@@ -174,11 +180,11 @@ func (a *talosUpgradeAdvancer) Advance(
 
 	switch {
 	case rebooting:
-		return a.afterReboot(ctx, dialCtx, talos, cluster, m, upToDate, currentVersion, currentSchematic, target)
+		return a.afterReboot(ctx, dialCtx, talos, cluster, m, op, upToDate, currentVersion, currentSchematic, target)
 	case !upToDate:
 		return a.beginUpgrade(ctx, talos, cluster, m, currentVersion, target)
 	default:
-		return a.finish(ctx, dialCtx, talos, cluster, m)
+		return a.finish(ctx, dialCtx, talos, cluster, m, op)
 	}
 }
 
@@ -271,7 +277,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 // failure, never a success -- or verifies and finishes.
 func (a *talosUpgradeAdvancer) afterReboot(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	upToDate bool, currentVersion, currentSchematic, target string,
+	op *ichorv1alpha1.TalosOperation, upToDate bool, currentVersion, currentSchematic, target string,
 ) (bool, error) {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade)
 
@@ -326,7 +332,7 @@ func (a *talosUpgradeAdvancer) afterReboot(
 		return false, errors.New(msg)
 	}
 
-	return a.finish(ctx, dialCtx, talos, cluster, m)
+	return a.finish(ctx, dialCtx, talos, cluster, m, op)
 }
 
 // fellBackDetail names what a node that fell back runs instead of the target: its version, its schematic, or both.
@@ -348,13 +354,14 @@ func fellBackDetail(currentVersion, target, currentSchematic, wantSchematic stri
 // case) and afterReboot's success path land.
 func (a *talosUpgradeAdvancer) finish(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
 	node, err := resolveNodeName(ctx, a.Client, talos, m)
 	if err != nil {
 		// Any reason but Converged is an upgrade not yet verified: True while outstanding, or False with
 		// FellBack or VerifyTimedOut for a node that came back late. Its name may not be readable yet.
 		if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade); cond != nil && cond.Reason != reasonUpgradeConverged {
-			return false, nil
+			return a.waitVerify(ctx, talos, cluster, m, op)
 		}
 
 		return false, err
@@ -366,7 +373,7 @@ func (a *talosUpgradeAdvancer) finish(
 	}
 
 	if !ready {
-		return false, nil // expected right after a reboot: keep waiting
+		return a.waitVerify(ctx, talos, cluster, m, op) // expected right after a reboot: keep waiting, on a clock
 	}
 
 	if m.Spec.Role == roleControlPlane {
@@ -376,7 +383,7 @@ func (a *talosUpgradeAdvancer) finish(
 		}
 
 		if !etcdMemberPresent(members, node) {
-			return false, nil
+			return a.waitVerify(ctx, talos, cluster, m, op)
 		}
 	}
 
@@ -384,8 +391,16 @@ func (a *talosUpgradeAdvancer) finish(
 		return false, err
 	}
 
-	// Verified on the target, so any reason but Converged is stale: True while the request was outstanding,
-	// or False with FellBack or VerifyTimedOut from a node that came back late or converged by itself.
+	// Verified on the target: the wait is over, and any reason but Converged is stale: True while the request was
+	// outstanding, or False with FellBack or VerifyTimedOut from a node that came back late or converged by itself.
+	if apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting) != nil {
+		if err := updateMachineStatus(ctx, a.Client, a.Client, m, func(fresh *ichorv1alpha1.TalosMachine) {
+			apimeta.RemoveStatusCondition(&fresh.Status.Conditions, conditionTalosUpgradeWaiting)
+		}); err != nil {
+			return false, err
+		}
+	}
+
 	if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade); cond != nil && cond.Reason != reasonUpgradeConverged {
 		if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{
 			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeConverged,
@@ -396,6 +411,58 @@ func (a *talosUpgradeAdvancer) finish(
 	}
 
 	return true, nil
+}
+
+// waitVerify is finish's "not verified yet" outcome. While conditionTalosUpgrade is True its own clock bounds the
+// wait (afterReboot checks it). Otherwise, with no request outstanding, the wait has no such clock, so
+// conditionTalosUpgradeWaiting starts one, for this operation, and past talosUpgradeVerifyTimeout the step fails and the
+// operation pauses (ADR 0170). The failure keeps conditionTalosUpgrade False with a reason, and the clock is removed so
+// a resume starts a new one.
+func (a *talosUpgradeAdvancer) waitVerify(
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	op *ichorv1alpha1.TalosOperation,
+) (bool, error) {
+	if apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionTalosUpgrade) {
+		return false, nil
+	}
+
+	uid := ""
+	if op != nil {
+		uid = string(op.UID)
+	}
+
+	clock := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting)
+	if clock == nil || clock.Message != uid {
+		// Removed first: SetStatusCondition keeps LastTransitionTime when only the message changes.
+		return false, updateMachineStatus(ctx, a.Client, a.Client, m, func(fresh *ichorv1alpha1.TalosMachine) {
+			apimeta.RemoveStatusCondition(&fresh.Status.Conditions, conditionTalosUpgradeWaiting)
+			apimeta.SetStatusCondition(&fresh.Status.Conditions, metav1.Condition{
+				Type: conditionTalosUpgradeWaiting, Status: metav1.ConditionTrue, Reason: reasonUpgradeVerifying, Message: uid,
+			})
+		})
+	}
+
+	if time.Since(clock.LastTransitionTime.Time) <= talosUpgradeVerifyTimeout {
+		return false, nil
+	}
+
+	if endErr := endEvacuationOf(ctx, a.Client, a.Evacuator, talos, cluster, m); endErr != nil {
+		return false, endErr
+	}
+
+	msg := fmt.Sprintf("node %q was not verified on Talos %s within %s of waiting for it",
+		m.Name, cluster.Spec.TalosVersion, talosUpgradeVerifyTimeout)
+
+	if err := updateMachineStatus(ctx, a.Client, a.Client, m, func(fresh *ichorv1alpha1.TalosMachine) {
+		apimeta.RemoveStatusCondition(&fresh.Status.Conditions, conditionTalosUpgradeWaiting)
+		apimeta.SetStatusCondition(&fresh.Status.Conditions, metav1.Condition{
+			Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reasonUpgradeVerifyTimedOut, Message: msg,
+		})
+	}); err != nil {
+		return false, fmt.Errorf("recording %q's verify timeout: %w", m.Name, err)
+	}
+
+	return false, errors.New(msg)
 }
 
 // installerImage builds cluster's target installer image reference:

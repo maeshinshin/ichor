@@ -397,6 +397,11 @@ func stepRenewUntil(op *ichorv1alpha1.TalosOperation, m *ichorv1alpha1.TalosMach
 		return apimeta.FindStatusCondition(m.Status.Conditions, clock).LastTransitionTime.Add(verify)
 	}
 
+	// finish's waits with no request outstanding run on conditionTalosUpgradeWaiting (ADR 0170).
+	if w := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting); w != nil && op.Spec.Kind == ichorv1alpha1.TalosOperationKindTalos {
+		return w.LastTransitionTime.Add(talosUpgradeVerifyTimeout)
+	}
+
 	return time.Now().Add(operationRenewCeiling)
 }
 

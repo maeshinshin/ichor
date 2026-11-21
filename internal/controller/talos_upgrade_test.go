@@ -497,12 +497,12 @@ var _ = Describe("talosUpgradeAdvancer after a verify timeout", func() {
 })
 
 // setUpgradeCondition writes the TalosUpgrade condition of cp, as a previous Advance pass would have left it.
-func setUpgradeCondition(cp *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason string) {
+func setUpgradeCondition(cp *ichorv1alpha1.TalosMachine, reason string) {
 	GinkgoHelper()
 
 	m := fetchMachine(cp)
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
-		Type: conditionTalosUpgrade, Status: status, Reason: reason, Message: "test",
+		Type: conditionTalosUpgrade, Status: metav1.ConditionFalse, Reason: reason, Message: "test",
 	})
 	Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
 }
@@ -516,7 +516,7 @@ var _ = Describe("talosUpgradeAdvancer finish after a failed upgrade", func() {
 				etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-" + suffix}},
 			}
 			adv := newUpgradeAdvancer(fake, nil)
-			setUpgradeCondition(cp, metav1.ConditionFalse, reason)
+			setUpgradeCondition(cp, reason)
 
 			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
 			Expect(fake.upgradeCalls).To(BeEmpty(), "a node already on the target is not upgraded again")
@@ -538,7 +538,7 @@ var _ = Describe("talosUpgradeAdvancer finish after a failed upgrade", func() {
 				etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-" + suffix}},
 			}
 			adv := newUpgradeAdvancer(fake, nil)
-			setUpgradeCondition(cp, metav1.ConditionFalse, reason)
+			setUpgradeCondition(cp, reason)
 
 			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 
@@ -561,11 +561,64 @@ var _ = Describe("talosUpgradeAdvancer finish after a failed upgrade", func() {
 				version: cluster.Spec.TalosVersion, bootID: testBootIDAfter, nodeNameErr: errors.New("not reporting yet"),
 			}
 			adv := newUpgradeAdvancer(fake, nil)
-			setUpgradeCondition(cp, metav1.ConditionFalse, reason)
+			setUpgradeCondition(cp, reason)
 
 			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 		},
 		Entry("after a fallback", "fin5", reasonUpgradeFellBack),
 		Entry("after a verify timeout", "fin6", reasonUpgradeVerifyTimedOut),
+	)
+
+	DescribeTable("a wait on a node carrying a failure reason has its own clock, and a resume restarts it",
+		func(suffix string, ready bool, nameErr error, members []EtcdMember) {
+			cluster, cp := newUpgradeNode(suffix, ready)
+			if nameErr != nil {
+				m := fetchMachine(cp)
+				m.Spec.Hostname = ""
+				Expect(k8sClient.Update(ctx, m)).To(Succeed())
+			}
+
+			fake := &fakeTalosClient{
+				version: cluster.Spec.TalosVersion, bootID: testBootIDAfter, nodeNameErr: nameErr, etcdMembers: members,
+			}
+			adv := newUpgradeAdvancer(fake, nil)
+			setUpgradeCondition(cp, reasonUpgradeFellBack)
+			op := &ichorv1alpha1.TalosOperation{Spec: ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}}
+
+			// The failure's own transition is old: the clock must not be read from it.
+			m := fetchMachine(cp)
+			apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade).LastTransitionTime =
+				metav1.NewTime(time.Now().Add(-2 * talosUpgradeVerifyTimeout))
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), op)).To(BeFalse())
+			Expect(stepRenewUntil(op, fetchMachine(cp))).To(BeTemporally("<", time.Now().Add(talosUpgradeVerifyTimeout+time.Minute)))
+
+			m = fetchMachine(cp)
+			waiting := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting)
+			Expect(waiting).NotTo(BeNil())
+			Expect(apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade).Reason).To(Equal(reasonUpgradeFellBack))
+
+			waiting.LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * talosUpgradeVerifyTimeout))
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+			Expect(stepRenewUntil(op, fetchMachine(cp))).To(BeTemporally("<", time.Now()), "the lock is no longer renewed")
+
+			done, err := adv.Advance(ctx, cluster, fetchMachine(cp), op)
+			Expect(err).To(HaveOccurred())
+			Expect(done).To(BeFalse())
+
+			got := fetchMachine(cp)
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionTalosUpgrade)
+			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+			Expect(cond.Reason).To(Equal(reasonUpgradeVerifyTimedOut))
+			Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionTalosUpgradeWaiting)).To(BeNil())
+
+			// A resumed operation waits on a fresh clock instead of failing at once.
+			Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), op)).To(BeFalse())
+			Expect(apimeta.FindStatusCondition(fetchMachine(cp).Status.Conditions, conditionTalosUpgradeWaiting)).NotTo(BeNil())
+		},
+		Entry("an unreadable node name", "fin7", true, errors.New("not reporting yet"), nil),
+		Entry("a node that is not Ready", "fin8", false, nil, []EtcdMember{{ID: 1, Hostname: "node-fin8"}}),
+		Entry("a control plane missing from etcd", "fin9", true, nil, nil),
 	)
 })

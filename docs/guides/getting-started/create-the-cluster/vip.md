@@ -175,3 +175,22 @@ ichor approve node NAME --role controlplane --install-disk /dev/sda \
 
 `NAME` is the pending machine from `ichor get nodes`. Repeat the approval for
 the third control plane with its own address.
+
+### Give every control plane a static address
+
+Ichor puts the VIP on the link a node's `spec.network` names, so every control
+plane needs one: a control plane without it never holds the VIP, and
+`ichor approve node` refuses to approve one once another control plane has a link. Setting a
+cluster's endpoint to `vip` on an existing cluster does not add the link to the
+nodes it already has: the webhook warns and names each control plane without a
+`spec.network`. Set it on those nodes too.
+
+Give each control plane a static `--address` and not DHCP. For a control plane
+with a static address Ichor tells etcd to advertise from that address's subnet
+(`cluster.etcd.advertisedSubnets`). A control plane approved with `--nic` alone
+takes DHCP, and Talos then advertises etcd from the first routable address on
+the node, which can be a DHCP lease still on the link, next to the address you
+meant. etcd then lists that lease as its peer URL, and the other members
+reach it there. Approval warns about a control plane on DHCP. A control plane
+whose etcd already runs keeps the peer URL it has until etcd restarts with the
+new configuration.

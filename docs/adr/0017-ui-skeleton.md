@@ -1,6 +1,6 @@
 # 0017. UI skeleton: ui/, ichor-ui as a separate binary, building without it
 
-Status: Accepted · Date: 2026-10-25 · Design section: CLI and UI
+Status: Accepted, amended · Date: 2026-10-25 · Design section: CLI and UI
 
 Decided: Settled `ui/`'s directory, `cmd/ichor-ui` as a second binary, and how the Go side builds without the UI present
 
@@ -155,3 +155,11 @@ Redundant once the module boundary exists, since golangci-lint's package
 discovery follows the same module rules `go list` does. The module boundary is
 one new file (`ui/go.mod`); the exclusion would be a second entry in a shared
 config file that does nothing.
+
+## Amendment, 2026-11-22: the registry moved to preactcn.maesh.dev
+
+preactcn's registry moved from `https://maeshinshin.github.io/preactcn/r/{name}.json`,
+which now answers 301, to `https://preactcn.maesh.dev/r/{name}.json`. The
+`registries."@preactcn"` entry in `ui/components.json` and `site/components.json`
+uses the new host. The decision above is unchanged; only the host moved, and
+the `components.json` in the Context section is the old one.

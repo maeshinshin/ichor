@@ -31,6 +31,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -435,7 +436,13 @@ func initInstall(
 		objects := s.Detail()
 
 		// A Create that timed out may still have gone through; createRetrying counts that as success.
-		if err := createRetrying(ctx, k8sClient, bundleSecret, s); err != nil {
+		// AlreadyExists here, on the first try, means a previous init created the bundle: say so, not the raw error.
+		err := createRetrying(ctx, k8sClient, bundleSecret, s)
+		if apierrors.IsAlreadyExists(err) {
+			return "", fmt.Errorf("init: the cluster is already initialised: secrets bundle Secret %q exists", bundleSecret.Name)
+		}
+
+		if err != nil {
 			return "", fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
 		}
 

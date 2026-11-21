@@ -404,3 +404,17 @@ func TestRunInit_FirstMachineNamesTheStockInstaller(t *testing.T) {
 		t.Errorf("spec.install.image = %q, want %q", got, want)
 	}
 }
+
+// A second init against a cluster that already has its secrets bundle Secret is refused as already
+// initialised, not with the raw Kubernetes AlreadyExists its Create returns.
+func TestInitInstall_SecondRunSaysAlreadyInitialised(t *testing.T) {
+	bundle := &corev1.Secret{}
+	bundle.Name, bundle.Namespace = secretsRefName("c"), "ichor-system"
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(bundle.DeepCopy()).Build()
+	deps, _, _ := newFakeInitDeps(t, c)
+
+	_, _, err := initInstall(context.Background(), initOptions{}, deps, c, bundle, nil, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "already initialised") {
+		t.Fatalf("initInstall error = %v, want a refusal saying the cluster is already initialised", err)
+	}
+}

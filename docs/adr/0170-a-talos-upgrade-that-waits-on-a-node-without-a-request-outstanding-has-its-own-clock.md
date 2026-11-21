@@ -1,6 +1,6 @@
 # 0170. A Talos upgrade that waits on a node with no request outstanding has its own clock
 
-Status: Accepted · Date: 2026-11-21 · Design section: Upgrades
+Status: Accepted, amended · Date: 2026-11-21 · Design section: Upgrades
 
 Decided: when `finish` has to wait and `TalosUpgrade` is not True, a second machine condition, `TalosUpgradeWaiting`, records when the wait began; past `talosUpgradeVerifyTimeout` the step fails with `TalosUpgrade` False and reason `VerifyTimedOut`, and the operation pauses.
 
@@ -37,3 +37,9 @@ Making the wait True again, as `kubernetesUpgradeAdvancer.waiting` does, would w
 - Set `TalosUpgrade` True while waiting. Rejected: it hides the failure reason, and the existing behaviour that a node not yet verified keeps its reason is pinned.
 - A new field in `TalosOperationStatus`. Rejected: a condition on the machine carries a start time without a CRD change, and the machine is where the other verify clocks live.
 - Start from `CreationTimestamp` or `status.lastRetry`. Rejected: the first fails an old operation's resume at once; the second is not written when a pause by `spec.paused` is lifted.
+
+## Amendment, 2026-11-22: a Kubernetes VerifyTimedOut belongs to the operation that wrote it
+
+Point 7 said the Kubernetes side needs no change. It needed one. `upgradeApplied` took a `KubernetesUpgrade` False with `VerifyTimedOut` as an applied step, so a resumed operation waits on a fresh clock instead of failing on a transient error. Only `verify` clears that reason, so a timeout left by a cancelled operation made a later operation's first pass, before `begin`, wait and record True with `ConfigApplied` although nothing was applied.
+
+Decided: `waiting` ends the `VerifyTimedOut` message with ` [operation <UID>]`, the TalosOperation's UID, and `upgradeApplied` honours the reason only when the message ends with the running operation's UID. Another operation's timeout is then treated as absent: a transient error fails the step at once. No CRD field is added; the UID travels in the condition message, as it does on `TalosUpgradeWaiting`. The clock rules are unchanged: `LastTransitionTime` moves only when `Status` changes, a failure stays False with a reason, and `verify` rewrites it to `Converged`.

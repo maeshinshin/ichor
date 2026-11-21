@@ -621,6 +621,8 @@ command does. Each item is described where it is listed below.
   with no limit and hold the cluster lock.
 - A resumed Kubernetes upgrade whose node cannot be reached on its first pass waits on a fresh clock. It used
   to fail the step again and pause the operation.
+- A Kubernetes upgrade no longer waits on a transient error in its first pass because an earlier, cancelled
+  upgrade of the same machine timed out. It fails the step at once, as it should.
 - **`ichor resume operation` retries a Talos upgrade whose node booted its previous A/B slot.**
   The operation used to pause again on the same fallback without calling the Upgrade API, so
   the upgrade could not be retried. A machine whose upgrade fell back now shows as failed in

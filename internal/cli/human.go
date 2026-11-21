@@ -26,6 +26,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/maeshinshin/ichor/internal/controller"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -285,10 +286,6 @@ var (
 		"Transitioning": true, "VerifyingNewSide": true, "ConfigRollout": true, "KubernetesUpgrade": true,
 		"TalosUpgrade": true, "CARotation": true, "KeyRotation": true, "Removal": true, "Shutdown": true,
 	}
-	// progressFailedWhenFalse are the reasons a progress condition is False for a failure rather than a
-	// completed step: the node booted its previous slot (the controller's reasonUpgradeFellBack), or it did
-	// not come back within the verify window (reasonUpgradeVerifyTimedOut, reasonKubernetesVerifyTimedOut).
-	progressFailedWhenFalse = map[string]bool{"FellBack": true, "VerifyTimedOut": true}
 )
 
 // conditionMark is the glyph of a condition of type typ, status "True", "False" or "Unknown", and reason.
@@ -307,7 +304,7 @@ func conditionMark(typ, status, reason string) mark {
 			return markPending
 		}
 
-		if progressFailedWhenFalse[reason] {
+		if controller.ProgressFailureReasons[reason] {
 			return markFailed
 		}
 

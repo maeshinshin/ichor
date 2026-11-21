@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -81,7 +80,7 @@ func (r *rig) ensureForeign(t *testing.T) {
 	}
 	nodes := r.ikJSON(t, "get", "nodes", "-o", "name")
 	// Forget the Ichor-side objects of that machine first (a pending or approved worker), so the controller does not act on it.
-	for _, mname := range strings.Fields(r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[*].metadata.name}")) {
+	for mname := range strings.FieldsSeq(r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[*].metadata.name}")) {
 		role := r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", mname, "-o", "jsonpath={.spec.role}")
 		if !strings.Contains(strings.ToLower(role), "controlplane") {
 			_, _ = r.ikDelete("-n", crNS, "annotate", "talosmachines.ichor.maesh.dev", mname, "ichor.maesh.dev/allow-delete=true", "--overwrite")

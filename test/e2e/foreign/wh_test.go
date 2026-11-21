@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -73,7 +72,7 @@ func (w *whLog) block(title, text string) {
 // oneLine joins a multi-line kubectl or cilium-dbg answer for a summary line.
 func oneLine(s string) string {
 	var parts []string
-	for _, l := range strings.Split(strings.TrimSpace(s), "\n") {
+	for l := range strings.SplitSeq(strings.TrimSpace(s), "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			parts = append(parts, l)
 		}
@@ -134,7 +133,7 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 
 		var ctrlNode, ctrlIP string
 		var ctrlReady bool
-		for _, l := range strings.Split(pods, "\n") {
+		for l := range strings.SplitSeq(pods, "\n") {
 			if f := strings.Fields(l); len(f) >= 5 && strings.Contains(f[0], "controller-manager") {
 				ctrlNode, ctrlIP, ctrlReady = f[1], f[2], f[4] == whReady
 
@@ -151,7 +150,7 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 				w.block("events in ichor-system while the controller is not Ready", ev)
 			}
 		}
-		for _, l := range strings.Split(cils, "\n") {
+		for l := range strings.SplitSeq(cils, "\n") {
 			f := strings.Fields(l)
 			if len(f) == 0 {
 				continue
@@ -160,7 +159,7 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 				streams[f[0]] = whDrops(c, w, f[0])
 			}
 		}
-		for _, l := range strings.Split(cils, "\n") {
+		for l := range strings.SplitSeq(cils, "\n") {
 			f := strings.Fields(l)
 			if len(f) < 2 || f[1] != ctrlNode || ctrlNode == "" {
 				continue

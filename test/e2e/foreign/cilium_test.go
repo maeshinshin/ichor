@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -243,7 +242,7 @@ func trafficReport(t *testing.T, c *foreign.Cluster, label string) foreign.PodLe
 	for _, p := range pods {
 		out, _ := inner(c, "logs", p)
 		last := ""
-		for _, l := range strings.Split(out, "\n") {
+		for l := range strings.SplitSeq(out, "\n") {
 			if strings.HasPrefix(l, "FAIL") {
 				fails = append(fails, l)
 			}
@@ -303,9 +302,9 @@ func probeDiag(t *testing.T, c *foreign.Cluster, label string) {
 func ciliumDrops(c *foreign.Cluster) string {
 	pods, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.name}")
 	var b strings.Builder
-	for _, p := range strings.Fields(pods) {
+	for p := range strings.FieldsSeq(pods) {
 		out, _ := inner(c, "-n", "kube-system", "exec", p, "-c", "cilium-agent", "--", "cilium-dbg", "metrics", "list")
-		for _, l := range strings.Split(out, "\n") {
+		for l := range strings.SplitSeq(out, "\n") {
 			if strings.Contains(l, "drop_count_total") {
 				fmt.Fprintf(&b, "%s %s\n", p, strings.TrimSpace(l))
 			}
@@ -547,7 +546,7 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 	logState(t, c, "before")
 	recs := map[string]string{} // record name -> base64 of data.release
 	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o", "jsonpath={.items[*].metadata.name}")
-	for _, n := range strings.Fields(names) {
+	for n := range strings.FieldsSeq(names) {
 		recs[n] = secretData(c, "kube-system", n)["release"]
 	}
 	if len(recs) == 0 {

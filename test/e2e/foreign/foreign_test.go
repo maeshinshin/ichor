@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -125,7 +124,7 @@ func configDocs(t *testing.T, c *foreign.Cluster, ip string) (doc map[string]any
 	}
 	switch s := objs[0]["spec"].(type) {
 	case string: // the v1.14 contract keeps network, CNI, proxy and inline manifests in their own documents
-		for _, part := range strings.Split(s, "\n---\n") {
+		for part := range strings.SplitSeq(s, "\n---\n") {
 			var d map[string]any
 			if yaml.Unmarshal([]byte(part), &d) != nil {
 				continue

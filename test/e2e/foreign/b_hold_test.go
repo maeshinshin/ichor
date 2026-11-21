@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -64,7 +63,7 @@ func (s *sampler) start(t *testing.T, c *foreign.Cluster) {
 			smp := sample{at: time.Now(), held: map[string]bool{}, versions: map[string]string{}}
 			out, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
 				"jsonpath={range .items[*]}{.metadata.name} {.metadata.annotations.ichor\\.maesh\\.dev/hold-apply}{\"\\n\"}{end}")
-			for _, l := range strings.Split(out, "\n") {
+			for l := range strings.SplitSeq(out, "\n") {
 				if f := strings.Fields(l); len(f) >= 1 {
 					smp.held[f[0]] = len(f) == 2 && f[1] == "true"
 				}

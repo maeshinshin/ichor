@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -51,7 +50,7 @@ func waitOps(t *testing.T, c *foreign.Cluster, kc, kind string, limit time.Durat
 	for time.Since(start) < limit {
 		var mine, done int
 		list := opsList(c, kc)
-		for _, l := range strings.Split(list, "\n") {
+		for l := range strings.SplitSeq(list, "\n") {
 			if strings.Contains(strings.ToLower(l), strings.ToLower(kind)+"=") {
 				mine++
 				if strings.HasSuffix(l, "=Completed") {
@@ -130,7 +129,7 @@ func TestD4K8s(t *testing.T) {
 	t.Logf("Kubernetes upgrade to %s took %s", target, time.Since(start).Round(time.Second))
 	vers, _ := inner(c, "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.kubeletVersion}")
 	t.Logf("kubelet versions: %s", vers)
-	for _, v := range strings.Fields(vers) {
+	for v := range strings.FieldsSeq(vers) {
 		if v != target {
 			t.Errorf("a node is on %s, not %s", v, target)
 		}

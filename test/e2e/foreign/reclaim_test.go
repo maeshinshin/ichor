@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -37,6 +36,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -250,10 +250,8 @@ func (r *rig) waitPhase(t *testing.T, name string, d time.Duration, phases ...st
 	t.Helper()
 	p, err := kube.Poll("MachineReclaim "+name+" in "+strings.Join(phases, "|"), d, func() (string, bool) {
 		p := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o", "jsonpath={.status.phase}")
-		for _, w := range phases {
-			if p == w {
-				return p, true
-			}
+		if slices.Contains(phases, p) {
+			return p, true
 		}
 		return p, false
 	})
@@ -399,7 +397,7 @@ func jsonField(t *testing.T, raw, path string) string {
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
 		t.Fatalf("decoding: %v", err)
 	}
-	for _, k := range strings.Split(path, ".") {
+	for k := range strings.SplitSeq(path, ".") {
 		m, ok := v.(map[string]any)
 		if !ok {
 			return ""

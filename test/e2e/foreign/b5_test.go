@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -35,7 +34,7 @@ func TestB5Plan(t *testing.T) {
 	if err != nil {
 		t.Logf("plan exited with %v", err)
 	}
-	for _, l := range strings.Split(out, "\n") {
+	for l := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(l, "version contract") {
 			t.Logf("B5 contract line: %s", strings.TrimSpace(l))
 		}

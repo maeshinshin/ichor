@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -79,7 +78,7 @@ var _ = BeforeSuite(func() {
 	configureKubectlKubeRC()
 
 	raw := requireEnv(talosNodesEnvVar, "its maintenance-mode node endpoint(s)")
-	for _, n := range strings.Split(raw, ",") {
+	for n := range strings.SplitSeq(raw, ",") {
 		if n = strings.TrimSpace(n); n != "" {
 			talosNodes = append(talosNodes, n)
 		}

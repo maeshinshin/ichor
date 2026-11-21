@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -112,7 +111,7 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 
 		// The harness only brings up the node and the CRDs; the inner cluster is otherwise
 		// empty, so the namespace the fixtures below land in has to be created here.
-		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		ns := &corev1.Namespace{Name: namespace}
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(context.Background(), ns))).To(Succeed())
 	})
 

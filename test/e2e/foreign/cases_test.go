@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -54,7 +53,7 @@ func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) 
 	holdCleared(t, c)
 	pods, _ := inner(c, "-n", crNS, "get", "pods", "--no-headers")
 	t.Logf("pods in %s:\n%s", crNS, pods)
-	for _, l := range strings.Split(strings.TrimSpace(pods), "\n") {
+	for l := range strings.SplitSeq(strings.TrimSpace(pods), "\n") {
 		if l != "" && !strings.Contains(l, "Running") && !strings.Contains(l, "Completed") {
 			t.Errorf("pod not Running: %s", l)
 		}

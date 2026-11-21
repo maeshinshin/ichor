@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2026 maeshinshin.
@@ -34,7 +33,7 @@ import (
 func foreignRecs(c *foreign.Cluster) map[string]string {
 	recs := map[string]string{}
 	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o", "jsonpath={.items[*].metadata.name}")
-	for _, n := range strings.Fields(names) {
+	for n := range strings.FieldsSeq(names) {
 		recs[n] = secretData(c, "kube-system", n)["release"]
 	}
 	return recs
@@ -145,7 +144,7 @@ func TestA8KillJob(t *testing.T) {
 		t.Logf("log of %s:\n%s", p, logs)
 	}
 	cl, _ := inner(c, "-n", crNS, "logs", "deploy/ichor-controller-manager", "--since=30m")
-	for _, l := range strings.Split(cl, "\n") {
+	for l := range strings.SplitSeq(cl, "\n") {
 		if ll := strings.ToLower(l); strings.Contains(ll, "cni") || strings.Contains(ll, "handover") {
 			t.Logf("controller: %.400s", l)
 		}

@@ -220,3 +220,34 @@ func TestGoInstallToolRebuildsAToolFromAnotherToolchain(t *testing.T) {
 		})
 	}
 }
+
+// TestEmbedWarnsOnARegistryPort pins the warning for an IMG that names a registry host with a port. The nodes pull it
+// over HTTPS unless a registry mirror covers that host, and a plain-HTTP registry then fails with ImagePullBackOff. The
+// build cannot see the mirror, so it warns and still succeeds.
+func TestEmbedWarnsOnARegistryPort(t *testing.T) {
+	const ctl, ui = "ghcr.io/maeshinshin/ichor-controller:v0.1.0", "ghcr.io/maeshinshin/ichor-ui:v0.1.0"
+
+	warned := []struct{ img, imgUI, named string }{
+		{"192.168.0.8:5000/maeshinshin/ichor-controller:v0.1.0", ui, "IMG is 192.168.0.8:5000/"},
+		{ctl, "192.168.0.8:5000/maeshinshin/ichor-ui:v0.1.0", "IMG_UI is 192.168.0.8:5000/"},
+	}
+
+	for _, tc := range warned {
+		out, err := makeOut(t, "check-embed-images", "IMG="+tc.img, "IMG_UI="+tc.imgUI)
+		if err != nil {
+			t.Fatalf("check-embed-images refused IMG=%s IMG_UI=%s, which it should only warn about: %v\n%s", tc.img, tc.imgUI, err, out)
+		}
+
+		if !strings.Contains(out, "warning") || !strings.Contains(out, tc.named) {
+			t.Errorf("no warning names %q for IMG=%s IMG_UI=%s:\n%s", tc.named, tc.img, tc.imgUI, out)
+		}
+	}
+
+	// Mirrored names and a bare name with no registry host are not warned about.
+	for _, pair := range [][2]string{{ctl, ui}, {"controller:v0.1.0", ui}} {
+		out, err := makeOut(t, "check-embed-images", "IMG="+pair[0], "IMG_UI="+pair[1])
+		if err != nil || strings.Contains(out, "warning") {
+			t.Errorf("check-embed-images warned or failed for IMG=%s IMG_UI=%s (err %v):\n%s", pair[0], pair[1], err, out)
+		}
+	}
+}

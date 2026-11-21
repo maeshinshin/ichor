@@ -241,6 +241,7 @@ check-embed-images:
 	    *:*) ;; \
 	    *) echo "build-ichor-embed: $$name is $$img, which has no tag; tag it with the version being built." >&2; exit 1 ;; \
 	  esac; \
+	  case "$$img" in */*) host=$${img%%/*}; case "$$host" in *:*) echo "build-ichor-embed: warning: $$name is $$img, which names the registry $$host with a port. The nodes pull it over HTTPS unless a registry mirror covers $$host, and a plain-HTTP registry then fails with ImagePullBackOff. Name the image under the host the mirror serves, e.g. ghcr.io, and give ichor init --registry-mirror ghcr.io=http://$$host." >&2 ;; esac ;; esac; \
 	done
 
 # build-installer runs from the recipe, not as a prerequisite: under make -k a failed check does not stop a prerequisite

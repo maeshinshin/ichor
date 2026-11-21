@@ -70,7 +70,8 @@ By default the client certificates live a year, which is also the maximum; --ttl
 hours and --read-only makes the talosconfig os:reader instead of os:admin, for access that cannot
 change a node.
 
-The Kubernetes server is --kube-server, else the one in your current kubeconfig (its context names
+The Kubernetes server is --kube-server, else the one in your current kubeconfig, with a warning when that is not
+the cluster's endpoint address (its context names
 are kept too); with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
 cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix ` + credentialsSuffix + `
@@ -352,6 +353,10 @@ func reportCredentials(w io.Writer, files *credentialFiles) {
 	_, _ = fmt.Fprintf(w, "Wrote (mode 0600, content not printed; they trust %s):\n  kubeconfig:  %s\n  talosconfig: %s\n"+
 		"Use them with: KUBECONFIG=%s TALOSCONFIG=%s\n",
 		trusts, files.Kubeconfig, files.Talosconfig, files.Kubeconfig, files.Talosconfig)
+
+	if files.ServerWarning != "" {
+		_, _ = fmt.Fprintf(w, "Warning: %s\n", files.ServerWarning)
+	}
 }
 
 // handoffDeps are runRotateCAHandoff's seams.

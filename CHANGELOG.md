@@ -199,6 +199,10 @@ command does. Each item is described where it is listed below.
   command now writes a working kubeconfig and talosconfig with no kubeconfig on
   disk; before, it copied the server from a current kubeconfig and failed
   without one. Without the flag it behaves as before (CLI, ADR 0091).
+- **`ichor create credentials` warns when the kubeconfig's server is not the
+  cluster's endpoint.** Without `--kube-server` the server still comes from your
+  current kubeconfig, which keeps pointing at a node after the endpoint became a
+  VIP; the report now says so and gives the `--kube-server` to pass (CLI, ADR 0091).
 - **Breaking: the command surface is verb first.** `ichor machine list` is now
   `ichor get nodes`, and `ichor machine approve NAME` is
   `ichor approve node NAME`. The noun-first groups `cluster`, `machine`,

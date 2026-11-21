@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,13 +90,15 @@ type credentialFiles struct {
 	Dual bool
 	// ForcedStaleBundle is true when the CAs came from a bundle file found stale and used with --force.
 	ForcedStaleBundle bool
+	// ServerWarning is set when the kubeconfig's server host is not the cluster's endpoint address.
+	ServerWarning string
 }
 
 // writeCredentials writes the kubeconfig and talosconfig. With a cluster client (k8s) it reads the
 // secrets bundle and, when present, rotation.yaml from the cluster's Secret; with req.BundleFile it
 // reads the file and k8s may be nil. Nothing secret is returned or printed.
 func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequest) (*credentialFiles, error) {
-	src, endpoints, err := loadCredentialSources(ctx, k8s, req)
+	src, endpoints, endpoint, err := loadCredentialSources(ctx, k8s, req)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +152,28 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 		}
 	}
 
-	return &credentialFiles{Kubeconfig: kubeOut, Talosconfig: talosOut, Dual: src.Dual}, nil
+	return &credentialFiles{
+		Kubeconfig: kubeOut, Talosconfig: talosOut, Dual: src.Dual, ServerWarning: serverWarning(*current, endpoint),
+	}, nil
+}
+
+// serverWarning says so when the server the kubeconfig copied from the operator's own is not on the cluster's
+// endpoint address, as after an endpoint change (ADR 0091 keeps the operator's server; this only names it).
+// An unknown endpoint (--bundle) or an unreadable server warns of nothing.
+func serverWarning(current clientcmdapi.Config, endpoint string) string {
+	kctx := current.Contexts[current.CurrentContext]
+	if kctx == nil || current.Clusters[kctx.Cluster] == nil || endpoint == "" {
+		return ""
+	}
+
+	server := current.Clusters[kctx.Cluster].Server
+
+	if u, err := url.Parse(server); err != nil || u.Hostname() == endpoint {
+		return ""
+	}
+
+	return fmt.Sprintf("the kubeconfig's server %s differs from the cluster's endpoint %s: pass --kube-server https://%s "+
+		"if it should follow the endpoint", server, endpoint, net.JoinHostPort(endpoint, "6443"))
 }
 
 // currentKubeconfig is the kubeconfig the server and names are copied from: one naming only
@@ -171,29 +196,31 @@ func currentKubeconfig(req credentialRequest) (*clientcmdapi.Config, error) {
 	return current, nil
 }
 
-// loadCredentialSources returns the CAs and, from the cluster, the control planes' Talos endpoints.
-func loadCredentialSources(ctx context.Context, k8s client.Client, req credentialRequest) (*credentials.Sources, []string, error) {
+// loadCredentialSources returns the CAs and, from the cluster, the control planes' Talos endpoints and its endpoint address.
+func loadCredentialSources(ctx context.Context, k8s client.Client, req credentialRequest) (*credentials.Sources, []string, string, error) {
 	if req.BundleFile != "" {
 		bundle, err := loadBundleFile(req.BundleFile)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 
 		src, err := credentials.NewSources(bundle, nil)
 
-		return src, nil, err
+		return src, nil, "", err
 	}
 
 	if k8s == nil {
-		return nil, nil, errors.New("no cluster to read the CAs from: pass --bundle with a secrets bundle file")
+		return nil, nil, "", errors.New("no cluster to read the CAs from: pass --bundle with a secrets bundle file")
 	}
 
 	var cluster ichorv1alpha1.TalosCluster
 	if err := k8s.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: req.Cluster}, &cluster); err != nil {
-		return nil, nil, fmt.Errorf("getting TalosCluster %s/%s: %w", req.Namespace, req.Cluster, err)
+		return nil, nil, "", fmt.Errorf("getting TalosCluster %s/%s: %w", req.Namespace, req.Cluster, err)
 	}
 
-	return credentials.Load(ctx, k8s, req.IchorNamespace, &cluster)
+	src, endpoints, err := credentials.Load(ctx, k8s, req.IchorNamespace, &cluster)
+
+	return src, endpoints, cluster.Spec.Endpoint.Address, err
 }
 
 // defaultCredentialsOut is where credentials are written when no output path is given. A file that

@@ -935,3 +935,37 @@ func TestCreateCredentialsRefusesAKubeServerThatIsNotAnHTTPSURL(t *testing.T) {
 		t.Errorf("--kube-server %q refused: %v", clusterCredentialsOpts.KubeServer, err)
 	}
 }
+
+func TestCredentialsReportAServerThatIsNotTheClustersEndpoint(t *testing.T) {
+	f := newCredFixture(t, false, "")
+
+	files, err := writeCredentials(context.Background(), f.k8s, f.request())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+
+	reportCredentials(&out, files)
+
+	// The fixture's kubeconfig names 10.0.0.1 and the cluster's endpoint is 10.0.0.5.
+	for _, want := range []string{credServer, testEndpointAddr, "--kube-server"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("the report does not say the server differs from the endpoint (missing %q): %s", want, out.String())
+		}
+	}
+
+	req := f.request()
+	req.KubeServer = "https://" + testEndpointAddr + ":6443"
+
+	if files, err = writeCredentials(context.Background(), f.k8s, req); err != nil {
+		t.Fatal(err)
+	}
+
+	out.Reset()
+	reportCredentials(&out, files)
+
+	if strings.Contains(out.String(), "differs") {
+		t.Fatalf("a server on the endpoint address is reported as different: %s", out.String())
+	}
+}

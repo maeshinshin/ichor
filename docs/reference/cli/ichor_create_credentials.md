@@ -20,7 +20,8 @@ By default the client certificates live a year, which is also the maximum; --ttl
 hours and --read-only makes the talosconfig os:reader instead of os:admin, for access that cannot
 change a node.
 
-The Kubernetes server is --kube-server, else the one in your current kubeconfig (its context names
+The Kubernetes server is --kube-server, else the one in your current kubeconfig, with a warning when that is not
+the cluster's endpoint address (its context names
 are kept too); with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
 cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix .ichor-new

@@ -33,7 +33,7 @@ Anyone using a registry client certificate or manifest headers in a patch must m
 
 ## Amendment (2026-11-15): spec.cni.custom.documents is retired
 
-Decided by the maintainer: `TalosCluster.spec.cni.custom.documents` is retired as a second exception to the append-only rule. This extends this ADR rather than opening a new one because the rule, the mechanism (an entry in `retiredFields`) and the consequence for stored objects are the ones above; only the reason differs. Here the field is not a hole but dead weight.
+Decided by the coordinator, not the maintainer: `TalosCluster.spec.cni.custom.documents` is retired as a second exception to the append-only rule. This extends this ADR rather than opening a new one because the rule, the mechanism (an entry in `retiredFields`) and the consequence for stored objects are the ones above; only the reason differs. Here the field is not a hole but dead weight.
 
 **Why.** ADR 0099 decision 8 and ADR 0101 deprecated `spec.cni.custom` and kept it only because CRD fields are append-only. Its `documents` member is the whole `TalosConfigPatchDocument` union a second time, and nothing renders it. In the chart's Helm release record (ADR 0158's method) the field and the words about it in the doc comment of `custom` take 392,672 bytes, 40% of the record: the record goes from 991,560 to 598,888 bytes, leaving 449,688 of the 1,048,576 free instead of 57,016. ADR 0165 sets out what that room is needed for.
 

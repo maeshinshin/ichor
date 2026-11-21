@@ -1,6 +1,7 @@
 ---
 sidebar_group: "Purpose"
 sidebar_order: 2
+sidebar_label: "Architecture: Overview"
 ---
 
 # Overview

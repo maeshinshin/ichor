@@ -1001,8 +1001,9 @@ func refuseOldContract(name, contract, running string) error {
 	}
 
 	return fmt.Errorf("adopt: the version contract %s of %s is below %s, and adopt takes %s or later: %s. "+
-		"Nothing was written. Adopt it at --version-contract %s",
-		contract, name, adoptMinContract, adoptMinContract, reason, adoptMinContract)
+		"Nothing was written. Try --version-contract %s; if the zero-drift plan then fails on a kube-apiserver configuration conflict, "+
+		"the configuration was generated for an older contract and must be migrated to the %s form first, outside Ichor, then adopted again",
+		contract, name, adoptMinContract, adoptMinContract, reason, adoptMinContract, adoptMinContract)
 }
 
 // chooseContract settles spec.versionContract of a cluster adopt creates: the --version-contract

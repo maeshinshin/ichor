@@ -124,11 +124,16 @@ var _ = Describe("StorageService.ListStorages", func() {
 			{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosClusters}, Verbs: []string{cniVerbGet}},
 			{APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{resourceTalosMachines}, Verbs: []string{cniVerbGet, cniVerbList}},
 		})
-		_, err := s.ListStorages(signedIn, connect.NewRequest(&pb.ListStoragesRequest{
-			Cluster: objectRef(f.cluster.Namespace, f.cluster.Name),
-		}))
+		// The API server's authorizer takes a moment to see the new role, so until then the first read
+		// (the cluster) is refused instead. Wait for the refusal that names the TalosStorages.
+		var err error
+		Eventually(func() error {
+			_, err = s.ListStorages(signedIn, connect.NewRequest(&pb.ListStoragesRequest{
+				Cluster: objectRef(f.cluster.Namespace, f.cluster.Name),
+			}))
+			return err
+		}).Should(MatchError(ContainSubstring("talosstorages")))
 		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
-		Expect(err).To(MatchError(ContainSubstring("talosstorages")))
 	})
 
 	It("lists the TalosStorages for a signed-in user with the viewer's read rules", func() {

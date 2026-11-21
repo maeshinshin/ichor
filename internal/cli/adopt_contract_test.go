@@ -50,6 +50,18 @@ func TestAdoptRefusesAContractBelowV114(t *testing.T) {
 	}
 }
 
+// A node on v1.14 with an older contract: the advice names the flag and says what to do when the flag's
+// zero-drift plan fails, since the probe's contract is the one the configuration needs.
+func TestRefuseOldContractAdviceOnARunningV114(t *testing.T) {
+	err := refuseOldContract("demo", "v1.13", "v1.14.0")
+
+	for _, want := range []string{"--version-contract v1.14", "kube-apiserver configuration conflict", "migrated to the v1.14 form first", "Nothing was written"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("advice %q does not contain %q", err, want)
+		}
+	}
+}
+
 // A v1.13 cluster with a legacy machine.install is refused end to end: the probe picks v1.13 for it,
 // and the refusal comes before anything is written.
 func TestAdoptRefusesALegacyInstallBeforeWriting(t *testing.T) {

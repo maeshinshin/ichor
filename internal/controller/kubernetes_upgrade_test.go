@@ -637,7 +637,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 		m := fetchMachine(w)
 		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
-			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: "left by the timed-out pass",
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: "left by the timed-out pass" + verifyTimedOutSuffix(op),
 		})
 		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
 
@@ -653,6 +653,78 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 		Expect(time.Since(cond.LastTransitionTime.Time)).To(BeNumerically("<", kubernetesVerifyTimeout))
 	})
+
+	// markerOf seeds the machine's KubernetesUpgrade marker as a previous pass left it.
+	markerOf := func(w *ichorv1alpha1.TalosMachine, c metav1.Condition) {
+		m := fetchMachine(w)
+		apimeta.SetStatusCondition(&m.Status.Conditions, c)
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+	}
+
+	DescribeTable("fails at once, without waiting, when the marker is not this operation's applied step",
+		func(suffix string, c metav1.Condition) {
+			cluster, w, fake := k8sWorkerFixture(testK8sTarget, suffix, true)
+			other := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+			other.UID = "other-op"
+			c.Message += verifyTimedOutSuffix(other)
+			markerOf(w, c)
+
+			adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+			adv.TalosClient = func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error) {
+				return nil, errors.New("connection refused")
+			}
+
+			op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+			op.UID = "this-op"
+
+			_, err := adv.Advance(ctx, cluster, fetchMachine(w), op)
+			Expect(err).To(MatchError(ContainSubstring("dialing")))
+
+			got := apimeta.FindStatusCondition(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)
+			Expect(got.Status).To(Equal(metav1.ConditionFalse), "nothing was applied, so no clock starts")
+			Expect(got.Reason).To(Equal(c.Reason))
+		},
+		Entry("another operation's VerifyTimedOut", "stale1", metav1.Condition{
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: "node did not converge",
+		}),
+		Entry("Converged", "stale2", metav1.Condition{
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesConverged, Message: "finished",
+		}),
+	)
+
+	DescribeTable("waits on a fresh clock when a resumed pass of the same operation fails before begin",
+		func(suffix string, breakIt func(*ichorv1alpha1.TalosMachine, *fakeTalosClient)) {
+			cluster, w, fake := k8sWorkerFixture(testK8sTarget, suffix, true)
+			adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+			op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+			op.UID = "this-op"
+
+			markerOf(w, metav1.Condition{
+				Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut,
+				Message: "left by the timed-out pass" + verifyTimedOutSuffix(op),
+			})
+
+			m := fetchMachine(w)
+			breakIt(m, fake)
+
+			done, err := adv.Advance(ctx, cluster, m, op)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeFalse())
+
+			cond := apimeta.FindStatusCondition(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)
+			Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+			Expect(cond.Reason).To(Equal(reasonKubernetesApplied))
+		},
+		Entry("the node's name cannot be resolved", "res1", func(m *ichorv1alpha1.TalosMachine, _ *fakeTalosClient) {
+			m.Spec.Hostname = ""
+		}),
+		Entry("the Kubernetes node cannot be read", "res2", func(m *ichorv1alpha1.TalosMachine, _ *fakeTalosClient) {
+			m.Spec.Hostname = "no-such-node"
+		}),
+		Entry("the node's configuration cannot be read", "res3", func(_ *ichorv1alpha1.TalosMachine, f *fakeTalosClient) {
+			f.currentErr = errors.New("connection reset")
+		}),
+	)
 
 	It("fails at once when the dial fails before any upgrade started", func() {
 		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "to4", true)
@@ -677,7 +749,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 		m := fetchMachine(w)
 		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
-			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: "left by the timed-out pass",
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: "left by the timed-out pass" + verifyTimedOutSuffix(op),
 		})
 		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
 

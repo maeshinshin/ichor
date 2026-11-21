@@ -228,8 +228,8 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	talos, err := a.TalosClient(dialCtx, cluster, m, bundle)
 	if err != nil {
-		if upgradeApplied(m) {
-			return false, a.waiting(ctx, m, cluster, "dialing the node: "+err.Error()) // restarting services
+		if upgradeApplied(m, op) {
+			return false, a.waiting(ctx, m, cluster, op, "dialing the node: "+err.Error()) // restarting services
 		}
 
 		return false, fmt.Errorf("dialing %q: %w", m.Name, err)
@@ -239,8 +239,8 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 	// The node is read first: what its kubelet runs is what the staged render pins.
 	nodeName, err := resolveNodeName(ctx, a.Reader, talos, m)
 	if err != nil {
-		if upgradeApplied(m) {
-			return false, a.waiting(ctx, m, cluster, err.Error())
+		if upgradeApplied(m, op) {
+			return false, a.waiting(ctx, m, cluster, op, err.Error())
 		}
 
 		return false, err
@@ -248,8 +248,8 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	var node corev1.Node
 	if err := a.Reader.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
-		if upgradeApplied(m) {
-			return false, a.waiting(ctx, m, cluster, fmt.Sprintf("reading node %q: %v", nodeName, err)) // API server restarting
+		if upgradeApplied(m, op) {
+			return false, a.waiting(ctx, m, cluster, op, fmt.Sprintf("reading node %q: %v", nodeName, err)) // API server restarting
 		}
 
 		return false, fmt.Errorf("reading %q's Kubernetes node: %w", m.Name, err)
@@ -269,8 +269,8 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	current, err := talos.CurrentConfig(dialCtx)
 	if err != nil {
-		if upgradeApplied(m) {
-			return false, a.waiting(ctx, m, cluster, "reading the node's configuration: "+err.Error())
+		if upgradeApplied(m, op) {
+			return false, a.waiting(ctx, m, cluster, op, "reading the node's configuration: "+err.Error())
 		}
 
 		return false, fmt.Errorf("reading %q's configuration: %w", m.Name, err)
@@ -281,7 +281,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 			a.begin(ctx, talos, cluster, m, bundle, op, &node, stage, current, rendered))
 	}
 
-	done, err := a.verify(ctx, talos, cluster, m, nodeName, stage)
+	done, err := a.verify(ctx, talos, cluster, m, op, nodeName, stage)
 
 	return done, a.releaseOnError(ctx, cluster, m, nodeName, stage, err)
 }
@@ -601,18 +601,18 @@ func valueAtPath(docs map[string]configDoc, path string) any {
 // true is "still settling" until kubernetesVerifyTimeout.
 func (a *kubernetesUpgradeAdvancer) verify(
 	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	nodeName, stage string,
+	op *ichorv1alpha1.TalosOperation, nodeName, stage string,
 ) (bool, error) {
 	target := cluster.Spec.KubernetesVersion
 
 	if reason := a.nodeNotConverged(ctx, m, nodeName, target, stage); reason != "" {
-		return false, a.waiting(ctx, m, cluster, reason)
+		return false, a.waiting(ctx, m, cluster, op, reason)
 	}
 
 	// The kubelet is back on the target and Ready: give the node back.
 	if stage == ichorv1alpha1.KubernetesStageKubelets {
 		if err := a.release(ctx, cluster, m, nodeName); err != nil {
-			return false, a.waiting(ctx, m, cluster, "re-enabling scheduling: "+err.Error())
+			return false, a.waiting(ctx, m, cluster, op, "re-enabling scheduling: "+err.Error())
 		}
 	}
 
@@ -628,7 +628,7 @@ func (a *kubernetesUpgradeAdvancer) verify(
 
 		if mode, _ := render.KubeProxyMode(cluster); mode != cni.KubeProxyReplaced {
 			if reason := a.kubeProxyNotReady(ctx, target); reason != "" {
-				return false, a.waiting(ctx, m, cluster, reason)
+				return false, a.waiting(ctx, m, cluster, op, reason)
 			}
 		}
 	}
@@ -740,17 +740,25 @@ func (a *kubernetesUpgradeAdvancer) kubeProxyNotReady(ctx context.Context, targe
 // False with VerifyTimedOut, which a resumed operation finds on its first pass. Either way a transient
 // error is a wait on the marker's clock (waiting restarts it), not a failed step. Absent or Converged
 // means nothing is applied for this step, so an error is a real failure.
-func upgradeApplied(m *ichorv1alpha1.TalosMachine) bool {
+func upgradeApplied(m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation) bool {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade)
 
-	return cond != nil && (cond.Status == metav1.ConditionTrue || cond.Reason == reasonKubernetesVerifyTimedOut)
+	return cond != nil && (cond.Status == metav1.ConditionTrue ||
+		cond.Reason == reasonKubernetesVerifyTimedOut && strings.HasSuffix(cond.Message, verifyTimedOutSuffix(op)))
+}
+
+// verifyTimedOutSuffix ends the VerifyTimedOut message with the operation's UID (ADR 0170, amended), so a
+// timeout left by an abandoned operation is not taken for this one's.
+func verifyTimedOutSuffix(op *ichorv1alpha1.TalosOperation) string {
+	return " [operation " + string(op.UID) + "]"
 }
 
 // waiting is the "not converged yet" outcome: it starts the verification clock if no marker exists
 // (a crash between apply and marker, or a node found already carrying the rendered configuration)
 // and fails the step once the clock passes kubernetesVerifyTimeout.
 func (a *kubernetesUpgradeAdvancer) waiting(
-	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster, reason string,
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, cluster *ichorv1alpha1.TalosCluster,
+	op *ichorv1alpha1.TalosOperation, reason string,
 ) error {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade)
 	if cond == nil || cond.Status != metav1.ConditionTrue {
@@ -766,7 +774,7 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 			m.Name, cluster.Spec.KubernetesVersion, kubernetesVerifyTimeout, reason)
 
 		if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
-			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: msg,
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: msg + verifyTimedOutSuffix(op),
 		}); err != nil {
 			return fmt.Errorf("recording %q's verify timeout: %w", m.Name, err)
 		}

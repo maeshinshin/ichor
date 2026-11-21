@@ -4,13 +4,10 @@
 // It reads internal/uiapi with type information (go/packages), so it sees the object each write targets
 // and the client the write is made with. The client is told apart by how the call is written:
 //
-//   - s.Client.X, and s.Patch, on a *uiapi.Server: the embedded client.Client, which is the ServiceAccount.
-//   - s.Create, s.Update and s.Delete on a *uiapi.Server: the methods in auth.go, which use the signed-in
+//   - s.Client.X on a *uiapi.Server: the embedded client.Client, which is the ServiceAccount.
+//   - s.Create, s.Update, s.Delete, s.Patch and s.DeleteAllOf on a *uiapi.Server: the methods in auth.go, which use the signed-in
 //     user's impersonating client when the context carries an identity. AuthInterceptor puts one on every
 //     RPC, so these are the user's writes and the role does not have to grant them.
-//
-// Patch is not shadowed in auth.go, so it is the one write verb that goes to the ServiceAccount although
-// the other three go to the user. A check that treated all four alike would be wrong about it.
 //
 // A write through any other client (a parameter, a field) is a site in the unresolved table below, with the
 // origin of that client written beside it. A write the table does not name fails the check: it is never
@@ -82,9 +79,15 @@ var unresolved = map[site]origin{
 	// The shadowing methods forward to cl(ctx), the client the caller's context picks: the signed-in
 	// user's whenever the RPC carries an identity, which AuthInterceptor guarantees. The object is an
 	// interface here, so these are not kinds of their own; the write is checked where the caller makes it.
-	{authFile, "*Server.Create", "c"}: forwarder,
-	{authFile, "*Server.Update", "c"}: forwarder,
-	{authFile, "*Server.Delete", "c"}: forwarder,
+	{authFile, "*Server.Create", "c"}:      forwarder,
+	{authFile, "*Server.Update", "c"}:      forwarder,
+	{authFile, "*Server.Delete", "c"}:      forwarder,
+	{authFile, "*Server.Patch", "c"}:       forwarder,
+	{authFile, "*Server.DeleteAllOf", "c"}: forwarder,
+	// Status() and SubResource() return subResource, which picks the client per call the same way.
+	{authFile, "subResource.Create", "c"}: forwarder,
+	{authFile, "subResource.Update", "c"}: forwarder,
+	{authFile, "subResource.Patch", "c"}:  forwarder,
 
 	// credentialAnswer is called with s.Client (nodeReader, the public facts: credissuer.go:182,207) and
 	// with s.cl(ctx) (issueAsCaller). It is checked as the ServiceAccount, the stricter reading.
@@ -325,7 +328,7 @@ func (w *walker) origin(sel *ast.SelectorExpr, fn, file string) (origin, bool) {
 			return signedInUser, true
 		}
 
-		return serviceAccount, true // Patch: promoted from the embedded client.Client
+		return serviceAccount, true // a method promoted from the embedded client.Client
 	}
 
 	if inner, ok := sel.X.(*ast.SelectorExpr); ok && inner.Sel.Name == "Client" && isServerType(info.TypeOf(inner.X)) {

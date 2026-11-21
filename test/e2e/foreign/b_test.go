@@ -91,7 +91,8 @@ func helmSet(t *testing.T, c *foreign.Cluster, sets ...string) {
 	if o, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Fatalf("cilium rollout: %v\n%s", err, o)
 	}
-	if o, err := inner(c, "-n", "kube-system", "rollout", "status", "deploy/cilium-operator", "--timeout=300s"); err != nil {
+	if o, err := inner(c, "-n", "kube-system", "rollout", "status", "deploy/cilium-operator",
+		"--timeout=300s"); err != nil {
 		t.Fatalf("cilium-operator rollout: %v\n%s", err, o)
 	}
 	kpr, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
@@ -141,7 +142,8 @@ func TestB4RefusedReplacedKubePrismOff(t *testing.T) {
 	refusedUntouched(t, c, "KubePrism is off on machine")
 }
 
-// TestHelmSet changes values on the running Cilium: ICHOR_E2E_F_HELMSET=kubeProxyReplacement=false,tunnelProtocol=vxlan.
+// TestHelmSet changes values on the running Cilium:
+// ICHOR_E2E_F_HELMSET=kubeProxyReplacement=false,tunnelProtocol=vxlan.
 func TestHelmSet(t *testing.T) {
 	v := os.Getenv("ICHOR_E2E_F_HELMSET")
 	if v == "" {
@@ -182,7 +184,8 @@ func stringify(v any) string {
 // cluster's secretbox key, which the recovered bundle must reproduce).
 func b3Canary(t *testing.T, c *foreign.Cluster) {
 	t.Helper()
-	if out, err := inner(c, "-n", "default", "create", "secret", "generic", canaryName, "--from-literal=v="+canaryValue); err != nil && !strings.Contains(out, "already exists") {
+	if out, err := inner(c, "-n", "default", "create", "secret", "generic", canaryName,
+		"--from-literal=v="+canaryValue); err != nil && !strings.Contains(out, "already exists") {
 		t.Fatalf("creating the canary Secret: %v\n%s", err, out)
 	}
 }
@@ -197,7 +200,8 @@ func b3CanaryReadable(t *testing.T, c *foreign.Cluster) {
 	t.Logf("canary Secret readable after adoption (%d bytes of base64)", len(out))
 }
 
-// TestB3WrongBundle (B3): a bundle of another cluster produces secret-field drift and no patch. Runs before the real adopt.
+// TestB3WrongBundle (B3): a bundle of another cluster produces secret-field drift and no patch. Runs before the real
+// adopt.
 func TestB3WrongBundle(t *testing.T) {
 	c := build(t, bOpts(foreign.CNICiliumHelm, false, true, "kubeProxyReplacement=true"))
 	b3Canary(t, c)

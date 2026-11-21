@@ -213,7 +213,8 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 		t.Errorf("B3: a TalosMachine is not Ready (the controller must reach the nodes): %s", st)
 	}
 	b3CanaryReadable(t, c)
-	if out, err := utils.Run(kube.Command("-n", ns, "exec", c.Opts.Prefix+"-tools", "--", "ls", "-l", "/tmp/home/.ichor/clusters/"+c.Opts.Prefix)); err == nil {
+	if out, err := utils.Run(kube.Command("-n", ns, "exec", c.Opts.Prefix+"-tools", "--", "ls", "-l",
+		"/tmp/home/.ichor/clusters/"+c.Opts.Prefix)); err == nil {
 		t.Logf("recovered bundle files:\n%s", out)
 	}
 }

@@ -101,7 +101,8 @@ var _ = Describe("short", Label("short"), Ordered, func() {
 		// on talosNode(), not on whatever KUBECONFIG points at - which may be production
 		// (P2-8).
 		cfg, err := clientcmd.BuildConfigFromFlags("", innerKubeconfig)
-		Expect(err).NotTo(HaveOccurred(), "could not load the inner kubeconfig at %s=%s", innerKubeconfigEnvVar, innerKubeconfig)
+		Expect(err).NotTo(HaveOccurred(), "could not load the inner kubeconfig at %s=%s", innerKubeconfigEnvVar,
+			innerKubeconfig)
 
 		scheme := runtime.NewScheme()
 		Expect(v1alpha1.AddToScheme(scheme)).To(Succeed())

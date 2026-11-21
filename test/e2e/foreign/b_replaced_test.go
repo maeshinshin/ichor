@@ -24,7 +24,8 @@ import (
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 )
 
-// TestB2ReplacedAdopt (B2): kube-proxy disabled in Talos and replaced by Cilium is adopted as spec.cni.kubeProxy: replaced.
+// TestB2ReplacedAdopt (B2): kube-proxy disabled in Talos and replaced by Cilium is adopted as spec.cni.kubeProxy:
+// replaced.
 // Cluster: cilium-helm, --no-kube-proxy, then TestHelmSet with kubeProxyReplacement=true.
 func TestB2ReplacedAdopt(t *testing.T) {
 	c := build(t, bOpts(foreign.CNICiliumHelm, true, false, "kubeProxyReplacement=false"))

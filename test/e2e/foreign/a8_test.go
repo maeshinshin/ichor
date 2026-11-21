@@ -32,7 +32,8 @@ import (
 // foreignRecs returns the foreign cilium release record Secrets of kube-system (name -> base64 data.release).
 func foreignRecs(c *foreign.Cluster) map[string]string {
 	recs := map[string]string{}
-	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o", "jsonpath={.items[*].metadata.name}")
+	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
+		"jsonpath={.items[*].metadata.name}")
 	for n := range strings.FieldsSeq(names) {
 		recs[n] = secretData(c, "kube-system", n)["release"]
 	}
@@ -66,7 +67,8 @@ func innerDelete(c *foreign.Cluster, args ...string) (string, error) {
 
 // TestA8KillJob: the takeover ichor-cni Job's pod is deleted once Ichor's Helm record exists (during Helm's
 // rollout wait, so a pending-* record may be left) and, best effort, once more when Ichor's record is deployed while a
-// foreign record is still there. The Job retries; the hand-over must still complete once, with the backup byte-identical.
+// foreign record is still there. The Job retries; the hand-over must still complete once, with the backup
+// byte-identical.
 // Run `foreign up --cni cilium-helm --cilium-set operator.replicas=1,debug.enabled=true` first.
 func TestA8KillJob(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
@@ -103,7 +105,8 @@ func TestA8KillJob(t *testing.T) {
 				note("log of %s before the kill: %s", pods[0], strings.ReplaceAll(strings.TrimSpace(pre), "\n", " | "))
 				out, err := innerDelete(c, "-n", "kube-system", "delete", "pod", pods[0], "--wait=false")
 				kills++
-				note("kill %d of %s: ichor records [%s], foreign records left %d: %v %s", kills, pods[0], strings.ReplaceAll(mine, "\n", "; "), foreignLeft, err, strings.TrimSpace(out))
+				note("kill %d of %s: ichor records [%s], foreign records left %d: %v %s", kills, pods[0], strings.ReplaceAll(mine,
+					"\n", "; "), foreignLeft, err, strings.TrimSpace(out))
 				time.Sleep(20 * time.Second)
 			}
 		}
@@ -134,7 +137,8 @@ func TestA8KillJob(t *testing.T) {
 			t.Logf("backup of %s byte-identical (%d bytes b64)", n, len(got))
 		}
 	}
-	if left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o", "jsonpath={.items[*].metadata.name}"); strings.TrimSpace(left) != "" {
+	if left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o",
+		"jsonpath={.items[*].metadata.name}"); strings.TrimSpace(left) != "" {
 		t.Errorf("foreign release record Secrets remain: %s", left)
 	}
 	jobs, _ := inner(c, "-n", "kube-system", "get", "jobs,pods", "--no-headers")

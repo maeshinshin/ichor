@@ -331,7 +331,8 @@ func eventsTail(c *foreign.Cluster) string {
 // ciliumDS is what a takeover or an upgrade must not disturb: the DaemonSet's generation, image and pod UIDs.
 func ciliumDS(c *foreign.Cluster) string {
 	gen, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} {.status.numberReady}/{.status.desiredNumberScheduled}")
-	uids, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.uid}")
+	uids, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o",
+		"jsonpath={.items[*].metadata.uid}")
 	return strings.TrimSpace(gen) + " pods=" + strings.TrimSpace(uids)
 }
 
@@ -390,10 +391,12 @@ func waitHandover(t *testing.T, c *foreign.Cluster, inline string) {
 	for time.Since(start) < 14*time.Minute {
 		var present, absent int
 		if inline != "" {
-			present, absent = hasName(inlineNames(t, c), inline) // sampled first: a later True cannot make an earlier removal late
+			present, absent = hasName(inlineNames(t, c),
+				inline) // sampled first: a later True cannot make an earlier removal late
 		}
 		h := clusterJSONPath(c, handoverPath)
-		t.Logf("%s CNIHandover=%q inline %q present on %d nodes, absent on %d", time.Since(start).Round(time.Second), h, inline, present, absent)
+		t.Logf("%s CNIHandover=%q inline %q present on %d nodes, absent on %d", time.Since(start).Round(time.Second), h,
+			inline, present, absent)
 		if inline != "" && absent > 0 && h != "True" {
 			t.Errorf("inline entry %q removed from %d node(s) before CNIHandover was True", inline, absent)
 		}
@@ -545,7 +548,8 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 	c := build(t, foreign.Options{Workers: 1, CNI: cni})
 	logState(t, c, "before")
 	recs := map[string]string{} // record name -> base64 of data.release
-	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o", "jsonpath={.items[*].metadata.name}")
+	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
+		"jsonpath={.items[*].metadata.name}")
 	for n := range strings.FieldsSeq(names) {
 		recs[n] = secretData(c, "kube-system", n)["release"]
 	}
@@ -570,7 +574,8 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 			t.Logf("backup of %s byte-identical (%d bytes b64)", n, len(got))
 		}
 	}
-	left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o", "jsonpath={.items[*].metadata.name}")
+	left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o",
+		"jsonpath={.items[*].metadata.name}")
 	if strings.TrimSpace(left) != "" {
 		t.Errorf("release record Secrets remain in kube-system:\n%s", left)
 	}
@@ -583,7 +588,8 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 
 // TestA5Adopt: live-only residue. An extra pod-template annotation and an extra agent argument on the
 // live DaemonSet, and an extra ConfigMap, exist before adopt. The diff gate must report the first two and require
-// --accept-cilium-diff; the ConfigMap must stay. Run `foreign up --cni cilium-helm --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
+// --accept-cilium-diff; the ConfigMap must stay. Run `foreign up --cni cilium-helm --cilium-set
+// tunnelProtocol=vxlan,tunnelPort=4789` first.
 func TestA5Adopt(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
 	patch := `[{"op":"add","path":"/spec/template/metadata/annotations/fa.test~1extra","value":"yes"},` +
@@ -594,7 +600,8 @@ func TestA5Adopt(t *testing.T) {
 	if out, err := inner(c, "-n", "kube-system", "create", "configmap", "fa-extra", "--from-literal=a=b"); err != nil {
 		t.Fatalf("creating the ConfigMap: %v\n%s", err, out)
 	}
-	if out, err := inner(c, "-n", "kube-system", "label", "configmap", "fa-extra", "app.kubernetes.io/part-of=cilium"); err != nil {
+	if out, err := inner(c, "-n", "kube-system", "label", "configmap", "fa-extra",
+		"app.kubernetes.io/part-of=cilium"); err != nil {
 		t.Fatalf("labelling the ConfigMap: %v\n%s", err, out)
 	}
 	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
@@ -616,7 +623,8 @@ func TestA5Adopt(t *testing.T) {
 	if out, err := inner(c, "-n", "kube-system", "get", "configmap", "fa-extra", "-o", "name"); err != nil {
 		t.Errorf("the extra ConfigMap is gone after takeover: %v\n%s", err, out)
 	}
-	ds, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.spec.template.metadata.annotations.fa\\.test/extra}|{.spec.template.spec.containers[0].args}")
+	ds, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o",
+		"jsonpath={.spec.template.metadata.annotations.fa\\.test/extra}|{.spec.template.spec.containers[0].args}")
 	t.Logf("live DaemonSet after takeover (annotation|args): %s", ds)
 	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Errorf("rollout after takeover: %v\n%s", err, out)
@@ -639,11 +647,13 @@ func refusedWritesNothing(t *testing.T, c *foreign.Cluster, hashes map[string]st
 }
 
 // TestA7Refused: ipam.mode cluster-pool is refused, and no accept flag changes that.
-// Run `foreign up --workers 0 --cni cilium-helm --cilium-set ipam.mode=cluster-pool,tunnelProtocol=vxlan,tunnelPort=4789` first.
+// Run `foreign up --workers 0 --cni cilium-helm --cilium-set
+// ipam.mode=cluster-pool,tunnelProtocol=vxlan,tunnelPort=4789` first.
 func TestA7Refused(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
 	hashes, records := cniPaths(t, c), helmRecords(c)
-	if mode, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o", "jsonpath={.data.ipam}"); mode != "cluster-pool" {
+	if mode, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o",
+		"jsonpath={.data.ipam}"); mode != "cluster-pool" {
 		t.Fatalf("the live ipam is %q, not cluster-pool", mode)
 	}
 	for _, flags := range [][]string{nil, {"--accept-cilium-changes", "--accept-cilium-diff"}} {
@@ -660,7 +670,8 @@ func TestA7Refused(t *testing.T) {
 
 // TestA6Refused: a Cilium more than one minor below the embedded 1.20.4 (here 1.16.x) is refused and nothing
 // is written. One minor below (1.19, TestA6Accepted119) is taken over; two below (1.18) is refused by the same rule.
-// Run `foreign up --workers 0 --cni cilium-helm --cilium-chart bin/foreign/chart116/cilium-1.16.19.tgz --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
+// Run `foreign up --workers 0 --cni cilium-helm --cilium-chart bin/foreign/chart116/cilium-1.16.19.tgz --cilium-set
+// tunnelProtocol=vxlan,tunnelPort=4789` first.
 func TestA6Refused(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
 	hashes, records := cniPaths(t, c), helmRecords(c)
@@ -700,7 +711,8 @@ func TestA6Accepted119(t *testing.T) {
 	trafficReport(t, c, "across the A6 1.19 to 1.20 takeover")
 }
 
-// TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.
+// TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and
+// writes nothing.
 func TestA1AcceptAll(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
 	before := cniPaths(t, c)

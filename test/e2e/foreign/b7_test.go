@@ -25,8 +25,10 @@ import (
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 )
 
-// TestB7ClassC (B7): 3 control planes and a worker whose machine config carries a user inline manifest of a non-Cilium app.
-// Cluster: `foreign up --cps 3 --workers 1 --user-manifest`. Every machine is class C, so adopt writes nothing and applies nothing.
+// TestB7ClassC (B7): 3 control planes and a worker whose machine config carries a user inline manifest of a
+// non-Cilium app.
+// Cluster: `foreign up --cps 3 --workers 1 --user-manifest`. Every machine is class C, so adopt writes nothing and
+// applies nothing.
 func TestB7ClassC(t *testing.T) {
 	c := build(t, foreign.Options{ControlPlanes: 3, Workers: 1, UserManifest: true})
 	before := cniPaths(t, c)

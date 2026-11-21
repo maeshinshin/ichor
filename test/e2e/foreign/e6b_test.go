@@ -61,7 +61,8 @@ func TestE6NoPodNetwork(t *testing.T) {
 	wipe := func() {
 		for _, a := range [][]string{
 			{"-n", "kube-system", "patch", "ds/cilium", "-p", `{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
-			{"-n", "kube-system", "patch", "ds/cilium-envoy", "-p", `{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
+			{"-n", "kube-system", "patch", "ds/cilium-envoy", "-p",
+				`{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
 			{"-n", "kube-system", "scale", "deploy/cilium-operator", "--replicas=0"},
 			{"apply", "-f", manifest},
 		} {

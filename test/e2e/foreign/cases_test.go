@@ -42,7 +42,8 @@ func noCNINothingWritten(t *testing.T, c *foreign.Cluster, before map[string]str
 func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) {
 	t.Helper()
 	membership(t, c)
-	if rec, _ := inner(c, "-n", crNS, "get", "secrets", "-l", "owner=helm,name=cilium", "--no-headers"); strings.TrimSpace(rec) == "" {
+	if rec, _ := inner(c, "-n", crNS, "get", "secrets", "-l", "owner=helm,name=cilium",
+		"--no-headers"); strings.TrimSpace(rec) == "" {
 		t.Errorf("no Cilium release record in %s", crNS)
 	}
 	if got := clusterJSONPath(c, "{.spec.cni.preset}"); got != "cilium" {

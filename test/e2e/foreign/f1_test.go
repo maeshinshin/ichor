@@ -50,19 +50,23 @@ func TestF1CiliumHelm(t *testing.T) {
 	}
 	membership(t, c)
 	holdCleared(t, c)
-	if got, _ := inner(c, "get", "ichorinstallations.ichor.maesh.dev", "-o", "jsonpath={.items[*].spec.deployment.manager}"); strings.TrimSpace(got) != "helm" {
+	if got, _ := inner(c, "get", "ichorinstallations.ichor.maesh.dev", "-o",
+		"jsonpath={.items[*].spec.deployment.manager}"); strings.TrimSpace(got) != "helm" {
 		t.Errorf("IchorInstallation manager = %q, want helm", got)
 	}
-	if rel, _ := local(t, time.Minute, "helm", "list", "-n", crNS, "--kubeconfig", c.LocalKube); !strings.Contains(rel, "deployed") {
+	if rel, _ := local(t, time.Minute, "helm", "list", "-n", crNS, "--kubeconfig", c.LocalKube); !strings.Contains(rel,
+		"deployed") {
 		t.Errorf("helm list does not show the release deployed")
 	}
 
 	// helm upgrade works against the adopted cluster.
-	if out, err := local(t, 8*time.Minute, "helm", "upgrade", "ichor", packagedChart(t), "--kubeconfig", c.LocalKube, "-n", crNS,
+	if out, err := local(t, 8*time.Minute, "helm", "upgrade", "ichor", packagedChart(t), "--kubeconfig", c.LocalKube,
+		"-n", crNS,
 		"--reuse-values", "--set", "manager.replicas=1", "--wait", "--timeout", "6m"); err != nil {
 		t.Errorf("helm upgrade failed: %v\n%s", err, out)
 	}
-	if got, _ := inner(c, "-n", crNS, "get", "deploy", "-l", "control-plane=controller-manager", "-o", "jsonpath={.items[0].spec.replicas}"); got != "1" {
+	if got, _ := inner(c, "-n", crNS, "get", "deploy", "-l", "control-plane=controller-manager", "-o",
+		"jsonpath={.items[0].spec.replicas}"); got != "1" {
 		t.Errorf("controller replicas after helm upgrade = %q, want 1", got)
 	}
 

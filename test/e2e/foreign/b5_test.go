@@ -27,7 +27,8 @@ import (
 )
 
 // TestB5Plan (B5): `adopt --plan --cni-unmanaged` logs the probed version contract and the per-contract class C counts.
-// Cluster: `foreign up --talos v1.13.0 --workers 0` (ICHOR_E2E_F_TALOS=v1.13.0), optionally upgraded with TestB5Upgrade.
+// Cluster: `foreign up --talos v1.13.0 --workers 0` (ICHOR_E2E_F_TALOS=v1.13.0), optionally upgraded with
+// TestB5Upgrade.
 func TestB5Plan(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0})
 	out, err := adoptArgs(t, c, append(recoverFlags(c), "--plan", "--cni-unmanaged")...)
@@ -42,12 +43,14 @@ func TestB5Plan(t *testing.T) {
 	nothingWritten(t, c)
 }
 
-// TestB5Upgrade upgrades the node in place to ICHOR_E2E_F_UPGRADE_TO (default v1.14.3): the machine config stays at its old contract.
+// TestB5Upgrade upgrades the node in place to ICHOR_E2E_F_UPGRADE_TO (default v1.14.3): the machine config stays at
+// its old contract.
 func TestB5Upgrade(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0})
 	to := env("ICHOR_E2E_F_UPGRADE_TO", "v1.14.3")
 	tc := ftc(t, c)
-	out, err := talosctl.Upgrade(ns, c.CPs[0], "factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:"+to, tc)
+	out, err := talosctl.Upgrade(ns, c.CPs[0],
+		"factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:"+to, tc)
 	t.Logf("talosctl upgrade: %v\n%s", err, out)
 	if err != nil {
 		t.Fatal(err)

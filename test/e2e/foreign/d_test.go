@@ -43,7 +43,8 @@ func opsList(c *foreign.Cluster, kc string) string {
 	return strings.TrimSpace(out)
 }
 
-// waitOps polls until every TalosOperation of the given kind is Completed (and at least one exists); a Failed one fails the test.
+// waitOps polls until every TalosOperation of the given kind is Completed (and at least one exists); a Failed one
+// fails the test.
 func waitOps(t *testing.T, c *foreign.Cluster, kc, kind string, limit time.Duration) {
 	t.Helper()
 	start := time.Now()
@@ -70,15 +71,18 @@ func waitOps(t *testing.T, c *foreign.Cluster, kc, kind string, limit time.Durat
 	t.Fatalf("%s operation did not complete in %s", kind, limit)
 }
 
-// noHandover asserts the cluster never grew a CNIHandover condition or an ichor-cni Job (D4: an upgrade is not blocked by one).
+// noHandover asserts the cluster never grew a CNIHandover condition or an ichor-cni Job (D4: an upgrade is not
+// blocked by one).
 func noHandover(t *testing.T, c *foreign.Cluster, kc string) {
 	t.Helper()
-	out, _ := utils.Run(kube.InnerCommand(kc, "-n", crNS, "get", "talosclusters.ichor.maesh.dev", c.Opts.Prefix, "-o", "jsonpath={.status.conditions[*].type}"))
+	out, _ := utils.Run(kube.InnerCommand(kc, "-n", crNS, "get", "talosclusters.ichor.maesh.dev", c.Opts.Prefix, "-o",
+		"jsonpath={.status.conditions[*].type}"))
 	t.Logf("TalosCluster conditions: %s", out)
 	if strings.Contains(out, "CNIHandover") {
 		t.Errorf("a CNIHandover condition exists: %s", out)
 	}
-	if jobs, _ := utils.Run(kube.InnerCommand(kc, "-n", crNS, "get", "jobs", "--no-headers")); strings.Contains(jobs, "ichor-cni") {
+	if jobs, _ := utils.Run(kube.InnerCommand(kc, "-n", crNS, "get", "jobs", "--no-headers")); strings.Contains(jobs,
+		"ichor-cni") {
 		t.Errorf("an ichor-cni Job exists: %s", jobs)
 	}
 }
@@ -172,14 +176,16 @@ func rotatedKube(t *testing.T, c *foreign.Cluster) string {
 	return dst
 }
 
-// TestD4RotateCAWait polls the rotation (with the rotated credentials) until it Completes and checks the cluster afterwards.
+// TestD4RotateCAWait polls the rotation (with the rotated credentials) until it Completes and checks the cluster
+// afterwards.
 func TestD4RotateCAWait(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	kc := rotatedKube(t, c)
 	waitOps(t, c, kc, "ca-rotation", 9*time.Minute)
 	noHandover(t, c, kc)
 	flannelRunning(t, c, kc)
-	if out, err := utils.Run(kube.InnerCommand(kc, "get", "--raw", "/readyz")); err != nil || !strings.Contains(out, "ok") {
+	if out, err := utils.Run(kube.InnerCommand(kc, "get", "--raw", "/readyz")); err != nil || !strings.Contains(out,
+		"ok") {
 		t.Errorf("readyz with the rotated kubeconfig: %v %s", err, out)
 	}
 }

@@ -27,6 +27,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/coreos/go-oidc/v3/oidc"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -381,7 +382,7 @@ func (s *Server) cl(ctx context.Context) (client.Client, error) {
 	return s.Client, nil
 }
 
-// Get, List, Create, Update and Delete are the calls handlers make on
+// Get, List, Create, Update, Delete, Patch, DeleteAllOf, Status and SubResource are the calls handlers make on
 // user-requested CRs. They shadow the embedded client's methods so the
 // handlers need no change; reads that must stay on the ServiceAccount
 // (secrets bundle) call s.Client.X explicitly.
@@ -428,4 +429,95 @@ func (s *Server) Delete(ctx context.Context, obj client.Object, opts ...client.D
 	}
 
 	return c.Delete(ctx, obj, opts...)
+}
+
+func (s *Server) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	c, err := s.cl(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Patch(ctx, obj, patch, opts...)
+}
+
+func (s *Server) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+	c, err := s.cl(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.DeleteAllOf(ctx, obj, opts...)
+}
+
+func (s *Server) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	c, err := s.cl(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Apply(ctx, obj, opts...)
+}
+
+// Status and SubResource take no context, so they return a writer that picks the client when a call arrives.
+func (s *Server) Status() client.SubResourceWriter { return s.SubResource("status") }
+
+func (s *Server) SubResource(name string) client.SubResourceClient { return subResource{s, name} }
+
+type subResource struct {
+	s    *Server
+	name string
+}
+
+func (r subResource) on(ctx context.Context) (client.SubResourceClient, error) {
+	c, err := r.s.cl(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.SubResource(r.name), nil
+}
+
+func (r subResource) Get(ctx context.Context, obj, sub client.Object, opts ...client.SubResourceGetOption) error {
+	c, err := r.on(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Get(ctx, obj, sub, opts...)
+}
+
+func (r subResource) Create(ctx context.Context, obj, sub client.Object, opts ...client.SubResourceCreateOption) error {
+	c, err := r.on(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Create(ctx, obj, sub, opts...)
+}
+
+func (r subResource) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	c, err := r.on(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Update(ctx, obj, opts...)
+}
+
+func (r subResource) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+	c, err := r.on(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Patch(ctx, obj, patch, opts...)
+}
+
+func (r subResource) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+	c, err := r.on(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.Apply(ctx, obj, opts...)
 }

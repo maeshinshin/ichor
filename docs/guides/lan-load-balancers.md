@@ -39,7 +39,7 @@ same values.
 
 `--gateway-api` is read by `ichor init` only. On a cluster that already runs, Ichor
 does not install the Gateway API CRDs, and it refuses `gatewayAPI.enabled` until
-the `gateways` CRD exists. Install them yourself, then turn the setting on:
+all seven CRDs exist (a partial set is refused, naming the missing ones). Install them yourself, then turn the setting on:
 
 1. Apply the seven CRDs from Gateway API v1.6.3, the release Cilium's install page
    points at; v1.6.1 is the floor Cilium 1.20 requires

@@ -19,6 +19,7 @@ package cilium
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"golang.org/x/mod/semver"
 
@@ -50,6 +51,8 @@ type ValidationContext struct {
 
 	// GatewayAPICRDs is whether the Gateway API CRDs exist in the cluster.
 	GatewayAPICRDs *bool
+	// GatewayAPIMissing names the Gateway API CRDs absent from the cluster; with GatewayAPICRDs true it is a partial set.
+	GatewayAPIMissing []string
 	// GatewayAPIRelease is the bundle-version annotation of the gateways CRD, "" when it records none.
 	GatewayAPIRelease string
 	// ForwardKubeDNSToHost is machine.features.hostDNS.forwardKubeDNSToHost
@@ -126,6 +129,12 @@ func guards(effective map[string]any, c ValidationContext) error {
 	if on, _ := values.Get(effective, "gatewayAPI.enabled"); on == true &&
 		c.GatewayAPICRDs != nil && !*c.GatewayAPICRDs {
 		errs = append(errs, errors.New("gatewayAPI.enabled=true needs the Gateway API CRDs installed first"))
+	}
+
+	if on, _ := values.Get(effective, "gatewayAPI.enabled"); on == true &&
+		c.GatewayAPICRDs != nil && *c.GatewayAPICRDs && len(c.GatewayAPIMissing) > 0 {
+		errs = append(errs, fmt.Errorf("gatewayAPI.enabled=true needs every Gateway API CRD, and the cluster lacks %s: "+
+			"install the full set first (ichor init --gateway-api applies it)", strings.Join(c.GatewayAPIMissing, ", ")))
 	}
 
 	// An old or unrecorded release passes only when the CRDs are unknown: the guard names what it found.

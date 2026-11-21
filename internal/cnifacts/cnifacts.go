@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,12 +37,14 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/cni/gatewayapi"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// GatewayAPICRD is the CRD whose presence stands for "the Gateway API CRDs are installed".
+// GatewayAPICRD is the CRD whose bundle-version annotation stands for the installed Gateway API release.
 const GatewayAPICRD = "gateways.gateway.networking.k8s.io"
 
 // GatewayAPIBundleVersionAnnotation names the Gateway API release a CRD was installed from.
@@ -49,11 +52,27 @@ const GatewayAPIBundleVersionAnnotation = "gateway.networking.k8s.io/bundle-vers
 
 const roleControlPlane = "controlplane"
 
+// gatewayAPICRDNames is the names of the CRDs Ichor embeds, the one list `ichor init --gateway-api` applies.
+var gatewayAPICRDNames = sync.OnceValues(func() ([]string, error) {
+	objs, err := installer.Decode(gatewayapi.CRDs())
+	if err != nil {
+		return nil, err
+	}
+
+	return slices.Collect(func(yield func(string) bool) {
+		for _, o := range objs {
+			if !yield(o.GetName()) {
+				return
+			}
+		}
+	}), nil
+})
+
 // Source is where the facts are read from.
 type Source struct {
 	// Client lists the cluster's machines and patches and resolves the render's system inputs.
 	Client client.Client
-	// CRDs reads the Gateway API CRD by name (an uncached reader needs only get on that one CRD).
+	// CRDs reads the Gateway API CRDs by name (an uncached reader needs only get on those CRDs).
 	CRDs client.Reader
 	// Namespace is where the registry credentials Secrets are read (the controller's namespace).
 	Namespace string
@@ -81,24 +100,44 @@ func (s Source) Validate(ctx context.Context, cluster *ichorv1alpha1.TalosCluste
 }
 
 // Context collects the facts the guards need. A fact that cannot be read stays nil, which makes its
-// guard pass. The Gateway API release is read from the gateways CRD alone: that is the one CRD the
-// controller and the UI backend may get (their RBAC names it).
+// guard pass. The Gateway API CRDs are the ones Ichor embeds (pkg/cni/gatewayapi); the release is read from
+// the gateways CRD.
 func (s Source) Context(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, kubeProxy cni.KubeProxyMode,
 ) cilium.ValidationContext {
 	vc := cilium.ValidationContext{KubeProxy: kubeProxy, Tunnel: cluster.Spec.CNI.Tunnel}
 
-	crd := &metav1.PartialObjectMetadata{}
-	crd.SetGroupVersionKind(apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
-
-	switch err := s.CRDs.Get(ctx, types.NamespacedName{Name: GatewayAPICRD}, crd); {
-	case err == nil:
-		vc.GatewayAPICRDs = ptr.To(true)
-		vc.GatewayAPIRelease = crd.GetAnnotations()[GatewayAPIBundleVersionAnnotation]
-	case apierrors.IsNotFound(err):
-		vc.GatewayAPICRDs = ptr.To(false)
+	names, err := gatewayAPICRDNames()
+	if err != nil {
+		return vc
 	}
 
+	for _, name := range names {
+		crd := &metav1.PartialObjectMetadata{}
+		crd.SetGroupVersionKind(apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+
+		switch err := s.CRDs.Get(ctx, types.NamespacedName{Name: name}, crd); {
+		case err == nil:
+			if name == GatewayAPICRD {
+				vc.GatewayAPIRelease = crd.GetAnnotations()[GatewayAPIBundleVersionAnnotation]
+			}
+		case apierrors.IsNotFound(err):
+			vc.GatewayAPIMissing = append(vc.GatewayAPIMissing, name)
+		default:
+			// An unreadable CRD leaves the whole fact unknown, which makes its guard pass.
+			vc.GatewayAPIMissing = nil
+
+			return s.withTalosFacts(ctx, cluster, vc)
+		}
+	}
+
+	// shortcut: a set with none present is "absent", one with some present is partial; the guard tells them apart.
+	vc.GatewayAPICRDs = ptr.To(len(vc.GatewayAPIMissing) < len(names))
+
+	return s.withTalosFacts(ctx, cluster, vc)
+}
+
+func (s Source) withTalosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, vc cilium.ValidationContext) cilium.ValidationContext {
 	vc.ForwardKubeDNSToHost, vc.KubePrism = s.talosFacts(ctx, cluster)
 
 	return vc

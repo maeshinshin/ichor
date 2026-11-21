@@ -94,8 +94,8 @@ package uiapi
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list
 
 // CniService asks whether the Gateway API CRDs exist before it accepts
-// gatewayAPI.enabled: one metadata get of that one CRD, as the ServiceAccount.
-// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=gateways.gateway.networking.k8s.io,verbs=get
+// gatewayAPI.enabled: one metadata get of each of the seven Gateway API CRDs, as the ServiceAccount.
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=backendtlspolicies.gateway.networking.k8s.io;gatewayclasses.gateway.networking.k8s.io;gateways.gateway.networking.k8s.io;grpcroutes.gateway.networking.k8s.io;httproutes.gateway.networking.k8s.io;referencegrants.gateway.networking.k8s.io;tlsroutes.gateway.networking.k8s.io,verbs=get
 
 // OIDC login and Ichor users: the backend calls the Kubernetes API as the
 // signed-in user. impersonate is the strongest verb in this file, so it never covers a name it

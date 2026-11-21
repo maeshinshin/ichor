@@ -73,7 +73,13 @@ rules:
 - apiGroups:
   - apiextensions.k8s.io
   resourceNames:
+  - backendtlspolicies.gateway.networking.k8s.io
+  - gatewayclasses.gateway.networking.k8s.io
   - gateways.gateway.networking.k8s.io
+  - grpcroutes.gateway.networking.k8s.io
+  - httproutes.gateway.networking.k8s.io
+  - referencegrants.gateway.networking.k8s.io
+  - tlsroutes.gateway.networking.k8s.io
   resources:
   - customresourcedefinitions
   verbs:

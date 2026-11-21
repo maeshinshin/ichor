@@ -138,8 +138,8 @@ type CNIHandoverReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
-// The values re-check before a Helm Job reads whether the Gateway API CRDs exist, one CRD by name.
-// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=gateways.gateway.networking.k8s.io,verbs=get
+// The values re-check before a Helm Job reads whether the Gateway API CRDs exist, each CRD by name.
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=backendtlspolicies.gateway.networking.k8s.io;gatewayclasses.gateway.networking.k8s.io;gateways.gateway.networking.k8s.io;grpcroutes.gateway.networking.k8s.io;httproutes.gateway.networking.k8s.io;referencegrants.gateway.networking.k8s.io;tlsroutes.gateway.networking.k8s.io,verbs=get
 
 // The Helm Job runs in kube-system (cniJobNamespace); the controller's namespaced Role there is
 // hand-written (config/rbac/ichor-cni/controller_role.yaml): controller-gen's shared

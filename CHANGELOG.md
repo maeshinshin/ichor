@@ -422,6 +422,10 @@ command does. Each item is described where it is listed below.
 
 ### Cluster
 
+- **`gatewayAPI.enabled` is refused when only some of the Gateway API CRDs are installed.** The check read
+  the `gateways` CRD alone, so a cluster missing `httproutes` passed it. It now reads all seven and names
+  the missing ones; the controller and ichor-ui roles may `get` the six extra CRDs by name.
+
 - **`kubectl get talosclusters` shows the `Transitioning` condition instead of an empty
   `Ready` column.** No controller sets a `Ready` condition on a `TalosCluster`; the
   column now reads `Transitioning`, which is `True` while the control-plane count is

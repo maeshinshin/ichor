@@ -18,6 +18,8 @@ package cnifacts
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +32,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
 // crdReader answers the one CRD Context reads: with its bundle-version annotation, or with NotFound when crd is nil.
@@ -47,6 +50,35 @@ func (r crdReader) Get(_ context.Context, key types.NamespacedName, obj client.O
 
 func (crdReader) List(context.Context, client.ObjectList, ...client.ListOption) error {
 	return nil
+}
+
+// TestContextNamesTheMissingGatewayAPICRDs: a cluster with gateways but not the other six is a partial set, and the
+// fact says which are missing, so the values guard can refuse by name.
+func TestContextNamesTheMissingGatewayAPICRDs(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	src := Source{Client: fake.NewClientBuilder().WithScheme(scheme).Build(), CRDs: crdReader{crd: &metav1.PartialObjectMetadata{
+		Name: GatewayAPICRD, Annotations: map[string]string{GatewayAPIBundleVersionAnnotation: "v1.6.1"},
+	}}, Namespace: "ns"}
+	cluster := &ichorv1alpha1.TalosCluster{Name: "c", Namespace: "ns"}
+
+	vc := src.Context(context.Background(), cluster, cni.KubeProxyReplaced)
+
+	if vc.GatewayAPICRDs == nil || !*vc.GatewayAPICRDs {
+		t.Fatalf("GatewayAPICRDs = %v, want true", vc.GatewayAPICRDs)
+	}
+
+	if !slices.Contains(vc.GatewayAPIMissing, "httproutes.gateway.networking.k8s.io") || len(vc.GatewayAPIMissing) != 6 {
+		t.Fatalf("GatewayAPIMissing = %v, want the six CRDs other than gateways", vc.GatewayAPIMissing)
+	}
+
+	err := cilium.ValidateValues(map[string]any{"gatewayAPI": map[string]any{"enabled": true}}, vc)
+	if err == nil || !strings.Contains(err.Error(), "httproutes.gateway.networking.k8s.io") {
+		t.Fatalf("ValidateValues = %v, want a refusal naming httproutes", err)
+	}
 }
 
 // TestContextReadsGatewayAPIRelease checks that the release the guard compares is the gateways CRD's

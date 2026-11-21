@@ -290,6 +290,15 @@ func blockedFor(cond *metav1.Condition, reason string) time.Duration {
 	return time.Since(cond.LastTransitionTime.Time)
 }
 
+// fail pauses the rotation on a failed step at once, for a cause no waiting clears (a request the cluster's contract
+// cannot run, a bundle with nothing to finish from): blocked would hold the cluster lock for rotationGiveUpAfter
+// first. The pause frees the lock, and an explicit retry resumes the rotation.
+func (c *caRun) fail(ctx context.Context, message string) (ctrl.Result, error) {
+	apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
+
+	return ctrl.Result{}, c.r.setPhase(ctx, c.op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, c.scrub.clean(message))
+}
+
 func (c *caRun) retry(ctx context.Context, message string) (ctrl.Result, error) {
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.blocked(ctx, message)
 }
@@ -435,7 +444,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if err := c.checkTargets(targets); err != nil {
-		return c.retry(ctx, "not starting the rotation: "+err.Error())
+		return c.fail(ctx, "not starting the rotation: "+err.Error())
 	}
 
 	var patches ichorv1alpha1.TalosConfigPatchList
@@ -486,7 +495,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 	if c.rot == nil {
 		contract, err := coreconfig.ParseContractFromVersion(c.cluster.Spec.VersionContract)
 		if err != nil {
-			return c.retry(ctx, "invalid versionContract")
+			return c.fail(ctx, "invalid versionContract")
 		}
 
 		rot, err := secretsbundle.NewRotationFor(time.Now(), contract, targets)
@@ -866,7 +875,7 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 
 		bundle = replaced
 	} else if !c.holdsNewCAs(bundle) {
-		return c.retry(ctx, "the secrets bundle neither carries the new CAs nor has a rotation.yaml to take them from")
+		return c.fail(ctx, "the secrets bundle neither carries the new CAs nor has a rotation.yaml to take them from")
 	}
 
 	if err := c.markBundleBackupStale(ctx); err != nil {

@@ -228,6 +228,34 @@ var _ = Describe("TalosOperationReconciler", func() {
 		expectPausedBecause(got, reasonOperationTransitioning)
 	})
 
+	It("gives back a cluster lock an earlier reconcile took when it pauses for a transitioning cluster", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "tl-cp1")
+		newOpTestMachine(cluster.Name, "controlplane", "tl-cp2")
+		op := newOpTestOperation(cluster.Name)
+		Expect(opTestLock(cluster).Acquire(ctx, operationLockIdentity(op))).To(Succeed())
+
+		r, _ := newOpTestReconciler(nil)
+		mustReconcileOperation(r, op)
+
+		expectPausedBecause(fetchOperation(op), reasonOperationTransitioning)
+		expectLockFree(cluster, "the removal that ends the transition needs the lock, and this pause does not renew it")
+	})
+
+	It("gives back a cluster lock an earlier reconcile took when it pauses for a shutdown", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "sl-cp1")
+		newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindShutdown)
+		op := newOpTestOperation(cluster.Name)
+		Expect(opTestLock(cluster).Acquire(ctx, operationLockIdentity(op))).To(Succeed())
+
+		r, _ := newOpTestReconciler(nil)
+		mustReconcileOperation(r, op)
+
+		expectPausedBecause(fetchOperation(op), reasonOperationShuttingDown)
+		expectLockFree(cluster, "the shutdown waits for the lock, and this pause does not renew it")
+	})
+
 	It("resumes by itself when the control-plane count is odd again", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "ar-cp1")

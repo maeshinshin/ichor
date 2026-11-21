@@ -89,6 +89,18 @@ var _ = Describe("Cilium chart upgrade", func() {
 		})
 	})
 
+	It("waits, and does not fail, while the hand-over has not made a Cilium release yet", func() {
+		op := &ichorv1alpha1.TalosOperation{Spec: ichorv1alpha1.TalosOperationSpec{CNI: &ichorv1alpha1.TalosOperationCNISpec{
+			Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: cilium.ChartVersion,
+		}}}
+
+		done, err := (&cniKubeProxyAdvancer{Reader: k8sClient, ControllerNamespace: "a-namespace-with-no-release"}).
+			upgradeChart(ctx, cluster, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide)).To(HaveField("Status", metav1.ConditionTrue))
+	})
+
 	Describe("availability", func() {
 		It("is set when the release's chart differs from the embedded one, and cleared when it matches", func() {
 			ciliumDaemonSet()(true)

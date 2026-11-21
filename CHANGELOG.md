@@ -557,6 +557,10 @@ command does. Each item is described where it is listed below.
   `InstallerImageUnresolved`, which ADR 0122 already assigned to that case, and
   says the signature could not be checked rather than that it failed. A
   signature that was read and does not verify is unchanged.
+- **The pause for an installer image that did not resolve names the way past it.**
+  It said to check the registry or pin `spec.installerDigest`; it now gives
+  `ichor upgrade ichor VERSION --installer-digest sha256:... --skip-signature-check`,
+  the route for a registry the controller cannot read.
 - `imagesig` gained `VerifyBlob`, which checks a Sigstore bundle of a release
   blob offline, for artefacts that are not OCI images.
 - **An operation paused because the controller cannot tell which machine it runs

@@ -176,6 +176,15 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 		Expect(images.verified).To(BeEmpty())
 	})
 
+	It("names the documented route past a registry the controller cannot read", func() {
+		startUpgrade()
+
+		_, err := upgrade(&fakeInstallerImages{resolveErr: errors.New("connection refused")}, nil)
+		Expect(err).To(MatchError(ContainSubstring("ichor upgrade ichor")))
+		Expect(err).To(MatchError(ContainSubstring("--installer-digest")))
+		Expect(err).To(MatchError(ContainSubstring("--skip-signature-check")))
+	})
+
 	It("pauses with InstallerImageUnverified when the signature does not verify, and creates no Job", func() {
 		startUpgrade()
 

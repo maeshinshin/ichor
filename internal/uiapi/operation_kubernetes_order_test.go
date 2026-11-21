@@ -17,12 +17,15 @@ limitations under the License.
 package uiapi
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -131,5 +134,30 @@ func TestPlanKubernetesWithoutAControllerMachineListsControlPlanesThenWorkers(t 
 
 	if got := plannedMachines(p); got != "cp1@1,cp2@2,cp3@3,w1@4,w2@5" || strings.Contains(strings.Join(p.GetStages(), "|"), "where Ichor") {
 		t.Fatalf("machines = %s, stages = %q", got, p.GetStages())
+	}
+}
+
+// A failed lookup of where the controller runs is not "it runs on no listed machine": the Kubernetes plan says it
+// could not tell, and names what it could not show.
+func TestPlanKubernetesSaysWhenItCouldNotTellWhereTheControllerRuns(t *testing.T) {
+	base, _ := opServer(t, kubernetesOrderObjects("cp2")...)
+	srv := &Server{ControllerNamespace: opNS, Client: interceptor.NewClient(base.Client.(client.WithWatch), interceptor.Funcs{
+		List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, o ...client.ListOption) error {
+			if _, ok := l.(*corev1.PodList); ok {
+				return errors.New("forbidden")
+			}
+
+			return c.List(ctx, l, o...)
+		},
+	})}
+
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.36.6")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if w := res.Msg.GetWarning(); !strings.Contains(w, "could not determine which machine runs Ichor's controller") ||
+		!strings.Contains(w, "forbidden") || !strings.Contains(w, "which is upgraded last") {
+		t.Fatalf("warning = %q", w)
 	}
 }

@@ -60,7 +60,7 @@ func TestF1CiliumHelm(t *testing.T) {
 	}
 
 	// helm upgrade works against the adopted cluster.
-	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube,
+	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", helmRelease, packagedChart(t), flagKubeconfig, c.LocalKube,
 		"-n", crNS,
 		"--reuse-values", "--set", "manager.replicas=1", "--wait", "--timeout", "6m"); err != nil {
 		t.Errorf("helm upgrade failed: %v\n%s", err, out)
@@ -71,7 +71,7 @@ func TestF1CiliumHelm(t *testing.T) {
 	}
 
 	// helm uninstall removes the release but keeps the CRDs and the cluster's objects.
-	if out, err := local(t, 5*time.Minute, nameHelm, "uninstall", "ichor", "-n", crNS, flagKubeconfig,
+	if out, err := local(t, 5*time.Minute, nameHelm, "uninstall", helmRelease, "-n", crNS, flagKubeconfig,
 		c.LocalKube); err != nil {
 		t.Errorf("helm uninstall failed: %v\n%s", err, out)
 	}

@@ -207,7 +207,8 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 		return "", len(f) == 2 && f[0] == valTrue && f[1] == valTrue
 	})
 	st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-		"jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type==\"Ready\")].status}/{.status.conditions[?(@.type==\"Ready\")].reason} {end}")
+		"jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type==\"Ready\")].status}/"+
+			"{.status.conditions[?(@.type==\"Ready\")].reason} {end}")
 	t.Logf("TalosMachines Ready: %s", st)
 	if strings.Contains(st, "=False") || strings.Contains(st, "=/") {
 		t.Errorf("B3: a TalosMachine is not Ready (the controller must reach the nodes): %s", st)

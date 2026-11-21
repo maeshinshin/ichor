@@ -60,6 +60,7 @@ const (
 	valTrue        = "True"
 	nameCilium     = "cilium"
 	nameHelm       = "helm"
+	helmRelease    = "ichor"
 	pathTmpIchor   = "/tmp/ichor"
 	envHome        = "HOME=/tmp/home"
 	cmdEnv         = "env"
@@ -484,7 +485,8 @@ func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 		t.Errorf("apply cni-values was not refused with the unmanaged text (err=%v)", err)
 	}
 	op := filepath.Join(t.TempDir(), "op.yaml")
-	manifest := "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosOperation\nmetadata:\n  name: d3-cni\n  namespace: " + crNS +
+	manifest := "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosOperation\nmetadata:\n  name: d3-cni\n" +
+		"  namespace: " + crNS +
 		"\nspec:\n  kind: cni\n  clusterRef:\n    name: " + c.Opts.Prefix + "\n"
 	if err := os.WriteFile(op, []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)

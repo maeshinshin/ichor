@@ -317,7 +317,8 @@ func TestC1C5C7(t *testing.T) {
 	if strings.Contains(out, "changed") {
 		t.Logf("address changed after the reset: %s", out)
 	} else {
-		t.Logf("C7: the address %s did not change across the reset (KubeVirt pod network); the hint path is not reachable in this harness", r.foreignW)
+		t.Logf("C7: the address %s did not change across the reset (KubeVirt pod network); "+
+			"the hint path is not reachable in this harness", r.foreignW)
 	}
 	if got := maintenanceUUID(r.foreignW); got != uuid {
 		t.Errorf("maintenance UUID = %q, want %q", got, uuid)

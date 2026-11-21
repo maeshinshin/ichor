@@ -62,7 +62,8 @@ func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter tim
 	t.Helper()
 	pod := stage(t, c)
 	kill := func() {
-		kc := exec.Command("kubectl", flagContext, os.Getenv(kube.ContextEnv), "-n", ns, "exec", pod, "--", "pkill", "-9", "ichor") //nolint:gosec // fixed
+		kc := exec.Command("kubectl", flagContext, os.Getenv(kube.ContextEnv), //nolint:gosec // fixed
+			"-n", ns, "exec", pod, "--", "pkill", "-9", "ichor")
 		o, kerr := kc.CombinedOutput()
 		t.Logf("pkill -9 ichor at %s: %v %s", time.Now().Format("15:04:05"), kerr, o)
 	}
@@ -83,17 +84,22 @@ func TestF5HelmTemplateNoCNI(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
 	before := cniPaths(t, c)
 	chart := packagedChart(t)
-	if out, err := local(t, 2*time.Minute, nameHelm, "template", "ichor", chart, "-n", crNS, "--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443"); err != nil || strings.Contains(out, "this cluster has no CNI") {
+	set := []string{"--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443"}
+	out, err := local(t, 2*time.Minute, nameHelm, append([]string{"template", helmRelease, chart, "-n", crNS}, set...)...)
+	if err != nil || strings.Contains(out, "this cluster has no CNI") {
 		t.Errorf("helm template failed or tripped the preflight: %v", err)
 	}
-	if out, err := local(t, 2*time.Minute, nameHelm, "install", "ichor", chart, "--dry-run", flagKubeconfig, c.LocalKube, "-n", crNS, "--create-namespace", "--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443"); err != nil || strings.Contains(out, "this cluster has no CNI") {
+	install := append([]string{"install", helmRelease, chart, flagKubeconfig, c.LocalKube, "-n", crNS,
+		"--create-namespace"}, set...)
+	out, err = local(t, 2*time.Minute, nameHelm, append(install, "--dry-run")...)
+	if err != nil || strings.Contains(out, "this cluster has no CNI") {
 		t.Errorf("helm install --dry-run failed or tripped the preflight: %v", err)
 	}
 	// shortcut: a server-side dry run does lookups; its outcome is recorded, not asserted.
-	_, _ = local(t, 2*time.Minute, nameHelm, "install", "ichor", chart, "--dry-run=server", flagKubeconfig, c.LocalKube, "-n", crNS, "--create-namespace", "--set", "ichorUI.users.enabled=true", "--set", "ichorUI.users.externalURL=https://localhost:8443")
+	_, _ = local(t, 2*time.Minute, nameHelm, append(install, "--dry-run=server")...)
 	noCNINothingWritten(t, c, before)
 
-	out, err := adopt(t, c, "--require-ichor")
+	out, err = adopt(t, c, "--require-ichor")
 	if err == nil || !strings.Contains(out, "require-ichor") {
 		t.Errorf("adopt --require-ichor with no Ichor was not refused (err=%v)", err)
 	}

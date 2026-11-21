@@ -209,7 +209,8 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 
 	// UI API through the `ichor ui` port-forward.
 	port := env("ICHOR_E2E_F_UI_PORT", "5144")
-	ui := exec.Command(ichorBin(t), "ui", "--open-browser=false", "--local-port", port, flagKubeconfig, c.LocalKube, "-n", crNS) //nolint:gosec // test harness
+	ui := exec.Command(ichorBin(t), "ui", "--open-browser=false", "--local-port", port, //nolint:gosec // test harness
+		flagKubeconfig, c.LocalKube, "-n", crNS)
 	var uiOut strings.Builder
 	ui.Stdout, ui.Stderr = &uiOut, &uiOut
 	if err := ui.Start(); err != nil {
@@ -225,7 +226,8 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := exec.Command("go", "run", "./test/harness/cniui", "-url", "https://127.0.0.1:"+port, "-cluster", c.Opts.Prefix) //nolint:gosec // test harness
+	api := exec.Command("go", "run", "./test/harness/cniui", //nolint:gosec // test harness
+		"-url", "https://127.0.0.1:"+port, "-cluster", c.Opts.Prefix)
 	api.Dir = root
 	apiOut, err := api.CombinedOutput()
 	t.Logf("UI API (err=%v):\n%s", err, apiOut)

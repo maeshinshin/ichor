@@ -66,7 +66,7 @@ func TestT7HelmManager(t *testing.T) {
 	}
 	t.Logf("seeded spec.version = %q", installationField(c, "{.spec.version}"))
 
-	out, err := ichorInPod(t, c, "upgrade", "ichor", "v0.0.1-g0000000", "-n", crNS, "--local")
+	out, err := ichorInPod(t, c, "upgrade", helmRelease, "v0.0.1-g0000000", "-n", crNS, "--local")
 	if err == nil || !strings.Contains(out, "helm upgrade") {
 		t.Errorf("ichor upgrade ichor was not refused with the helm command (err=%v)", err)
 	}
@@ -81,7 +81,7 @@ func TestT7HelmManager(t *testing.T) {
 	if got := installationField(c, "{.spec.users.tokenTTL}"); got != "10m0s" {
 		t.Fatalf("spec.users.tokenTTL = %q, want 10m0s", got)
 	}
-	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube,
+	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", helmRelease, packagedChart(t), flagKubeconfig, c.LocalKube,
 		"-n", crNS,
 		"--reuse-values", "--set", "manager.replicas=1", "--wait", "--timeout", "6m"); err != nil {
 		t.Fatalf("helm upgrade failed: %v\n%s", err, out)

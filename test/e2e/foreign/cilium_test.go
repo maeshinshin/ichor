@@ -288,11 +288,15 @@ func trafficReport(t *testing.T, c *foreign.Cluster, label string) foreign.PodLe
 func probeDiag(t *testing.T, c *foreign.Cluster, label string) {
 	t.Helper()
 	pods, _ := inner(c, "get", "pods", "-l", "app in (fa-srv,fa-client)", "-o",
-		`jsonpath={range .items[*]}{.metadata.labels.app}/{.metadata.name}/{.metadata.uid}/{.spec.nodeName}/{.status.podIP}/{.status.phase}/restarts={.status.containerStatuses[0].restartCount}{.metadata.deletionTimestamp}{" "}{end}`)
+		`jsonpath={range .items[*]}{.metadata.labels.app}/{.metadata.name}/{.metadata.uid}/`+
+			`{.spec.nodeName}/{.status.podIP}/{.status.phase}/`+
+			`restarts={.status.containerStatuses[0].restartCount}{.metadata.deletionTimestamp}{" "}{end}`)
 	nodes, _ := inner(c, "get", "nodes", "-o",
-		`jsonpath={range .items[*]}{.metadata.name}/unsched={.spec.unschedulable}/ready={.status.conditions[?(@.type=="Ready")].status}{" "}{end}`)
+		`jsonpath={range .items[*]}{.metadata.name}/unsched={.spec.unschedulable}/`+
+			`ready={.status.conditions[?(@.type=="Ready")].status}{" "}{end}`)
 	cilium, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o",
-		`jsonpath={range .items[*]}{.spec.nodeName}/{.metadata.name}/restarts={.status.containerStatuses[0].restartCount}/ready={.status.containerStatuses[0].ready}{" "}{end}`)
+		`jsonpath={range .items[*]}{.spec.nodeName}/{.metadata.name}/restarts={.status.containerStatuses[0].restartCount}/`+
+			`ready={.status.containerStatuses[0].ready}{" "}{end}`)
 	t.Logf("A4 diag %s %s: pods [%s] nodes [%s] cilium [%s]", time.Now().UTC().Format("15:04:05"), label,
 		strings.TrimSpace(pods), strings.TrimSpace(nodes), strings.TrimSpace(cilium))
 }
@@ -331,7 +335,9 @@ func eventsTail(c *foreign.Cluster) string {
 
 // ciliumDS is what a takeover or an upgrade must not disturb: the DaemonSet's generation, image and pod UIDs.
 func ciliumDS(c *foreign.Cluster) string {
-	gen, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o", "jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} {.status.numberReady}/{.status.desiredNumberScheduled}")
+	gen, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o",
+		"jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} "+
+			"{.status.numberReady}/{.status.desiredNumberScheduled}")
 	uids, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o",
 		"jsonpath={.items[*].metadata.uid}")
 	return strings.TrimSpace(gen) + " pods=" + strings.TrimSpace(uids)
@@ -340,7 +346,8 @@ func ciliumDS(c *foreign.Cluster) string {
 // helmRecords lists the Helm release record Secrets of the foreign cluster with their resourceVersion.
 func helmRecords(c *foreign.Cluster) string {
 	out, _ := inner(c, "get", "secrets", "-A", "-l", "owner=helm", "-o",
-		"jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name} rv={.metadata.resourceVersion} status={.metadata.labels.status}{\"\\n\"}{end}")
+		"jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name} rv={.metadata.resourceVersion} "+
+			"status={.metadata.labels.status}{\"\\n\"}{end}")
 	return out
 }
 

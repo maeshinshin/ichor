@@ -46,7 +46,8 @@ const (
 	whPodColumns = "NAME:.metadata.name,NODE:.spec.nodeName,IP:.status.podIP,PHASE:.status.phase," +
 		"READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount," +
 		"WAITING:.status.containerStatuses[*].state.waiting.reason,STARTED:.status.startTime"
-	whAgentColumns = "NAME:.metadata.name,NODE:.spec.nodeName,UID:.metadata.uid,READY:.status.containerStatuses[*].ready," +
+	whAgentColumns = "NAME:.metadata.name,NODE:.spec.nodeName,UID:.metadata.uid," +
+		"READY:.status.containerStatuses[*].ready," +
 		"RESTARTS:.status.containerStatuses[*].restartCount,STARTED:.status.startTime"
 )
 

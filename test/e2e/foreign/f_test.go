@@ -55,7 +55,8 @@ func packagedChart(t *testing.T) string {
 // helmInstall runs `helm install ichor <packaged chart>` against the foreign cluster.
 func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
 	t.Helper()
-	args := []string{"install", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube, "-n", crNS, "--create-namespace"}
+	args := []string{"install", helmRelease, packagedChart(t), flagKubeconfig, c.LocalKube, "-n", crNS,
+		"--create-namespace"}
 	if wait {
 		args = append(args, "--wait", "--timeout", "6m")
 	}

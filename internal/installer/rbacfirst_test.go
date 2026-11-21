@@ -125,6 +125,17 @@ subjects: [{apiGroup: rbac.authorization.k8s.io, kind: User, name: %[2]s}]
 		}
 	}
 
+	// Until discovery publishes the seeded CRD, a Get of its kind is a NoMatch, not the Forbidden below.
+	if err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		var l unstructured.UnstructuredList
+		l.SetAPIVersion(o.gizmoGrp + "/v1")
+		l.SetKind("GizmoList")
+
+		return k8sClient.List(ctx, &l) == nil, nil
+	}); err != nil {
+		t.Fatalf("the Gizmo kind was never served: %v", err)
+	}
+
 	cfg := rest.CopyConfig(testCfg)
 	cfg.Impersonate = rest.ImpersonationConfig{UserName: user}
 

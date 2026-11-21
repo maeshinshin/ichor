@@ -19,6 +19,7 @@ package kube
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -104,15 +105,26 @@ func TestInnerArgs(t *testing.T) {
 	}
 }
 
-// TestStorageClass: the default is the lab's class; ICHOR_E2E_STORAGE_CLASS overrides it.
+// TestStorageClass: ICHOR_E2E_STORAGE_CLASS is used as given, trimmed.
 func TestStorageClass(t *testing.T) {
-	t.Setenv(StorageClassEnv, "")
-	if got := StorageClass(); got != defaultStorageClass {
-		t.Fatalf("unset: got %q, want %q", got, defaultStorageClass)
-	}
 	t.Setenv(StorageClassEnv, " fast-wffc ")
 	if got := StorageClass(); got != "fast-wffc" {
 		t.Fatalf("override: got %q, want %q", got, "fast-wffc")
+	}
+}
+
+// TestPickStorageClass: the default class is the one annotated default; none or several is an error
+// naming the env var, never a guessed name.
+func TestPickStorageClass(t *testing.T) {
+	const ann = `"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}`
+	got, err := pickStorageClass([]byte(`{"items":[{"metadata":{"name":"a"}},{"metadata":{"name":"vmstore",` + ann + `}}]}`))
+	if err != nil || got != "vmstore" {
+		t.Fatalf("got %q, %v; want vmstore", got, err)
+	}
+	for _, in := range []string{`{"items":[{"metadata":{"name":"a"}}]}`, `{"items":[{"metadata":{"name":"a",` + ann + `}},{"metadata":{"name":"b",` + ann + `}}]}`} {
+		if _, err := pickStorageClass([]byte(in)); err == nil || !strings.Contains(err.Error(), StorageClassEnv) {
+			t.Fatalf("%s: want an error naming %s, got %v", in, StorageClassEnv, err)
+		}
 	}
 }
 

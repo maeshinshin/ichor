@@ -23,6 +23,7 @@ limitations under the License.
 package kube
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -51,18 +52,58 @@ const (
 	// StorageClassEnv overrides the StorageClass the harness's DataVolumes and PVCs request.
 	StorageClassEnv = "ICHOR_E2E_STORAGE_CLASS"
 
-	defaultStorageClass = "ceph-block"
-
 	flagContext    = "--context"
 	flagKubeconfig = "--kubeconfig"
 )
 
-// StorageClass returns the StorageClass the harness requests: ICHOR_E2E_STORAGE_CLASS, else the default.
+// StorageClass returns the StorageClass the harness requests: ICHOR_E2E_STORAGE_CLASS, which
+// ResolveStorageClass sets from the cluster's default class when it is unset.
 func StorageClass() string {
-	if c := strings.TrimSpace(os.Getenv(StorageClassEnv)); c != "" {
-		return c
+	return strings.TrimSpace(os.Getenv(StorageClassEnv))
+}
+
+// ResolveStorageClass makes ICHOR_E2E_STORAGE_CLASS non-empty before any VM is created: when it
+// is unset it takes the outer cluster's default StorageClass, and fails at once when there is none
+// (a wrong class leaves every PVC Pending until a 10-minute timeout).
+func ResolveStorageClass() error {
+	if StorageClass() != "" {
+		return nil
 	}
-	return defaultStorageClass
+	out, err := Command("get", "storageclass", "-o", "json").Output()
+	if err != nil {
+		return fmt.Errorf("listing StorageClasses to find the default: %w", err)
+	}
+	c, err := pickStorageClass(out)
+	if err != nil {
+		return err
+	}
+	return os.Setenv(StorageClassEnv, c)
+}
+
+// pickStorageClass returns the one class in a StorageClassList marked default.
+func pickStorageClass(list []byte) (string, error) {
+	var l struct {
+		Items []struct {
+			Metadata struct {
+				Name        string            `json:"name"`
+				Annotations map[string]string `json:"annotations"`
+			} `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(list, &l); err != nil {
+		return "", fmt.Errorf("reading the StorageClass list: %w", err)
+	}
+	var def []string
+	for _, i := range l.Items {
+		if i.Metadata.Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
+			def = append(def, i.Metadata.Name)
+		}
+	}
+	if len(def) != 1 {
+		return "", fmt.Errorf("%s is unset and the outer cluster has %d default StorageClasses (%v): set %s to the class the VM disks use",
+			StorageClassEnv, len(def), def, StorageClassEnv)
+	}
+	return def[0], nil
 }
 
 // flagsWithValue are the kubectl flags (as separate args) whose next arg is a value, so

@@ -53,6 +53,11 @@ ICHOR_UI_DEMO_SCALE=1x3 ICHOR_UI_DEMO_SYSTEM_DISK=40Gi ICHOR_UI_DEMO_WORKER_SPAR
   ./bin/kubevirt-harness up-demo
 ```
 
+**StorageClass.** The VM disks and the ISO imports request `ICHOR_E2E_STORAGE_CLASS`. When it is unset, the harness
+(`up`-type commands only) uses the outer cluster's StorageClass marked `storageclass.kubernetes.io/is-default-class`, and
+exits at once, naming the variable, when there is not exactly one. A wrong class would otherwise leave every PVC Pending
+until the 10-minute IP wait times out. Mark your class default, or set `ICHOR_E2E_STORAGE_CLASS=vmstore`.
+
 **No-provisioner outer storage.** The cache PVC asks for 1Gi, but on static `no-provisioner` PVs (e.g. 200Gi `vmstore`)
 it binds a whole PV, so its capacity is 200Gi. Each VM's clone must request at least that capacity, and CDI adds its
 filesystem overhead on top (apparently 200Gi / 0.945, about 212Gi), which no 200Gi PV can satisfy: the clone never

@@ -71,6 +71,10 @@ func main() {
 	var err error
 	switch os.Args[1] {
 	case "up":
+		if err := kube.ResolveStorageClass(); err != nil {
+			fmt.Fprintln(os.Stderr, "foreign:", err)
+			os.Exit(1)
+		}
 		var c *foreign.Cluster
 		if c, err = foreign.Up(o); err == nil {
 			fmt.Println("CPS=", c.CPs, "WORKERS=", c.Workers, "DIR=", c.Dir)

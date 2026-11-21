@@ -19,6 +19,6 @@
     "hooks": "@/hooks"
   },
   "registries": {
-    "@preactcn": "https://maeshinshin.github.io/preactcn/r/{name}.json"
+    "@preactcn": "https://preactcn.maesh.dev/r/{name}.json"
   }
 }

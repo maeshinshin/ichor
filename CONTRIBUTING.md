@@ -112,7 +112,7 @@ lint failures are not yours.
     into a `type: string` schema, which the API server then rejects even for
     the literal string `"true"`; quote the values instead
     (`Enum="true";"false"`).
-- The UI is Vite + Preact + [preactcn](https://maeshinshin.github.io/preactcn/).
+- The UI is Vite + Preact + [preactcn](https://preactcn.maesh.dev/).
   Add components with `npx shadcn@latest add @preactcn/<name>`. No React,
   no `preact/compat`.
   `ui/src/lib/radix` and `site/src/lib/radix` are the same vendored Radix port and

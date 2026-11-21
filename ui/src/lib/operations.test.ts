@@ -119,3 +119,12 @@ test('the Kubernetes upgrade stage is a position in the four stages; unknown or 
   assert.equal(kubernetesStageProgress(''), null)
   assert.equal(kubernetesStageProgress('Accepting'), null)
 })
+
+test('a pause whose reason is OwnNodeUnread is blocked: not resumable, still polled', () => {
+  const own = [{ type: 'Paused', reason: 'OwnNodeUnread' }]
+  assert.equal(operationState('Paused', '', own), 'blocked')
+  assert.equal(operationState('Paused', '', [{ type: 'Paused', reason: 'PausedByOperator' }]), 'paused')
+  assert.equal(operationState('Paused', 'boom', own), 'failed')
+  assert.equal(pauseAction(false, 'blocked'), null)
+  assert.ok((pollIntervalMs('blocked') ?? 0) > 3000)
+})

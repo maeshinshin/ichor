@@ -35,11 +35,26 @@ const (
 	// opGoneMessage is said once when a live etcd restore's operation vanishes with the rolled-back API.
 	opGoneMessage  = "the operation is gone from the API (the cluster was rolled back to the snapshot); waiting for the restore to resume…"
 	opPhaseWaiting = ichorv1alpha1.TalosOperationPhasePending
+
+	// reasonOwnNodeUnread is the Paused condition's reason from the controller (talosoperation_controller.go).
+	reasonOwnNodeUnread = "OwnNodeUnread"
 )
 
 // opFailed is an operation that paused itself because a step failed (an operator's pause has no reason).
 func opFailed(op *pb.Operation) bool {
 	return op.GetPhase() == condPaused && op.GetFailureReason() != ""
+}
+
+// opBlocked is an operation the controller paused because it cannot tell which machine runs it (reason
+// OwnNodeUnread): no step failed, nothing is to be resumed, and the controller lifts the pause itself.
+func opBlocked(op *pb.Operation) bool {
+	if op.GetPhase() != condPaused || op.GetFailureReason() != "" {
+		return false
+	}
+
+	return slices.ContainsFunc(op.GetConditions(), func(c *pb.Condition) bool {
+		return c.GetType() == condPaused && c.GetReason() == reasonOwnNodeUnread
+	})
 }
 
 // opFinished is an operation that has nothing left to do.
@@ -62,7 +77,12 @@ func opMark(op *pb.Operation) mark {
 }
 
 func (h *human) phase(op *pb.Operation) string {
-	return h.Mark(opMark(op)) + " " + cmp.Or(op.GetPhase(), opPhaseWaiting)
+	out := h.Mark(opMark(op)) + " " + cmp.Or(op.GetPhase(), opPhaseWaiting)
+	if opBlocked(op) {
+		out += " (blocked)"
+	}
+
+	return out
 }
 
 // opTarget is what an operation acts on: the node of a node action, else its cluster.
@@ -278,6 +298,8 @@ func (w *opWatch) detailIn(op *pb.Operation, stage, phase string) string {
 	}
 
 	switch {
+	case opBlocked(op):
+		parts = append(parts, "blocked: "+opNote(op), "resumes by itself, nothing to resume")
 	case op.GetPhase() == condPaused && !opFailed(op):
 		parts = append(parts, "resume with `ichor resume operation "+op.GetRef().GetName()+"`")
 	case opFailed(op):

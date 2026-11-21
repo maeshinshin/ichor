@@ -195,7 +195,7 @@ function Home({
   const ready = approved.filter((m) => readyOf(m)?.status === 'True').length
   const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyOf(m)?.reason ?? '' }]) > 0)
   const apiRestart = approved.filter((m) => apiRestartPendingCount([{ readyReason: readyOf(m)?.reason ?? '' }]) > 0)
-  const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
+  const currentState = current ? operationState(current.op.phase, current.op.failureReason, current.op.conditions) : null
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const versionOf = (name: string) => componentOf(cluster.versions, name)
   const cilium = versionOf('cilium')
@@ -395,7 +395,7 @@ function Home({
                   </TableHeader>
                   <TableBody>
                     {recent.map(({ op }) => {
-                      const state = operationState(op.phase, op.failureReason)
+                      const state = operationState(op.phase, op.failureReason, op.conditions)
                       return (
                         <TableRow key={op.ref?.name}>
                           <TableCell>
@@ -697,7 +697,7 @@ function ActiveProgress({ row, total }: { row: Row; total: number }) {
   return (
     <>
       <p>
-        {tracksNodes ? t('ops.currentNodes', { done, total }) : opStateTone(operationState(op.phase, op.failureReason)) === 'bad' ? null : t(`ops.state.${operationState(op.phase, op.failureReason)}`)}
+        {tracksNodes ? t('ops.currentNodes', { done, total }) : opStateTone(operationState(op.phase, op.failureReason, op.conditions)) === 'bad' ? null : t(`ops.state.${operationState(op.phase, op.failureReason, op.conditions)}`)}
         {kubeStage && ` · ${t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}`}
       </p>
       {tracksNodes && <Progress value={(done / total) * 100} />}

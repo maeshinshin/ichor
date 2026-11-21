@@ -39,7 +39,7 @@ export function attentionItems(i: {
 }): Attention[] {
   const out: Attention[] = []
   if (i.opState === 'failed') out.push({ kind: 'opFailed' })
-  if (i.opState === 'paused') out.push({ kind: 'opPaused' })
+  if (i.opState === 'paused' || i.opState === 'blocked') out.push({ kind: 'opPaused' })
   if (i.autoPatchHalted) out.push({ kind: 'autoPatchHalted', operation: i.autoPatchHalted })
   if (i.installerUnverified) out.push({ kind: 'installerUnverified' })
   const certs = activeCondition(i.conditions, 'CertificatesExpiring')

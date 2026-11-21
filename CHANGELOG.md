@@ -600,6 +600,15 @@ command does. Each item is described where it is listed below.
   is not among those that can be named; each now carries a dated amendment that says when
   it stops, which operations it covers, that the etcd restore already refused so, and what
   the operator sees.
+  `ichor get operation` and the live view of `--follow` now show such an operation as
+  `Paused (blocked)` with its message and say it resumes by itself, where they offered
+  `ichor resume operation`; the UI shows it as Blocked, with the message, and offers no
+  Resume button.
+- **A write the UI backend makes through `Patch`, `DeleteAllOf`, `Apply`, `Status()` or
+  `SubResource()` on a user's resource now runs as the signed-in user.** Only `Create`,
+  `Update` and `Delete` did. The ServiceAccount holds no write verb on those resources, so
+  this changes nothing a user could do; it makes the backend's own client say whose
+  write it is.
 - **ADR 0080 says what the `ConfigRollout` marker does when a rollout ends.** The ADR
   said the rollout clears the marker. It sets the `TalosMachine` condition to `False`
   with reason `Converged` and leaves it there until the next rollout. The reason is not

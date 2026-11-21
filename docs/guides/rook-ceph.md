@@ -205,6 +205,108 @@ this node to include in the storage cluster." Rook's `deviceFilter` and
 `devicePathFilter` are regular expressions over the same names and paths; a
 filter that matches a disk you did not mean to give Ceph is the same mistake.
 
+## Install the charts
+
+Install the `rook-ceph` chart, then the `rook-ceph-cluster` chart, in the
+`rook-ceph` namespace. Pin the chart version you read the documentation for;
+the examples here are for v1.19.6:
+
+```sh
+helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version v1.19.6
+helm install -n rook-ceph rook-ceph-cluster rook-release/rook-ceph-cluster --version v1.19.6 -f values.yaml
+```
+
+### Restate the StorageClass parameters
+
+Helm merges maps from your values file into the chart's defaults, but it
+replaces a list whole. `cephBlockPools`, `cephFileSystems` and
+`cephObjectStores` are lists. If your values file overrides one of them, the
+chart's default entry is gone, including its `storageClass.parameters`: the
+`csi.storage.k8s.io/*` names of the Ceph admin Secrets. A StorageClass rendered
+without them provisions nothing, and a claim stays `Pending` with
+`provided secret is empty`.
+
+So write the parameters in every entry you override. For a block pool:
+
+```yaml
+cephBlockPools:
+  - name: ceph-blockpool
+    spec:
+      failureDomain: host
+      replicated:
+        size: 3
+    storageClass:
+      enabled: true
+      name: ceph-block
+      isDefault: false
+      reclaimPolicy: Delete
+      allowVolumeExpansion: true
+      volumeBindingMode: Immediate
+      parameters:
+        imageFormat: "2"
+        imageFeatures: layering
+        csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/provisioner-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/controller-publish-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/controller-publish-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+        csi.storage.k8s.io/node-stage-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/fstype: ext4
+```
+
+For a filesystem, use the same eight `csi.storage.k8s.io/*-secret-*` keys and
+`csi.storage.k8s.io/fstype`, with `rook-csi-cephfs-provisioner` and
+`rook-csi-cephfs-node` as the Secret names. Take the full default lists from
+`helm show values rook-release/rook-ceph-cluster --version <version>` and edit
+a copy, so nothing else is dropped.
+
+A StorageClass's `parameters` cannot be changed after it is created. To fix one
+that was rendered without them, delete the StorageClass and run
+`helm upgrade` again.
+
+### A small cluster
+
+The chart's defaults ask for 4Gi of memory for each OSD, 4Gi for each metadata
+server and 1Gi for each gateway and mon, and are meant for dedicated storage
+nodes. On control planes that also run workloads, with about 12 GiB of memory
+each, lower the requests and the limits in your values file:
+
+```yaml
+cephClusterSpec:
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  resources:
+    mgr: {limits: {memory: 1Gi}, requests: {cpu: 250m, memory: 512Mi}}
+    mon: {limits: {memory: 1Gi}, requests: {cpu: 250m, memory: 512Mi}}
+    osd: {limits: {memory: 3Gi}, requests: {cpu: 500m, memory: 2Gi}}
+cephFileSystems:
+  - name: ceph-filesystem
+    # ...spec and storageClass written out in full, as above
+    spec:
+      metadataServer:
+        resources: {limits: {memory: 1Gi}, requests: {cpu: 250m, memory: 512Mi}}
+```
+
+`cephClusterSpec.resources` is a map, so it merges with the chart's default:
+write only the daemons you change. These numbers are a starting point for a
+small cluster, not a sizing recommendation.
+
+### Upgrade the cluster chart
+
+The Rook operator edits the `CephCluster` and the other custom resources after
+the chart creates them. Helm 4 applies charts with server-side apply, so a
+`helm upgrade` of `rook-ceph-cluster` can stop with `conflict occurred while
+applying object ... Apply failed with N conflicts: conflict with "rook"`.
+`helm upgrade --help` describes the flag for this case:
+
+> `--force-conflicts`  if set server-side apply will force changes against conflicts
+
+Pass `--force-conflicts` to `helm upgrade` once you have read what the
+conflicting fields are and decided that your values should win.
+
 ## Drains
 
 Ichor drains a node by cordoning it and evicting its pods through the Eviction

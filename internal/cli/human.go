@@ -287,7 +287,7 @@ var (
 	}
 	// progressFailedWhenFalse are the reasons a progress condition is False for a failure rather than a
 	// completed step: the node booted its previous slot (the controller's reasonUpgradeFellBack), or it did
-	// not come back within the verify window (reasonUpgradeVerifyTimedOut).
+	// not come back within the verify window (reasonUpgradeVerifyTimedOut, reasonKubernetesVerifyTimedOut).
 	progressFailedWhenFalse = map[string]bool{"FellBack": true, "VerifyTimedOut": true}
 )
 

@@ -28,6 +28,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -69,9 +70,12 @@ const (
 
 	reasonKubernetesApplied   = "ConfigApplied"
 	reasonKubernetesConverged = "Converged"
-	reasonRemovedAPIsInUse    = "RemovedAPIsInUse"
-	reasonRemovedAPIsNone     = "NoneRequested"
-	reasonRemovedAPIsUnknown  = "CheckFailed"
+	// reasonKubernetesVerifyTimedOut is the False the marker takes when the verify window ran out: the clock
+	// stops, and a resumed operation's next waiting pass starts a fresh one.
+	reasonKubernetesVerifyTimedOut = "VerifyTimedOut"
+	reasonRemovedAPIsInUse         = "RemovedAPIsInUse"
+	reasonRemovedAPIsNone          = "NoneRequested"
+	reasonRemovedAPIsUnknown       = "CheckFailed"
 
 	// kubernetesVerifyTimeout bounds how long a node may take to converge after its
 	// configuration was applied (static pods replaced, kubelet restarted, node Ready). Past it the
@@ -629,7 +633,9 @@ func (a *kubernetesUpgradeAdvancer) verify(
 		}
 	}
 
-	if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade); cond != nil && cond.Status == metav1.ConditionTrue {
+	// Verified on the target, so any reason but Converged is stale: True while the clock ran, or False with
+	// VerifyTimedOut from a node that came back late.
+	if cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionKubernetesUpgrade); cond != nil && cond.Reason != reasonKubernetesConverged {
 		if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
 			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesConverged,
 			Message: "finished the " + stage + " stage for Kubernetes " + target,
@@ -744,8 +750,18 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 	}
 
 	if time.Since(cond.LastTransitionTime.Time) > kubernetesVerifyTimeout {
-		return fmt.Errorf("node %q did not converge on Kubernetes %s within %s: %s",
+		// False, not left True: a True keeps this clock's LastTransitionTime, so a resumed operation would
+		// time out at once, and stepRenewUntil would stop renewing the lock from its expired bound.
+		msg := fmt.Sprintf("node %q did not converge on Kubernetes %s within %s: %s",
 			m.Name, cluster.Spec.KubernetesVersion, kubernetesVerifyTimeout, reason)
+
+		if err := setMachineCondition(ctx, a.Reader, a.Client, m, metav1.Condition{
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: msg,
+		}); err != nil {
+			return fmt.Errorf("recording %q's verify timeout: %w", m.Name, err)
+		}
+
+		return errors.New(msg)
 	}
 
 	return nil

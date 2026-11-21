@@ -235,6 +235,17 @@ func TestConditionMarkReadsTheTimedOutUpgradeAsFailed(t *testing.T) {
 	}
 }
 
+// The Kubernetes upgrade marker uses the same reason, so a timed-out one reads as failed too.
+func TestConditionMarkReadsTheTimedOutKubernetesUpgradeAsFailed(t *testing.T) {
+	if got := conditionMark("KubernetesUpgrade", condFalse, "Converged"); got != markOK {
+		t.Errorf("KubernetesUpgrade False/Converged = %d, want markOK (%d)", got, markOK)
+	}
+
+	if got := conditionMark("KubernetesUpgrade", condFalse, "VerifyTimedOut"); got != markFailed {
+		t.Errorf("KubernetesUpgrade False/VerifyTimedOut = %d, want markFailed (%d)", got, markFailed)
+	}
+}
+
 func TestShortNamesShortenOnlyWhatStaysUnique(t *testing.T) {
 	got := shortNames([]string{"fa70962a-4fd9-4d01-88c5-f9966adcda99", "0b1c2d3e-aaaa-bbbb-cccc-111122223333", testMachineName})
 	if want := []string{"fa70962a", "0b1c2d3e", "node-a"}; strings.Join(got, ",") != strings.Join(want, ",") {

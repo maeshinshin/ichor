@@ -607,6 +607,44 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("did not converge"))
 		Expect(done).To(BeFalse())
+
+		cond = apimeta.FindStatusCondition(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse), "a timed-out clock must not stay True")
+		Expect(cond.Reason).To(Equal(reasonKubernetesVerifyTimedOut))
+
+		// A resumed operation reads a fresh clock, not the expired one.
+		done, err = adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
+		Expect(err).NotTo(HaveOccurred(), "a resumed timed-out upgrade must not fail on the expired clock")
+		Expect(done).To(BeFalse())
+
+		cond = apimeta.FindStatusCondition(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(time.Since(cond.LastTransitionTime.Time)).To(BeNumerically("<", kubernetesVerifyTimeout))
+		Expect(stepRenewUntil(opAtStage(ichorv1alpha1.KubernetesStageKubelets), fetchMachine(w))).To(BeTemporally(">", time.Now()),
+			"the lock is renewed again once the clock restarts")
+	})
+
+	It("ends Converged when a node verified on the target still carries the timed-out reason", func() {
+		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "to2", true)
+		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+
+		advanceOK(adv.Advance, cluster, w, op)
+
+		fake.current = fake.applyCalls[0]
+
+		m := fetchMachine(w)
+		apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+			Type: conditionKubernetesUpgrade, Status: metav1.ConditionFalse, Reason: reasonKubernetesVerifyTimedOut, Message: "left by the timed-out pass",
+		})
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+		setK8sNode(w.Spec.Hostname, testK8sTarget)
+
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(w), op)).To(BeTrue())
+
+		cond := apimeta.FindStatusCondition(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)
+		Expect(cond.Reason).To(Equal(reasonKubernetesConverged), "a verified node must not keep its failure reason")
 	})
 
 	It("in the last stage applies a control plane's whole configuration and does not sync the bootstrap manifests", func() {

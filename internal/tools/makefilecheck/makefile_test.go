@@ -251,3 +251,27 @@ func TestEmbedWarnsOnARegistryPort(t *testing.T) {
 		}
 	}
 }
+
+// TestReleaseRefusesEmptyImageDigests pins the release path: an empty IMAGE_DIGESTS fails, naming digests.txt, in make
+// release and in goreleaser's hook, and only a snapshot build (ADR 0122) goes without.
+func TestReleaseRefusesEmptyImageDigests(t *testing.T) {
+	for _, args := range [][]string{{"check-release-digests"}, {"release", "VERSION=v0.1.0"}} {
+		out, err := makeOut(t, args...)
+		if err == nil || !strings.Contains(out, "digests.txt") {
+			t.Errorf("make %v with no IMAGE_DIGESTS: err=%v, want a refusal naming digests.txt:\n%s", args, err, out)
+		}
+	}
+
+	if out, err := makeOut(t, "check-release-digests", "IMAGE_DIGESTS=bin/digests.txt"); err != nil {
+		t.Errorf("check-release-digests refused a set IMAGE_DIGESTS: %v\n%s", err, out)
+	}
+
+	goreleaser, err := os.ReadFile(filepath.Join(repoRoot, ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(goreleaser), "{{ if not .IsSnapshot }}make check-release-digests") {
+		t.Error("the goreleaser hook does not run check-release-digests outside a snapshot build")
+	}
+}

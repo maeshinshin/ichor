@@ -21,7 +21,7 @@ dist: .goreleaser-dist
 # does; a snapshot build without it names tags.
 before:
   hooks:
-    - sh -c 'make check-embed-images IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }} && make build-installer IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }} IMAGE_DIGESTS={{ envOrDefault "ICHOR_IMAGE_DIGESTS" "" }}'
+    - sh -c '{{ if not .IsSnapshot }}make check-release-digests IMAGE_DIGESTS={{ envOrDefault "ICHOR_IMAGE_DIGESTS" "" }} && {{ end }}make check-embed-images IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }} && make build-installer IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }} IMAGE_DIGESTS={{ envOrDefault "ICHOR_IMAGE_DIGESTS" "" }}'
     - cp dist/install.yaml internal/installmanifest/install.yaml
     - cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 

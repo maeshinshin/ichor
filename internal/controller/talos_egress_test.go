@@ -138,13 +138,6 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		ensureCiliumPolicyCRD()
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metaOf(egressNS)})).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
 
-		Eventually(func() error {
-			var l unstructured.UnstructuredList
-			l.SetGroupVersionKind(ciliumPolicyGVK)
-
-			return k8sClient.List(ctx, &l, client.InNamespace(egressNS))
-		}, "20s", "200ms").Should(Succeed())
-
 		egress = &TalosEgress{Client: k8sClient, Namespace: egressNS}
 	})
 

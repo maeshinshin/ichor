@@ -102,13 +102,6 @@ var _ = Describe("UIEgress", Ordered, func() {
 		ensureCiliumPolicyCRD()
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metaOf(uiEgressNS)})).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
 
-		Eventually(func() error {
-			var l unstructured.UnstructuredList
-			l.SetGroupVersionKind(ciliumPolicyGVK)
-
-			return k8sClient.List(ctx, &l, client.InNamespace(uiEgressNS))
-		}, "20s", "200ms").Should(Succeed())
-
 		egress = &UIEgress{Client: k8sClient, Reader: k8sClient, Namespace: uiEgressNS}
 	})
 

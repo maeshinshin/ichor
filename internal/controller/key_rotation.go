@@ -192,7 +192,7 @@ func (r *TalosOperationReconciler) advanceKeyRotation(
 	}
 
 	if kr == nil {
-		return run.retry(ctx, fmt.Sprintf(
+		return run.fail(ctx, fmt.Sprintf(
 			"the Secret %q has no %s although the rotation is in stage %s; the new keys cannot be found, so nothing is advanced. "+
 				"Restore %s from the copy made when the rotation started",
 			cluster.Spec.SecretsRef.Name, secretsbundle.KeyRotationKey, rs.Stage, secretsbundle.KeyRotationKey))
@@ -246,6 +246,14 @@ func (c *keyRun) blocked(ctx context.Context, message string) error {
 	}
 
 	return c.status(ctx, ichorv1alpha1.TalosOperationPhasePaused, metav1.ConditionFalse, reasonKeyRotationBlocked, message)
+}
+
+// fail pauses the rotation on a failed step at once, for a cause no waiting clears: blocked would hold the cluster
+// lock for rotationGiveUpAfter first. The pause frees the lock, and an explicit retry resumes the rotation.
+func (c *keyRun) fail(ctx context.Context, message string) (ctrl.Result, error) {
+	apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionKeyRotation)
+
+	return ctrl.Result{}, c.r.setPhase(ctx, c.op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, c.scrub.clean(message))
 }
 
 func (c *keyRun) retry(ctx context.Context, message string) (ctrl.Result, error) {
@@ -417,16 +425,16 @@ func (c *keyRun) preflight(ctx context.Context) (ctrl.Result, error) {
 
 	contract, err := coreconfig.ParseContractFromVersion(c.cluster.Spec.VersionContract)
 	if err != nil {
-		return c.retry(ctx, "invalid versionContract")
+		return c.fail(ctx, "invalid versionContract")
 	}
 
 	if !contract.MultidocKubernetesConfigSupported() {
-		return c.retry(ctx, fmt.Sprintf("spec.versionContract %q keeps the service-account key and the secretbox secret in single "+
+		return c.fail(ctx, fmt.Sprintf("spec.versionContract %q keeps the service-account key and the secretbox secret in single "+
 			"fields that cannot hold two keys at once; raise the contract to v1.14 or later before rotating them", c.cluster.Spec.VersionContract))
 	}
 
 	if c.has(ichorv1alpha1.KeyRotationTargetSecretbox) && c.bundle.Secrets.SecretboxEncryptionSecret == "" {
-		return c.retry(ctx, "the secrets bundle has no secretbox secret (the cluster encrypts with aescbc), so there is no secretbox key to rotate")
+		return c.fail(ctx, "the secrets bundle has no secretbox secret (the cluster encrypts with aescbc), so there is no secretbox key to rotate")
 	}
 
 	// A keyrotation.yaml left by an earlier attempt that never reached a machine is adopted, not replaced, as
@@ -440,7 +448,7 @@ func (c *keyRun) preflight(ctx context.Context) (ctrl.Result, error) {
 		c.addNewKeys(kr)
 	} else if (kr.ServiceAccount != nil) != c.has(ichorv1alpha1.KeyRotationTargetServiceAccount) ||
 		(kr.Secretbox != "") != c.has(ichorv1alpha1.KeyRotationTargetSecretbox) {
-		return c.retry(ctx, fmt.Sprintf("the Secret already holds %s from another rotation and it does not hold the keys this operation "+
+		return c.fail(ctx, fmt.Sprintf("the Secret already holds %s from another rotation and it does not hold the keys this operation "+
 			"names; remove it or start the rotation it belongs to", secretsbundle.KeyRotationKey))
 	}
 
@@ -507,7 +515,7 @@ func (c *keyRun) preflightMachine(
 	}
 
 	if first == plain {
-		res, err := c.retry(ctx, fmt.Sprintf("a TalosConfigPatch overrides the Kubernetes service-account or encryption document of %q, so "+
+		res, err := c.fail(ctx, fmt.Sprintf("a TalosConfigPatch overrides the Kubernetes service-account or encryption document of %q, so "+
 			"adding the new keys would change nothing; remove the override before rotating", m.Name))
 
 		return res, true, err
@@ -924,7 +932,7 @@ func (c *keyRun) finalize(ctx context.Context) (ctrl.Result, error) {
 
 		bundle = replaced
 	} else if !c.holdsNewKeys(bundle) {
-		return c.retry(ctx, "the secrets bundle neither carries the new keys nor has a keyrotation.yaml to take them from")
+		return c.fail(ctx, "the secrets bundle neither carries the new keys nor has a keyrotation.yaml to take them from")
 	}
 
 	if err := c.markBundleBackupStale(ctx); err != nil {

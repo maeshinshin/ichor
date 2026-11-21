@@ -398,7 +398,8 @@ func stepRenewUntil(op *ichorv1alpha1.TalosOperation, m *ichorv1alpha1.TalosMach
 	}
 
 	// finish's waits with no request outstanding run on conditionTalosUpgradeWaiting (ADR 0170).
-	if w := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting); w != nil && op.Spec.Kind == ichorv1alpha1.TalosOperationKindTalos {
+	if w := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting); w != nil && op.Spec.Kind == ichorv1alpha1.TalosOperationKindTalos &&
+		w.Message == string(op.UID) {
 		return w.LastTransitionTime.Add(talosUpgradeVerifyTimeout)
 	}
 
@@ -757,6 +758,12 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 		apimeta.RemoveStatusCondition(&op.Status.Conditions, conditionOperationPaused)
 	}
 
+	if phase == ichorv1alpha1.TalosOperationPhasePaused {
+		if err := r.clearWaitClocks(ctx, op); err != nil {
+			return err
+		}
+	}
+
 	if err := r.Status().Update(ctx, op); err != nil {
 		return err
 	}
@@ -769,6 +776,42 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused ||
 		reason == reasonOperationNoExecutor || reason == reasonOperationOwnNodeUnread) {
 		return r.releaseLock(ctx, op)
+	}
+
+	return nil
+}
+
+// clearWaitClocks removes conditionTalosUpgradeWaiting from the machines of a Talos operation that is pausing, whatever
+// the cause, so the resume starts a new clock instead of reading the one the pause left running (ADR 0170).
+func (r *TalosOperationReconciler) clearWaitClocks(ctx context.Context, op *ichorv1alpha1.TalosOperation) error {
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindTalos {
+		return nil
+	}
+
+	for _, entry := range op.Status.Machines {
+		var m ichorv1alpha1.TalosMachine
+		if err := r.Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: entry.Name}, &m); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+
+			return err
+		}
+
+		if apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgradeWaiting) == nil {
+			continue
+		}
+
+		reader := r.APIReader
+		if reader == nil {
+			reader = r.Client
+		}
+
+		if err := updateMachineStatus(ctx, reader, r.Client, &m, func(fresh *ichorv1alpha1.TalosMachine) {
+			apimeta.RemoveStatusCondition(&fresh.Status.Conditions, conditionTalosUpgradeWaiting)
+		}); err != nil {
+			return err
+		}
 	}
 
 	return nil

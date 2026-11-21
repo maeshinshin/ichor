@@ -622,3 +622,57 @@ var _ = Describe("talosUpgradeAdvancer finish after a failed upgrade", func() {
 		Entry("a control plane missing from etcd", "fin9", true, nil, nil),
 	)
 })
+
+var _ = Describe("the clock of finish's waits across a pause", func() {
+	waitingClock := func(uid string) metav1.Condition {
+		return metav1.Condition{
+			Type: conditionTalosUpgradeWaiting, Status: metav1.ConditionTrue, Reason: reasonUpgradeVerifying, Message: uid,
+			LastTransitionTime: metav1.NewTime(time.Now().Add(-2 * talosUpgradeVerifyTimeout)),
+		}
+	}
+
+	DescribeTable("a pause of the operation, whatever its cause, starts a fresh clock at the resume",
+		func(pause func(*ichorv1alpha1.TalosOperation)) {
+			cluster := newOpTestCluster()
+			m := newOpTestMachine(cluster.Name, "controlplane", "wclk-cp1")
+			op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindTalos)
+
+			got := fetchMachine(m)
+			got.Status.Conditions = []metav1.Condition{waitingClock(string(op.UID))}
+			Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+			fresh := fetchOperation(op)
+			fresh.Status.Machines = []ichorv1alpha1.TalosOperationMachineStatus{
+				{Name: m.Name, Phase: ichorv1alpha1.TalosOperationMachinePhaseInProgress},
+			}
+			Expect(k8sClient.Status().Update(ctx, fresh)).To(Succeed())
+			pause(fresh)
+
+			fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{m.Name: {err: errors.New("another machine failed")}}}
+			r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+			reconcileTimes(r, op, 2)
+
+			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(apimeta.FindStatusCondition(fetchMachine(m).Status.Conditions, conditionTalosUpgradeWaiting)).To(BeNil(),
+				"the resume must not read the clock the pause left running")
+		},
+		Entry("spec.paused", func(op *ichorv1alpha1.TalosOperation) {
+			op.Spec.Paused = true
+			Expect(k8sClient.Update(ctx, op)).To(Succeed())
+		}),
+		Entry("a failed step", func(*ichorv1alpha1.TalosOperation) {}),
+	)
+
+	It("does not bound the lock by a clock another operation started", func() {
+		_, m := newUpgradeNode("wclk2", true)
+		got := fetchMachine(m)
+		got.Status.Conditions = []metav1.Condition{waitingClock("another-operation")}
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+		op := &ichorv1alpha1.TalosOperation{
+			Spec: ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}}
+		op.UID = "this-operation"
+
+		Expect(stepRenewUntil(op, fetchMachine(m))).To(BeTemporally(">", time.Now()))
+	})
+})

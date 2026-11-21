@@ -70,9 +70,9 @@ By default the client certificates live a year, which is also the maximum; --ttl
 hours and --read-only makes the talosconfig os:reader instead of os:admin, for access that cannot
 change a node.
 
-The Kubernetes server is --kube-server, else the one in your current kubeconfig, with a warning when that is not
-the cluster's endpoint address (its context names
-are kept too); with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
+The Kubernetes server is --kube-server, else the cluster's endpoint (https://ADDRESS:6443: the VIP when the
+endpoint is a vip), with a warning when --kube-server names another host. Your current kubeconfig's context
+names are kept; with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
 cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix ` + credentialsSuffix + `
 (never over them), unless --kubeconfig-out and --talosconfig-out say otherwise.
@@ -84,7 +84,7 @@ the moment the rotation waits for credentials: they keep working after the old C
 With --bundle FILE (the output of 'ichor export bundle') the CAs come from the file, not the cluster,
 so an unreachable cluster does not stop it. The bundle plus --kube-server URL and --talos-endpoints is
 all it needs: no kubeconfig or talosconfig has to exist. Without --kube-server it still takes the
-server from your current kubeconfig, so run it where that kubeconfig and context exist. A bundle
+server from your current kubeconfig, since a bundle holds no endpoint, so run it where that kubeconfig and context exist. A bundle
 saved before a rotation names CAs that no node accepts any more.
 
 With --acknowledge the command also tells a waiting CA rotation that you have the credentials, after
@@ -383,7 +383,7 @@ func init() {
 	f.StringSliceVar(&clusterCredentialsOpts.TalosEndpoints, "talos-endpoints", nil,
 		"the Talos API endpoints for the talosconfig (default: the cluster's control-plane nodes, else your current talosconfig's)")
 	f.StringVar(&clusterCredentialsOpts.KubeServer, "kube-server", "",
-		"the Kubernetes API server URL for the kubeconfig, for example https://10.0.0.2:6443 (default: the server of your current kubeconfig)")
+		"the Kubernetes API server URL for the kubeconfig, for example https://10.0.0.2:6443 (default: the cluster's endpoint on port 6443)")
 	f.DurationVar(&clusterCredentialsOpts.TTL, "ttl", 0,
 		"how long the client certificates in the files are valid; the default and the maximum is "+credentials.MaxLifetime.String()+
 			" (a rotation hand-off must outlive the rotation)")

@@ -20,9 +20,9 @@ By default the client certificates live a year, which is also the maximum; --ttl
 hours and --read-only makes the talosconfig os:reader instead of os:admin, for access that cannot
 change a node.
 
-The Kubernetes server is --kube-server, else the one in your current kubeconfig, with a warning when that is not
-the cluster's endpoint address (its context names
-are kept too); with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
+The Kubernetes server is --kube-server, else the cluster's endpoint (https://ADDRESS:6443: the VIP when the
+endpoint is a vip), with a warning when --kube-server names another host. Your current kubeconfig's context
+names are kept; with --kube-server no current kubeconfig is read at all. The Talos endpoints are the
 cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix .ichor-new
 (never over them), unless --kubeconfig-out and --talosconfig-out say otherwise.
@@ -34,7 +34,7 @@ the moment the rotation waits for credentials: they keep working after the old C
 With --bundle FILE (the output of 'ichor export bundle') the CAs come from the file, not the cluster,
 so an unreachable cluster does not stop it. The bundle plus --kube-server URL and --talos-endpoints is
 all it needs: no kubeconfig or talosconfig has to exist. Without --kube-server it still takes the
-server from your current kubeconfig, so run it where that kubeconfig and context exist. A bundle
+server from your current kubeconfig, since a bundle holds no endpoint, so run it where that kubeconfig and context exist. A bundle
 saved before a rotation names CAs that no node accepts any more.
 
 With --acknowledge the command also tells a waiting CA rotation that you have the credentials, after
@@ -63,7 +63,7 @@ ichor create credentials NAME [flags]
       --force                     with --bundle: write the files even though the bundle's CAs differ from the stored secrets bundle; pass it when you know the file is the current bundle (for example after a restore)
   -h, --help                      help for credentials
       --ichor-namespace string    namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
-      --kube-server string        the Kubernetes API server URL for the kubeconfig, for example https://10.0.0.2:6443 (default: the server of your current kubeconfig)
+      --kube-server string        the Kubernetes API server URL for the kubeconfig, for example https://10.0.0.2:6443 (default: the cluster's endpoint on port 6443)
       --kubeconfig-out string     where to write the kubeconfig (default: your current kubeconfig's path plus .ichor-new)
       --local                     do not use ichor-ui; compute from the Kubernetes API directly
   -n, --namespace string          namespace of the Ichor resources the command names (default "ichor-system")

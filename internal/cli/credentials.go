@@ -73,7 +73,7 @@ type credentialRequest struct {
 	KubeconfigOut  string
 	TalosconfigOut string
 	TalosEndpoints []string
-	// KubeServer, when set, is the API server the kubeconfig names, and no current kubeconfig is read.
+	// KubeServer, when set, is the API server the kubeconfig names, and no current kubeconfig is read; unset, the cluster's endpoint is.
 	KubeServer string
 
 	// TTL is how long the client certificates are valid (zero: a year, which is also the cap); ReadOnly makes
@@ -107,7 +107,7 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 
 	kubeIn := currentKubeconfigFile(req.KubeconfigIn)
 
-	current, err := currentKubeconfig(req)
+	current, err := kubeconfigFor(req, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -153,16 +153,15 @@ func writeCredentials(ctx context.Context, k8s client.Client, req credentialRequ
 	}
 
 	return &credentialFiles{
-		Kubeconfig: kubeOut, Talosconfig: talosOut, Dual: src.Dual, ServerWarning: serverWarning(*current, endpoint),
+		Kubeconfig: kubeOut, Talosconfig: talosOut, Dual: src.Dual, ServerWarning: serverWarning(*current, req.KubeServer, endpoint),
 	}, nil
 }
 
-// serverWarning says so when the server the kubeconfig copied from the operator's own is not on the cluster's
-// endpoint address, as after an endpoint change (ADR 0091 keeps the operator's server; this only names it).
-// An unknown endpoint (--bundle) or an unreadable server warns of nothing.
-func serverWarning(current clientcmdapi.Config, endpoint string) string {
+// serverWarning says so when --kube-server names a host that is not the cluster's endpoint address. Without the
+// flag the server is the endpoint's, and an unknown endpoint (--bundle) warns of nothing.
+func serverWarning(current clientcmdapi.Config, explicit, endpoint string) string {
 	kctx := current.Contexts[current.CurrentContext]
-	if kctx == nil || current.Clusters[kctx.Cluster] == nil || endpoint == "" {
+	if explicit == "" || kctx == nil || current.Clusters[kctx.Cluster] == nil || endpoint == "" {
 		return ""
 	}
 
@@ -172,8 +171,32 @@ func serverWarning(current clientcmdapi.Config, endpoint string) string {
 		return ""
 	}
 
-	return fmt.Sprintf("the kubeconfig's server %s differs from the cluster's endpoint %s: pass --kube-server https://%s "+
-		"if it should follow the endpoint", server, endpoint, net.JoinHostPort(endpoint, "6443"))
+	return fmt.Sprintf("--kube-server %s is not the cluster's endpoint %s (https://%s)",
+		server, endpoint, net.JoinHostPort(endpoint, "6443"))
+}
+
+// kubeconfigFor is the kubeconfig the server and names come from. The server is --kube-server, else the cluster's
+// endpoint address on port 6443 (the VIP for a vip endpoint, ADR 0091 amended), else, when no endpoint is known
+// (--bundle), the operator's own. The operator's context names are kept when a current kubeconfig is readable.
+func kubeconfigFor(req credentialRequest, endpoint string) (*clientcmdapi.Config, error) {
+	if req.KubeServer != "" || endpoint == "" {
+		return currentKubeconfig(req)
+	}
+
+	server := "https://" + net.JoinHostPort(endpoint, "6443")
+
+	current, err := currentKubeconfig(req)
+	if err == nil {
+		if kctx := current.Contexts[current.CurrentContext]; kctx != nil && current.Clusters[kctx.Cluster] != nil {
+			current.Clusters[kctx.Cluster].Server = server
+
+			return current, nil
+		}
+	}
+
+	cfg := credentials.ServerConfig(req.Cluster, server)
+
+	return &cfg, nil
 }
 
 // currentKubeconfig is the kubeconfig the server and names are copied from: one naming only

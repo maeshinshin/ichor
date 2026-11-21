@@ -121,3 +121,13 @@ exists, and the command does not pretend otherwise.
 ## Amendment (2026-11-16): `--kube-server` names the server, so `--bundle` needs no kubeconfig
 
 Decision 2 copies the server and names from the current kubeconfig, and Decision 5 says the Kubernetes server comes from `--kubeconfig`. `ichor create credentials` also takes `--kube-server URL`. With it the kubeconfig is built from a template that names only that server (`credentials.ServerConfig`, the one the UI download uses: one cluster, context and user, all called the cluster's name) and no current kubeconfig is read. The bundle holds the CAs and no addresses, so the bundle, `--kube-server` and `--talos-endpoints` (or a current talosconfig) are everything the offline path needs. Without `--kube-server` the command behaves as Decision 2 says.
+
+## Amendment, 2026-11-22: the kubeconfig's server is the cluster's endpoint
+
+Decision 2 copies the server from the operator's current kubeconfig. After an endpoint change that file keeps
+naming a node (the 2026-11-22 conversion of a one-node cluster to a VIP wrote `https://<first node>:6443` after
+`spec.endpoint` became the VIP). Without `--kube-server` the server is now `https://<spec.endpoint.address>:6443`
+(the VIP for `vip`, the address or name for `node`); the operator's context, cluster and user names and namespace are
+still copied from a readable current kubeconfig, and a template named for the cluster is used when none is. `--kube-server`
+still wins, with a warning when its host is not the endpoint's. With `--bundle` the bundle holds no endpoint, so the
+server still comes from the current kubeconfig. The rest of this ADR stands.

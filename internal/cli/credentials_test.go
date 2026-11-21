@@ -55,11 +55,13 @@ import (
 )
 
 const (
-	credSecret   = "cred-bundle"
-	credOpName   = "rot-1"
-	credServer   = "https://10.0.0.1:6443"
-	credContext  = "admin@c"
-	credEndpoint = "10.0.0.2:50000"
+	credSecret = "cred-bundle"
+	credOpName = "rot-1"
+	credServer = "https://10.0.0.1:6443"
+	// credEndpointServer is the cluster's endpoint (testEndpointAddr, a vip) as the kubeconfig names it by default.
+	credEndpointServer = "https://" + testEndpointAddr + ":6443"
+	credContext        = "admin@c"
+	credEndpoint       = "10.0.0.2:50000"
 	// credHandoffToken is the hand-off annotation the fixture's rotation (at AwaitingCredentials) expects.
 	credHandoffToken = "talos=n1,kubernetes=n2"
 )
@@ -298,7 +300,7 @@ func TestCredentialsDuringRotationTrustBothCAsAndAreSignedByTheNewOne(t *testing
 	// Kubernetes: the server is copied; the CA data holds the old and the new CA; the client
 	// certificate is signed by the new one only, and is cluster-admin.
 	caData, crt, cfg := readKubeconfigCreds(t, files.Kubeconfig)
-	if cfg.Clusters["c"].Server != credServer || cfg.Contexts[cfg.CurrentContext].Namespace != "kube-system" {
+	if cfg.Clusters["c"].Server != credEndpointServer || cfg.Contexts[cfg.CurrentContext].Namespace != "kube-system" {
 		t.Fatalf("server or context not copied: %+v", cfg.Clusters["c"])
 	}
 
@@ -936,7 +938,10 @@ func TestCreateCredentialsRefusesAKubeServerThatIsNotAnHTTPSURL(t *testing.T) {
 	}
 }
 
-func TestCredentialsReportAServerThatIsNotTheClustersEndpoint(t *testing.T) {
+// The kubeconfig names the cluster's endpoint, the VIP here, and not the host the operator's own kubeconfig still
+// names (the fixture's 10.0.0.1); the operator's context names are kept. --kube-server overrides it, with a warning
+// when it names another host.
+func TestCredentialsServerDefaultsToTheClustersEndpoint(t *testing.T) {
 	f := newCredFixture(t, false, "")
 
 	files, err := writeCredentials(context.Background(), f.k8s, f.request())
@@ -944,28 +949,39 @@ func TestCredentialsReportAServerThatIsNotTheClustersEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var out bytes.Buffer
+	_, _, cfg := readKubeconfigCreds(t, files.Kubeconfig)
+	if got := cfg.Clusters["c"].Server; got != credEndpointServer {
+		t.Fatalf("server = %q, want the VIP %q (the current kubeconfig names %q)", got, credEndpointServer, credServer)
+	}
 
-	reportCredentials(&out, files)
-
-	// The fixture's kubeconfig names 10.0.0.1 and the cluster's endpoint is 10.0.0.5.
-	for _, want := range []string{credServer, testEndpointAddr, "--kube-server"} {
-		if !strings.Contains(out.String(), want) {
-			t.Fatalf("the report does not say the server differs from the endpoint (missing %q): %s", want, out.String())
-		}
+	if files.ServerWarning != "" {
+		t.Fatalf("the default server warned: %s", files.ServerWarning)
 	}
 
 	req := f.request()
-	req.KubeServer = "https://" + testEndpointAddr + ":6443"
+	req.KubeServer = credServer
 
 	if files, err = writeCredentials(context.Background(), f.k8s, req); err != nil {
 		t.Fatal(err)
 	}
 
-	out.Reset()
+	if _, _, cfg = readKubeconfigCreds(t, files.Kubeconfig); cfg.Clusters[f.name].Server != credServer {
+		t.Fatalf("--kube-server did not win: %+v", cfg.Clusters)
+	}
+
+	var out bytes.Buffer
+
 	reportCredentials(&out, files)
 
-	if strings.Contains(out.String(), "differs") {
-		t.Fatalf("a server on the endpoint address is reported as different: %s", out.String())
+	for _, want := range []string{credServer, testEndpointAddr, "--kube-server"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("no warning that --kube-server is not the endpoint (missing %q): %s", want, out.String())
+		}
+	}
+
+	req.KubeServer = credEndpointServer
+
+	if files, err = writeCredentials(context.Background(), f.k8s, req); err != nil || files.ServerWarning != "" {
+		t.Fatalf("--kube-server on the endpoint warned or failed: %v %q", err, files.ServerWarning)
 	}
 }

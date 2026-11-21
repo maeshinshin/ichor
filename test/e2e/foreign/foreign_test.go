@@ -189,7 +189,8 @@ func stage(t *testing.T, c *foreign.Cluster) string {
 		t.Fatal(err)
 	}
 	for _, cp := range [][2]string{
-		{repoPath(t, os.Getenv("ICHOR_E2E_F_ICHOR_BIN")), pathTmpIchor}, {c.Talosconfig, "/tmp/talosconfig"}, {c.Kubeconfig, "/tmp/kubeconfig"},
+		{repoPath(t, os.Getenv("ICHOR_E2E_F_ICHOR_BIN")), pathTmpIchor}, {c.Talosconfig, "/tmp/talosconfig"}, {c.Kubeconfig,
+			"/tmp/kubeconfig"},
 	} {
 		if _, err := utils.Run(kube.Command("-n", ns, "cp", cp[0], pod+":"+cp[1])); err != nil {
 			t.Fatalf("copying %s: %v", cp[1], err)
@@ -209,7 +210,8 @@ func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) 
 		a = append(a, "--cluster", c.Opts.Prefix)
 	}
 	a = append(a, "-n", crNS, flagKubeconfig, "/tmp/kubeconfig", "--local")
-	out, err := exec.Command("kubectl", append([]string{flagContext, os.Getenv(kube.ContextEnv)}, a...)...).CombinedOutput()
+	out, err := exec.Command("kubectl", append([]string{flagContext, os.Getenv(kube.ContextEnv)},
+		a...)...).CombinedOutput()
 	t.Logf("ichor %s:\n%s", strings.Join(args, " "), out)
 	return string(out), err
 }
@@ -235,15 +237,20 @@ func adoptArgs(t *testing.T, c *foreign.Cluster, flags ...string) (string, error
 	return out, err
 }
 
-// adoptTriggered runs `ichor adopt --yes` (the binary at bin in the tools pod, recovery flags added) and runs action delay
-// after its output first contains trigger (never when trigger is empty). It returns the output, how long adopt ran, whether
+// adoptTriggered runs `ichor adopt --yes` (the binary at bin in the tools pod, recovery flags added) and runs action
+// delay
+// after its output first contains trigger (never when trigger is empty). It returns the output, how long adopt ran,
+// whether
 // the action ran, and adopt's error.
-func adoptTriggered(t *testing.T, c *foreign.Cluster, bin, trigger string, delay time.Duration, action func(), extra ...string) (string, time.Duration, bool, error) {
+func adoptTriggered(t *testing.T, c *foreign.Cluster, bin, trigger string, delay time.Duration, action func(),
+	extra ...string) (string, time.Duration, bool, error) {
 	t.Helper()
-	return adoptRun(t, c, bin, append([]string{flagYes}, append(recoverArgs(c, extra), extra...)...), trigger, delay, action)
+	return adoptRun(t, c, bin, append([]string{flagYes}, append(recoverArgs(c, extra), extra...)...), trigger, delay,
+		action)
 }
 
-func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trigger string, delay time.Duration, action func()) (string, time.Duration, bool, error) {
+func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trigger string, delay time.Duration,
+	action func()) (string, time.Duration, bool, error) {
 	t.Helper()
 	pod := stage(t, c)
 	args := append([]string{"-n", ns, cmdExec, pod, "--", cmdEnv, envHome, bin, "adopt",
@@ -251,7 +258,8 @@ func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trig
 		"--node", c.CPs[0]}, flags...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
-	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
+	ctx, cancel := context.WithTimeout(context.Background(),
+		14*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "kubectl", append([]string{flagContext, os.Getenv(kube.ContextEnv)}, args...)...)
 	pipe, err := cmd.StdoutPipe()
@@ -289,7 +297,8 @@ func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trig
 	return out.String(), time.Since(start), ran, err
 }
 
-// recoverArgs: a rerun that passes --secrets-bundle (the bundle an earlier run wrote) must not recover the secrets again.
+// recoverArgs: a rerun that passes --secrets-bundle (the bundle an earlier run wrote) must not recover the secrets
+// again.
 func recoverArgs(c *foreign.Cluster, extra []string) []string {
 	if slices.Contains(extra, "--secrets-bundle") {
 		return nil
@@ -346,8 +355,10 @@ func TestD1FlannelAdoptedUnmanaged(t *testing.T) {
 	}
 	unmanagedAdopted(t, c) // also: adopt must never silently adopt a subset of the cluster
 	holdCleared(t, c)
-	// kubectl exits non-zero when the Cilium CRD is not served (the expected state): only a successful, non-empty listing is a failure.
-	if p, err := inner(c, "get", "ciliumnetworkpolicies.cilium.io", "-A", "--no-headers"); err == nil && strings.TrimSpace(p) != "" {
+	// kubectl exits non-zero when the Cilium CRD is not served (the expected state): only a successful, non-empty
+	// listing is a failure.
+	if p, err := inner(c, "get", "ciliumnetworkpolicies.cilium.io", "-A",
+		"--no-headers"); err == nil && strings.TrimSpace(p) != "" {
 		t.Errorf("Cilium policies exist on a flannel cluster: %s", p)
 	}
 	// Give the controller time to render and apply (it must change nothing CNI-related).
@@ -468,7 +479,8 @@ func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 		t.Errorf("Helm release records changed:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 	sameHashes(t, hashes, cniPaths(t, c))
-	if out, err := ichorCLI(t, c, "apply", "cni-values", "-f", "/dev/null"); err == nil || !strings.Contains(out, unmanagedText) {
+	if out, err := ichorCLI(t, c, "apply", "cni-values", "-f", "/dev/null"); err == nil || !strings.Contains(out,
+		unmanagedText) {
 		t.Errorf("apply cni-values was not refused with the unmanaged text (err=%v)", err)
 	}
 	op := filepath.Join(t.TempDir(), "op.yaml")

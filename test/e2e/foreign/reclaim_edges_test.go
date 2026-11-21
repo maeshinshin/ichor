@@ -95,7 +95,8 @@ func (r *rig) gone(t *testing.T, name string, d time.Duration) bool {
 	return err == nil
 }
 
-// TestC2 (needs `foreign up --cps 3 --workers 0`): a control plane of a 3-member cluster is reclaimed gracefully and the
+// TestC2 (needs `foreign up --cps 3 --workers 0`): a control plane of a 3-member cluster is reclaimed gracefully and
+// the
 // old cluster keeps two healthy etcd members; a second one, of what is now a 2-member cluster, is refused.
 func TestC2ControlPlanes(t *testing.T) {
 	r := newRig(t, foreign.Options{ControlPlanes: 3, Workers: 0})
@@ -120,7 +121,8 @@ func TestC2ControlPlanes(t *testing.T) {
 	// talosctl health reaches every etcd check (healthy, consistent members) but then fails on the Kubernetes Node object
 	// of the reclaimed machine, which a graceful reset leaves behind (cordoned, drained, not deleted).
 	h, _ := talosctl.Health(ns, []string{keeper, other}, tc)
-	if !strings.Contains(h, "waiting for etcd to be healthy: OK") || !strings.Contains(h, "waiting for etcd members to be consistent across nodes: OK") {
+	if !strings.Contains(h, "waiting for etcd to be healthy: OK") || !strings.Contains(h,
+		"waiting for etcd members to be consistent across nodes: OK") {
 		t.Errorf("C2: etcd of the old cluster is not healthy with two members:\n%s", h)
 	}
 	t.Logf("old cluster nodes: %s", func() string { o, _ := inner(r.f, "get", "nodes", "--no-headers"); return o }())
@@ -166,7 +168,8 @@ func TestC9Restart(t *testing.T) {
 	tc := ftc(t, r.f)
 	uuid := uuidOf(t, r.foreignW, tc)
 	tcPath, secrets := r.markedTalosconfig(t, "c9r")
-	_, _ = r.ikDelete("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui")
+	_, _ = r.ikDelete("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer",
+		"--serviceaccount=ichor-system:ichor-ichor-ui")
 	t.Cleanup(func() { _, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })
 
 	name, _, err := r.newReclaim(t, tcPath, r.foreignW)
@@ -174,10 +177,12 @@ func TestC9Restart(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.waitPhase(t, name, 3*time.Minute, "AwaitingConfirmation")
-	cred := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o", "jsonpath={.spec.credentialSecretRef}")
+	cred := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o",
+		"jsonpath={.spec.credentialSecretRef}")
 
 	// Restart the controller mid-request.
-	if out, err := r.ikDelete("-n", crNS, "delete", "pod", "-l", "control-plane=controller-manager", "--wait=true"); err != nil {
+	if out, err := r.ikDelete("-n", crNS, "delete", "pod", "-l", "control-plane=controller-manager",
+		"--wait=true"); err != nil {
 		t.Fatalf("deleting the controller pod: %v\n%s", err, out)
 	}
 	if _, err := kube.Poll("controller Ready again", 5*time.Minute, func() (string, bool) {
@@ -186,7 +191,8 @@ func TestC9Restart(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o", "jsonpath={.status.phase}"); got != "AwaitingConfirmation" {
+	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o",
+		"jsonpath={.status.phase}"); got != "AwaitingConfirmation" {
 		t.Errorf("phase after the restart = %q, want AwaitingConfirmation", got)
 	}
 	if got := uuidOf(t, r.foreignW, tc); got != uuid {
@@ -219,7 +225,8 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	// Failed: nothing answers at the address.
 	failed, fsec := r.adminReclaim(t, "10.244.1.250", "5m", tc)
 	phase := r.waitPhase(t, failed, 4*time.Minute, "Failed", "Expired")
-	t.Logf("unreachable node: phase %s, message %q", phase, r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", failed, "-o", "jsonpath={.status.conditions[*].message}"))
+	t.Logf("unreachable node: phase %s, message %q", phase, r.ikJSON(t, "-n", crNS, "get",
+		"machinereclaims.ichor.maesh.dev", failed, "-o", "jsonpath={.status.conditions[*].message}"))
 	if !r.gone(t, fsec, time.Minute) {
 		t.Errorf("C9: the Secret %s survives a Failed request", fsec)
 	}
@@ -231,7 +238,8 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	if !r.gone(t, esec, time.Minute) {
 		t.Errorf("C9: the Secret %s survives an Expired request", esec)
 	}
-	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", expired, "-o", "jsonpath={.status.audit}"); got == "" {
+	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", expired, "-o",
+		"jsonpath={.status.audit}"); got == "" {
 		t.Errorf("C10: no status.audit on an expired request")
 	} else {
 		t.Logf("expired request audit: %s", got)
@@ -254,6 +262,7 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 		t.Errorf("C9: the Secret %s survives the deletion of its request", osec)
 	}
 	noLeaks(t, secrets, map[string]string{
-		labelControllerLog: r.logs(t, "ichor-controller-manager"), labelEvents: r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
+		labelControllerLog: r.logs(t, "ichor-controller-manager"), labelEvents: r.ikJSON(t, "get", "events", "-A", "-o",
+			"yaml"),
 	})
 }

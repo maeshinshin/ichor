@@ -71,7 +71,8 @@ func TestF1CiliumHelm(t *testing.T) {
 	}
 
 	// helm uninstall removes the release but keeps the CRDs and the cluster's objects.
-	if out, err := local(t, 5*time.Minute, nameHelm, "uninstall", "ichor", "-n", crNS, flagKubeconfig, c.LocalKube); err != nil {
+	if out, err := local(t, 5*time.Minute, nameHelm, "uninstall", "ichor", "-n", crNS, flagKubeconfig,
+		c.LocalKube); err != nil {
 		t.Errorf("helm uninstall failed: %v\n%s", err, out)
 	}
 	crds, _ := inner(c, "get", "crd", "--no-headers")
@@ -84,7 +85,8 @@ func TestF1CiliumHelm(t *testing.T) {
 	if ms := names(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev"); len(ms) != 2 {
 		t.Errorf("TalosMachines after helm uninstall = %v, want 2", ms)
 	}
-	if sec, _ := inner(c, "-n", crNS, "get", "secret", c.Opts.Prefix+"-secrets", "--no-headers"); strings.TrimSpace(sec) == "" {
+	if sec, _ := inner(c, "-n", crNS, "get", "secret", c.Opts.Prefix+"-secrets",
+		"--no-headers"); strings.TrimSpace(sec) == "" {
 		t.Errorf("the cluster's secrets Secret is gone after helm uninstall")
 	}
 	nodesReady(t, c)

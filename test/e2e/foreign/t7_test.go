@@ -42,7 +42,8 @@ func installationField(c *foreign.Cluster, path string) string {
 func ichorInPod(t *testing.T, c *foreign.Cluster, args ...string) (string, error) {
 	t.Helper()
 	pod := stage(t, c)
-	a := append([]string{flagContext, os.Getenv(kube.ContextEnv), "-n", ns, cmdExec, pod, "--", cmdEnv, envHome, pathTmpIchor}, args...)
+	a := append([]string{flagContext, os.Getenv(kube.ContextEnv), "-n", ns, cmdExec, pod, "--", cmdEnv, envHome,
+		pathTmpIchor}, args...)
 	a = append(a, flagKubeconfig, "/tmp/kubeconfig")
 	out, err := exec.Command("kubectl", a...).CombinedOutput()
 	t.Logf("ichor %s: %v\n%s", strings.Join(args, " "), err, out)
@@ -69,7 +70,8 @@ func TestT7HelmManager(t *testing.T) {
 	if err == nil || !strings.Contains(out, "helm upgrade") {
 		t.Errorf("ichor upgrade ichor was not refused with the helm command (err=%v)", err)
 	}
-	if ops, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o", "name"); strings.TrimSpace(ops) != "" {
+	if ops, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o",
+		"name"); strings.TrimSpace(ops) != "" {
 		t.Errorf("a TalosOperation exists after the refused upgrade:\n%s", ops)
 	}
 
@@ -79,7 +81,8 @@ func TestT7HelmManager(t *testing.T) {
 	if got := installationField(c, "{.spec.users.tokenTTL}"); got != "10m0s" {
 		t.Fatalf("spec.users.tokenTTL = %q, want 10m0s", got)
 	}
-	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube, "-n", crNS,
+	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube,
+		"-n", crNS,
 		"--reuse-values", "--set", "manager.replicas=1", "--wait", "--timeout", "6m"); err != nil {
 		t.Fatalf("helm upgrade failed: %v\n%s", err, out)
 	}

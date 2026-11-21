@@ -48,7 +48,8 @@ func bOpts(noProxy, noPrism bool, sets ...string) foreign.Options {
 	if os.Getenv("ICHOR_E2E_F_WORKERS") == "0" {
 		w = 0
 	}
-	o := foreign.Options{Workers: w, CNI: foreign.CNICiliumHelm, NoKubeProxy: noProxy, NoKubePrism: noPrism, CiliumSets: sets}
+	o := foreign.Options{Workers: w, CNI: foreign.CNICiliumHelm, NoKubeProxy: noProxy, NoKubePrism: noPrism,
+		CiliumSets: sets}
 	return o
 }
 

@@ -300,7 +300,8 @@ func probeDiag(t *testing.T, c *foreign.Cluster, label string) {
 // ciliumDrops returns each Cilium agent's drop counters by reason and direction. They only grow, so the delta over a
 // window says whether the datapath dropped packets on that node during it.
 func ciliumDrops(c *foreign.Cluster) string {
-	pods, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.name}")
+	pods, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o",
+		"jsonpath={.items[*].metadata.name}")
 	var b strings.Builder
 	for p := range strings.FieldsSeq(pods) {
 		out, _ := inner(c, "-n", nsKubeSystem, "exec", p, "-c", "cilium-agent", "--", "cilium-dbg", "metrics", "list")
@@ -634,7 +635,8 @@ func TestA5Adopt(t *testing.T) {
 	trafficReport(t, c, "across A5 takeover")
 }
 
-// refusedWritesNothing asserts that a refused adopt left the machine configs, Ichor's namespace and the Helm records alone.
+// refusedWritesNothing asserts that a refused adopt left the machine configs, Ichor's namespace and the Helm records
+// alone.
 func refusedWritesNothing(t *testing.T, c *foreign.Cluster, hashes map[string]string, records string) {
 	t.Helper()
 	sameHashes(t, hashes, cniPaths(t, c))
@@ -675,7 +677,8 @@ func TestA7Refused(t *testing.T) {
 func TestA6Refused(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
 	hashes, records := cniPaths(t, c), helmRecords(c)
-	img, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o", "jsonpath={.spec.template.spec.containers[0].image}")
+	img, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o",
+		"jsonpath={.spec.template.spec.containers[0].image}")
 	t.Logf("live agent image: %s", img)
 	out, err := adopt(t, c, "--accept-cilium-changes", "--accept-cilium-diff")
 	if err == nil {

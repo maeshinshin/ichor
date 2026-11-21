@@ -50,7 +50,8 @@ const (
 		"RESTARTS:.status.containerStatuses[*].restartCount,STARTED:.status.startTime"
 )
 
-// whLog is the sampler's log. Each write is one whole line or block, so the drop streams never interleave with the samples.
+// whLog is the sampler's log. Each write is one whole line or block, so the drop streams never interleave with the
+// samples.
 type whLog struct {
 	mu    sync.Mutex
 	f     *os.File
@@ -126,7 +127,8 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 			"-o", "custom-columns="+whPodColumns)
 		ep, _ := inner(c, "-n", crNS, "get", "endpoints", "ichor-webhook-service", "-o",
 			"jsonpath=ready={.subsets[*].addresses[*].ip} notReady={.subsets[*].notReadyAddresses[*].ip}")
-		cnp, _ := inner(c, "-n", crNS, "get", "ciliumnetworkpolicies", "--no-headers", "-o", "custom-columns=NAME:.metadata.name")
+		cnp, _ := inner(c, "-n", crNS, "get", "ciliumnetworkpolicies", "--no-headers", "-o",
+			"custom-columns=NAME:.metadata.name")
 		cils, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "--no-headers",
 			"-o", "custom-columns="+whAgentColumns)
 		w.printf("pods {%s} | webhook %s | cnp {%s} | cilium {%s}", oneLine(pods), oneLine(ep), oneLine(cnp), oneLine(cils))

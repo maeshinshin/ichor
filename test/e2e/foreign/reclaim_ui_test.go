@@ -79,11 +79,14 @@ func (r *rig) ensureForeign(t *testing.T) {
 		return
 	}
 	nodes := r.ikJSON(t, "get", "nodes", "-o", "name")
-	// Forget the Ichor-side objects of that machine first (a pending or approved worker), so the controller does not act on it.
-	for mname := range strings.FieldsSeq(r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[*].metadata.name}")) {
+	// Forget the Ichor-side objects of that machine first (a pending or approved worker), so the controller does not act
+	// on it.
+	for mname := range strings.FieldsSeq(r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
+		"jsonpath={.items[*].metadata.name}")) {
 		role := r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", mname, "-o", "jsonpath={.spec.role}")
 		if !strings.Contains(strings.ToLower(role), "controlplane") {
-			_, _ = r.ikDelete("-n", crNS, "annotate", "talosmachines.ichor.maesh.dev", mname, "ichor.maesh.dev/allow-delete=true", "--overwrite")
+			_, _ = r.ikDelete("-n", crNS, "annotate", "talosmachines.ichor.maesh.dev", mname,
+				"ichor.maesh.dev/allow-delete=true", "--overwrite")
 			out, err := r.ikDelete("-n", crNS, "delete", "talosmachines.ichor.maesh.dev", mname, "--timeout=2m")
 			t.Logf("deleting TalosMachine %s: %v %s", mname, err, out)
 		}
@@ -119,11 +122,13 @@ func TestC8C9C10(t *testing.T) {
 	if err == nil || !strings.Contains(out, "reclaim") {
 		t.Errorf("C8: a caller without the reclaim verb was not denied: %v / %s", err, out)
 	}
-	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", "-o", "name"); got != "" && !strings.Contains(got, "reclaim-") {
+	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", "-o",
+		"name"); got != "" && !strings.Contains(got, "reclaim-") {
 		t.Logf("MachineReclaims after the denial: %s", got)
 	}
 
-	if _, err := r.ik("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer", "--serviceaccount=ichor-system:ichor-ichor-ui"); err != nil {
+	if _, err := r.ik("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer",
+		"--serviceaccount=ichor-system:ichor-ichor-ui"); err != nil {
 		t.Fatalf("binding the reclaimer role: %v", err)
 	}
 	t.Cleanup(func() { _, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })
@@ -147,7 +152,8 @@ func TestC8C9C10(t *testing.T) {
 	if got := uuidOf(t, r.foreignW, tc); got != uuid { // untouched while held
 		t.Errorf("node changed while held")
 	}
-	if got := jsonField(t, mr, "spec.credentialSecretRef"); got == "" || r.ikJSON(t, "-n", crNS, "get", "secret", got, "-o", "name") == "" {
+	if got := jsonField(t, mr, "spec.credentialSecretRef"); got == "" || r.ikJSON(t, "-n", crNS, "get", "secret", got,
+		"-o", "name") == "" {
 		t.Errorf("credential Secret %q missing while the request is held", got)
 	}
 
@@ -155,7 +161,8 @@ func TestC8C9C10(t *testing.T) {
 	if out, err := r.ui(t, "confirm", "-name", name, "-uuid", "00000000-0000-0000-0000-000000000000"); err == nil {
 		t.Errorf("C8: a wrong UUID was accepted: %s", out)
 	}
-	if p := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o", "jsonpath={.status.phase}"); p != "AwaitingConfirmation" {
+	if p := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", name, "-o",
+		"jsonpath={.status.phase}"); p != "AwaitingConfirmation" {
 		t.Errorf("phase after a wrong UUID = %q", p)
 	}
 	if got := uuidOf(t, r.foreignW, tc); got != uuid {
@@ -183,7 +190,8 @@ func TestC8C9C10(t *testing.T) {
 	// The same request cannot reset twice.
 	_, _ = r.ui(t, "confirm", "-name", name, "-uuid", uuid)
 	time.Sleep(30 * time.Second)
-	resets := strings.Count(r.ikJSON(t, "get", "events", "-A", "-o", "jsonpath={range .items[*]}{.involvedObject.name}{\" \"}{.reason}{\"\\n\"}{end}"), name+" ReclaimReset")
+	resets := strings.Count(r.ikJSON(t, "get", "events", "-A", "-o",
+		"jsonpath={range .items[*]}{.involvedObject.name}{\" \"}{.reason}{\"\\n\"}{end}"), name+" ReclaimReset")
 	t.Logf("ReclaimReset events for %s after a second confirm: %d", name, resets)
 	if resets != 1 {
 		t.Errorf("C9: %d ReclaimReset events, want exactly 1", resets)
@@ -196,12 +204,14 @@ func TestC8C9C10(t *testing.T) {
 			t.Errorf("C10: neither status.audit nor Events carry %q", w)
 		}
 	}
-	for _, reason := range []string{"ReclaimRequested", "ReclaimInspected", "ReclaimConfirmed", "ReclaimReset", "ReclaimCompleted", "CredentialDeleted"} {
+	for _, reason := range []string{"ReclaimRequested", "ReclaimInspected", "ReclaimConfirmed", "ReclaimReset",
+		"ReclaimCompleted", "CredentialDeleted"} {
 		if !strings.Contains(events, "reason: "+reason) {
 			t.Errorf("C10: no %s Event", reason)
 		}
 	}
-	t.Logf("C10: events for the request:\n%s", r.ikJSON(t, "-n", crNS, "get", "events", "--field-selector", "involvedObject.name="+name,
+	t.Logf("C10: events for the request:\n%s", r.ikJSON(t, "-n", crNS, "get", "events", "--field-selector",
+		"involvedObject.name="+name,
 		"-o", "custom-columns=REASON:.reason,MESSAGE:.message"))
 }
 

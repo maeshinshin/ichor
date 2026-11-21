@@ -32,7 +32,8 @@ func TestF4VersionSkew(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	stageAlt(t, c)
 	before := releaseState(c)
-	out, err := adoptBin(t, c, "/tmp/ichor-alt", "--secrets-bundle", "/tmp/home/.ichor/clusters/"+c.Opts.Prefix+"/secrets.yaml")
+	out, err := adoptBin(t, c, "/tmp/ichor-alt", "--secrets-bundle",
+		"/tmp/home/.ichor/clusters/"+c.Opts.Prefix+"/secrets.yaml")
 	if err == nil {
 		t.Fatalf("adopt with a skewed CLI succeeded:\n%s", out)
 	}

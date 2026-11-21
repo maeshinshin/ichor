@@ -81,7 +81,8 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 		t.Fatal(err)
 	}
 	r := &rig{f: f, ichorKC: filepath.Join(root, "bin/foreign/ichor-e2e-fj-r/kubeconfig.local")}
-	out, err := utils.Run(kube.Command("-n", ns, "get", "vmi", ichorName+"-cp", "-o", "jsonpath={.status.interfaces[0].ipAddress}"))
+	out, err := utils.Run(kube.Command("-n", ns, "get", "vmi", ichorName+"-cp", "-o",
+		"jsonpath={.status.interfaces[0].ipAddress}"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +130,8 @@ func (r *rig) machine(t *testing.T, verb string, args ...string) (string, error)
 
 func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error) {
 	t.Helper()
-	return r.machine(t, "reclaim", append([]string{addr, "--talosconfig", "/tmp/foreign-talosconfig", flagKubeconfig, podKC}, extra...)...)
+	return r.machine(t, "reclaim", append([]string{addr, "--talosconfig", "/tmp/foreign-talosconfig", flagKubeconfig,
+		podKC}, extra...)...)
 }
 
 func (r *rig) ui(t *testing.T, op string, extra ...string) (string, error) {
@@ -266,7 +268,8 @@ var reclaimName = regexp.MustCompile(`"name":\s*"(reclaim-[a-z0-9]+)"`)
 // newReclaim creates a request through ichor-ui and returns its name.
 func (r *rig) newReclaim(t *testing.T, tcPath, addr string, extra ...string) (string, string, error) {
 	t.Helper()
-	out, err := r.ui(t, "create", append([]string{"-address", addr, "-talosconfig", tcPath, "-cluster", ichorName}, extra...)...)
+	out, err := r.ui(t, "create", append([]string{"-address", addr, "-talosconfig", tcPath, "-cluster", ichorName},
+		extra...)...)
 	if err != nil {
 		return "", out, err
 	}
@@ -296,7 +299,8 @@ func TestC1C5C7(t *testing.T) {
 		t.Fatalf("node answered with a different UUID %q after a refused reclaim", got)
 	}
 	// C5: both volumes are listed, the encrypted one called out.
-	if !strings.Contains(out, "plain on /dev/vdb") || !strings.Contains(out, "secret on /dev/vdb") || !strings.Contains(out, "ENCRYPTED") {
+	if !strings.Contains(out, "plain on /dev/vdb") || !strings.Contains(out,
+		"secret on /dev/vdb") || !strings.Contains(out, "ENCRYPTED") {
 		t.Errorf("the inspection does not list the user volume and the encrypted volume")
 	}
 
@@ -331,7 +335,8 @@ func TestC1C5C7(t *testing.T) {
 		t.Fatalf("approve: %v\n%s", err, out)
 	}
 	if _, err := kube.Poll("joined Ichor cluster", 12*time.Minute, func() (string, bool) {
-		ready := r.ikJSON(t, "get", "node", "ichor-e2e-r-w", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
+		ready := r.ikJSON(t, "get", "node", "ichor-e2e-r-w", "-o",
+			"jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 		return ready, ready == valTrue
 	}); err != nil {
 		t.Fatal(err)
@@ -375,7 +380,8 @@ func TestC3C4Refusals(t *testing.T) {
 	if err == nil || !strings.Contains(out, "is already an Ichor node") {
 		t.Errorf("C4: an Ichor machine was not refused: %v", err)
 	}
-	if got := r.ikJSON(t, "get", "node", ichorName+"-cp", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}"); got != valTrue {
+	if got := r.ikJSON(t, "get", "node", ichorName+"-cp", "-o",
+		"jsonpath={.status.conditions[?(@.type==\"Ready\")].status}"); got != valTrue {
 		t.Errorf("Ichor control plane not Ready after the refusal: %q", got)
 	}
 }

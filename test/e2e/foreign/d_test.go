@@ -153,7 +153,8 @@ func TestD4RotateCA(t *testing.T) {
 	}
 }
 
-// rotatedKube copies the kubeconfig the CA rotation's hand-off wrote (next to /tmp/kubeconfig in the tools pod) and points
+// rotatedKube copies the kubeconfig the CA rotation's hand-off wrote (next to /tmp/kubeconfig in the tools pod) and
+// points
 // it at the local relay tunnel.
 func rotatedKube(t *testing.T, c *foreign.Cluster) string {
 	t.Helper()

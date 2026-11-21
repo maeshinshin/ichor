@@ -57,7 +57,8 @@ func stageAlt(t *testing.T, c *foreign.Cluster) {
 
 // adoptKilled runs `ichor adopt` in the tools pod and kills it (SIGKILL, in the pod) killAfter after its output
 // first contains trigger. It returns the output and whether the kill happened.
-func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter time.Duration, extra ...string) (string, bool) {
+func adoptKilled(t *testing.T, c *foreign.Cluster, trigger string, killAfter time.Duration, extra ...string) (string,
+	bool) {
 	t.Helper()
 	pod := stage(t, c)
 	kill := func() {

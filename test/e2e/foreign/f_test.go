@@ -75,7 +75,8 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 		t.Errorf("Ichor CRDs exist after the refused helm install: %s", got)
 	}
 	start := time.Now()
-	out, err = local(t, 9*time.Minute, repoPath(t, "bin/img/ichor/ichor"), "bootstrap", "cni", "--kube-proxy", "enabled", "--tunnel", "geneve", flagYes, flagKubeconfig, c.LocalKube)
+	out, err = local(t, 9*time.Minute, repoPath(t, "bin/img/ichor/ichor"), "bootstrap", "cni", "--kube-proxy", "enabled",
+		"--tunnel", "geneve", flagYes, flagKubeconfig, c.LocalKube)
 	t.Logf("bootstrap cni took %s", time.Since(start))
 	if err != nil {
 		t.Fatalf("bootstrap cni failed: %v\n%s", err, out)
@@ -105,7 +106,8 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 		t.Errorf("spec.cni.tunnel = %q, want geneve (the controller would flip the live tunnel with an ichor-cni Job)", got)
 	}
 	noCNIJob(t, c)
-	if rel, _ := local(t, time.Minute, nameHelm, "list", "-A", flagKubeconfig, c.LocalKube); !strings.Contains(rel, "ichor") {
+	if rel, _ := local(t, time.Minute, nameHelm, "list", "-A", flagKubeconfig, c.LocalKube); !strings.Contains(rel,
+		"ichor") {
 		t.Errorf("helm list does not show the ichor release")
 	}
 }
@@ -129,7 +131,8 @@ func TestF2FlannelHelm(t *testing.T) {
 	if pols := policiesIn(c); pols != "" {
 		t.Errorf("policies were applied into %s: %s", crNS, pols)
 	}
-	if np, _ := inner(c, "-n", crNS, "get", "networkpolicies.networking.k8s.io", "--no-headers"); strings.TrimSpace(np) != "" {
+	if np, _ := inner(c, "-n", crNS, "get", "networkpolicies.networking.k8s.io",
+		"--no-headers"); strings.TrimSpace(np) != "" {
 		t.Logf("NetworkPolicies in %s (from the chart, if any):\n%s", crNS, np)
 	}
 	sameHashes(t, before, cniPaths(t, c))

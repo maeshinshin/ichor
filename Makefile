@@ -129,7 +129,7 @@ fmt: ## Run go fmt against code.
 	go fmt ./...
 
 .PHONY: vet
-vet: ## Run go vet against code.
+vet: build-installer ## Run go vet against code.
 	go vet ./...
 	# internal/uiapi/rbac_markers.go lives behind the ichorui_rbac build tag so
 	# make manifests never merges its markers into manager-role; that tag also means the
@@ -139,6 +139,11 @@ vet: ## Run go vet against code.
 	# The e2e tree is behind the e2e tag, so a plain "go vet ./..." never type-checks it. A call
 	# that no longer matches a helper's signature fails here, not on a cluster run.
 	go vet -tags e2e ./test/...
+	# installmanifest's installembed file embeds install.yaml, which build-installer writes to dist/;
+	# it is copied in the way build-ichor-embed copies it, so the tag is type-checked here too.
+	cp dist/install.yaml internal/installmanifest/install.yaml
+	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
+	go vet -tags installembed ./internal/installmanifest/...
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest build-installer ## Run tests.

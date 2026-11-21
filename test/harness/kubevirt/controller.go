@@ -52,8 +52,8 @@ const (
 
 // controllerWebhookCertSecret and controllerLeaderElectionNamespace are cmd/main.go's own
 // hardcoded names (webhookSecretName, and leader election's namespace, which
-// controller-runtime auto-detects from *this* pod's own namespace -- "ichor-e2e" on the
-// outer cluster -- not from POD_NAMESPACE).
+// controller-runtime auto-detects from *this* pod's own namespace -- the e2e namespace
+// (ICHOR_E2E_NAMESPACE) on the outer cluster -- not from POD_NAMESPACE).
 const (
 	controllerWebhookCertSecret       = "ichor-webhook-server-cert"
 	controllerValidatingWebhookConfig = "ichor-validating-webhook-configuration"
@@ -227,7 +227,7 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 
 // prepareInnerClusterForController creates two things the controller needs on the inner
 // cluster before it will start cleanly, neither of which it creates itself:
-// the namespace leader election looks for (this outer pod's own namespace, "ichor-e2e" --
+// the namespace leader election looks for (this outer pod's own namespace, the e2e namespace --
 // not POD_NAMESPACE, which controller-runtime's leader-election namespace auto-detection
 // ignores), and an empty webhook cert Secret (cert-controller's rotator only ever Gets
 // then Updates one, never creates it).

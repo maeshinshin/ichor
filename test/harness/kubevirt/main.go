@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Command kubevirt is the KubeVirt harness's setup/cleanup for e2e: it boots a
-// Talos node as a KubeVirt VM in ichor-e2e, waits for maintenance mode, applies a
+// Talos node as a KubeVirt VM in the e2e namespace (ICHOR_E2E_NAMESPACE), waits for maintenance mode, applies a
 // control-plane configuration, waits for the authenticated API, bootstraps etcd, and hands
 // back an inner-cluster kubeconfig and the node's address ("up") - or tears everything down
 // ("down"). The e2e specs never provision any of this themselves; they only consume what
@@ -191,7 +191,7 @@ func main() {
 	mode := os.Args[1]
 
 	// Every outer-cluster kubectl call goes through test/internal/kube, which pins it to
-	// --context $ICHOR_E2E_KUBE_CONTEXT and confines deletes to ichor-e2e. Refuse up front
+	// --context $ICHOR_E2E_KUBE_CONTEXT and confines deletes to the e2e namespace. Refuse up front
 	// (before any "up" creates something) rather than fall back to kubectl's ambient
 	// current-context, on which "down" could delete from a cluster this run never touched
 	// (observed for real: a dangling kind-kind context).
@@ -295,7 +295,7 @@ func waitVMIIP(name string, timeout time.Duration) (string, error) {
 }
 
 // getJSONPath returns the trimmed value of expr (a JSONPath without its braces) on the named
-// resource in ichor-e2e on the outer cluster.
+// resource in the e2e namespace on the outer cluster.
 func getJSONPath(resource, name, expr string) (string, error) {
 	out, err := utils.Run(kube.Command("-n", namespace, "get", resource, name, "-o", "jsonpath={"+expr+"}"))
 	return strings.TrimSpace(out), err

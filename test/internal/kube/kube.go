@@ -19,7 +19,7 @@ limitations under the License.
 // carries an explicit --context taken from ICHOR_E2E_KUBE_CONTEXT and refuses to build a
 // command when it is unset, so nothing can fall through to kubectl's ambient
 // current-context (which on a workstation may be a different, real cluster). Deletes are
-// further limited to the ichor-e2e namespace.
+// further limited to the e2e namespace (NamespaceEnv).
 package kube
 
 import (
@@ -204,9 +204,14 @@ func checkDelete(args []string) error {
 	return nil
 }
 
+// fillNamespace names the e2e namespace in a manifest that says __NAMESPACE__.
+func fillNamespace(manifest string) string {
+	return strings.ReplaceAll(manifest, "__NAMESPACE__", Namespace)
+}
+
 // Apply runs `kubectl apply -f -` against the outer cluster with manifest on stdin.
 func Apply(manifest string) error {
-	manifest = strings.ReplaceAll(manifest, "__NAMESPACE__", Namespace)
+	manifest = fillNamespace(manifest)
 	cmd := Command("apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
 	_, err := utils.Run(cmd)

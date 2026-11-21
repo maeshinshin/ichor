@@ -20,7 +20,7 @@ limitations under the License.
 // `ichor approve node --install-disk`, so every node's configuration is rendered by
 // Ichor (test/harness/ui-demo/README.md). Objects are named with a prefix (env
 // ICHOR_UI_DEMO_PREFIX, default "ichor-ui-demo"), never the e2e prefixes, because other
-// runs share the ichor-e2e namespace. Nothing here is torn down on its own: the cluster
+// runs share the e2e namespace. Nothing here is torn down on its own: the cluster
 // stays up until someone runs "down-demo" with the same prefix.
 package main
 

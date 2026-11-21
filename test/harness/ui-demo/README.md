@@ -167,7 +167,7 @@ C=OUTER_CONTEXT; P=ichor-ui-demo3; NS=ichor-e2e
 kubectl --context $C -n $NS delete pod $P-tools
 kubectl --context $C -n $NS delete deployment $P-registry
 kubectl --context $C -n $NS delete service $P-registry
-ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_KUBE_CONTEXT=$C ./bin/kubevirt-harness down-demo   # VMs $P-cp/-w and their 4 DataVolumes
+ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_E2E_NAMESPACE=$NS ./bin/kubevirt-harness down-demo   # VMs $P-cp/-w and their 4 DataVolumes
 rm -f bin/ui-demo.kubeconfig   # only if it is for this cluster
 # the shared Service ichor-ui-demo: delete it only when no demo is left
 ```

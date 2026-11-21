@@ -126,3 +126,12 @@ func TestNamespaceFromEnv(t *testing.T) {
 		t.Fatalf("override = %q", got)
 	}
 }
+
+func TestFillNamespace(t *testing.T) {
+	old := Namespace
+	t.Cleanup(func() { Namespace = old })
+	Namespace = "lab-ns"
+	if got := fillNamespace("a: __NAMESPACE__\nb: __NAMESPACE__"); got != "a: lab-ns\nb: lab-ns" {
+		t.Fatalf("got %q", got)
+	}
+}

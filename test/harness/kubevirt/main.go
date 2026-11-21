@@ -205,6 +205,10 @@ func main() {
 
 	var err error
 	if isUp {
+		if err := kube.ResolveStorageClass(); err != nil {
+			fmt.Fprintln(os.Stderr, "kubevirt harness:", err)
+			os.Exit(1)
+		}
 		// A killed "up"/"up-ha" (Ctrl-C, CI cancellation, a wrapping `timeout`) must not
 		// leave the VM(s)/DataVolume(s)/relay behind either - that is the other way a run
 		// can end partway through.

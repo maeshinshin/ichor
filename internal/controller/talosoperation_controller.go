@@ -770,11 +770,13 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 
 	r.phaseEvent(op, previous, previousPauseReason, phase, reason, message)
 
-	// A pause that waits for a person, or for the controller's own machine to be told, frees the cluster lock, so a
-	// machine that is trying to join is not blocked by an operation nobody is working on. Its resume takes the lock
-	// again (acquireDisruptiveLock).
+	// A pause that waits for a person, for the controller's own machine to be told, or for the cluster to settle (an even
+	// control-plane count, a shutdown or a rotation under way) frees the cluster lock, so a machine that is trying to join
+	// or the removal that ends a transition is not blocked by an operation nobody is working on: an earlier reconcile may
+	// have taken the lease, and a pause does not renew it. Its resume takes the lock again (acquireDisruptiveLock).
 	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused ||
-		reason == reasonOperationNoExecutor || reason == reasonOperationOwnNodeUnread) {
+		reason == reasonOperationNoExecutor || reason == reasonOperationOwnNodeUnread || reason == reasonOperationTransitioning ||
+		reason == reasonOperationShuttingDown || reason == reasonOperationCARotating || reason == reasonOperationKeyRotating) {
 		return r.releaseLock(ctx, op)
 	}
 

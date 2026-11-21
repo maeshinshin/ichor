@@ -179,3 +179,13 @@ The Decision said that `pkg/storage.Preset` "is the same shape `pkg/cni.Preset` 
 The interface was removed by commit fc2b9f5fa (2026-10-29, "refactor(cni): collapse the one-implementation Preset interface into the cilium package"). No ADR names that commit. The analogy this ADR's Decision relied on was true when it was written and was invalidated by that refactor, which no ADR records: a design an ADR relied on changed without a record. Two ADRs record the change in part: ADR 0013, whose interface decision is "superseded in part by ADR 0099", and ADR 0099, which lists `ArgoCDApplication` and `HandoverWorkloads` for deletion from `pkg/cni/preset.go`, two of the interface's six methods. ADR 0101 does not mention `pkg/cni`.
 
 The comparison that still holds is to a concrete struct, not to a sibling interface. `pkg/cni/cilium.Preset` and `pkg/storage` both render configuration as data with no cluster call, and neither shares an interface with the other. `pkg/storage.Preset` is an interface with seven methods (`RequiredExtensions`, `CheckExtensions`, `TalosPatches`, `KubeletMounts`, `NodeLabels`, `NodeAnnotations`, `CheckConsistency`), and nothing in `pkg/cni` is the reason for that shape.
+
+## Amendment, 2026-11-22: `machine.install.extensions` has no effect
+
+
+
+The Context section says `machine.install.extensions` "lists already-baked extension image refs". That is wrong for Talos 1.10 and later. The Talos CHANGELOG, in the `1.10.0-alpha.3` section (2025-03-24, "Machine Install Extensions", https://github.com/siderolabs/talos/blob/v1.14.5/CHANGELOG.md), says: "`.machine.install.extensions` will have no effect starting from Talos 1.10, the machine config document field is still kept so upgrades from older versions are possible. Use [Boot Assets](https://www.talos.dev/v1.10/talos-guides/install/boot-assets/) instead." The v1.14.5 machinery type marks the field `InstallConfig.InstallExtensions` (`pkg/machinery/config/types/v1alpha1/v1alpha1_types.go`) "Deprecated: Use custom `InstallImage` instead."
+
+
+
+So extensions reach a node only from the installer image that its schematic names, applied by install or upgrade. Setting the field in a `TalosConfigPatch` adds no extension, whatever its value. The conclusion above stands: a new schematic or installer is required, and `longhornV1.CheckExtensions` still verifies and blocks; it does not generate the extension.

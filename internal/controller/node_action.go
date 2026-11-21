@@ -238,6 +238,14 @@ func (n *nodeRun) cleanup(ctx context.Context) error {
 	return errors.Join(uncordonErr, endMachineEvacuation(ctx, n.r.Client, n.r.Evacuator, n.cluster, fresh, node))
 }
 
+// notSent is the failure of the call that sends the action, after recordRequest wrote the step: the record is
+// dropped, so a retry of the paused operation begins again instead of waiting for an effect that was never asked for.
+func (n *nodeRun) notSent(err error) error {
+	n.op.Status.Node = nil
+
+	return err
+}
+
 // recordRequest persists, before the action is sent, the boot ID the node is leaving and the
 // time, so a controller killed between the record and the call resumes into "waiting" and a
 // call is never repeated.
@@ -401,7 +409,7 @@ func (n *nodeRun) beginReboot(ctx context.Context) (ctrl.Result, error) {
 	defer cancel()
 
 	if err := n.talos.Reboot(callCtx); err != nil {
-		return ctrl.Result{}, fmt.Errorf("reboot API call to %q failed: %w", n.m.Name, err)
+		return ctrl.Result{}, n.notSent(fmt.Errorf("reboot API call to %q failed: %w", n.m.Name, err))
 	}
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, nil
@@ -492,7 +500,7 @@ func (n *nodeRun) beginShutdown(ctx context.Context) (ctrl.Result, error) {
 	defer cancel()
 
 	if err := n.talos.Shutdown(callCtx, force); err != nil {
-		return ctrl.Result{}, fmt.Errorf("shutdown API call to %q failed: %w", n.m.Name, err)
+		return ctrl.Result{}, n.notSent(fmt.Errorf("shutdown API call to %q failed: %w", n.m.Name, err))
 	}
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, nil
@@ -546,7 +554,7 @@ func (n *nodeRun) beginRestartService(ctx context.Context) (ctrl.Result, error) 
 	defer cancel()
 
 	if err := n.talos.ServiceRestart(callCtx, n.spec.Service); err != nil {
-		return ctrl.Result{}, fmt.Errorf("restarting %s on %q failed: %w", n.spec.Service, n.m.Name, err)
+		return ctrl.Result{}, n.notSent(fmt.Errorf("restarting %s on %q failed: %w", n.spec.Service, n.m.Name, err))
 	}
 
 	return ctrl.Result{RequeueAfter: nodeActionSettle}, nil
@@ -661,7 +669,7 @@ func (n *nodeRun) beginForfeit(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if err := n.talos.EtcdForfeitLeadership(n.dial); err != nil {
-		return ctrl.Result{}, fmt.Errorf("forfeiting etcd leadership on %q failed: %w", n.m.Name, err)
+		return ctrl.Result{}, n.notSent(fmt.Errorf("forfeiting etcd leadership on %q failed: %w", n.m.Name, err))
 	}
 
 	return ctrl.Result{RequeueAfter: nodeActionSettle}, nil

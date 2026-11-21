@@ -163,3 +163,33 @@ var _ = Describe("a destructive call to a node that is not the machine it is nam
 			Expect(f.fake(hostW1).rebootCalls).To(BeZero())
 		}, wrong)
 })
+
+// A caller that retries one cause and stops on the other needs to tell them apart without reading the text.
+var _ = Describe("confirmMachine's two causes", func() {
+	m := &ichorv1alpha1.TalosMachine{}
+	m.Name, m.Spec.Identity.UUID = hostCP1, "want-uuid"
+
+	It("wraps errIdentityUnreadable when the node's identity cannot be read", func() {
+		cause := errors.New("connection refused")
+		err := confirmMachine(ctx, &fakeTalosClient{identityErr: cause}, m)
+
+		Expect(err).To(MatchError(errIdentityUnreadable))
+		Expect(err).NotTo(MatchError(errIdentityMismatch))
+		Expect(err).To(MatchError(cause), "the dial error stays reachable")
+	})
+
+	DescribeTable("wraps errIdentityMismatch when the node answers as another machine or with no UUID",
+		func(id HardwareIdentity) {
+			err := confirmMachine(ctx, &fakeTalosClient{identity: id}, m)
+
+			Expect(err).To(MatchError(errIdentityMismatch))
+			Expect(err).NotTo(MatchError(errIdentityUnreadable))
+		},
+		Entry("another machine's UUID", HardwareIdentity{UUID: "other-uuid"}),
+		Entry("no UUID", HardwareIdentity{Serial: "s1"}),
+	)
+
+	It("returns nil for the machine it is named for", func() {
+		Expect(confirmMachine(ctx, &fakeTalosClient{identity: HardwareIdentity{UUID: "WANT-UUID"}}, m)).To(Succeed())
+	})
+})

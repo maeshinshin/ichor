@@ -129,13 +129,23 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	extensions, err := r.extensionsCondition(ctx, &ts, governed)
-	if err != nil {
-		return ctrl.Result{}, err
+	// A preset that names no extension (rook-v1) has nothing to check, so the condition is absent
+	// there rather than claiming nodes carry "the extensions it needs".
+	var extensions metav1.Condition
+
+	if preset, perr := storage.NewPreset(ts.Spec.DiskPreset); perr == nil && len(preset.RequiredExtensions()) > 0 {
+		if extensions, err = r.extensionsCondition(ctx, &ts, governed); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	apimeta.SetStatusCondition(&ts.Status.Conditions, ready)
-	apimeta.SetStatusCondition(&ts.Status.Conditions, extensions)
+
+	if extensions.Type == "" {
+		apimeta.RemoveStatusCondition(&ts.Status.Conditions, conditionStorageExtensions)
+	} else {
+		apimeta.SetStatusCondition(&ts.Status.Conditions, extensions)
+	}
 
 	if system.Type == "" {
 		apimeta.RemoveStatusCondition(&ts.Status.Conditions, conditionStorageSystem)
@@ -251,8 +261,8 @@ func (r *TalosStorageReconciler) readyCondition(
 // preset needs are installed. The source is the Kubernetes Node's extensions.talos.dev/<name>
 // labels, which Talos itself sets from the running image: they need no Talos API client or
 // credentials here and reflect what is actually booted, not what a schematic ID says. A machine
-// whose Node cannot be found yet is skipped; if no Node could be observed at all the condition is
-// Unknown. It never gates Ready and never blocks the rest of the reconcile.
+// whose Node cannot be found yet is unknown, not absent: it is counted in the governed total, and
+// the condition is Unknown unless a missing extension is already proven (False). It never gates Ready and never blocks the rest of the reconcile.
 func (r *TalosStorageReconciler) extensionsCondition(
 	ctx context.Context, ts *ichorv1alpha1.TalosStorage, governed []*ichorv1alpha1.TalosMachine,
 ) (metav1.Condition, error) {
@@ -314,12 +324,19 @@ func (r *TalosStorageReconciler) extensionsCondition(
 		cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageMissingExtensions
 		cond.Message = fmt.Sprintf("%s: %s. Add them to spec.schematic and run ichor upgrade talos",
 			ts.Spec.DiskPreset, strings.Join(problems, "; "))
+		if observed < len(governed) {
+			cond.Message += fmt.Sprintf(" (%d of %d governed nodes reported)", observed, len(governed))
+		}
 	case observed == 0:
 		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageExtensionsUnknown
 		cond.Message = "no Kubernetes Node of a governed node was found, so its extensions are not known yet"
+	case observed < len(governed):
+		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageExtensionsUnknown
+		cond.Message = fmt.Sprintf("%d of %d governed nodes reported; all of them carry the system extensions %s needs, the rest have no Kubernetes Node yet",
+			observed, len(governed), ts.Spec.DiskPreset)
 	default:
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonStorageExtensionsPresent
-		cond.Message = fmt.Sprintf("%d nodes carry the system extensions %s needs", observed, ts.Spec.DiskPreset)
+		cond.Message = fmt.Sprintf("%d nodes carry the system extensions %s needs", len(governed), ts.Spec.DiskPreset)
 	}
 
 	return cond, nil

@@ -71,4 +71,4 @@ func TestE7Flannel(t *testing.T) { e7(t, foreign.CNIFlannel, "flannel", false) }
 func TestE7Calico(t *testing.T) { e7(t, foreign.CNICalico, "calico", false) }
 
 // TestE7CiliumUnmanaged: a Helm Cilium adopted --cni-unmanaged gets Ichor's policies.
-func TestE7CiliumUnmanaged(t *testing.T) { e7(t, foreign.CNICiliumHelm, "cilium", true) }
+func TestE7CiliumUnmanaged(t *testing.T) { e7(t, foreign.CNICiliumHelm, nameCilium, true) }

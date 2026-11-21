@@ -34,7 +34,7 @@ import (
 
 func (r *rig) ikApply(t *testing.T, manifest string, verb ...string) string {
 	t.Helper()
-	cmd := exec.Command("kubectl", append([]string{"--kubeconfig", r.ichorKC}, append(verb, "-f", "-")...)...)
+	cmd := exec.Command("kubectl", append([]string{flagKubeconfig, r.ichorKC}, append(verb, "-f", "-")...)...)
 	cmd.Stdin = strings.NewReader(manifest)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -87,10 +87,10 @@ func indent(s, p string) string {
 	return p + strings.ReplaceAll(strings.TrimRight(s, "\n"), "\n", "\n"+p)
 }
 
-func (r *rig) gone(t *testing.T, kind, name string, d time.Duration) bool {
+func (r *rig) gone(t *testing.T, name string, d time.Duration) bool {
 	t.Helper()
-	_, err := kube.Poll(kind+" "+name+" gone", d, func() (string, bool) {
-		return "", r.ikJSON(t, "-n", crNS, "get", kind, name, "--ignore-not-found", "-o", "name") == ""
+	_, err := kube.Poll("secret "+name+" gone", d, func() (string, bool) {
+		return "", r.ikJSON(t, "-n", crNS, "get", "secret", name, "--ignore-not-found", "-o", "name") == ""
 	})
 	return err == nil
 }
@@ -199,12 +199,12 @@ func TestC9Restart(t *testing.T) {
 	if got := waitMaintenance(t, r.foreignW, 6*time.Minute); got != uuid {
 		t.Errorf("maintenance UUID = %q, want %q", got, uuid)
 	}
-	if !r.gone(t, "secret", cred, time.Minute) {
+	if !r.gone(t, cred, time.Minute) {
 		t.Errorf("credential Secret %s still exists after Done", cred)
 	}
 	noLeaks(t, secrets, map[string]string{
-		"controller log": r.logs(t, "ichor-controller-manager"), "ichor-ui log": r.logs(t, "ichor-ichor-ui"),
-		"events": r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
+		labelControllerLog: r.logs(t, "ichor-controller-manager"), "ichor-ui log": r.logs(t, "ichor-ichor-ui"),
+		labelEvents: r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
 	})
 }
 
@@ -220,7 +220,7 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	failed, fsec := r.adminReclaim(t, "10.244.1.250", "5m", tc)
 	phase := r.waitPhase(t, failed, 4*time.Minute, "Failed", "Expired")
 	t.Logf("unreachable node: phase %s, message %q", phase, r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", failed, "-o", "jsonpath={.status.conditions[*].message}"))
-	if !r.gone(t, "secret", fsec, time.Minute) {
+	if !r.gone(t, fsec, time.Minute) {
 		t.Errorf("C9: the Secret %s survives a Failed request", fsec)
 	}
 
@@ -228,7 +228,7 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	expired, esec := r.adminReclaim(t, r.foreignW, "1m", tc)
 	r.waitPhase(t, expired, 3*time.Minute, "AwaitingConfirmation")
 	r.waitPhase(t, expired, 4*time.Minute, "Expired")
-	if !r.gone(t, "secret", esec, time.Minute) {
+	if !r.gone(t, esec, time.Minute) {
 		t.Errorf("C9: the Secret %s survives an Expired request", esec)
 	}
 	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", expired, "-o", "jsonpath={.status.audit}"); got == "" {
@@ -250,10 +250,10 @@ func TestC9FailedExpiredDeleted(t *testing.T) {
 	if out, err := r.ikDelete("-n", crNS, "delete", "machinereclaims.ichor.maesh.dev", early, "--wait=true"); err != nil {
 		t.Fatalf("deleting the request: %v\n%s", err, out)
 	}
-	if !r.gone(t, "secret", osec, 2*time.Minute) {
+	if !r.gone(t, osec, 2*time.Minute) {
 		t.Errorf("C9: the Secret %s survives the deletion of its request", osec)
 	}
 	noLeaks(t, secrets, map[string]string{
-		"controller log": r.logs(t, "ichor-controller-manager"), "events": r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
+		labelControllerLog: r.logs(t, "ichor-controller-manager"), labelEvents: r.ikJSON(t, "get", "events", "-A", "-o", "yaml"),
 	})
 }

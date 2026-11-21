@@ -156,11 +156,11 @@ func analyseHold(t *testing.T, smp []sample) {
 // TestB3B4B6EnabledAdopt (B2 enabled, B3 recovery, B4 enabled-mode KubePrism, B6 hold): adopts the cluster of
 // TestB2RefusedEnabledReplacementOn after its replacement was switched off (TestHelmSetKPR).
 func TestB3B4B6EnabledAdopt(t *testing.T) {
-	c := build(t, bOpts(foreign.CNICiliumHelm, false, true, "kubeProxyReplacement=true"))
+	c := build(t, bOpts(false, true, "kubeProxyReplacement=true"))
 	b3Canary(t, c)
 	prism := kubePrismState(t, c)
 	t.Logf("KubePrism before adoption: %v", prism)
-	plan, err := adoptArgs(t, c, append(recoverFlags(c), "--plan", "--accept-cilium-diff")...)
+	plan, err := adoptArgs(t, c, append(recoverFlags(c), flagPlan, "--accept-cilium-diff")...)
 	if err != nil {
 		t.Fatalf("adopt --plan: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 		st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
 			"jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}")
 		f := strings.Fields(st)
-		return "", len(f) == 2 && f[0] == "True" && f[1] == "True"
+		return "", len(f) == 2 && f[0] == valTrue && f[1] == valTrue
 	})
 	st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
 		"jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type==\"Ready\")].status}/{.status.conditions[?(@.type==\"Ready\")].reason} {end}")

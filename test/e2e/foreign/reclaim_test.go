@@ -115,7 +115,7 @@ func (r *rig) stage(t *testing.T) {
 // pod runs a command in the Ichor tools pod and logs its output (no secret is ever in it).
 func (r *rig) pod(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	a := append([]string{"--context", os.Getenv(kube.ContextEnv), "-n", ns, "exec", ichorTools, "--"}, args...)
+	a := append([]string{flagContext, os.Getenv(kube.ContextEnv), "-n", ns, cmdExec, ichorTools, "--"}, args...)
 	out, err := exec.Command("kubectl", a...).CombinedOutput()
 	t.Logf("$ %s\n%s", strings.Join(args, " "), out)
 	return string(out), err
@@ -124,12 +124,12 @@ func (r *rig) pod(t *testing.T, args ...string) (string, error) {
 // machine runs `ichor <verb> node <args>` (reclaim, approve) in the Ichor tools pod.
 func (r *rig) machine(t *testing.T, verb string, args ...string) (string, error) {
 	t.Helper()
-	return r.pod(t, append([]string{"env", "HOME=/tmp/home", "/tmp/ichor", verb, "node"}, args...)...)
+	return r.pod(t, append([]string{cmdEnv, envHome, pathTmpIchor, verb, "node"}, args...)...)
 }
 
 func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error) {
 	t.Helper()
-	return r.machine(t, "reclaim", append([]string{addr, "--talosconfig", "/tmp/foreign-talosconfig", "--kubeconfig", podKC}, extra...)...)
+	return r.machine(t, "reclaim", append([]string{addr, "--talosconfig", "/tmp/foreign-talosconfig", flagKubeconfig, podKC}, extra...)...)
 }
 
 func (r *rig) ui(t *testing.T, op string, extra ...string) (string, error) {
@@ -239,7 +239,7 @@ func (r *rig) refoereignize(t *testing.T, ownerTC []byte, nodeName string) {
 	}
 	if _, err := kube.Poll("foreign node Ready", 10*time.Minute, func() (string, bool) {
 		out, err := inner(r.f, "get", "node", nodeName, "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
-		return out, err == nil && strings.TrimSpace(out) == "True"
+		return out, err == nil && strings.TrimSpace(out) == valTrue
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -327,12 +327,12 @@ func TestC1C5C7(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out, err := r.machine(t, "approve", uuid, "--role", "worker", "--install-disk", "/dev/vda",
-		"--hostname", "ichor-e2e-r-w", "--yes", "--local", "-n", crNS, "--kubeconfig", podKC); err != nil {
+		"--hostname", "ichor-e2e-r-w", flagYes, "--local", "-n", crNS, flagKubeconfig, podKC); err != nil {
 		t.Fatalf("approve: %v\n%s", err, out)
 	}
 	if _, err := kube.Poll("joined Ichor cluster", 12*time.Minute, func() (string, bool) {
 		ready := r.ikJSON(t, "get", "node", "ichor-e2e-r-w", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
-		return ready, ready == "True"
+		return ready, ready == valTrue
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -371,11 +371,11 @@ func TestC3C4Refusals(t *testing.T) {
 	// C4: the Ichor control plane, with --force, --confirm-cluster and --force-ungraceful all given.
 	iuuid := r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[0].metadata.name}")
 	out, err = r.machine(t, "reclaim", r.ichorCP, "--talosconfig", "/tmp/ichor-talosconfig",
-		"--kubeconfig", podKC, "--confirm", iuuid, "--force", "--confirm-cluster", ichorName, "--force-ungraceful")
+		flagKubeconfig, podKC, "--confirm", iuuid, "--force", "--confirm-cluster", ichorName, "--force-ungraceful")
 	if err == nil || !strings.Contains(out, "is already an Ichor node") {
 		t.Errorf("C4: an Ichor machine was not refused: %v", err)
 	}
-	if got := r.ikJSON(t, "get", "node", ichorName+"-cp", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}"); got != "True" {
+	if got := r.ikJSON(t, "get", "node", ichorName+"-cp", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}"); got != valTrue {
 		t.Errorf("Ichor control plane not Ready after the refusal: %q", got)
 	}
 }

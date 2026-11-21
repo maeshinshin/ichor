@@ -291,7 +291,7 @@ func probeDiag(t *testing.T, c *foreign.Cluster, label string) {
 		`jsonpath={range .items[*]}{.metadata.labels.app}/{.metadata.name}/{.metadata.uid}/{.spec.nodeName}/{.status.podIP}/{.status.phase}/restarts={.status.containerStatuses[0].restartCount}{.metadata.deletionTimestamp}{" "}{end}`)
 	nodes, _ := inner(c, "get", "nodes", "-o",
 		`jsonpath={range .items[*]}{.metadata.name}/unsched={.spec.unschedulable}/ready={.status.conditions[?(@.type=="Ready")].status}{" "}{end}`)
-	cilium, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o",
+	cilium, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o",
 		`jsonpath={range .items[*]}{.spec.nodeName}/{.metadata.name}/restarts={.status.containerStatuses[0].restartCount}/ready={.status.containerStatuses[0].ready}{" "}{end}`)
 	t.Logf("A4 diag %s %s: pods [%s] nodes [%s] cilium [%s]", time.Now().UTC().Format("15:04:05"), label,
 		strings.TrimSpace(pods), strings.TrimSpace(nodes), strings.TrimSpace(cilium))
@@ -300,10 +300,10 @@ func probeDiag(t *testing.T, c *foreign.Cluster, label string) {
 // ciliumDrops returns each Cilium agent's drop counters by reason and direction. They only grow, so the delta over a
 // window says whether the datapath dropped packets on that node during it.
 func ciliumDrops(c *foreign.Cluster) string {
-	pods, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.name}")
+	pods, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.name}")
 	var b strings.Builder
 	for p := range strings.FieldsSeq(pods) {
-		out, _ := inner(c, "-n", "kube-system", "exec", p, "-c", "cilium-agent", "--", "cilium-dbg", "metrics", "list")
+		out, _ := inner(c, "-n", nsKubeSystem, "exec", p, "-c", "cilium-agent", "--", "cilium-dbg", "metrics", "list")
 		for l := range strings.SplitSeq(out, "\n") {
 			if strings.Contains(l, "drop_count_total") {
 				fmt.Fprintf(&b, "%s %s\n", p, strings.TrimSpace(l))
@@ -316,7 +316,7 @@ func ciliumDrops(c *foreign.Cluster) string {
 // eventsTail returns the last events of default and kube-system (drains, evictions, kills, restarts) by time.
 func eventsTail(c *foreign.Cluster) string {
 	var b strings.Builder
-	for _, ns := range []string{"default", "kube-system"} {
+	for _, ns := range []string{"default", nsKubeSystem} {
 		out, _ := inner(c, "-n", ns, "get", "events", "--sort-by=.lastTimestamp", "-o",
 			"custom-columns=LAST:.lastTimestamp,REASON:.reason,OBJ:.involvedObject.name,MSG:.message")
 		lines := strings.Split(strings.TrimSpace(out), "\n")
@@ -330,8 +330,8 @@ func eventsTail(c *foreign.Cluster) string {
 
 // ciliumDS is what a takeover or an upgrade must not disturb: the DaemonSet's generation, image and pod UIDs.
 func ciliumDS(c *foreign.Cluster) string {
-	gen, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} {.status.numberReady}/{.status.desiredNumberScheduled}")
-	uids, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o",
+	gen, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o", "jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} {.status.numberReady}/{.status.desiredNumberScheduled}")
+	uids, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "-o",
 		"jsonpath={.items[*].metadata.uid}")
 	return strings.TrimSpace(gen) + " pods=" + strings.TrimSpace(uids)
 }
@@ -397,10 +397,10 @@ func waitHandover(t *testing.T, c *foreign.Cluster, inline string) {
 		h := clusterJSONPath(c, handoverPath)
 		t.Logf("%s CNIHandover=%q inline %q present on %d nodes, absent on %d", time.Since(start).Round(time.Second), h,
 			inline, present, absent)
-		if inline != "" && absent > 0 && h != "True" {
+		if inline != "" && absent > 0 && h != valTrue {
 			t.Errorf("inline entry %q removed from %d node(s) before CNIHandover was True", inline, absent)
 		}
-		if h == "True" {
+		if h == valTrue {
 			return
 		}
 		time.Sleep(10 * time.Second)
@@ -415,15 +415,15 @@ func logState(t *testing.T, c *foreign.Cluster, label string) {
 
 // takeoverAdopt runs the plan, then adopt; a refusal naming --accept-cilium-diff is logged and retried with it.
 // It returns the diff-gate verdict.
-func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (first string, diffNeeded bool) {
+func takeoverAdopt(t *testing.T, c *foreign.Cluster) (first string, diffNeeded bool) {
 	t.Helper()
-	_, _ = adopt(t, c, append([]string{"--plan"}, extra...)...) // the plan's exit is logged by adopt
-	out, err := adopt(t, c, extra...)
+	_, _ = adopt(t, c, flagPlan) // the plan's exit is logged by adopt
+	out, err := adopt(t, c)
 	first = out
 	if err != nil && strings.Contains(out, "--accept-cilium-diff") {
 		t.Logf("the diff gate refused without --accept-cilium-diff; retrying with it")
 		diffNeeded = true
-		out, err = adopt(t, c, append([]string{"--accept-cilium-diff"}, extra...)...)
+		out, err = adopt(t, c, "--accept-cilium-diff")
 	}
 	if err != nil {
 		t.Fatalf("adopt failed: %v\n%s", err, out)
@@ -440,12 +440,12 @@ func TestA1Adopt(t *testing.T) {
 	t.Logf("inline manifests before: %v", before)
 	_, needed := takeoverAdopt(t, c)
 	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
-	waitHandover(t, c, "cilium")
+	waitHandover(t, c, nameCilium)
 	membership(t, c)
-	if got := clusterJSONPath(c, "{.status.cni.takenOverInlineManifest}"); got != "cilium" {
+	if got := clusterJSONPath(c, "{.status.cni.takenOverInlineManifest}"); got != nameCilium {
 		t.Errorf("status.cni.takenOverInlineManifest = %q, want cilium", got)
 	}
-	if p, a := hasName(inlineNames(t, c), "cilium"); p != 0 {
+	if p, a := hasName(inlineNames(t, c), nameCilium); p != 0 {
 		t.Errorf("inline entry still on %d nodes (absent on %d)", p, a)
 	}
 	jobs, _ := inner(c, "-n", crNS, "get", "jobs", "--no-headers")
@@ -465,7 +465,7 @@ func TestA1Upgrade(t *testing.T) {
 	trafficStart(t, c)
 	logState(t, c, "before takeover")
 	takeoverAdopt(t, c)
-	waitHandover(t, c, "cilium")
+	waitHandover(t, c, nameCilium)
 	membership(t, c)
 	before, recBefore := ciliumDS(c), helmRecords(c)
 	logState(t, c, "before upgrade")
@@ -475,7 +475,7 @@ func TestA1Upgrade(t *testing.T) {
 	probeDiag(t, c, "before upgrade")
 	dropsBefore := ciliumDrops(c)
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
-	out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes")
+	out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, flagYes)
 	if err != nil {
 		t.Fatalf("upgrade kubernetes: %v\n%s", err, out)
 	}
@@ -497,7 +497,7 @@ func TestA1Upgrade(t *testing.T) {
 	if strings.Contains(vers, foreignK8sUpgradeStart) {
 		t.Errorf("a node is still on %s: %s", foreignK8sUpgradeStart, vers)
 	}
-	if p, _ := hasName(inlineNames(t, c), "cilium"); p != 0 {
+	if p, _ := hasName(inlineNames(t, c), nameCilium); p != 0 {
 		t.Errorf("the cilium inline entry is back on %d node(s)", p)
 	}
 	after, recAfter := ciliumDS(c), helmRecords(c)
@@ -548,10 +548,10 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 	c := build(t, foreign.Options{Workers: 1, CNI: cni})
 	logState(t, c, "before")
 	recs := map[string]string{} // record name -> base64 of data.release
-	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
+	names, _ := inner(c, "-n", nsKubeSystem, "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
 		"jsonpath={.items[*].metadata.name}")
 	for n := range strings.FieldsSeq(names) {
-		recs[n] = secretData(c, "kube-system", n)["release"]
+		recs[n] = secretData(c, nsKubeSystem, n)["release"]
 	}
 	if len(recs) == 0 {
 		t.Fatal("no foreign cilium release record")
@@ -574,12 +574,12 @@ func takeoverHelmRecord(t *testing.T, cni string) {
 			t.Logf("backup of %s byte-identical (%d bytes b64)", n, len(got))
 		}
 	}
-	left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o",
+	left, _ := inner(c, "-n", nsKubeSystem, "get", "secrets", "-l", "owner=helm", "-o",
 		"jsonpath={.items[*].metadata.name}")
 	if strings.TrimSpace(left) != "" {
 		t.Errorf("release record Secrets remain in kube-system:\n%s", left)
 	}
-	if ds, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "--no-headers"); !strings.Contains(ds, "cilium") {
+	if ds, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "--no-headers"); !strings.Contains(ds, nameCilium) {
 		t.Errorf("the cilium DaemonSet is gone (helm uninstall?)")
 	}
 	logState(t, c, "after takeover")
@@ -594,17 +594,17 @@ func TestA5Adopt(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
 	patch := `[{"op":"add","path":"/spec/template/metadata/annotations/fa.test~1extra","value":"yes"},` +
 		`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--prometheus-serve-addr=:9962"}]`
-	if out, err := inner(c, "-n", "kube-system", "patch", "ds", "cilium", "--type=json", "-p", patch); err != nil {
+	if out, err := inner(c, "-n", nsKubeSystem, "patch", "ds", nameCilium, "--type=json", "-p", patch); err != nil {
 		t.Fatalf("patching the DaemonSet: %v\n%s", err, out)
 	}
-	if out, err := inner(c, "-n", "kube-system", "create", "configmap", "fa-extra", "--from-literal=a=b"); err != nil {
+	if out, err := inner(c, "-n", nsKubeSystem, "create", "configmap", "fa-extra", "--from-literal=a=b"); err != nil {
 		t.Fatalf("creating the ConfigMap: %v\n%s", err, out)
 	}
-	if out, err := inner(c, "-n", "kube-system", "label", "configmap", "fa-extra",
+	if out, err := inner(c, "-n", nsKubeSystem, "label", "configmap", "fa-extra",
 		"app.kubernetes.io/part-of=cilium"); err != nil {
 		t.Fatalf("labelling the ConfigMap: %v\n%s", err, out)
 	}
-	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+	if out, err := inner(c, "-n", nsKubeSystem, "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Fatalf("rollout after the patch: %v\n%s", err, out)
 	}
 	logState(t, c, "before (patched)")
@@ -620,13 +620,13 @@ func TestA5Adopt(t *testing.T) {
 	}
 	waitHandover(t, c, "")
 	membership(t, c)
-	if out, err := inner(c, "-n", "kube-system", "get", "configmap", "fa-extra", "-o", "name"); err != nil {
+	if out, err := inner(c, "-n", nsKubeSystem, "get", "configmap", "fa-extra", "-o", "name"); err != nil {
 		t.Errorf("the extra ConfigMap is gone after takeover: %v\n%s", err, out)
 	}
-	ds, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o",
+	ds, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o",
 		"jsonpath={.spec.template.metadata.annotations.fa\\.test/extra}|{.spec.template.spec.containers[0].args}")
 	t.Logf("live DaemonSet after takeover (annotation|args): %s", ds)
-	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+	if out, err := inner(c, "-n", nsKubeSystem, "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Errorf("rollout after takeover: %v\n%s", err, out)
 	}
 	logState(t, c, "after takeover")
@@ -652,7 +652,7 @@ func refusedWritesNothing(t *testing.T, c *foreign.Cluster, hashes map[string]st
 func TestA7Refused(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
 	hashes, records := cniPaths(t, c), helmRecords(c)
-	if mode, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o",
+	if mode, _ := inner(c, "-n", nsKubeSystem, "get", "cm", "cilium-config", "-o",
 		"jsonpath={.data.ipam}"); mode != "cluster-pool" {
 		t.Fatalf("the live ipam is %q, not cluster-pool", mode)
 	}
@@ -675,7 +675,7 @@ func TestA7Refused(t *testing.T) {
 func TestA6Refused(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
 	hashes, records := cniPaths(t, c), helmRecords(c)
-	img, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.spec.template.spec.containers[0].image}")
+	img, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o", "jsonpath={.spec.template.spec.containers[0].image}")
 	t.Logf("live agent image: %s", img)
 	out, err := adopt(t, c, "--accept-cilium-changes", "--accept-cilium-diff")
 	if err == nil {
@@ -700,7 +700,7 @@ func TestA6Accepted119(t *testing.T) {
 	}
 	waitHandover(t, c, "")
 	membership(t, c)
-	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+	if out, err := inner(c, "-n", nsKubeSystem, "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Errorf("rollout after takeover: %v\n%s", err, out)
 	}
 	if img := ciliumDS(c); !strings.Contains(img, "cilium:v1.20.4") {

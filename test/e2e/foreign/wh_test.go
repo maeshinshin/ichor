@@ -82,7 +82,7 @@ func oneLine(s string) string {
 
 // whDrops follows the drops one agent's monitor reports for ports 9443 and 8081 until the command is killed.
 func whDrops(c *foreign.Cluster, w *whLog, pod string) *exec.Cmd {
-	cmd := kube.InnerCommand(c.LocalKube, "-n", "kube-system", "exec", pod, "--", "cilium-dbg", "monitor", "--type", "drop")
+	cmd := kube.InnerCommand(c.LocalKube, "-n", nsKubeSystem, "exec", pod, "--", "cilium-dbg", "monitor", "--type", "drop")
 	out, err := cmd.StdoutPipe()
 	if err != nil || cmd.Start() != nil {
 		w.printf("drop stream %s did not start: %v", pod, err)
@@ -127,7 +127,7 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 		ep, _ := inner(c, "-n", crNS, "get", "endpoints", "ichor-webhook-service", "-o",
 			"jsonpath=ready={.subsets[*].addresses[*].ip} notReady={.subsets[*].notReadyAddresses[*].ip}")
 		cnp, _ := inner(c, "-n", crNS, "get", "ciliumnetworkpolicies", "--no-headers", "-o", "custom-columns=NAME:.metadata.name")
-		cils, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "--no-headers",
+		cils, _ := inner(c, "-n", nsKubeSystem, "get", "pods", "-l", "k8s-app=cilium", "--no-headers",
 			"-o", "custom-columns="+whAgentColumns)
 		w.printf("pods {%s} | webhook %s | cnp {%s} | cilium {%s}", oneLine(pods), oneLine(ep), oneLine(cnp), oneLine(cils))
 
@@ -165,13 +165,13 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 				continue
 			}
 			agent := f[0]
-			if out, err := inner(c, "-n", "kube-system", "exec", agent, "--", "cilium-dbg", "endpoint", "list"); err == nil {
+			if out, err := inner(c, "-n", nsKubeSystem, "exec", agent, "--", "cilium-dbg", "endpoint", "list"); err == nil {
 				if out != last["endpoints"] {
 					last["endpoints"] = out
 					w.block(fmt.Sprintf("endpoint list on %s (controller %s %s)", agent, ctrlNode, ctrlIP), out)
 				}
 			}
-			if out, err := inner(c, "-n", "kube-system", "exec", agent, "--", "cilium-dbg", "policy", "selectors"); err == nil {
+			if out, err := inner(c, "-n", nsKubeSystem, "exec", agent, "--", "cilium-dbg", "policy", "selectors"); err == nil {
 				if out != last["selectors"] {
 					last["selectors"] = out
 					w.block("policy selectors on "+agent, out)
@@ -199,6 +199,6 @@ func TestWHAdopt(t *testing.T) {
 	wg.Go(func() { whSample(c, w, stop) })
 	defer func() { close(stop); wg.Wait() }()
 	takeoverAdopt(t, c)
-	waitHandover(t, c, "cilium")
+	waitHandover(t, c, nameCilium)
 	membership(t, c)
 }

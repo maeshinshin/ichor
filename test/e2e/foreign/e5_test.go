@@ -38,7 +38,7 @@ func e5(t *testing.T, trigger string, killAfter time.Duration) {
 		t.Fatalf("%q never appeared:\n%s", trigger, out)
 	}
 	t.Logf("Helm release records after the kill:\n%s", releaseState(c))
-	ds, _ := inner(c, "-n", "kube-system", "get", "ds,deploy", "--no-headers")
+	ds, _ := inner(c, "-n", nsKubeSystem, "get", "ds,deploy", "--no-headers")
 	t.Logf("workloads after the kill:\n%s", ds)
 
 	// The rerun passes no --secrets-bundle: --recover-secrets is accepted because the stored bundle equals the

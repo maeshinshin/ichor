@@ -39,7 +39,7 @@ func TestE2NoCNIKubeProxyDisabled(t *testing.T) {
 	if got := clusterJSONPath(c, "{.spec.cni.kubeProxy}"); got != "replaced" {
 		t.Errorf("spec.cni.kubeProxy = %q, want replaced", got)
 	}
-	cfg, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
+	cfg, _ := inner(c, "-n", nsKubeSystem, "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
 	if strings.TrimSpace(cfg) != "true" {
 		t.Errorf("cilium-config kube-proxy-replacement = %q, want true", cfg)
 	}
@@ -53,7 +53,7 @@ func TestE2NoCNIKubeProxyDisabled(t *testing.T) {
 	if perr != nil || !strings.Contains(probe, "10.249.0.1") {
 		t.Errorf("a pod could not resolve a name through the kube-dns Service")
 	}
-	st, _ := inner(c, "-n", "kube-system", "exec", "ds/cilium", "--", "cilium-dbg", "status")
+	st, _ := inner(c, "-n", nsKubeSystem, "exec", "ds/cilium", "--", "cilium-dbg", "status")
 	if !strings.Contains(st, "KubeProxyReplacement:    True") {
 		t.Errorf("cilium status does not report KubeProxyReplacement True:\n%s", st)
 	}

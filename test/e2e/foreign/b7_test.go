@@ -32,7 +32,7 @@ import (
 func TestB7ClassC(t *testing.T) {
 	c := build(t, foreign.Options{ControlPlanes: 3, Workers: 1, UserManifest: true})
 	before := cniPaths(t, c)
-	for _, extra := range []string{"--plan", "--yes"} {
+	for _, extra := range []string{flagPlan, flagYes} {
 		out, err := adoptArgs(t, c, append(recoverFlags(c), "--cni-unmanaged", extra)...)
 		if err == nil {
 			t.Errorf("adopt %s succeeded on a cluster with a user inline manifest", extra)

@@ -177,8 +177,8 @@ func TestC8C9C10(t *testing.T) {
 	}
 	events := r.ikJSON(t, "get", "events", "-A", "-o", "yaml")
 	noLeaks(t, secrets, map[string]string{
-		"controller log": r.logs(t, "ichor-controller-manager"), "ichor-ui log": r.logs(t, "ichor-ichor-ui"),
-		"events": events, "MachineReclaim": mr,
+		labelControllerLog: r.logs(t, "ichor-controller-manager"), "ichor-ui log": r.logs(t, "ichor-ichor-ui"),
+		labelEvents: events, "MachineReclaim": mr,
 	})
 	// The same request cannot reset twice.
 	_, _ = r.ui(t, "confirm", "-name", name, "-uuid", uuid)
@@ -215,6 +215,6 @@ func TestEnsureForeign(t *testing.T) {
 // ikDelete deletes objects of the Ichor-made cluster; the inner-cluster helper refuses deletes by design, and this
 // cluster is ours (its kubeconfig is the only credential passed).
 func (r *rig) ikDelete(args ...string) (string, error) {
-	out, err := exec.Command("kubectl", append([]string{"--kubeconfig", r.ichorKC}, args...)...).CombinedOutput()
+	out, err := exec.Command("kubectl", append([]string{flagKubeconfig, r.ichorKC}, args...)...).CombinedOutput()
 	return string(out), err
 }

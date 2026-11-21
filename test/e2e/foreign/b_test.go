@@ -43,12 +43,12 @@ const (
 )
 
 // bOpts are the harness options of a B-group cluster (they must match the `foreign up` flags).
-func bOpts(cni string, noProxy, noPrism bool, sets ...string) foreign.Options {
+func bOpts(noProxy, noPrism bool, sets ...string) foreign.Options {
 	w := 1
 	if os.Getenv("ICHOR_E2E_F_WORKERS") == "0" {
 		w = 0
 	}
-	o := foreign.Options{Workers: w, CNI: cni, NoKubeProxy: noProxy, NoKubePrism: noPrism, CiliumSets: sets}
+	o := foreign.Options{Workers: w, CNI: foreign.CNICiliumHelm, NoKubeProxy: noProxy, NoKubePrism: noPrism, CiliumSets: sets}
 	return o
 }
 
@@ -73,29 +73,30 @@ func nothingWritten(t *testing.T, c *foreign.Cluster) {
 // helmSet changes the Cilium release the harness installed (reuse values) and waits for the DaemonSet.
 func helmSet(t *testing.T, c *foreign.Cluster, sets ...string) {
 	t.Helper()
-	args := []string{"upgrade", "cilium", repoPath(t, foreign.CiliumChartPath), "--kubeconfig", c.LocalKube,
-		"--namespace", "kube-system", "--reuse-values"}
+	args := make([]string, 0, 8+2*len(sets))
+	args = append(args, "upgrade", nameCilium, repoPath(t, foreign.CiliumChartPath), flagKubeconfig, c.LocalKube,
+		"--namespace", nsKubeSystem, "--reuse-values")
 	for _, s := range sets {
 		args = append(args, "--set", s)
 	}
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	out, err := exec.Command(nameHelm, args...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("helm upgrade: %v\n%s", err, out)
 	}
 	// A ConfigMap change alone does not restart the agents; the data plane only changes when they do.
 	for _, w := range []string{"ds/cilium", "ds/cilium-envoy", "deploy/cilium-operator"} {
-		if o, err := inner(c, "-n", "kube-system", "rollout", "restart", w); err != nil {
+		if o, err := inner(c, "-n", nsKubeSystem, "rollout", "restart", w); err != nil {
 			t.Fatalf("restart %s: %v\n%s", w, err, o)
 		}
 	}
-	if o, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
+	if o, err := inner(c, "-n", nsKubeSystem, "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Fatalf("cilium rollout: %v\n%s", err, o)
 	}
-	if o, err := inner(c, "-n", "kube-system", "rollout", "status", "deploy/cilium-operator",
+	if o, err := inner(c, "-n", nsKubeSystem, "rollout", "status", "deploy/cilium-operator",
 		"--timeout=300s"); err != nil {
 		t.Fatalf("cilium-operator rollout: %v\n%s", err, o)
 	}
-	kpr, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
+	kpr, _ := inner(c, "-n", nsKubeSystem, "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
 	t.Logf("cilium-config kube-proxy-replacement = %q after helm upgrade %v", strings.TrimSpace(kpr), sets)
 }
 
@@ -103,7 +104,7 @@ func helmSet(t *testing.T, c *foreign.Cluster, sets ...string) {
 func refusedUntouched(t *testing.T, c *foreign.Cluster, want string) {
 	t.Helper()
 	before := cniPaths(t, c)
-	for _, extra := range [][]string{{"--plan"}, {"--yes"}} {
+	for _, extra := range [][]string{{flagPlan}, {flagYes}} {
 		out, err := adoptArgs(t, c, append(recoverFlags(c), extra...)...)
 		if err == nil {
 			t.Errorf("adopt %v succeeded, want a refusal containing %q", extra, want)
@@ -122,8 +123,8 @@ func kubeProxyMode(c *foreign.Cluster) string { return clusterJSONPath(c, "{.spe
 // TestB2RefusedEnabledReplacementOn (B2): kube-proxy runs in Talos and Cilium replaces it.
 // Cluster: cilium-helm, --no-kubeprism, --cilium-set kubeProxyReplacement=true.
 func TestB2RefusedEnabledReplacementOn(t *testing.T) {
-	c := build(t, bOpts(foreign.CNICiliumHelm, false, true, "kubeProxyReplacement=true"))
-	kpr, _ := inner(c, "-n", "kube-system", "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
+	c := build(t, bOpts(false, true, "kubeProxyReplacement=true"))
+	kpr, _ := inner(c, "-n", nsKubeSystem, "get", "cm", "cilium-config", "-o", "jsonpath={.data.kube-proxy-replacement}")
 	t.Logf("cilium-config kube-proxy-replacement = %q", strings.TrimSpace(kpr))
 	refusedUntouched(t, c, twoOwners)
 }
@@ -131,14 +132,14 @@ func TestB2RefusedEnabledReplacementOn(t *testing.T) {
 // TestB2RefusedDisabledReplacementOff (B2): kube-proxy is disabled in Talos and Cilium does not replace it.
 // Cluster: cilium-helm, --no-kube-proxy, --cilium-set kubeProxyReplacement=false.
 func TestB2RefusedDisabledReplacementOff(t *testing.T) {
-	c := build(t, bOpts(foreign.CNICiliumHelm, true, false, "kubeProxyReplacement=false"))
+	c := build(t, bOpts(true, false, "kubeProxyReplacement=false"))
 	refusedUntouched(t, c, noRouting)
 }
 
 // TestB4RefusedReplacedKubePrismOff (B4): replaced mode with KubePrism off is refused.
 // Cluster: cilium-helm, --no-kube-proxy --no-kubeprism (the harness then points Cilium at the control plane).
 func TestB4RefusedReplacedKubePrismOff(t *testing.T) {
-	c := build(t, bOpts(foreign.CNICiliumHelm, true, true))
+	c := build(t, bOpts(true, true))
 	refusedUntouched(t, c, "KubePrism is off on machine")
 }
 
@@ -149,7 +150,7 @@ func TestHelmSet(t *testing.T) {
 	if v == "" {
 		t.Skip("ICHOR_E2E_F_HELMSET not set")
 	}
-	c := build(t, bOpts(foreign.CNICiliumHelm, false, false))
+	c := build(t, bOpts(false, false))
 	helmSet(t, c, strings.Split(v, ",")...)
 }
 
@@ -203,7 +204,7 @@ func b3CanaryReadable(t *testing.T, c *foreign.Cluster) {
 // TestB3WrongBundle (B3): a bundle of another cluster produces secret-field drift and no patch. Runs before the real
 // adopt.
 func TestB3WrongBundle(t *testing.T) {
-	c := build(t, bOpts(foreign.CNICiliumHelm, false, true, "kubeProxyReplacement=true"))
+	c := build(t, bOpts(false, true, "kubeProxyReplacement=true"))
 	b3Canary(t, c)
 	wrong := filepath.Join(t.TempDir(), "wrong-secrets.yaml")
 	if out, err := exec.Command("talosctl", "gen", "secrets", "-o", wrong).CombinedOutput(); err != nil {
@@ -214,7 +215,7 @@ func TestB3WrongBundle(t *testing.T) {
 		t.Fatalf("cp: %v\n%s", err, out)
 	}
 	before := cniPaths(t, c)
-	for _, extra := range []string{"--plan", "--yes"} {
+	for _, extra := range []string{flagPlan, flagYes} {
 		out, err := adoptArgs(t, c, "--secrets-bundle", "/tmp/wrong-secrets.yaml", extra)
 		if err == nil {
 			t.Errorf("wrong bundle %s: adopt succeeded", extra)

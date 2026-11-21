@@ -60,17 +60,17 @@ func TestE6NoPodNetwork(t *testing.T) {
 	}
 	wipe := func() {
 		for _, a := range [][]string{
-			{"-n", "kube-system", "patch", "ds/cilium", "-p", `{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
-			{"-n", "kube-system", "patch", "ds/cilium-envoy", "-p",
+			{"-n", nsKubeSystem, "patch", "ds/cilium", "-p", `{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
+			{"-n", nsKubeSystem, "patch", "ds/cilium-envoy", "-p",
 				`{"spec":{"template":{"spec":{"nodeSelector":{"gone":"gone"}}}}}`},
-			{"-n", "kube-system", "scale", "deploy/cilium-operator", "--replicas=0"},
+			{"-n", nsKubeSystem, "scale", "deploy/cilium-operator", "--replicas=0"},
 			{"apply", "-f", manifest},
 		} {
 			o, err := inner(c, a...)
 			t.Logf("kubectl %s: %v\n%s", strings.Join(a, " "), err, o)
 		}
 	}
-	out, took, ran, err := adoptTriggered(t, c, "/tmp/ichor", "Cilium is installed and the nodes are Ready", 0, wipe,
+	out, took, ran, err := adoptTriggered(t, c, pathTmpIchor, "Cilium is installed and the nodes are Ready", 0, wipe,
 		append([]string{"--wait-timeout", "6m"}, geneve...)...)
 	t.Logf("adopt ran %s, wipe ran=%v, err=%v", took, ran, err)
 	nodes, _ := inner(c, "get", "nodes", "--no-headers")

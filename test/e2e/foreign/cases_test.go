@@ -33,7 +33,7 @@ func noCNINothingWritten(t *testing.T, c *foreign.Cluster, before map[string]str
 	t.Helper()
 	sameHashes(t, before, cniPaths(t, c))
 	nothingWritten(t, c)
-	if got, _ := inner(c, "get", "ds", "-A", "--no-headers"); strings.Contains(got, "cilium") {
+	if got, _ := inner(c, "get", "ds", "-A", "--no-headers"); strings.Contains(got, nameCilium) {
 		t.Errorf("a Cilium DaemonSet exists after a refusal: %s", got)
 	}
 }
@@ -46,10 +46,10 @@ func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) 
 		"--no-headers"); strings.TrimSpace(rec) == "" {
 		t.Errorf("no Cilium release record in %s", crNS)
 	}
-	if got := clusterJSONPath(c, "{.spec.cni.preset}"); got != "cilium" {
+	if got := clusterJSONPath(c, "{.spec.cni.preset}"); got != nameCilium {
 		t.Errorf("spec.cni.preset = %q, want cilium", got)
 	}
-	waitCluster(t, c, "{.status.conditions[?(@.type==\"CNIHandover\")].status}", "True")
+	waitCluster(t, c, "{.status.conditions[?(@.type==\"CNIHandover\")].status}", valTrue)
 	noCNIJob(t, c)
 	holdCleared(t, c)
 	pods, _ := inner(c, "-n", crNS, "get", "pods", "--no-headers")

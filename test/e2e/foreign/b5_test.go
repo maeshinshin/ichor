@@ -31,7 +31,7 @@ import (
 // TestB5Upgrade.
 func TestB5Plan(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0})
-	out, err := adoptArgs(t, c, append(recoverFlags(c), "--plan", "--cni-unmanaged")...)
+	out, err := adoptArgs(t, c, append(recoverFlags(c), flagPlan, "--cni-unmanaged")...)
 	if err != nil {
 		t.Logf("plan exited with %v", err)
 	}

@@ -32,10 +32,10 @@ import (
 // foreignRecs returns the foreign cilium release record Secrets of kube-system (name -> base64 data.release).
 func foreignRecs(c *foreign.Cluster) map[string]string {
 	recs := map[string]string{}
-	names, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
+	names, _ := inner(c, "-n", nsKubeSystem, "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
 		"jsonpath={.items[*].metadata.name}")
 	for n := range strings.FieldsSeq(names) {
-		recs[n] = secretData(c, "kube-system", n)["release"]
+		recs[n] = secretData(c, nsKubeSystem, n)["release"]
 	}
 	return recs
 }
@@ -50,7 +50,7 @@ func ichorRecords(c *foreign.Cluster) string {
 // cniJobPods returns the pods of the ichor-cni Jobs (pods are named after their Job).
 func cniJobPods(c *foreign.Cluster) []string {
 	var res []string
-	for _, p := range names(c, "-n", "kube-system", "get", "pods", "-l", "batch.kubernetes.io/job-name") {
+	for _, p := range names(c, "-n", nsKubeSystem, "get", "pods", "-l", "batch.kubernetes.io/job-name") {
 		if strings.HasPrefix(p, "ichor-cni") {
 			res = append(res, p)
 		}
@@ -61,7 +61,7 @@ func cniJobPods(c *foreign.Cluster) []string {
 // innerDelete deletes objects of the foreign cluster; the harness helper refuses deletes by design, and this cluster
 // is ours (its kubeconfig is the only credential passed).
 func innerDelete(c *foreign.Cluster, args ...string) (string, error) {
-	out, err := exec.Command("kubectl", append([]string{"--kubeconfig", c.LocalKube}, args...)...).CombinedOutput()
+	out, err := exec.Command("kubectl", append([]string{flagKubeconfig, c.LocalKube}, args...)...).CombinedOutput()
 	return string(out), err
 }
 
@@ -101,9 +101,9 @@ func TestA8KillJob(t *testing.T) {
 			foreignLeft := len(foreignRecs(c))
 			deployed := strings.Contains(mine, "=deployed")
 			if kills == 0 || (deployed && foreignLeft > 0) {
-				pre, _ := inner(c, "-n", "kube-system", "logs", pods[0], "--tail=10")
+				pre, _ := inner(c, "-n", nsKubeSystem, "logs", pods[0], "--tail=10")
 				note("log of %s before the kill: %s", pods[0], strings.ReplaceAll(strings.TrimSpace(pre), "\n", " | "))
-				out, err := innerDelete(c, "-n", "kube-system", "delete", "pod", pods[0], "--wait=false")
+				out, err := innerDelete(c, "-n", nsKubeSystem, "delete", "pod", pods[0], "--wait=false")
 				kills++
 				note("kill %d of %s: ichor records [%s], foreign records left %d: %v %s", kills, pods[0], strings.ReplaceAll(mine,
 					"\n", "; "), foreignLeft, err, strings.TrimSpace(out))
@@ -137,14 +137,14 @@ func TestA8KillJob(t *testing.T) {
 			t.Logf("backup of %s byte-identical (%d bytes b64)", n, len(got))
 		}
 	}
-	if left, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o",
+	if left, _ := inner(c, "-n", nsKubeSystem, "get", "secrets", "-l", "owner=helm", "-o",
 		"jsonpath={.items[*].metadata.name}"); strings.TrimSpace(left) != "" {
 		t.Errorf("foreign release record Secrets remain: %s", left)
 	}
-	jobs, _ := inner(c, "-n", "kube-system", "get", "jobs,pods", "--no-headers")
+	jobs, _ := inner(c, "-n", nsKubeSystem, "get", "jobs,pods", "--no-headers")
 	t.Logf("jobs and pods in kube-system:\n%s", jobs)
 	for _, p := range cniJobPods(c) {
-		logs, _ := inner(c, "-n", "kube-system", "logs", p, "--tail=30")
+		logs, _ := inner(c, "-n", nsKubeSystem, "logs", p, "--tail=30")
 		t.Logf("log of %s:\n%s", p, logs)
 	}
 	cl, _ := inner(c, "-n", crNS, "logs", "deploy/ichor-controller-manager", "--since=30m")
@@ -153,7 +153,7 @@ func TestA8KillJob(t *testing.T) {
 			t.Logf("controller: %.400s", l)
 		}
 	}
-	if h := clusterJSONPath(c, handoverPath); h != "True" {
+	if h := clusterJSONPath(c, handoverPath); h != valTrue {
 		t.Errorf("CNIHandover = %q", h)
 	}
 	nodesReady(t, c)

@@ -42,8 +42,8 @@ func installationField(c *foreign.Cluster, path string) string {
 func ichorInPod(t *testing.T, c *foreign.Cluster, args ...string) (string, error) {
 	t.Helper()
 	pod := stage(t, c)
-	a := append([]string{"--context", os.Getenv(kube.ContextEnv), "-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor"}, args...)
-	a = append(a, "--kubeconfig", "/tmp/kubeconfig")
+	a := append([]string{flagContext, os.Getenv(kube.ContextEnv), "-n", ns, cmdExec, pod, "--", cmdEnv, envHome, pathTmpIchor}, args...)
+	a = append(a, flagKubeconfig, "/tmp/kubeconfig")
 	out, err := exec.Command("kubectl", a...).CombinedOutput()
 	t.Logf("ichor %s: %v\n%s", strings.Join(args, " "), err, out)
 	return string(out), err
@@ -60,7 +60,7 @@ func TestT7HelmManager(t *testing.T) {
 	for installationField(c, "{.spec.deployment.manager}") == "" && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Second)
 	}
-	if got := installationField(c, "{.spec.deployment.manager}"); got != "helm" {
+	if got := installationField(c, "{.spec.deployment.manager}"); got != nameHelm {
 		t.Fatalf("seeded IchorInstallation manager = %q, want helm", got)
 	}
 	t.Logf("seeded spec.version = %q", installationField(c, "{.spec.version}"))
@@ -79,14 +79,14 @@ func TestT7HelmManager(t *testing.T) {
 	if got := installationField(c, "{.spec.users.tokenTTL}"); got != "10m0s" {
 		t.Fatalf("spec.users.tokenTTL = %q, want 10m0s", got)
 	}
-	if out, err := local(t, 8*time.Minute, "helm", "upgrade", "ichor", packagedChart(t), "--kubeconfig", c.LocalKube, "-n", crNS,
+	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube, "-n", crNS,
 		"--reuse-values", "--set", "manager.replicas=1", "--wait", "--timeout", "6m"); err != nil {
 		t.Fatalf("helm upgrade failed: %v\n%s", err, out)
 	}
 	if got := installationField(c, "{.spec.users.tokenTTL}"); got != "10m0s" {
 		t.Errorf("spec.users.tokenTTL after helm upgrade = %q, want 10m0s", got)
 	}
-	if got := installationField(c, "{.spec.deployment.manager}"); got != "helm" {
+	if got := installationField(c, "{.spec.deployment.manager}"); got != nameHelm {
 		t.Errorf("manager after helm upgrade = %q, want helm", got)
 	}
 }

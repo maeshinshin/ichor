@@ -55,11 +55,11 @@ func packagedChart(t *testing.T) string {
 // helmInstall runs `helm install ichor <packaged chart>` against the foreign cluster.
 func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
 	t.Helper()
-	args := []string{"install", "ichor", packagedChart(t), "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace"}
+	args := []string{"install", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube, "-n", crNS, "--create-namespace"}
 	if wait {
 		args = append(args, "--wait", "--timeout", "6m")
 	}
-	return local(t, 8*time.Minute, "helm", args...)
+	return local(t, 8*time.Minute, nameHelm, args...)
 }
 
 // TestF3NoCNIHelmPath: on a no-CNI cluster helm install is refused by the preflight;
@@ -75,7 +75,7 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 		t.Errorf("Ichor CRDs exist after the refused helm install: %s", got)
 	}
 	start := time.Now()
-	out, err = local(t, 9*time.Minute, repoPath(t, "bin/img/ichor/ichor"), "bootstrap", "cni", "--kube-proxy", "enabled", "--tunnel", "geneve", "--yes", "--kubeconfig", c.LocalKube)
+	out, err = local(t, 9*time.Minute, repoPath(t, "bin/img/ichor/ichor"), "bootstrap", "cni", "--kube-proxy", "enabled", "--tunnel", "geneve", flagYes, flagKubeconfig, c.LocalKube)
 	t.Logf("bootstrap cni took %s", time.Since(start))
 	if err != nil {
 		t.Fatalf("bootstrap cni failed: %v\n%s", err, out)
@@ -105,7 +105,7 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 		t.Errorf("spec.cni.tunnel = %q, want geneve (the controller would flip the live tunnel with an ichor-cni Job)", got)
 	}
 	noCNIJob(t, c)
-	if rel, _ := local(t, time.Minute, "helm", "list", "-A", "--kubeconfig", c.LocalKube); !strings.Contains(rel, "ichor") {
+	if rel, _ := local(t, time.Minute, nameHelm, "list", "-A", flagKubeconfig, c.LocalKube); !strings.Contains(rel, "ichor") {
 		t.Errorf("helm list does not show the ichor release")
 	}
 }

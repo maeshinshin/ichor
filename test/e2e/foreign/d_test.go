@@ -37,7 +37,7 @@ import (
 )
 
 // opsList prints every TalosOperation as name kind=phase.
-func opsList(c *foreign.Cluster, kc string) string {
+func opsList(kc string) string {
 	out, _ := utils.Run(kube.InnerCommand(kc, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o",
 		"jsonpath={range .items[*]}{.metadata.name} {.spec.kind}={.status.phase}{\"\\n\"}{end}"))
 	return strings.TrimSpace(out)
@@ -45,12 +45,12 @@ func opsList(c *foreign.Cluster, kc string) string {
 
 // waitOps polls until every TalosOperation of the given kind is Completed (and at least one exists); a Failed one
 // fails the test.
-func waitOps(t *testing.T, c *foreign.Cluster, kc, kind string, limit time.Duration) {
+func waitOps(t *testing.T, kc, kind string, limit time.Duration) {
 	t.Helper()
 	start := time.Now()
 	for time.Since(start) < limit {
 		var mine, done int
-		list := opsList(c, kc)
+		list := opsList(kc)
 		for l := range strings.SplitSeq(list, "\n") {
 			if strings.Contains(strings.ToLower(l), strings.ToLower(kind)+"=") {
 				mine++
@@ -87,9 +87,9 @@ func noHandover(t *testing.T, c *foreign.Cluster, kc string) {
 	}
 }
 
-func flannelRunning(t *testing.T, c *foreign.Cluster, kc string) {
+func flannelRunning(t *testing.T, kc string) {
 	t.Helper()
-	pods, _ := utils.Run(kube.InnerCommand(kc, "-n", "kube-system", "get", "pods", "--no-headers"))
+	pods, _ := utils.Run(kube.InnerCommand(kc, "-n", nsKubeSystem, "get", "pods", "--no-headers"))
 	t.Logf("kube-system pods:\n%s", pods)
 	nodes, _ := utils.Run(kube.InnerCommand(kc, "get", "nodes", "-o", "wide", "--no-headers"))
 	t.Logf("nodes:\n%s", nodes)
@@ -103,10 +103,10 @@ func TestD4Talos(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	to := env("ICHOR_E2E_F_UPGRADE_TO", "v1.14.4")
 	start := time.Now()
-	if out, err := ichorCLI(t, c, "upgrade", "talos", to, "--yes"); err != nil {
+	if out, err := ichorCLI(t, c, "upgrade", "talos", to, flagYes); err != nil {
 		t.Fatalf("upgrade talos: %v\n%s", err, out)
 	}
-	waitOps(t, c, c.LocalKube, "talos", 9*time.Minute)
+	waitOps(t, c.LocalKube, "talos", 9*time.Minute)
 	t.Logf("Talos upgrade to %s took %s", to, time.Since(start).Round(time.Second))
 	for _, ip := range c.Nodes() {
 		v, err := talosctl.Version(ns, ip, ftc(t, c))
@@ -116,7 +116,7 @@ func TestD4Talos(t *testing.T) {
 		}
 	}
 	noHandover(t, c, c.LocalKube)
-	flannelRunning(t, c, c.LocalKube)
+	flannelRunning(t, c.LocalKube)
 }
 
 // TestD4K8s: a Kubernetes upgrade to the release set (ICHOR_E2E_F_K8S_TARGET, default v1.36.6). The
@@ -126,10 +126,10 @@ func TestD4K8s(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, K8sVersion: foreignK8sUpgradeStart})
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	start := time.Now()
-	if out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes"); err != nil {
+	if out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, flagYes); err != nil {
 		t.Fatalf("upgrade kubernetes: %v\n%s", err, out)
 	}
-	waitOps(t, c, c.LocalKube, "kubernetes", 9*time.Minute)
+	waitOps(t, c.LocalKube, "kubernetes", 9*time.Minute)
 	t.Logf("Kubernetes upgrade to %s took %s", target, time.Since(start).Round(time.Second))
 	vers, _ := inner(c, "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.kubeletVersion}")
 	t.Logf("kubelet versions: %s", vers)
@@ -139,14 +139,14 @@ func TestD4K8s(t *testing.T) {
 		}
 	}
 	noHandover(t, c, c.LocalKube)
-	flannelRunning(t, c, c.LocalKube)
+	flannelRunning(t, c.LocalKube)
 }
 
 // TestD4RotateCA: `ichor rotate ca` (without --follow: the call returns after the credential hand-off).
 func TestD4RotateCA(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	start := time.Now()
-	out, err := ichorCLI(t, c, "rotate", "ca", c.Opts.Prefix, "--yes")
+	out, err := ichorCLI(t, c, "rotate", "ca", c.Opts.Prefix, flagYes)
 	t.Logf("rotate ca returned after %s", time.Since(start).Round(time.Second))
 	if err != nil {
 		t.Fatalf("rotate ca: %v\n%s", err, out)
@@ -181,9 +181,9 @@ func rotatedKube(t *testing.T, c *foreign.Cluster) string {
 func TestD4RotateCAWait(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	kc := rotatedKube(t, c)
-	waitOps(t, c, kc, "ca-rotation", 9*time.Minute)
+	waitOps(t, kc, "ca-rotation", 9*time.Minute)
 	noHandover(t, c, kc)
-	flannelRunning(t, c, kc)
+	flannelRunning(t, kc)
 	if out, err := utils.Run(kube.InnerCommand(kc, "get", "--raw", "/readyz")); err != nil || !strings.Contains(out,
 		"ok") {
 		t.Errorf("readyz with the rotated kubeconfig: %v %s", err, out)
@@ -208,7 +208,7 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 
 	// UI API through the `ichor ui` port-forward.
 	port := env("ICHOR_E2E_F_UI_PORT", "5144")
-	ui := exec.Command(ichorBin(t), "ui", "--open-browser=false", "--local-port", port, "--kubeconfig", c.LocalKube, "-n", crNS) //nolint:gosec // test harness
+	ui := exec.Command(ichorBin(t), "ui", "--open-browser=false", "--local-port", port, flagKubeconfig, c.LocalKube, "-n", crNS) //nolint:gosec // test harness
 	var uiOut strings.Builder
 	ui.Stdout, ui.Stderr = &uiOut, &uiOut
 	if err := ui.Start(); err != nil {

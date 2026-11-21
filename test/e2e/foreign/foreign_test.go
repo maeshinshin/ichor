@@ -52,6 +52,24 @@ import (
 var ns = kube.Namespace
 
 const (
+	flagKubeconfig = "--kubeconfig"
+	flagPlan       = "--plan"
+	flagContext    = "--context"
+	flagYes        = "--yes"
+	nsKubeSystem   = "kube-system"
+	valTrue        = "True"
+	nameCilium     = "cilium"
+	nameHelm       = "helm"
+	pathTmpIchor   = "/tmp/ichor"
+	envHome        = "HOME=/tmp/home"
+	cmdEnv         = "env"
+	cmdExec        = "exec"
+
+	labelControllerLog = "controller log"
+	labelEvents        = "events"
+)
+
+const (
 	crNS    = "ichor-system"
 	prefixE = "ICHOR_E2E_F_PREFIX"
 	// foreignK8sUpgradeStart is where the cases that upgrade Kubernetes to the release set (v1.36.6) start: one
@@ -171,7 +189,7 @@ func stage(t *testing.T, c *foreign.Cluster) string {
 		t.Fatal(err)
 	}
 	for _, cp := range [][2]string{
-		{repoPath(t, os.Getenv("ICHOR_E2E_F_ICHOR_BIN")), "/tmp/ichor"}, {c.Talosconfig, "/tmp/talosconfig"}, {c.Kubeconfig, "/tmp/kubeconfig"},
+		{repoPath(t, os.Getenv("ICHOR_E2E_F_ICHOR_BIN")), pathTmpIchor}, {c.Talosconfig, "/tmp/talosconfig"}, {c.Kubeconfig, "/tmp/kubeconfig"},
 	} {
 		if _, err := utils.Run(kube.Command("-n", ns, "cp", cp[0], pod+":"+cp[1])); err != nil {
 			t.Fatalf("copying %s: %v", cp[1], err)
@@ -185,13 +203,13 @@ func stage(t *testing.T, c *foreign.Cluster) string {
 func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) {
 	t.Helper()
 	pod := stage(t, c)
-	a := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor"}, args...)
+	a := append([]string{"-n", ns, cmdExec, pod, "--", cmdEnv, envHome, pathTmpIchor}, args...)
 	// `ichor get cluster NAME` and `ichor rotate ca NAME` take the name as an argument and have no --cluster flag
 	if !slices.Contains([]string{"get cluster", "rotate ca"}, strings.Join(args[:min(2, len(args))], " ")) {
 		a = append(a, "--cluster", c.Opts.Prefix)
 	}
-	a = append(a, "-n", crNS, "--kubeconfig", "/tmp/kubeconfig", "--local")
-	out, err := exec.Command("kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, a...)...).CombinedOutput()
+	a = append(a, "-n", crNS, flagKubeconfig, "/tmp/kubeconfig", "--local")
+	out, err := exec.Command("kubectl", append([]string{flagContext, os.Getenv(kube.ContextEnv)}, a...)...).CombinedOutput()
 	t.Logf("ichor %s:\n%s", strings.Join(args, " "), out)
 	return string(out), err
 }
@@ -200,7 +218,7 @@ func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) 
 // returns its combined output and exit error.
 func adopt(t *testing.T, c *foreign.Cluster, extra ...string) (string, error) {
 	t.Helper()
-	return adoptBin(t, c, "/tmp/ichor", extra...)
+	return adoptBin(t, c, pathTmpIchor, extra...)
 }
 
 // adoptBin is adopt with the ichor binary at bin inside the tools pod (stage puts ICHOR_E2E_F_ICHOR_BIN at /tmp/ichor).
@@ -213,7 +231,7 @@ func adoptBin(t *testing.T, c *foreign.Cluster, bin string, extra ...string) (st
 // adoptArgs runs `ichor adopt` with exactly the given flags (no --yes, no recovery flags added).
 func adoptArgs(t *testing.T, c *foreign.Cluster, flags ...string) (string, error) {
 	t.Helper()
-	out, _, _, err := adoptRun(t, c, "/tmp/ichor", flags, "", 0, nil)
+	out, _, _, err := adoptRun(t, c, pathTmpIchor, flags, "", 0, nil)
 	return out, err
 }
 
@@ -222,20 +240,20 @@ func adoptArgs(t *testing.T, c *foreign.Cluster, flags ...string) (string, error
 // the action ran, and adopt's error.
 func adoptTriggered(t *testing.T, c *foreign.Cluster, bin, trigger string, delay time.Duration, action func(), extra ...string) (string, time.Duration, bool, error) {
 	t.Helper()
-	return adoptRun(t, c, bin, append([]string{"--yes"}, append(recoverArgs(c, extra), extra...)...), trigger, delay, action)
+	return adoptRun(t, c, bin, append([]string{flagYes}, append(recoverArgs(c, extra), extra...)...), trigger, delay, action)
 }
 
 func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trigger string, delay time.Duration, action func()) (string, time.Duration, bool, error) {
 	t.Helper()
 	pod := stage(t, c)
-	args := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", bin, "adopt",
-		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", "--kubeconfig", "/tmp/kubeconfig",
+	args := append([]string{"-n", ns, cmdExec, pod, "--", cmdEnv, envHome, bin, "adopt",
+		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", flagKubeconfig, "/tmp/kubeconfig",
 		"--node", c.CPs[0]}, flags...)
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
 	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute) // adopt waits for Ichor's webhooks without a bound (D5: no CNI, never ready)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "kubectl", append([]string{"--context", os.Getenv(kube.ContextEnv)}, args...)...)
+	cmd := exec.CommandContext(ctx, "kubectl", append([]string{flagContext, os.Getenv(kube.ContextEnv)}, args...)...)
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -353,7 +371,7 @@ func TestB1FlannelRefusedWithoutFlag(t *testing.T) {
 	nothingWritten(t, c)
 	// The plan phase writes nothing anywhere, not even the recovered secrets bundle.
 	if pod, err := foreign.ToolsPod(c.Opts.Prefix); err == nil {
-		if got, err := utils.Run(kube.Command("-n", ns, "exec", pod, "--", "ls", "/tmp/home/.ichor")); err == nil {
+		if got, err := utils.Run(kube.Command("-n", ns, cmdExec, pod, "--", "ls", "/tmp/home/.ichor")); err == nil {
 			t.Errorf("a refused adopt left files under ~/.ichor: %s", got)
 		}
 	}
@@ -432,7 +450,7 @@ const unmanagedText = "the CNI is not managed by Ichor (spec.cni.preset: unmanag
 func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
 	records := func() string {
-		out, _ := inner(c, "-n", "kube-system", "get", "secrets", "-l", "owner=helm", "-o",
+		out, _ := inner(c, "-n", nsKubeSystem, "get", "secrets", "-l", "owner=helm", "-o",
 			"jsonpath={range .items[*]}{.metadata.name} {.metadata.resourceVersion}{\"\\n\"}{end}")
 		return out
 	}
@@ -444,7 +462,7 @@ func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 		t.Fatalf("adopt --cni-unmanaged failed: %v\n%s", err, out)
 	}
 	unmanagedAdopted(t, c)
-	waitCluster(t, c, "{.status.cni.detected}", "cilium")
+	waitCluster(t, c, "{.status.cni.detected}", nameCilium)
 	time.Sleep(3 * time.Minute)
 	if after := records(); after != before {
 		t.Errorf("Helm release records changed:\nbefore:\n%s\nafter:\n%s", before, after)

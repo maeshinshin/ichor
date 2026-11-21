@@ -51,16 +51,16 @@ func TestF1CiliumHelm(t *testing.T) {
 	membership(t, c)
 	holdCleared(t, c)
 	if got, _ := inner(c, "get", "ichorinstallations.ichor.maesh.dev", "-o",
-		"jsonpath={.items[*].spec.deployment.manager}"); strings.TrimSpace(got) != "helm" {
+		"jsonpath={.items[*].spec.deployment.manager}"); strings.TrimSpace(got) != nameHelm {
 		t.Errorf("IchorInstallation manager = %q, want helm", got)
 	}
-	if rel, _ := local(t, time.Minute, "helm", "list", "-n", crNS, "--kubeconfig", c.LocalKube); !strings.Contains(rel,
+	if rel, _ := local(t, time.Minute, nameHelm, "list", "-n", crNS, flagKubeconfig, c.LocalKube); !strings.Contains(rel,
 		"deployed") {
 		t.Errorf("helm list does not show the release deployed")
 	}
 
 	// helm upgrade works against the adopted cluster.
-	if out, err := local(t, 8*time.Minute, "helm", "upgrade", "ichor", packagedChart(t), "--kubeconfig", c.LocalKube,
+	if out, err := local(t, 8*time.Minute, nameHelm, "upgrade", "ichor", packagedChart(t), flagKubeconfig, c.LocalKube,
 		"-n", crNS,
 		"--reuse-values", "--set", "manager.replicas=1", "--wait", "--timeout", "6m"); err != nil {
 		t.Errorf("helm upgrade failed: %v\n%s", err, out)
@@ -71,7 +71,7 @@ func TestF1CiliumHelm(t *testing.T) {
 	}
 
 	// helm uninstall removes the release but keeps the CRDs and the cluster's objects.
-	if out, err := local(t, 5*time.Minute, "helm", "uninstall", "ichor", "-n", crNS, "--kubeconfig", c.LocalKube); err != nil {
+	if out, err := local(t, 5*time.Minute, nameHelm, "uninstall", "ichor", "-n", crNS, flagKubeconfig, c.LocalKube); err != nil {
 		t.Errorf("helm uninstall failed: %v\n%s", err, out)
 	}
 	crds, _ := inner(c, "get", "crd", "--no-headers")

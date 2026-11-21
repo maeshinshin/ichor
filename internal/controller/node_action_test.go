@@ -308,6 +308,23 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(f.fake(hostW1).rebootCalls).To(Equal(1))
 		})
 
+		It("sends the Reboot again when a paused reboot is retried, not wait for a reboot that never began", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			fake := f.fake(hostW1)
+			fake.rebootErr = errors.New("boom")
+			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(fake.rebootCalls).To(Equal(1))
+
+			fake.rebootErr = nil
+			got := fetchOperation(op)
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+			Expect(fake.rebootCalls).To(Equal(2), "the failed call reached no node, so the retry sends it")
+		})
+
 		It("ends the storage evacuation when the operation pauses on a failed Reboot call", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 			evacuator := f.longhornEvacuator()

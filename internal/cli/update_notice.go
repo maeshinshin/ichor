@@ -57,8 +57,8 @@ func updateNoticeLines(installed string, rel *ichorv1alpha1.IchorLatestRelease, 
 
 	if releasecheck.Newer(cliVersion, rel.Version) {
 		lines = append(lines, fmt.Sprintf(
-			"This ichor (%s) is older than the newest Ichor release, %s. Update the ichor binary to %s.",
-			cliVersion, rel.Version, rel.Version))
+			"This ichor (%s) is older than the newest Ichor release, %s. Update it with: ichor upgrade cli",
+			cliVersion, rel.Version))
 	}
 
 	return lines

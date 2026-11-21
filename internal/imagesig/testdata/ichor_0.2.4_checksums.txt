@@ -1,0 +1,4 @@
+cf66faf27ab2db20d6498ed9a7c2e11b0aa4cf0fab1c269cdb42ea1560061c81  ichor_0.2.4_darwin_amd64.tar.gz
+4e7809967711805a863c931c938e8858c1de09c5b1cefa3aba5493c21d87e303  ichor_0.2.4_darwin_arm64.tar.gz
+b005856311ec6ef8f3740a3cdd3034011bac05351fb275db4d5b5b37ce4eece1  ichor_0.2.4_linux_amd64.tar.gz
+a88b8819ac51855b1e4a366ddfe7ee53d2979ba149300022c14e4540bb407b0a  ichor_0.2.4_linux_arm64.tar.gz

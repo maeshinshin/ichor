@@ -34,8 +34,10 @@ same way.
 The UI bundle in the ichor-ui image holds one chunk, the field search index,
 that is built from the same schema and from the documentation tables of the
 Talos machinery config types (internal/tools/gendocs). It contains the field
-descriptions of those tables and is covered in the same way. The repository does
-not hold the file.
+descriptions of those tables and is covered in the same way. The covered files
+are ui/src/gen/fieldindex.json, written by make ui-fieldindex and not held in
+the repository, and the chunk Vite builds from it, assets/fieldindex-<hash>.js
+in the UI bundle (cmd/ichor-ui/dist).
 
 Source code for the MPL-2.0 covered files in this distribution is available
 at https://github.com/maeshinshin/ichor, at the Git tag that matches the

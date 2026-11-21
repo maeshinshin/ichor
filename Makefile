@@ -148,7 +148,7 @@ test: manifests generate fmt vet setup-envtest build-installer ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test -timeout 30m $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: remote-gate
-remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the cluster set in hack/remote-gate.sh; logs in remote-gate-out/.
+remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the cluster and namespace GATE_CONTEXT and GATE_NAMESPACE name; logs in remote-gate-out/.
 	hack/remote-gate.sh
 
 # cluster-gate: the gate as one Job in a cluster (hack/cluster-gate.sh). Nothing is hardcoded: the

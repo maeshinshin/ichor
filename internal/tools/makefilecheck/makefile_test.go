@@ -275,3 +275,24 @@ func TestReleaseRefusesEmptyImageDigests(t *testing.T) {
 		t.Error("the goreleaser hook does not run check-release-digests outside a snapshot build")
 	}
 }
+
+// TestRemoteGateHelpNamesItsCluster pins the help text to where remote-gate takes its cluster from: the two variables,
+// not a cluster set inside the script.
+func TestRemoteGateHelpNamesItsCluster(t *testing.T) {
+	out, err := makeOut(t, "help")
+	if err != nil {
+		t.Fatalf("make help: %v\n%s", err, out)
+	}
+
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(line, "remote-gate") {
+			if !strings.Contains(line, "GATE_CONTEXT") || !strings.Contains(line, "GATE_NAMESPACE") {
+				t.Errorf("the remote-gate help line does not name GATE_CONTEXT and GATE_NAMESPACE: %q", line)
+			}
+
+			return
+		}
+	}
+
+	t.Errorf("make help has no remote-gate line:\n%s", out)
+}

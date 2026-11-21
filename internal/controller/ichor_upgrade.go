@@ -333,7 +333,9 @@ func pinInstallerImage(
 		if digest, err = images.Resolve(ctx, repo, tag); err != nil {
 			return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnresolved,
 				err: fmt.Errorf("the installer image %s:%s was not resolved to a digest, so no installer Job was created "+
-					"(check that the registry is reachable from the controller, or pin spec.installerDigest): %w", repo, tag, err)}
+					"(check that the registry is reachable from the controller; if it cannot be, `ichor upgrade ichor VERSION "+
+					"--installer-digest sha256:... --skip-signature-check` pins the digest of the installer image you pushed "+
+					"and skips the signature check, which reads the same registry): %w", repo, tag, err)}
 		}
 	}
 

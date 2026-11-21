@@ -73,6 +73,8 @@ var newTestBundle = sync.OnceValue(func() *secrets.Bundle {
 	return bundle
 })
 
+// newTestSecret and newTestCluster are Ginkgo-only: they create objects through k8sClient, which
+// BeforeSuite sets, so a plain test cannot use them and Expect's fail handler is always registered.
 func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
 	raw, err := yaml.Marshal(bundle)
 	Expect(err).NotTo(HaveOccurred())

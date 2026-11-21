@@ -693,6 +693,11 @@ command does. Each item is described where it is listed below.
   Longhorn's settings, so with Rook it showed `Unknown (NotInstalled)` for a Longhorn
   namespace and never became True. Only `longhorn-v1` has a setting to check, so
   the condition is now absent for `rook-v1`, and a stale one is removed.
+- **`ExtensionsPresent` counts the nodes the `TalosStorage` governs.** While nodes were
+  NotReady after a reboot it counted only those whose Kubernetes Node it could find, so it
+  said "2 nodes" where `Ready` said "3". A node with no Node yet now makes it `Unknown`
+  ("2 of 3 governed nodes reported") instead of `True`. A `rook-v1` `TalosStorage` has no
+  extension to check, so the condition is absent there.
 - **A node that `rook-v1` governs drains, upgrades or is removed without an evacuation
   step.** Ichor moves nothing off such a node first, since the preset has no evacuation
   hook; the drain itself runs, and Rook's disruption budgets decide when each OSD may

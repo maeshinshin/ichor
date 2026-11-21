@@ -48,6 +48,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -57,6 +58,7 @@ var (
 	bothTargets = []string{ichorv1alpha1.KeyRotationTargetServiceAccount, ichorv1alpha1.KeyRotationTargetSecretbox}
 	saOnly      = []string{ichorv1alpha1.KeyRotationTargetServiceAccount}
 	boxOnly     = []string{ichorv1alpha1.KeyRotationTargetSecretbox}
+	contractV13 = "v1.13"
 
 	ecdsaBundleOnce sync.Once
 	ecdsaBundle     *secrets.Bundle
@@ -987,7 +989,14 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 			op := f.step(f.newOp(targets))
 			Expect(rotationStage(op)).To(BeEmpty())
-			Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring(want))
+
+			// A blocked rotation says why in its condition; a failed step, in its failure reason.
+			why := op.Status.FailureReason
+			if cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation); cond != nil {
+				why = cond.Message
+			}
+
+			Expect(why).To(ContainSubstring(want))
 			Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
 			Expect(f.world.applies).To(BeEmpty())
 		},
@@ -1009,7 +1018,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 			var cluster ichorv1alpha1.TalosCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &cluster)).To(Succeed())
-			cluster.Spec.VersionContract = "v1.13"
+			cluster.Spec.VersionContract = contractV13
 			Expect(k8sClient.Update(ctx, &cluster)).To(Succeed())
 
 			return f, bothTargets
@@ -1314,5 +1323,62 @@ var _ = Describe("a key rotation that gave up, and its retry request", func() {
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 		Expect(op.Status.LastRetry).NotTo(BeNil(), "the retry the controller acted on is recorded in status.lastRetry")
 		Expect(fetchOperation(op).Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation))
+	})
+})
+
+// A request no passage of time can make runnable is a failed step at once; waiting out the give-up window would
+// hold the cluster lock for thirty minutes first.
+var _ = Describe("a key rotation that can never run", func() {
+	expectFailedAtOnce := func(f *keyRotFixture, op *ichorv1alpha1.TalosOperation, reason string) {
+		GinkgoHelper()
+
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(ContainSubstring(reason))
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name},
+			clusterlock.DefaultDuration)
+		Expect(lock.Acquire(ctx, "ichor-controller/test/next-holder")).To(Succeed())
+		Expect(lock.Release(ctx, "ichor-controller/test/next-holder")).To(Succeed())
+	}
+
+	It("pauses on a failed step at once when the version contract cannot hold two keys", func() {
+		f := newKeyRotFixture(fastBundle())
+		f.cluster.Spec.VersionContract = contractV13
+		Expect(k8sClient.Update(ctx, f.cluster)).To(Succeed())
+
+		expectFailedAtOnce(f, f.step(f.newOp(bothTargets)), "raise the contract to v1.14 or later")
+	})
+
+	It("pauses on a failed step at once when the cluster has no secretbox key to rotate", func() {
+		// fastBundle is shared, so edit a copy.
+		b := *fastBundle()
+		secretsCopy := *b.Secrets
+		secretsCopy.SecretboxEncryptionSecret = ""
+		b.Secrets = &secretsCopy
+		f := newKeyRotFixture(&b)
+
+		expectFailedAtOnce(f, f.step(f.newOp(boxOnly)), "no secretbox key to rotate")
+	})
+
+	It("pauses on a failed step at once for a keyrotation.yaml that holds other keys than the operation names", func() {
+		f := newKeyRotFixture(fastBundle())
+
+		kr, err := secretsbundle.NewKeyRotation(f.old, boxOnly)
+		Expect(err).NotTo(HaveOccurred())
+
+		raw, _ := kr.Marshal()
+
+		editSecret(f.secret.Name, func(data map[string][]byte) { data[secretsbundle.KeyRotationKey] = raw })
+
+		expectFailedAtOnce(f, f.step(f.newOp(bothTargets)), "does not hold the keys this operation names")
+	})
+
+	It("pauses on a failed step at once when keyrotation.yaml is gone mid-rotation", func() {
+		f := newKeyRotFixture(fastBundle())
+		op, _ := f.runUntil(f.newOp(bothTargets), atStage(ichorv1alpha1.KeyRotationStageAccepting))
+
+		editSecret(f.secret.Name, func(data map[string][]byte) { delete(data, secretsbundle.KeyRotationKey) })
+
+		expectFailedAtOnce(f, f.step(op), "the new keys cannot be found")
 	})
 })

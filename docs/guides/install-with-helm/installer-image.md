@@ -22,9 +22,41 @@ checked first. Before it creates the Job the controller:
 If the tag does not resolve or the signature does not verify, the operation is
 paused with the reason `InstallerImageUnresolved` or `InstallerImageUnverified`,
 no Job is created and nothing is applied. `ichor describe operation` shows why.
-After you fix the registry or the mirror, `ichor resume operation NAME` runs the check
+`InstallerImageUnresolved` also covers a signature that could not be read because
+the registry could not be read: the image is neither verified nor shown to be
+unsigned, so the reason is not `InstallerImageUnverified`. After you fix the
+registry or the mirror, `ichor resume operation NAME` runs the check
 again. The digest and the result are in `ichor version` and in
 `IchorInstallation` `status.installerImage`.
+
+## A registry the controller cannot read
+
+The controller reads `installerRepository` itself. When it cannot, the operation
+pauses with `InstallerImageUnresolved`. Which flags get past the pause depend on
+which read failed; the pause message names the route for its case.
+
+- The controller cannot resolve the tag. Give the digest of the installer image
+  you pushed (`DIGEST_FILE` of `make demo-images` has it) and skip the check. The
+  pin alone is not enough, because the signature is read from the same registry:
+
+  ```sh
+  ichor upgrade ichor VERSION --installer-digest sha256:... --skip-signature-check
+  ```
+
+- The controller resolves the tag but cannot read the signature, for example
+  because a blob redirects to a host that is not allowed. The digest is already
+  known, so the skip alone is the route:
+
+  ```sh
+  ichor upgrade ichor --skip-signature-check
+  ```
+
+This is for an upgrade of an Ichor that is already installed. A fresh install, and
+the Cilium hand-over when `CNIHandover` pauses with `InstallerImageUnresolved`,
+use the same split on `ichor init`: `ichor init --installer-digest sha256:...
+--skip-signature-check` when the tag cannot be resolved, and `ichor init
+--skip-signature-check` when it resolves. Both routes record the skip, as
+[the flag is not one-shot](#the-flag-is-not-one-shot) describes.
 
 ## Mirrors and air gaps
 

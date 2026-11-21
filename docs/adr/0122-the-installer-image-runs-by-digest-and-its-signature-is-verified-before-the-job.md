@@ -124,3 +124,12 @@ Not done, and it needs a decision: the record does not outlive the next upgrade.
 ## Amendment (2026-11-21): a release without the digests file fails
 
 `make release` without `IMAGE_DIGESTS`, and a goreleaser release (not a snapshot) without `ICHOR_IMAGE_DIGESTS`, now fail with a message naming the file (`make check-release-digests`). The Context sentence "A snapshot build or a `make release` without the file embeds tags, as before" holds for the snapshot build only. `check-embed-images` is unchanged.
+
+## Amendment (2026-11-22): a registry that cannot be read pauses with `InstallerImageUnresolved`, and each case names its route
+
+Section 3 says that a registry which redirects blobs to a host that is not allowed fails "with the registry's error and the pause says so", without naming a reason. Section 5 gives `InstallerImageUnresolved` for a tag that does not resolve (registry unreachable, tag missing, egress), and does not say where a signature that cannot be read falls. What `pinInstallerImage` does:
+
+- A failed resolution of the tag pauses with `InstallerImageUnresolved`. There is no digest to verify, so the route is the pin and the skip: `ichor upgrade ichor VERSION --installer-digest sha256:... --skip-signature-check`. `ichor init` takes the same two flags for a fresh install and the Cilium hand-over.
+- A signature that cannot be read because the registry could not be read (the referrers listing or the bundle; the error wraps `imagesig.ErrRegistry`) pauses with `InstallerImageUnresolved`, not `InstallerImageUnverified`. Nothing was read to its end, so the image is neither verified nor shown to be unsigned. The digest is already known, so the route is the skip alone: `ichor upgrade ichor --skip-signature-check`. The pin adds nothing here, because the signature is read from the same registry as the tag.
+
+`InstallerImageUnverified` keeps its meaning in section 5: a signature that was read and does not verify, or no signature. Both routes record the skip as section 4 and the amendment of 2026-11-16 describe. The guide, [The installer image on an upgrade](../guides/install-with-helm/installer-image.md), gives the same routes.

@@ -572,6 +572,18 @@ command does. Each item is described where it is listed below.
   releases before its retry, and a CA or key rotation reports itself blocked. A
   shutdown with no Talos client now writes the reason on the operation rather
   than only to the log. Paths whose failure cannot persist are unchanged.
+- **The rest of the controller's error paths are sorted the same way: a failure that
+  can persist pauses for a person, one that clears by itself is retried.** An Ichor
+  upgrade or Cilium chart upgrade that meets an API server or network error is retried
+  instead of paused. A Cilium chart upgrade started before the hand-over made its release
+  waits for it. A CA rotation the cluster's version contract cannot run, or whose bundle has
+  nothing to finish from, pauses at once and frees the cluster lock, where it waited out
+  the thirty-minute give-up window holding it. An operation paused because the control-plane
+  count is even, or a shutdown or rotation is under way, gives back a cluster lock an earlier
+  reconcile took, so the removal that ends the transition is not kept waiting.
+- **A node action whose reboot, shutdown, service restart or leadership hand-over
+  call failed is sent again when the paused operation is retried.** The retry used to wait
+  for an effect of a call that never reached the node, until the action timed out.
 
 - **The Kubernetes upgrade's plan states the order the run follows, stage by stage**
   (ADR 0087). When the controller runs on one of the cluster's nodes, the plan listed

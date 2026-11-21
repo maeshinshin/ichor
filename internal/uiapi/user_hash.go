@@ -155,8 +155,8 @@ func (s *Server) writeCredential(ctx context.Context, name string, cred ichoraut
 
 	sec := &corev1.Secret{Namespace: s.ControllerNamespace, Name: ichorauth.CredentialsSecretName}
 
-	// Patch is not shadowed by the Server, so this is the ServiceAccount's client.
-	return s.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch))
+	// The ServiceAccount's client on purpose: the caller holds no write on this Secret.
+	return s.Client.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch))
 }
 
 // setCredential hashes password and stores it for name with the given

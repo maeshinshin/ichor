@@ -163,6 +163,9 @@ command does. Each item is described where it is listed below.
   effect. An upgrade that stopped with that message can be run again (Operations).
 
 ### CLI
+- **A second `ichor init` says the cluster is already initialised.** It used to
+  fail with the raw Kubernetes "already exists" error on the secrets bundle Secret;
+  it now names the cluster as initialised and the Secret that exists.
 - **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The
   check was that the `gateways` CRD existed, so any release and any partial set
   passed and Cilium failed later. It now reads the CRD's `bundle-version` and

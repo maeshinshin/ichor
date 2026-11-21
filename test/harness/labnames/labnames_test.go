@@ -41,49 +41,48 @@ const codeConstant = "the e2e namespace is a code constant there; " +
 // allowed says where a match may stay. Everywhere else a match fails the test.
 var allowed = []struct {
 	path string
-	dir  bool // path is a directory prefix, not one file
 	why  string
 }{
-	{"test/e2e/e2e_test.go", false,
+	{"test/e2e/e2e_test.go",
 		codeConstant},
-	{"test/e2e/foreign/reclaim_edges_test.go", false,
+	{"test/e2e/foreign/reclaim_edges_test.go",
 		codeConstant},
-	{"test/e2e/foreign/reclaim_test.go", false,
+	{"test/e2e/foreign/reclaim_test.go",
 		codeConstant},
-	{"test/e2e/foreign/reclaim_ui_test.go", false,
+	{"test/e2e/foreign/reclaim_ui_test.go",
 		codeConstant},
-	{"test/harness/harness.mk", false,
+	{"test/harness/harness.mk",
 		codeConstant},
-	{"test/harness/kubevirt/cache.go", false,
+	{"test/harness/kubevirt/cache.go",
 		codeConstant},
-	{"test/harness/kubevirt/config_test.go", false,
+	{"test/harness/kubevirt/config_test.go",
 		codeConstant},
-	{"test/harness/kubevirt/controller.go", false,
+	{"test/harness/kubevirt/controller.go",
 		codeConstant},
-	{"test/harness/kubevirt/ha.go", false,
+	{"test/harness/kubevirt/ha.go",
 		codeConstant},
-	{"test/harness/kubevirt/main.go", false,
+	{"test/harness/kubevirt/main.go",
 		codeConstant},
-	{"test/harness/ui-demo/README.md", false,
+	{"test/harness/ui-demo/README.md",
 		codeConstant},
-	{"test/internal/foreign/foreign.go", false,
+	{"test/internal/foreign/foreign.go",
 		codeConstant},
-	{"test/internal/kube/kube.go", false,
+	{"test/internal/kube/kube.go",
 		codeConstant},
-	{"test/internal/kube/kube_test.go", false,
+	{"test/internal/kube/kube_test.go",
 		codeConstant},
 	// TEMPORARY, not a decision: another agent holds these two files right now. Remove these entries when that
 	// agent's rename lands; the names are then checked here like everywhere else.
-	{"Makefile", false,
+	{"Makefile",
 		"TEMPORARY: held by another agent for the e2e namespace rename; not a decision"},
-	{"hack/cluster-gate.sh", false,
+	{"hack/cluster-gate.sh",
 		"TEMPORARY: held by another agent for the e2e namespace rename; not a decision"},
 }
 
 // allowedIndex returns the allowance that covers name, or -1.
 func allowedIndex(name string) int {
 	for i, a := range allowed {
-		if a.dir && strings.HasPrefix(name, a.path) || !a.dir && name == a.path {
+		if name == a.path {
 			return i
 		}
 	}

@@ -115,10 +115,13 @@ func TestAuthTimeIsTheSignInAndSurvivesRefresh(t *testing.T) {
 					c.Refresh = st
 				}
 			})
+			// The clock is wall time, so the sign-in may land in either second around login.
+			before := e.clk.now().Unix()
 			login := e.tokens(clientCLI, cliRedirect, "")
+			after := e.clk.now().Unix()
 			signedIn := claimsOf(t, login.IDToken)["auth_time"]
-			if signedIn != float64(e.clk.now().Unix()) {
-				t.Fatalf("login auth_time = %v, want the sign-in time %d", signedIn, e.clk.now().Unix())
+			if s, _ := signedIn.(float64); s < float64(before) || s > float64(after) {
+				t.Fatalf("login auth_time = %v, want the sign-in time within [%d, %d]", s, before, after)
 			}
 
 			e.clk.shift(time.Hour)

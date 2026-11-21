@@ -9,7 +9,7 @@ for little.
 
 | Condition | What happens |
 |---|---|
-| Kubernetes 1.30 or later, Helm 3 | The chart declares `kubeVersion >=1.30.0-0`; Helm refuses an older cluster. |
+| Kubernetes 1.30 or later, Helm 3 | The chart declares `kubeVersion >=1.30.0-0`; Helm refuses an older cluster. This is a guarantee of the chart alone: `install.yaml` and `ichor init` declare no minimum and do not read the server version, so below 1.30 they install without the kube-proxy-switch guard (ValidatingAdmissionPolicy is Stable from 1.30). |
 | A working pod network | The chart's pods need one. If every node is NotReady with "cni plugin not initialized", the chart refuses to install and tells you to run `ichor bootstrap cni` first (see [A cluster with no CNI](no-cni.md)). A cluster with at least one Ready node passes. |
 | Cilium as the CNI | Not needed to install. With Cilium, the chart also renders Ichor's network policies (see [Network policies](network-policies.md)). |
 | Another CNI (flannel, Calico, ...) | The chart installs and runs; it does not touch your CNI and renders no network policies, so `ichor-system` is not isolated by Ichor. `ichor adopt` later refuses such a cluster unless you pass `--cni-unmanaged`, which leaves the CNI exactly as it is and refuses the Cilium commands (`ichor get cni-values`, `ichor edit cni-values`, `ichor apply cni-values`, `ichor diff cni-values`, `ichor upgrade cni`, `ichor set kube-proxy`) for the cluster. Ichor does not migrate a CNI. |

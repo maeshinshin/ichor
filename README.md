@@ -68,7 +68,7 @@ ichor create user admin --role admin --generate --bootstrap
 
 Conditions:
 
-- Kubernetes 1.30 or later and a working pod network.
+- Kubernetes 1.30 or later and a working pod network. Only the Helm chart enforces the minimum (`kubeVersion`); `install.yaml` and `ichor init` do not check it.
 - Cilium, a talosconfig and a secrets bundle are not needed to install.
 - Ichor manages no nodes until you run `ichor adopt`.
 - On a CNI other than Cilium, adopt needs `--cni-unmanaged`; the CNI is left as it is.

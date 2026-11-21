@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -183,7 +182,8 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 	}
 
 	if rel.Status == "" {
-		return false, errors.New("there is no Helm release of Cilium yet: wait for the hand-over to finish")
+		// The hand-over makes the release: this clears by itself, and the verification clock bounds the wait.
+		return false, waitOn(op, reasonCiliumNoRelease, "there is no Helm release of Cilium yet: waiting for the hand-over to finish")
 	}
 
 	// The upgrade reproduces the mode Cilium runs now, not a spec edit no switch has applied.

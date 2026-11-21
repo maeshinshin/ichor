@@ -557,6 +557,10 @@ command does. Each item is described where it is listed below.
   `InstallerImageUnresolved`, which ADR 0122 already assigned to that case, and
   says the signature could not be checked rather than that it failed. A
   signature that was read and does not verify is unchanged.
+- **The pause for an installer image that did not resolve names the way past it.**
+  It said to check the registry or pin `spec.installerDigest`; it now gives
+  `ichor upgrade ichor VERSION --installer-digest sha256:... --skip-signature-check`,
+  the route for a registry the controller cannot read.
 - `imagesig` gained `VerifyBlob`, which checks a Sigstore bundle of a release
   blob offline, for artefacts that are not OCI images.
 - **An operation paused because the controller cannot tell which machine it runs
@@ -568,6 +572,18 @@ command does. Each item is described where it is listed below.
   releases before its retry, and a CA or key rotation reports itself blocked. A
   shutdown with no Talos client now writes the reason on the operation rather
   than only to the log. Paths whose failure cannot persist are unchanged.
+- **The rest of the controller's error paths are sorted the same way: a failure that
+  can persist pauses for a person, one that clears by itself is retried.** An Ichor
+  upgrade or Cilium chart upgrade that meets an API server or network error is retried
+  instead of paused. A Cilium chart upgrade started before the hand-over made its release
+  waits for it. A CA rotation the cluster's version contract cannot run, or whose bundle has
+  nothing to finish from, pauses at once and frees the cluster lock, where it waited out
+  the thirty-minute give-up window holding it. An operation paused because the control-plane
+  count is even, or a shutdown or rotation is under way, gives back a cluster lock an earlier
+  reconcile took, so the removal that ends the transition is not kept waiting.
+- **A node action whose reboot, shutdown, service restart or leadership hand-over
+  call failed is sent again when the paused operation is retried.** The retry used to wait
+  for an effect of a call that never reached the node, until the action timed out.
 
 - **The Kubernetes upgrade's plan states the order the run follows, stage by stage**
   (ADR 0087). When the controller runs on one of the cluster's nodes, the plan listed
@@ -693,6 +709,11 @@ command does. Each item is described where it is listed below.
   Longhorn's settings, so with Rook it showed `Unknown (NotInstalled)` for a Longhorn
   namespace and never became True. Only `longhorn-v1` has a setting to check, so
   the condition is now absent for `rook-v1`, and a stale one is removed.
+- **`ExtensionsPresent` counts the nodes the `TalosStorage` governs.** While nodes were
+  NotReady after a reboot it counted only those whose Kubernetes Node it could find, so it
+  said "2 nodes" where `Ready` said "3". A node with no Node yet now makes it `Unknown`
+  ("2 of 3 governed nodes reported") instead of `True`. A `rook-v1` `TalosStorage` has no
+  extension to check, so the condition is absent there.
 - **A node that `rook-v1` governs drains, upgrades or is removed without an evacuation
   step.** Ichor moves nothing off such a node first, since the preset has no evacuation
   hook; the drain itself runs, and Rook's disruption budgets decide when each OSD may

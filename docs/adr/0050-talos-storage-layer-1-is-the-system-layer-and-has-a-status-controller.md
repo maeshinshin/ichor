@@ -111,3 +111,7 @@ generic condition list, and `ExtensionsPresent=False` renders as a failure.
 ## Amendment, 2026-11-21: rook-v1 has no StorageSystemConsistent condition
 
 Only `longhorn-v1` carries `StorageSystemConsistent`. `rook-v1` has no setting to check (its `CheckConsistency` reports no mismatch), so the condition is absent there and a stale one is removed.
+
+## Amendment, 2026-11-22: ExtensionsPresent counts the governed set
+
+The check skipped a governed machine whose Node it could not find, so while nodes were NotReady after a reboot `ExtensionsPresent` said "2 nodes" where `Ready` said "3". A machine with no Node is now unknown, not absent: with none missing, `ExtensionsPresent` is `Unknown/NodesNotObserved` and says "N of M governed nodes reported"; a missing extension on a reported node is still `False`, with the same count appended. `True/AllPresent` counts every governed node. `rook-v1` names no extension, so the condition is absent there and a stale one is removed.

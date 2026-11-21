@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -59,6 +60,13 @@ func (r *TalosMachineReconciler) checkEndpointIdentity(
 	return res, true, err
 }
 
+// confirmMachine's two refusals, for a caller that retries one and stops on the other: errors.Is tells them apart.
+// errIdentityUnreadable may clear on its own; errIdentityMismatch holds until the address or the machine is fixed.
+var (
+	errIdentityUnreadable = errors.New("the node's identity could not be read")
+	errIdentityMismatch   = errors.New("the node is not the machine it is named for")
+)
+
 // confirmMachine proves that the node talos is connected to is the machine m is named for, before a
 // call that wipes it, changes its etcd membership, upgrades it or applies configuration to it. An
 // address recorded for one machine can answer as another that trusts the same CA (a DHCP lease that
@@ -74,13 +82,13 @@ func confirmMachine(ctx context.Context, talos TalosClient, m *ichorv1alpha1.Tal
 
 	hw, err := talos.Identity(idCtx)
 	if err != nil {
-		return fmt.Errorf("cannot tell that %s is %q (UUID %s), so nothing was sent to it: reading its identity failed: %w",
-			m.DialEndpoint(), m.Name, want, err)
+		return fmt.Errorf("cannot tell that %s is %q (UUID %s), so nothing was sent to it: %w: %w",
+			m.DialEndpoint(), m.Name, want, errIdentityUnreadable, err)
 	}
 
 	if hw.UUID == "" || !strings.EqualFold(hw.UUID, want) {
 		return fmt.Errorf("the node at %s reports machine UUID %q, but %q is %s, so nothing was sent to it; "+
-			"the address may be held by another node", m.DialEndpoint(), hw.UUID, m.Name, want)
+			"the address may be held by another node: %w", m.DialEndpoint(), hw.UUID, m.Name, want, errIdentityMismatch)
 	}
 
 	return nil

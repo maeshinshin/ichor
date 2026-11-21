@@ -581,6 +581,11 @@ command does. Each item is described where it is listed below.
   the thirty-minute give-up window holding it. An operation paused because the control-plane
   count is even, or a shutdown or rotation is under way, gives back a cluster lock an earlier
   reconcile took, so the removal that ends the transition is not kept waiting.
+- **A key rotation the cluster cannot run pauses at once and frees the cluster lock.** A
+  version contract below v1.14, a bundle with no secretbox secret, a `keyrotation.yaml` that
+  holds other keys than the operation names, a `keyrotation.yaml` gone mid-rotation, a
+  `TalosConfigPatch` that overrides the key documents and a bundle with nothing to finish from
+  waited out the thirty-minute give-up window holding the lock; they now pause on a failed step.
 - **A node action whose reboot, shutdown, service restart or leadership hand-over
   call failed is sent again when the paused operation is retried.** The retry used to wait
   for an effect of a call that never reached the node, until the action timed out.

@@ -98,6 +98,27 @@ func TestDiscoveryWarnings(t *testing.T) {
 			want: []string{"network MAC " + otherMAC + " is not the permanent address"},
 		},
 		{
+			name: "a control plane on DHCP is told etcd may advertise a DHCP lease",
+			m: TalosMachine{Spec: TalosMachineSpec{
+				Role:    literalControlPlane,
+				Network: &TalosMachineNetwork{MAC: nic, Addressing: MachineAddressingDHCP},
+			}},
+			want: []string{"advertise"},
+		},
+		{
+			name: "a control plane with a static address is not",
+			m: TalosMachine{Spec: TalosMachineSpec{
+				Role:    literalControlPlane,
+				Network: &TalosMachineNetwork{MAC: nic, Addressing: MachineAddressingStatic},
+			}},
+		},
+		{
+			name: "a worker on DHCP is not",
+			m: TalosMachine{Spec: TalosMachineSpec{
+				Role: "worker", Network: &TalosMachineNetwork{MAC: nic, Addressing: MachineAddressingDHCP},
+			}},
+		},
+		{
 			name: "both wrong, both named in order",
 			m: TalosMachine{
 				Spec: TalosMachineSpec{

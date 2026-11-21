@@ -259,3 +259,26 @@ func documentOfKind(t *testing.T, out, kind string) string {
 
 	return found[0]
 }
+
+// TestRenderEtcdAdvertisedSubnets: a control plane with static addresses tells etcd to advertise from their
+// subnets, so a second address on the link (a DHCP lease kept from maintenance mode) never becomes a peer URL.
+// DHCP has no address to name, and a worker has no etcd.
+func TestRenderEtcdAdvertisedSubnets(t *testing.T) {
+	render := func(role string, network *ichorv1alpha1.TalosMachineNetwork) string {
+		cluster := testCluster("true")
+		m := testMachine("node-a", role, nil)
+		m.Spec.Network = network
+
+		return mustRender(t, cluster, m, testBundle(t), nil)
+	}
+	static := &ichorv1alpha1.TalosMachineNetwork{
+		MAC: testNICMAC, Addressing: ichorv1alpha1.MachineAddressingStatic,
+		Addresses: []string{"192.168.0.201/24", "fd00::201/64"},
+	}
+
+	requireAll(t, render(roleControlPlane, static), "advertisedSubnets:", "- 192.168.0.0/24", "- fd00::/64")
+	requireNone(t, render(roleWorker, static), "advertisedSubnets")
+	dhcp := &ichorv1alpha1.TalosMachineNetwork{MAC: testNICMAC, Addressing: ichorv1alpha1.MachineAddressingDHCP}
+	requireNone(t, render(roleControlPlane, dhcp), "advertisedSubnets")
+	requireNone(t, render(roleControlPlane, nil), "advertisedSubnets")
+}

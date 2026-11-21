@@ -512,6 +512,14 @@ command does. Each item is described where it is listed below.
 
 ### Nodes
 
+- **A control plane with a static address now tells etcd to advertise from that
+  subnet** (`cluster.etcd.advertisedSubnets`, rendered from `spec.network.addresses`).
+  Without it Talos advertises the node's first routable address, which on a
+  control plane approved on DHCP and then given a static address could be a
+  DHCP lease still on the link, and became etcd's peer URL. A control plane
+  approved on DHCP gets a warning that says so; give it a static address
+  (`--address`). A machine already running etcd keeps its peer URL; the change
+  applies when etcd next starts.
 - The CLI, the controller, the admission webhooks and ichor-ui say node where
   they said machine: confirmations, plans, errors, command hints, Kubernetes
   event and condition messages, admission denials and the screens of the UI. The

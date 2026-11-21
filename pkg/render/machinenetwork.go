@@ -40,7 +40,20 @@ const PrimaryLinkAlias = "net0"
 // ephemeralVolume is the name of the EPHEMERAL system volume.
 const ephemeralVolume = "EPHEMERAL"
 
-// injectNetwork renders spec.network. From the multi-document contract it is a
+// injectNetwork renders spec.network (injectNetworkDocuments) and the etcd subnets that follow from it.
+func injectNetwork(
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) (coreconfig.Provider, error) {
+	cfg, err := injectNetworkDocuments(cfg, contract, cluster, m)
+	if err != nil {
+		return nil, err
+	}
+
+	return injectEtcdAdvertisedSubnets(cfg, m)
+}
+
+// injectNetworkDocuments renders spec.network. From the multi-document contract it is a
 // LinkAliasConfig whose CEL selector matches the permanent MAC, plus a DHCPv4Config or a
 // LinkConfig (or, with a VLAN, a VLANConfig on the alias) for the addressing and a
 // ResolverConfig for the DNS servers. Before it, one machine.network.interfaces entry selected by
@@ -49,7 +62,7 @@ const ephemeralVolume = "EPHEMERAL"
 // A control plane of a cluster whose endpoint type is vip also gets the endpoint address as a shared IP
 // on the primary link (vipAddress). That needs the link, so a machine without spec.network gets none: this
 // is also what leaves an adopted cluster, whose machines carry no spec.network, as it was.
-func injectNetwork(
+func injectNetworkDocuments(
 	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (coreconfig.Provider, error) {
@@ -162,6 +175,39 @@ func injectNetwork(
 	}
 
 	return mergeDocument(cfg, "resolver", resolver)
+}
+
+// injectEtcdAdvertisedSubnets makes a control plane with static addresses advertise etcd from their subnets
+// (cluster.etcd.advertisedSubnets). Unset, Talos picks the first routable address of the node, which is a DHCP
+// lease the link still holds when the static address is added beside it. A DHCP machine has no address to name.
+func injectEtcdAdvertisedSubnets(cfg coreconfig.Provider, m *ichorv1alpha1.TalosMachine) (coreconfig.Provider, error) {
+	n := m.Spec.Network
+	if n == nil || m.Spec.Role != controlPlaneRole || n.Addressing != ichorv1alpha1.MachineAddressingStatic {
+		return cfg, nil
+	}
+
+	var subnets []string
+
+	for _, a := range n.Addresses {
+		p, err := netip.ParsePrefix(a)
+		if err != nil {
+			return nil, fmt.Errorf("render: network.addresses %q: %w", a, err)
+		}
+
+		subnets = append(subnets, p.Masked().String())
+	}
+
+	if len(subnets) == 0 {
+		return cfg, nil
+	}
+
+	//nolint:staticcheck // cluster.etcd has no standalone document in 1.14: the legacy block is the only form
+	legacy := &mv1alpha1.Config{
+		ConfigVersion: mv1alpha1.Version,
+		ClusterConfig: &mv1alpha1.ClusterConfig{EtcdConfig: &mv1alpha1.EtcdConfig{EtcdAdvertisedSubnets: subnets}},
+	}
+
+	return mergeDocument(cfg, "etcd advertised subnets", legacy)
 }
 
 // vipAddress is the endpoint address a control plane holds as a shared IP: the cluster endpoint when its

@@ -156,5 +156,11 @@ func (m *TalosMachine) DiscoveryWarnings() []string {
 		}
 	}
 
+	if n := m.Spec.Network; n != nil && m.Spec.Role == "controlplane" && n.Addressing == MachineAddressingDHCP {
+		warns = append(warns, "this control plane takes its address by DHCP, so no address is known to tell etcd which one to advertise: "+
+			"etcd advertises the first routable address of the node, which can be another DHCP lease on the link and not "+
+			"the one you meant. Give it a static address (`--address`) so etcd advertises from that subnet")
+	}
+
 	return warns
 }

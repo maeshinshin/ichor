@@ -35,12 +35,12 @@ func TestInlineManifestForm(t *testing.T) {
 	m := testMachine("node-a", roleControlPlane, nil)
 
 	const (
-		newKind    = "kind: KubeInlineManifestConfig"
-		legacy     = "inlineManifests:"
-		cniName    = "name: " + cni.InlineManifestName
-		otherName  = "name: other"
-		sibling    = "unrelated.yaml"
-		handedOver = true
+		newKind     = "kind: KubeInlineManifestConfig"
+		v1alpha1Key = "inlineManifests:"
+		cniName     = "name: " + cni.InlineManifestName
+		otherName   = "name: other"
+		sibling     = "unrelated.yaml"
+		handedOver  = true
 	)
 
 	patch := inlineManifestPatch("manifests", cni.InlineManifestName)
@@ -51,8 +51,8 @@ func TestInlineManifestForm(t *testing.T) {
 		name, contract       string
 		wantForm, absentForm string
 	}{
-		{"multidoc", versionContract, newKind, legacy},
-		{"legacy", contractV112, legacy, newKind},
+		{"multidoc", versionContract, newKind, v1alpha1Key},
+		{"v1alpha1", contractV112, v1alpha1Key, newKind},
 	} {
 		for _, handover := range []bool{false, handedOver} {
 			name := tc.name + "/kept"

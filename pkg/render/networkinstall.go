@@ -74,7 +74,7 @@ func injectCNI(cfg coreconfig.Provider, contract *coreconfig.VersionContract) (c
 		return out, nil
 	}
 
-	//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
+	//nolint:staticcheck // the v1alpha1 block is the only form a pre-1.14 contract accepts
 	return mergeDocument(cfg, "cni", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		ClusterConfig: &mv1alpha1.ClusterConfig{
@@ -109,26 +109,26 @@ func injectInstall(
 	}
 
 	//nolint:staticcheck // see below
-	legacy := &mv1alpha1.InstallConfig{InstallImage: install.Image, InstallWipe: trueOrNil(install.Wipe)}
+	inst := &mv1alpha1.InstallConfig{InstallImage: install.Image, InstallWipe: trueOrNil(install.Wipe)}
 
 	switch d := install.Disk; {
 	case d.WWID != "":
-		legacy.InstallDiskSelector = &mv1alpha1.InstallDiskSelector{WWID: d.WWID} //nolint:staticcheck // see below
+		inst.InstallDiskSelector = &mv1alpha1.InstallDiskSelector{WWID: d.WWID} //nolint:staticcheck // see below
 	case d.Serial != "":
-		legacy.InstallDiskSelector = &mv1alpha1.InstallDiskSelector{Serial: d.Serial} //nolint:staticcheck // see below
+		inst.InstallDiskSelector = &mv1alpha1.InstallDiskSelector{Serial: d.Serial} //nolint:staticcheck // see below
 	case d.BusPath != "":
-		legacy.InstallDiskSelector = &mv1alpha1.InstallDiskSelector{BusPath: d.BusPath} //nolint:staticcheck // see below
+		inst.InstallDiskSelector = &mv1alpha1.InstallDiskSelector{BusPath: d.BusPath} //nolint:staticcheck // see below
 	case d.ByIDPath != "":
-		// The legacy block has no symlink selector, but installDisk is a path and the symlink resolves.
-		legacy.InstallDisk = d.ByIDPath
+		// The v1alpha1 block has no symlink selector, but installDisk is a path and the symlink resolves.
+		inst.InstallDisk = d.ByIDPath
 	default:
-		legacy.InstallDisk = d.DevPath
+		inst.InstallDisk = d.DevPath
 	}
 
-	//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
+	//nolint:staticcheck // the v1alpha1 block is the only form a pre-1.14 contract accepts
 	return mergeDocument(cfg, "install", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
-		MachineConfig: &mv1alpha1.MachineConfig{MachineInstall: legacy},
+		MachineConfig: &mv1alpha1.MachineConfig{MachineInstall: inst},
 	})
 }
 

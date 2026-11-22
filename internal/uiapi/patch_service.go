@@ -249,7 +249,7 @@ func patchPaths(documents []ichorv1alpha1.TalosConfigPatchDocument) ([]string, e
 		}
 
 		for p, v := range leaves {
-			// The legacy document's schema "version" and the empty machine/cluster maps of a
+			// The v1alpha1 document's schema "version" and the empty machine/cluster maps of a
 			// sparse document set nothing; as unknown paths they would read as a reboot.
 			if p == "version" || v == "{}" || v == "null" {
 				continue

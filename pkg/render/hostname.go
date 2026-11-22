@@ -45,7 +45,7 @@ func injectHostname(
 		return mergeDocument(cfg, "hostname", doc)
 	}
 
-	//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
+	//nolint:staticcheck // the v1alpha1 block is the only form a pre-1.14 contract accepts
 	return mergeDocument(cfg, "hostname", &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{

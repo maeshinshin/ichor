@@ -38,10 +38,10 @@ type registered struct {
 	pkgPath  string
 	typeName string
 	// constPkg/constName name the kind constant the call passes; empty when the kind is a string literal
-	// (the legacy v1alpha1 document), which has no Meta to set.
+	// (the v1alpha1 document), which has no Meta to set.
 	constPkg  string
 	constName string
-	// apiVersion is the version the factory switches on; empty when it does not switch (legacy v1alpha1).
+	// apiVersion is the version the factory switches on; empty when it does not switch (v1alpha1).
 	apiVersion string
 	// ambiguous: the factory returns more than one type or version; deriveRoots refuses it for a shipped kind.
 	ambiguous bool

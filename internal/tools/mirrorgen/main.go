@@ -65,7 +65,7 @@ type rootKind struct {
 	pkgPath  string
 	typeName string
 	// kind is the discriminator value TalosConfigPatchDocument uses for
-	// this root: Talos's own document kind string, or, for the legacy
+	// this root: Talos's own document kind string, or, for the v1alpha1
 	// v1alpha1.Config document which carries none, the name it is
 	// referred to by.
 	kind string
@@ -304,7 +304,7 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	"RegistryAuthConfig.RegistryPassword":      "registry password (user credential, not a bundle value)",
 	"RegistryAuthConfig.RegistryAuth":          "registry auth string (user credential, not a bundle value)",
 	"RegistryAuthConfig.RegistryIdentityToken": "registry identity token (user credential, not a bundle value)",
-	// The private half of a registry mTLS client identity. The legacy
+	// The private half of a registry mTLS client identity. The v1alpha1
 	// document reached it through machine.registries.config.<host>.tls, the
 	// same key the RegistryTLSConfig document kind already refuses (kindClasses
 	// marks it secret). The whole identity goes, not only the key: a
@@ -337,14 +337,14 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	//
 	// This key is "EncryptionKey.KeyStatic" -- the bare machinery type
 	// name, not whatever the mirror ends up calling it -- because both the
-	// legacy v1alpha1.EncryptionKey and the modern block.EncryptionKey
+	// v1alpha1.EncryptionKey and the modern block.EncryptionKey
 	// share that name and field, and secretFields/fieldOverrides are both
 	// matched against the walk's machinery name (walk.go builds fieldKey
 	// from named.Obj().Name(), before typeRenames below is applied), not
 	// the mirror name a struct ends up with after a rename. Getting that
 	// backwards is exactly how this stopped working once: block.EncryptionKey
 	// is renamed to VolumeEncryptionKey by typeRenames below, so this entry
-	// only matched the legacy, unrenamed side until the lookup was fixed to
+	// only matched the v1alpha1, unrenamed side until the lookup was fixed to
 	// key on the machinery name -- the modern side (embedded in VolumeConfig/
 	// UserVolumeConfig/RawVolumeConfig) silently kept its passphrase field.
 	// One entry still drops both, but only because the lookup is keyed
@@ -354,12 +354,12 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 }
 
 // typeRenames is the disambiguation table for the handful of block types
-// whose bare name collides with an existing, unrelated legacy v1alpha1
+// whose bare name collides with an existing, unrelated v1alpha1
 // mirror struct of the same name (EncryptionKey and friends: v1alpha1 has
 // its own, older disk-encryption-key type family). Mirror struct names are
 // one flat namespace (zz_generated.mirror.go), so a real collision --
 // unlike the "same meta.Unstructured type" problem fieldOverrides solves --
-// has to be resolved by renaming one side; the legacy v1alpha1 names stay
+// has to be resolved by renaming one side; the v1alpha1 names stay
 // put; the newer, less-established block ones take the "Volume" prefix.
 var typeRenames = map[string]string{
 	pkgBlock + ".EncryptionKey":       "VolumeEncryptionKey",

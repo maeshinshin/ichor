@@ -129,5 +129,5 @@ var kindClasses = map[string]kindRow{
 	"WatchdogTimerConfig":          {accept, "watchdog timer settings; no credentials"},
 	"WireguardConfig":              {secret, "carries the WireGuard private key and preshared keys; implements SecretDocument"},
 	"ZswapConfig":                  {accept, "zswap settings; no credentials"},
-	"v1alpha1":                     {accept, "the legacy machine and cluster document, which Ichor names Config; its secret fields are dropped by mirrorgen"},
+	"v1alpha1":                     {accept, "the v1alpha1 machine and cluster document, which Ichor names Config; its secret fields are dropped by mirrorgen"},
 }

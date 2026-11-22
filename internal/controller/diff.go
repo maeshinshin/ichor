@@ -31,12 +31,12 @@ import (
 // ChangedPaths implements design step 3 (configuration reconcile): it
 // reports which field paths differ between a node's current configuration
 // and the freshly rendered one, spelled the way pkg/fieldmeta expects --
-// dot-separated, rooted at "machine"/"cluster" for the legacy v1alpha1
+// dot-separated, rooted at "machine"/"cluster" for the v1alpha1
 // Config document and at the kind name for a standalone document such as
 // SysctlConfig or KernelModuleConfig (fieldmeta.go's own doc comment).
 //
 // It works generically off the decoded YAML tree rather than machinery's
-// typed config structs: a document's "kind" field (absent for the legacy
+// typed config structs: a document's "kind" field (absent for the v1alpha1
 // Config document) and, for named documents, its "name" field are the only
 // things it needs to know, and both are Talos's own document discriminators
 // (config.NamedDocument), not something this function invents.
@@ -84,7 +84,7 @@ func ChangedPaths(oldCfg, newCfg []byte) ([]string, error) {
 }
 
 // collapseDocumentPaths is the reporting form of paths: every path under a document that exists
-// on only one side (a newly added or removed standalone document, which has no legacy-style
+// on only one side (a newly added or removed standalone document, which has no v1alpha1-style
 // field to point at) is replaced by one entry naming the document, "KernelModuleConfig
 // br_netfilter (added)", so status.rebootPaths and the RebootRequired message never list a
 // document's apiVersion and kind on their own. Classification (pkg/fieldmeta) still runs on the
@@ -162,7 +162,7 @@ func reportablePaths(oldCfg, newCfg []byte, paths []string) []string {
 // configDoc is one decoded Talos config document.
 type configDoc struct {
 	// root is the fieldmeta path prefix for this document: "" for the
-	// legacy Config document, otherwise its kind.
+	// Config document, otherwise its kind.
 	root string
 	data map[string]any
 }
@@ -194,7 +194,7 @@ func decodeDocs(b []byte) (map[string]configDoc, error) {
 
 		kind, _ := m["kind"].(string)
 		if kind == "" {
-			// The legacy v1alpha1 Config document carries no "kind" field
+			// The v1alpha1 Config document carries no "kind" field
 			// and is always a singleton.
 			docs[""] = configDoc{root: "", data: m}
 

@@ -36,7 +36,7 @@ import (
 
 // The fixtures are `talosctl gen config d1 https://10.5.0.2:6443 --additional-sans 10.5.0.2,cp.example.test
 // --install-disk /dev/vda --registry-mirror docker.io=https://mirror.example.test:5000` at talosctl v1.14.3
-// (--talos-version v1.14.3, UnattendedInstallConfig) and v1.13.0 (legacy machine.install), generated with
+// (--talos-version v1.14.3, UnattendedInstallConfig) and v1.13.0 (v1alpha1 machine.install), generated with
 // throwaway secrets. They are the shape a real cluster has: the installer image, a disk, a registry
 // mirror and extra cert SANs.
 const (

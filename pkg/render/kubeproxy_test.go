@@ -69,7 +69,7 @@ func TestKubeProxyModeIsRenderedByIchor(t *testing.T) {
 		requireAll(t, mustRender(t, clusterFor(cni.KubeProxyReplaced, ""), m, bundle, nil), proxyOff)
 	})
 
-	t.Run("a legacy patch that disables it no longer breaks the v1.14 render", func(t *testing.T) {
+	t.Run("a v1alpha1 patch that disables it no longer breaks the v1.14 render", func(t *testing.T) {
 		requireAll(t, mustRender(t, clusterFor(cni.KubeProxyReplaced, ""), m, bundle, patches), proxyOff)
 	})
 

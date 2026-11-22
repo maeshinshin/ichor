@@ -75,7 +75,7 @@ func TestAdoptPlanDescribesEveryShippedKind(t *testing.T) {
 				t.Fatalf("converting to machinery: %v", err)
 			}
 
-			if _, legacy := md.(*mv1alpha1.Config); legacy {
+			if _, v1alpha1Form := md.(*mv1alpha1.Config); v1alpha1Form {
 				return
 			}
 

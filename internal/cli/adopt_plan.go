@@ -35,7 +35,7 @@ import (
 const (
 	kindResolverConfig = "ResolverConfig"
 
-	// pathNetworkInterfaces is the legacy network block of a node whose Talos config predates the
+	// pathNetworkInterfaces is the v1alpha1 network block of a node whose Talos config predates the
 	// multi-document form; spec.network renders the new form, so the block is captured as a patch.
 	pathNetworkInterfaces = "machine.network.interfaces"
 
@@ -123,14 +123,14 @@ func (o ownership) split(paths []string) (owned, rest []string) {
 // with zero drift").
 //
 // Only the documents of a shipped kind (ichorv1alpha1.TalosConfigPatchDocumentKinds) are ever
-// captured automatically, whole, through their generated conversions. The legacy v1alpha1 Config document is deliberately never
+// captured automatically, whole, through their generated conversions. The v1alpha1 Config document is deliberately never
 // captured: the mirror has no machine.token (secret material, which mirrorgen drops),
 // machine.type and machine.certSANs are omitempty, and there is no sparse way to patch
 // only e.g. cluster.network without also restating it. Differences confined to that
 // document come back as UnrepresentablePaths instead of a patch, and
 // buildAdoptPlan's own zero-drift check (below) is what actually enforces
 // this: it never returns a Patch unless applying it reproduces currentCfg
-// byte for byte, so a legacy-document difference always surfaces as
+// byte for byte, so a v1alpha1-document difference always surfaces as
 // "nothing to do here automatically" rather than a silently incomplete
 // patch.
 //
@@ -169,7 +169,7 @@ func buildAdoptPlan(
 	owned, rest := own.split(paths)
 	plan.Owned = owned
 
-	kinds, captured, legacy := groupChangedPaths(rest)
+	kinds, captured, unrepresentable := groupChangedPaths(rest)
 
 	// spec.network.dnsServers already renders the ResolverConfig and the render refuses a patch that
 	// carries one too (ADR 0138), so a difference there stays unrepresentable: set it in the spec.
@@ -178,12 +178,12 @@ func buildAdoptPlan(
 
 		for _, p := range rest {
 			if strings.HasPrefix(p, kindResolverConfig+".") {
-				legacy = append(legacy, p)
+				unrepresentable = append(unrepresentable, p)
 			}
 		}
 	}
 
-	plan.UnrepresentablePaths = legacy
+	plan.UnrepresentablePaths = unrepresentable
 
 	if len(kinds) == 0 && len(captured) == 0 {
 		return plan, nil
@@ -301,10 +301,10 @@ func jwtIssuers(machine string, cfg []byte) ([]string, error) {
 // groupChangedPaths partitions ChangedPaths' output by which
 // TalosConfigPatchDocument kind each path belongs to, using diff.go's own
 // rooting convention: a standalone document's paths are rooted at its kind
-// name, everything else (the legacy Config document's "machine.*",
+// name, everything else (the Config document's "machine.*",
 // "cluster.*" and top-level scalars) is not. A kind is any the generated
 // TalosConfigPatchDocumentKinds lists, so a new shipped kind needs no edit here.
-func groupChangedPaths(paths []string) (kinds map[string]bool, captured, legacy []string) {
+func groupChangedPaths(paths []string) (kinds map[string]bool, captured, unrepresentable []string) {
 	kinds = map[string]bool{}
 	shipped := ichorv1alpha1.TalosConfigPatchDocumentKinds()
 
@@ -319,11 +319,11 @@ func groupChangedPaths(paths []string) (kinds map[string]bool, captured, legacy 
 		if slices.Contains(shipped, kind) {
 			kinds[kind] = true
 		} else {
-			legacy = append(legacy, p)
+			unrepresentable = append(unrepresentable, p)
 		}
 	}
 
-	return kinds, captured, legacy
+	return kinds, captured, unrepresentable
 }
 
 // sansBeyond are the node's SANs that spec.certSANs does not render: a patch's list is appended to
@@ -349,13 +349,13 @@ func captureDocuments(currentCfg []byte, kinds map[string]bool, captured []strin
 
 	var docs []ichorv1alpha1.TalosConfigPatchDocument
 
-	// Only the captured subtrees of the legacy Config document (interfaces, certSANs), never the
+	// Only the captured subtrees of the Config document (interfaces, certSANs), never the
 	// document: it carries the machine and cluster secrets.
-	raw := provider.RawV1Alpha1() //nolint:staticcheck // the legacy block is what the node runs
+	raw := provider.RawV1Alpha1() //nolint:staticcheck // the v1alpha1 block is what the node runs
 	if len(captured) > 0 && raw != nil && raw.MachineConfig != nil {
 		sub := &mv1alpha1.Config{ConfigVersion: mv1alpha1.Version, MachineConfig: &mv1alpha1.MachineConfig{}}
 
-		//nolint:staticcheck // the legacy block is what the node runs
+		//nolint:staticcheck // the v1alpha1 block is what the node runs
 		if slices.Contains(captured, pathNetworkInterfaces) && raw.MachineConfig.MachineNetwork != nil {
 			sub.MachineConfig.MachineNetwork = &mv1alpha1.NetworkConfig{NetworkInterfaces: raw.MachineConfig.MachineNetwork.NetworkInterfaces}
 		}
@@ -373,7 +373,7 @@ func captureDocuments(currentCfg []byte, kinds map[string]bool, captured []strin
 	}
 
 	// The API server's own SANs are the KubeAPIServerConfig document's setting in Ichor's schema.
-	//nolint:staticcheck // the legacy block is what the node runs
+	//nolint:staticcheck // the v1alpha1 block is what the node runs
 	if slices.Contains(captured, pathAPIServerCertSANs) && !kinds["KubeAPIServerConfig"] && raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
 		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "KubeAPIServerConfig", KubeAPIServerConfig: &typedconfig.KubeAPIServerConfigV1Alpha1{
 			PodCertExtraSANs: sansBeyond(raw.ClusterConfig.APIServerConfig.ExtraCertSANs, specSANs),
@@ -410,7 +410,7 @@ type contractProbe struct {
 // probeVersionContract renders m at each contract from the nodes' running Talos version down to
 // v1.12 (contractCandidates) and returns the probes plus the chosen contract: the one with the
 // fewest unrepresentable paths, the higher contract on a tie. A cluster generated
-// on an old talosctl and upgraded in place has a legacy-form configuration, so forcing the
+// on an old talosctl and upgraded in place has a v1alpha1-form configuration, so forcing the
 // running version's contract would turn every field into drift.
 //
 // It never mutates cluster. It returns an error if no candidate renders, including when running is

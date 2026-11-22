@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	mirrorLegacyYAML = `version: v1alpha1
+	mirrorV1alpha1YAML = `version: v1alpha1
 machine:
   type: worker
   registries:
@@ -60,9 +60,9 @@ skipFallback: true
 `
 )
 
-// legacyMirrorForm rewrites a rendered config's RegistryMirrorConfig documents as the
+// v1alpha1MirrorForm rewrites a rendered config's RegistryMirrorConfig documents as the
 // machine.registries.mirrors an earlier Ichor build wrote.
-func legacyMirrorForm(cfg []byte) []byte {
+func v1alpha1MirrorForm(cfg []byte) []byte {
 	dec := yaml.NewDecoder(bytes.NewReader(cfg))
 
 	var main map[string]any
@@ -129,7 +129,7 @@ func legacyMirrorForm(cfg []byte) []byte {
 }
 
 func TestChangedPaths_RegistryMirrorFormsAreEquivalent(t *testing.T) {
-	for _, tc := range [][2]string{{mirrorLegacyYAML, mirrorDocYAML}, {mirrorDocYAML, mirrorLegacyYAML}} {
+	for _, tc := range [][2]string{{mirrorV1alpha1YAML, mirrorDocYAML}, {mirrorDocYAML, mirrorV1alpha1YAML}} {
 		paths, err := ChangedPaths([]byte(tc[0]), []byte(tc[1]))
 		if err != nil {
 			t.Fatalf("ChangedPaths: %v", err)
@@ -153,7 +153,7 @@ func TestChangedPaths_RegistryMirrorRealDifferencesStayDrift(t *testing.T) {
 	}
 
 	for name, tc := range cases {
-		paths, err := ChangedPaths([]byte(mirrorLegacyYAML), []byte(tc.doc))
+		paths, err := ChangedPaths([]byte(mirrorV1alpha1YAML), []byte(tc.doc))
 		if err != nil {
 			t.Fatalf("%s: ChangedPaths: %v", name, err)
 		}

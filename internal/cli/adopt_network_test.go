@@ -38,11 +38,11 @@ const staticInterface = `    network:
               dhcp: false
 `
 
-// A node whose config carries the legacy machine.network.interfaces block was blocked, because
+// A node whose config carries the v1alpha1 machine.network.interfaces block was blocked, because
 // spec.network renders the multi-document form (a different shape, not just different values). Adopt
 // captures the interfaces subtree, and only it, into the machine's TalosConfigPatch, which renders the
 // node byte for byte and so changes nothing on it.
-func TestAdoptCapturesTheLegacyNetworkInterfacesIntoAPatch(t *testing.T) {
+func TestAdoptCapturesTheV1alpha1NetworkInterfacesIntoAPatch(t *testing.T) {
 	cp, wk := classAFixture(t, "v114")
 	cp = []byte(strings.Replace(string(cp), "    features:\n", staticInterface+"    features:\n", 1))
 

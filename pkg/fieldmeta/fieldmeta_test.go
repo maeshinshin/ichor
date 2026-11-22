@@ -257,7 +257,7 @@ func TestAssess_VersionFloor(t *testing.T) {
 		})
 	}
 
-	// A path with no known version floor (the legacy Config document) is
+	// A path with no known version floor (the Config document) is
 	// never reported unsupported, regardless of how old the pinned version
 	// is.
 	impact := Assess([]string{pathMachineInstallDisk}, machineryconfig.TalosVersion1_0)
@@ -322,14 +322,14 @@ func TestAssess_APIServerRestartClass(t *testing.T) {
 	// The image stays reboot-required (the Kubernetes upgrade executor owns it).
 	wantRebootRequired(t, "KubeAPIServerConfig.image")
 
-	// The legacy paths are the only spelling a pre-1.14 contract has: the class holds there too, and
+	// The v1alpha1 paths are the only spelling a pre-1.14 contract has: the class holds there too, and
 	// their images stay with the Kubernetes upgrade, never safe or apiServerRestart.
 	for _, pinned := range []*machineryconfig.VersionContract{
 		machineryconfig.TalosVersion1_12, machineryconfig.TalosVersion1_13,
 	} {
 		if got := Assess([]string{"cluster.apiServer.certSANs"}, pinned); got.RebootRequired ||
 			len(got.APIServerRestartPaths) != 1 {
-			t.Errorf("legacy cluster.apiServer.certSANs on %v = %+v, want one APIServerRestartPath", pinned, got)
+			t.Errorf("v1alpha1 cluster.apiServer.certSANs on %v = %+v, want one APIServerRestartPath", pinned, got)
 		}
 
 		for _, path := range []string{

@@ -328,17 +328,17 @@ func (cv *converter) entries(coll reflect.Value, kind, where string) error {
 
 		// Where the machine takes no Kubernetes document, the entry is built as its document and moved into
 		// the v1alpha1 document.
-		legacy := !cv.multidoc && TalosConfigPatchDocumentIsKubernetes(kind)
-		if legacy {
+		v1alpha1Form := !cv.multidoc && TalosConfigPatchDocumentIsKubernetes(kind)
+		if v1alpha1Form {
 			cv.multidoc = true
 		}
 
 		err := cv.walkAt(item, map[string]instance{kind: inst}, at)
-		if legacy {
+		if v1alpha1Form {
 			cv.multidoc = false
 		}
 
-		if err != nil || !legacy {
+		if err != nil || !v1alpha1Form {
 			return err
 		}
 

@@ -32,13 +32,13 @@ func changedPaths(current, rendered []byte, hash string) ([]string, error) {
 	return ChangedPaths(current, rendered)
 }
 
-// normalizeRegistryMirrors rewrites the legacy machine.registries.mirrors of the v1alpha1 Config
+// normalizeRegistryMirrors rewrites the v1alpha1 machine.registries.mirrors of the v1alpha1 Config
 // document into RegistryMirrorConfig documents, the form the render uses from contract v1.12, and
 // drops the false flags a document may or may not spell. Talos folds both forms into one resource,
 // so the same mirrors in either form are one configuration, not drift: a node an earlier Ichor
-// build configured in the legacy form must stay Ready after an upgrade, and a v1.14 adopt of a
+// build configured in the v1alpha1 form must stay Ready after an upgrade, and a v1.14 adopt of a
 // document-form node must show no difference. machine.registries.config (credentials, TLS) is left
-// alone. A host stated in both forms keeps its document; the legacy entry is dropped.
+// alone. A host stated in both forms keeps its document; the v1alpha1Doc entry is dropped.
 func normalizeRegistryMirrors(docs map[string]configDoc) {
 	for _, d := range docs {
 		if d.root == registryMirrorKind {
@@ -46,12 +46,12 @@ func normalizeRegistryMirrors(docs map[string]configDoc) {
 		}
 	}
 
-	legacy, ok := docs[""]
+	v1alpha1Doc, ok := docs[""]
 	if !ok {
 		return
 	}
 
-	machine, _ := legacy.data["machine"].(map[string]any)
+	machine, _ := v1alpha1Doc.data["machine"].(map[string]any)
 	registries, _ := machine["registries"].(map[string]any)
 	mirrors, _ := registries["mirrors"].(map[string]any)
 

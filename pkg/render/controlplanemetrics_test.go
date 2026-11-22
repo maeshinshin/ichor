@@ -108,7 +108,7 @@ func TestControlPlaneMetrics(t *testing.T) {
 		}
 	})
 
-	t.Run("a pre-1.14 contract renders the legacy fields", func(t *testing.T) {
+	t.Run("a pre-1.14 contract renders the v1alpha1 fields", func(t *testing.T) {
 		c := metricsCluster(true, metricsCIDR)
 		c.Spec.VersionContract = "v1.12"
 

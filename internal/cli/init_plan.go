@@ -271,7 +271,7 @@ func secretsRefName(cluster string) string {
 // choice on its own.
 //
 // Of step 2's named disk roles, only "system" (the install disk) is set
-// here -- it is folded into the legacy Config patch alongside the
+// here -- it is folded into the Config patch alongside the
 // cluster.inlineManifests entry, in buildInlineManifestsPatch, since
 // machine.install and cluster.inlineManifests are both on the same
 // document. The other three roles (ephemeral/userVolume/storage,

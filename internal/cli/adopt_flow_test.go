@@ -289,7 +289,7 @@ func TestAdoptReleasesHoldInOrderAndPrintsAdvice(t *testing.T) {
 func TestAdoptKeepsHoldWhereLiveDriftRemains(t *testing.T) {
 	env := newFlowEnv(t, ichorv1alpha1.TalosClusterCNIPresetUnmanaged, nil)
 
-	// The worker drifts in a legacy field only after the plan was made.
+	// The worker drifts in a v1alpha1 field only after the plan was made.
 	drifting := &flipReader{first: env.live[flowWKAddr]}
 
 	m := newTestMachine(env.cluster.Name)

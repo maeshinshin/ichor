@@ -136,7 +136,7 @@ func encodeLeaves(cfg interface {
 // leafPaths decodes a "---"-separated multi-document YAML stream (the
 // shape pkg/render and machinery's own container encoder produce) into a
 // flat path -> JSON-encoded value map, keyed the way pkg/fieldmeta expects:
-// rooted at "machine"/"cluster" for the legacy v1alpha1.Config document
+// rooted at "machine"/"cluster" for the v1alpha1.Config document
 // (identified, like internal/controller's own decodeDocs, by having no
 // "kind" field), or at the document's own kind for a standalone document
 // such as SysctlConfig or KernelModuleConfig. Only maps are recursed into;

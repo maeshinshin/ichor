@@ -358,7 +358,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Step 3: work out which field paths changed and what that implies. No path means the node
-	// already has the rendered configuration, in the same bytes or in another form (legacy mirrors).
+	// already has the rendered configuration, in the same bytes or in another form (v1alpha1 mirrors).
 	paths, err := changedPaths(current, rendered, hash)
 	if err != nil {
 		log.Error(err, "diffing current and rendered configuration")

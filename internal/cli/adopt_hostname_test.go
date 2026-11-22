@@ -89,13 +89,13 @@ func TestAdoptTakesTheNodesHostnameIntoTheSpec(t *testing.T) {
 	}
 }
 
-// The legacy form states the hostname in machine.network.hostname; the facts read either.
+// The v1alpha1 form states the hostname in machine.network.hostname; the facts read either.
 func TestReadTalosFactsHostname(t *testing.T) {
-	legacy := "version: v1alpha1\nmachine:\n  type: worker\n  network:\n    hostname: legacy-1\n"
+	v1alpha1Cfg := "version: v1alpha1\nmachine:\n  type: worker\n  network:\n    hostname: v1alpha1-1\n"
 	doc := "apiVersion: v1alpha1\nkind: HostnameConfig\nauto: off\nhostname: doc-1\n"
 
 	for name, tc := range map[string]struct{ cfg, want string }{
-		"legacy": {legacy, "legacy-1"}, "document": {"version: v1alpha1\nmachine:\n  type: worker\n---\n" + doc, "doc-1"}, "absent": {"version: v1alpha1\nmachine:\n  type: worker\n", ""},
+		"v1alpha1": {v1alpha1Cfg, "v1alpha1-1"}, "document": {"version: v1alpha1\nmachine:\n  type: worker\n---\n" + doc, "doc-1"}, "absent": {"version: v1alpha1\nmachine:\n  type: worker\n", ""},
 	} {
 		f, err := ReadTalosFacts([]byte(tc.cfg))
 		if err != nil {

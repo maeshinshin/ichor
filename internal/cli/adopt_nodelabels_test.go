@@ -31,21 +31,21 @@ import (
 // spec.controlPlane.omitDefaultNodeLabels instead of blocking (ADR 0144).
 func TestAdoptKeepsMissingControlPlaneLabels(t *testing.T) {
 	const (
-		legacyLabels = "    nodeLabels:\n        node.kubernetes.io/exclude-from-external-load-balancers: \"\"\n"
-		docLabels    = "labels:\n    node-role.kubernetes.io/control-plane: \"\"\n    node.kubernetes.io/exclude-from-external-load-balancers: \"\"\n"
+		v1alpha1Labels = "    nodeLabels:\n        node.kubernetes.io/exclude-from-external-load-balancers: \"\"\n"
+		docLabels      = "labels:\n    node-role.kubernetes.io/control-plane: \"\"\n    node.kubernetes.io/exclude-from-external-load-balancers: \"\"\n"
 	)
 
 	for _, tc := range []struct {
 		name, labels, without string
-		// legacy is a machine.nodeLabels block (the v1alpha1 form) added beside the v1.14 documents.
-		legacy   string
-		blocked  bool
-		wantOmit bool
+		// v1alpha1Form is a machine.nodeLabels block (the v1alpha1 form) added beside the v1.14 documents.
+		v1alpha1Form string
+		blocked      bool
+		wantOmit     bool
 	}{
 		{"v1.14 without the labels", docLabels, "labels: {}\n", "", false, true},
 		{"v1.14 with the labels", docLabels, docLabels, "", false, false},
 		// machine.nodeLabels has no v1.14 patch form, so a node that carries it is blocked (class C), not adopted.
-		{"v1.14 with machine.nodeLabels carrying the label", docLabels, "labels: {}\n", legacyLabels, true, false},
+		{"v1.14 with machine.nodeLabels carrying the label", docLabels, "labels: {}\n", v1alpha1Labels, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cp, wk := classAFixture(t, "v114")
@@ -54,8 +54,8 @@ func TestAdoptKeepsMissingControlPlaneLabels(t *testing.T) {
 			}
 
 			cp = []byte(strings.Replace(string(cp), tc.labels, tc.without, 1))
-			if tc.legacy != "" {
-				cp = []byte(strings.Replace(string(cp), "    features:\n", tc.legacy+"    features:\n", 1))
+			if tc.v1alpha1Form != "" {
+				cp = []byte(strings.Replace(string(cp), "    features:\n", tc.v1alpha1Form+"    features:\n", 1))
 			}
 
 			env, deps := classAFlow(t, ver1143, cp, wk)

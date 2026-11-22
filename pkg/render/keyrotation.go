@@ -104,7 +104,7 @@ func injectRotations(
 }
 
 // requireDocument fails with the way out when cfg does not carry the multi-document form of a Kubernetes
-// setting. The legacy contract keeps one service-account key and one secretbox secret in single fields, which
+// setting. The pre-1.14 contract keeps one service-account key and one secretbox secret in single fields, which
 // cannot hold two keys.
 func requireDocument(cfg coreconfig.Provider, kind string) error {
 	if cfg.Has(kind) {

@@ -88,7 +88,7 @@ func injectNodeLabels(
 		d.LabelsConfig = m.Spec.NodeLabels
 		doc = d
 	} else {
-		//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
+		//nolint:staticcheck // the v1alpha1 block is the only form a pre-1.14 contract accepts
 		doc = &mv1alpha1.Config{
 			ConfigVersion: mv1alpha1.Version,
 			MachineConfig: &mv1alpha1.MachineConfig{MachineNodeLabels: m.Spec.NodeLabels},

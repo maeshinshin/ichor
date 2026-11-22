@@ -83,7 +83,7 @@ func injectNetworkDocuments(
 	}
 
 	if !contract.MultidocNetworkConfigSupported() {
-		return injectLegacyNetwork(cfg, n, routes, vip)
+		return injectV1alpha1Network(cfg, n, routes, vip)
 	}
 
 	match, err := cel.ParseBooleanExpression(
@@ -205,13 +205,13 @@ func injectEtcdAdvertisedSubnets(cfg coreconfig.Provider, m *ichorv1alpha1.Talos
 		return cfg, nil
 	}
 
-	//nolint:staticcheck // cluster.etcd has no standalone document in 1.14: the legacy block is the only form
-	legacy := &mv1alpha1.Config{
+	//nolint:staticcheck // cluster.etcd has no standalone document in 1.14: the v1alpha1 block is the only form
+	v1alpha1Doc := &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		ClusterConfig: &mv1alpha1.ClusterConfig{EtcdConfig: &mv1alpha1.EtcdConfig{EtcdAdvertisedSubnets: subnets}},
 	}
 
-	return mergeDocument(cfg, "etcd advertised subnets", legacy)
+	return mergeDocument(cfg, "etcd advertised subnets", v1alpha1Doc)
 }
 
 // vipAddress is the endpoint address a control plane holds as a shared IP: the cluster endpoint when its
@@ -245,11 +245,11 @@ func networkRoutes(n *ichorv1alpha1.TalosMachineNetwork) ([]network.RouteConfig,
 	return []network.RouteConfig{{RouteGateway: meta.Addr{Addr: gw}}}, nil
 }
 
-// injectLegacyNetwork is the pre-multi-document form: one interface selected by permanent
+// injectV1alpha1Network is the pre-multi-document form: one interface selected by permanent
 // address, with the VLAN nested under it, and the DNS servers under machine.network.
 //
-//nolint:staticcheck // the legacy block is the only form a 1.11 or older contract accepts
-func injectLegacyNetwork(
+//nolint:staticcheck // the v1alpha1 block is the only form a 1.11 or older contract accepts
+func injectV1alpha1Network(
 	cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineNetwork, gateway []network.RouteConfig, vip string,
 ) (coreconfig.Provider, error) {
 	dev := &mv1alpha1.Device{

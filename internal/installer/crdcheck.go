@@ -49,7 +49,7 @@ var retiredFields = []retiredField{
 	{crd: ichorInstallationsCRD, path: "status.stack"},
 	// The only management mode is ichor, so the field is gone.
 	{crd: ichorInstallationsCRD, path: "spec.managementMode"},
-	// ADR 0152: credential-bearing fields of the mirrored legacy v1alpha1 document, retired.
+	// ADR 0152: credential-bearing fields of the mirrored v1alpha1 document, retired.
 	{crd: talosConfigPatchesCRD, path: "spec.documents[].config.cluster.extraManifestHeaders"},
 	{crd: talosConfigPatchesCRD, path: "spec.documents[].config.machine.registries.config{}.tls.clientIdentity"},
 	// ADR 0152, amended: TalosClusters embedded the same union in the deprecated spec.cni.custom.documents, a second

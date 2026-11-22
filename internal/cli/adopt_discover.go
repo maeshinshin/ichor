@@ -188,7 +188,7 @@ func completeNode(n *adoptNode, warn func(format string, args ...any)) error {
 		}
 	}
 
-	// The legacy form names a disk path or a selector, v1.14 a CEL selector; a selector that is
+	// The v1alpha1 form names a disk path or a selector, v1.14 a CEL selector; a selector that is
 	// not one of the equalities spec.install.disk can hold is left as drift.
 	diskArg := cmp.Or(n.Facts.Install.Disk, diskFromExpression(n.Facts.Install.DiskSelector))
 

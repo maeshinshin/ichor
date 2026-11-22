@@ -249,17 +249,17 @@ func TestRunAdopt_OutputFormats(t *testing.T) {
 	}
 }
 
-// TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched proves the scope decision
-// in adopt_plan.go's doc comment: a difference confined to the legacy
+// TestBuildAdoptPlan_V1alpha1DiffIsNeverAutoPatched proves the scope decision
+// in adopt_plan.go's doc comment: a difference confined to the v1alpha1
 // Config document (here, cluster.apiServer.extraArgs) is reported as
 // unrepresentable, not folded into a patch, because doing so would force
 // restating machine.token (secret material) in the CR.
-func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
+func TestBuildAdoptPlan_V1alpha1DiffIsNeverAutoPatched(t *testing.T) {
 	bundle := newTestBundle(t)
 	cluster := newTestCluster()
 	machine := newTestMachine(cluster.Name)
 
-	fixture := legacyConfigPatch(cluster.Name)
+	fixture := v1alpha1ConfigPatch(cluster.Name)
 
 	currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 	if err != nil {
@@ -272,11 +272,11 @@ func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
 	}
 
 	if plan.Patch != nil {
-		t.Fatalf("expected no patch for a legacy-document-only diff, got %+v", plan.Patch)
+		t.Fatalf("expected no patch for a v1alpha1-document-only diff, got %+v", plan.Patch)
 	}
 
 	if len(plan.UnrepresentablePaths) == 0 {
-		t.Fatal("expected the legacy diff's field paths to be reported as unrepresentable")
+		t.Fatal("expected the v1alpha1 diff's field paths to be reported as unrepresentable")
 	}
 
 	found := false
@@ -293,7 +293,7 @@ func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
 }
 
 func TestGroupChangedPaths(t *testing.T) {
-	kinds, _, legacy := groupChangedPaths([]string{
+	kinds, _, unrepresentable := groupChangedPaths([]string{
 		"ResolverConfig.nameservers",
 		"SysctlConfig.params.net\\.ipv4\\.ip_forward",
 		"KernelModuleConfig.name",
@@ -307,8 +307,8 @@ func TestGroupChangedPaths(t *testing.T) {
 		}
 	}
 
-	if len(legacy) != 2 {
-		t.Errorf("legacy = %v, want 2 entries", legacy)
+	if len(unrepresentable) != 2 {
+		t.Errorf("unrepresentable = %v, want 2 entries", unrepresentable)
 	}
 }
 
@@ -398,15 +398,15 @@ func TestReportPlans_ExplainsUnrepresentablePaths(t *testing.T) {
 	}
 }
 
-// The legacy paths of a pre-1.14 node name the same spec fields.
-func TestExplainUnrepresentable_LegacyPaths(t *testing.T) {
+// The v1alpha1 paths of a pre-1.14 node name the same spec fields.
+func TestExplainUnrepresentable_V1alpha1Paths(t *testing.T) {
 	got := strings.Join(explainUnrepresentable([]string{
 		"cluster.network.podSubnets", "cluster.network.serviceSubnets", "machine.install.disk", "cluster.network.cni.name",
 	}), "\n")
 
 	for _, want := range []string{"spec.network.podSubnets", "spec.network.serviceSubnets", "spec.install"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("legacy report lacks %q:\n%s", want, got)
+			t.Errorf("v1alpha1 report lacks %q:\n%s", want, got)
 		}
 	}
 

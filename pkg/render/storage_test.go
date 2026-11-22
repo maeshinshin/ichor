@@ -94,13 +94,13 @@ func TestRenderStorage(t *testing.T) {
 		requireNone(t, out, "maxSize: 100%")
 	})
 
-	// Under a pre-1.14 contract the base config uses the legacy machine.* blocks, so layer 1
+	// Under a pre-1.14 contract the base config uses the v1alpha1 machine.* blocks, so layer 1
 	// renders its labels, annotations and the kubelet mount there; under 1.14+ the standalone
 	// documents carry no kubelet mount field, so the mount is absent by design.
-	t.Run("pre-1.14 contract renders the legacy kubelet mount", func(t *testing.T) {
-		legacy := testCluster("true")
-		legacy.Spec.VersionContract = contractV112
+	t.Run("pre-1.14 contract renders the pre114 kubelet mount", func(t *testing.T) {
+		pre114 := testCluster("true")
+		pre114.Spec.VersionContract = contractV112
 
-		requireAll(t, mustRenderSys(t, legacy, selected, bundle, nil, sys), "/var/mnt/longhorn", "rshared", longhornDiskLabel)
+		requireAll(t, mustRenderSys(t, pre114, selected, bundle, nil, sys), "/var/mnt/longhorn", "rshared", longhornDiskLabel)
 	})
 }

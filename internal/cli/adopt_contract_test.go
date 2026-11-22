@@ -62,9 +62,9 @@ func TestRefuseOldContractAdviceOnARunningV114(t *testing.T) {
 	}
 }
 
-// A v1.13 cluster with a legacy machine.install is refused end to end: the probe picks v1.13 for it,
+// A v1.13 cluster with a v1alpha1 machine.install is refused end to end: the probe picks v1.13 for it,
 // and the refusal comes before anything is written.
-func TestAdoptRefusesALegacyInstallBeforeWriting(t *testing.T) {
+func TestAdoptRefusesAV1alpha1InstallBeforeWriting(t *testing.T) {
 	cp, wk := classAFixture(t, "v113")
 	env, deps := classAFlow(t, "v1.14.0", cp, wk)
 	deps.AssumeYes = true

@@ -49,7 +49,7 @@ func kubeProxyOwned(cluster *ichorv1alpha1.TalosCluster) bool {
 }
 
 // dropProxyDisabled returns ordered with cluster.proxy.disabled cleared from every Config
-// document, deep-copying only the patches that set it. The legacy block cannot coexist with the KubeProxyConfig
+// document, deep-copying only the patches that set it. The v1alpha1 block cannot coexist with the KubeProxyConfig
 // document a v1.14 contract renders, and the value is owned by injectKubeProxy now.
 func dropProxyDisabled(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
 	return rewriteIchorConfigs(ordered,
@@ -88,7 +88,7 @@ func injectKubeProxy(
 		d.ProxyEnabled = &enabled
 		doc = d
 	} else {
-		//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract accepts
+		//nolint:staticcheck // the v1alpha1 block is the only form a pre-1.14 contract accepts
 		doc = &mv1alpha1.Config{
 			ConfigVersion: mv1alpha1.Version,
 			ClusterConfig: &mv1alpha1.ClusterConfig{ProxyConfig: &mv1alpha1.ProxyConfig{Disabled: &disabled}},

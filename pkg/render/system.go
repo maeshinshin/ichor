@@ -143,7 +143,7 @@ func injectStorage(
 // nodeRegistrationDocs returns the Node label and annotation that register the disk with the
 // storage system, plus the kubelet mounts, in whichever form contract allows. From Talos 1.14
 // (MultidocKubernetesConfigSupported) labels and annotations live in the standalone KubeNodeConfig
-// document, and a legacy machine.nodeLabels / machine.kubelet next to the base config's
+// document, and a v1alpha1 machine.nodeLabels / machine.kubelet next to the base config's
 // multi-document form fails validation. The standalone KubeletConfig document has no
 // extraMounts field at all (Talos bind-mounts /var/mnt into the kubelet itself), so under that
 // contract the preset's KubeletMounts are not rendered.
@@ -164,7 +164,7 @@ func nodeRegistrationDocs(contract *coreconfig.VersionContract, preset storage.P
 		})
 	}
 
-	//nolint:staticcheck // the legacy blocks are the only form a pre-1.14 contract accepts
+	//nolint:staticcheck // the v1alpha1 blocks are the only form a pre-1.14 contract accepts
 	return []config.Document{&mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{

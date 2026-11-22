@@ -46,7 +46,7 @@ func renderWith(t *testing.T, contract string, mutate func(m *ichorv1alpha1.Talo
 
 // TestRenderNetwork: spec.network picks the primary link by permanent MAC through a
 // LinkAliasConfig and refers to the alias from the addressing documents. v1.13 and
-// v1.14 both use documents; v1.11 is the legacy machine.network.interfaces form.
+// v1.14 both use documents; v1.11 is the v1alpha1 machine.network.interfaces form.
 func TestRenderNetwork(t *testing.T) {
 	dhcp := func(m *ichorv1alpha1.TalosMachine) {
 		m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{MAC: testNICMAC, Addressing: "dhcp"}
@@ -103,7 +103,7 @@ func TestRenderNetwork(t *testing.T) {
 		})
 	}
 
-	t.Run("v1.11 legacy", func(t *testing.T) {
+	t.Run("v1.11 v1alpha1 form", func(t *testing.T) {
 		out := renderWith(t, contractV111, static)
 		requireAll(t, out, "interfaces:", "permanentAddr: aa:bb:cc:dd:ee:01", "192.168.1.10/24", "gateway: 192.168.1.1",
 			"network: 0.0.0.0/0", "nameservers:", "1.1.1.1")
@@ -116,7 +116,7 @@ func TestRenderNetwork(t *testing.T) {
 		requireAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "dhcp: true")
 	})
 
-	t.Run("an IPv6 gateway routes ::/0 in the legacy form", func(t *testing.T) {
+	t.Run("an IPv6 gateway routes ::/0 in the v1alpha1 form", func(t *testing.T) {
 		out := renderWith(t, contractV111, func(m *ichorv1alpha1.TalosMachine) {
 			m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
 				MAC: testNICMAC, Addressing: "static", Addresses: []string{"fd00::10/64"}, Gateway: "fd00::1",
@@ -228,7 +228,7 @@ func TestRenderVIP(t *testing.T) {
 		})
 	}
 
-	t.Run("v1.11 legacy: vip on the selected device", func(t *testing.T) {
+	t.Run("v1.11 v1alpha1 form: vip on the selected device", func(t *testing.T) {
 		out := render(t, contractV111, "vip", dhcp)
 		requireAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "vip:", "ip: 10.0.0.5")
 		requireNone(t, out, "Layer2VIPConfig")

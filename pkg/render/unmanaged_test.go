@@ -78,8 +78,8 @@ func TestUnmanagedRendersTheLiveCNIConfiguration(t *testing.T) {
 	}
 
 	t.Run("v1.13 default emits no cni block, none emits cni none", func(t *testing.T) {
-		requireNone(t, renderFor(t, contractV113, unmanaged("default", "enabled")), legacyCNINone)
-		requireAll(t, renderFor(t, contractV113, unmanaged("none", "enabled")), legacyCNINone)
+		requireNone(t, renderFor(t, contractV113, unmanaged("default", "enabled")), v1alpha1CNINone)
+		requireAll(t, renderFor(t, contractV113, unmanaged("none", "enabled")), v1alpha1CNINone)
 	})
 
 	t.Run("no inline cni entry", func(t *testing.T) {

@@ -10,36 +10,36 @@ import (
 
 // bondBothCases are one bond written in both spellings: a v1alpha1 interfaces entry and a BondConfig, same name.
 var bondBothCases = []struct {
-	name, legacy, document string
-	wantRefused            string // a setting the refusal must name; empty when the pair is allowed
+	name, v1alpha1Form, document string
+	wantRefused                  string // a setting the refusal must name; empty when the pair is allowed
 }{
 	{
-		name:        "same-setting-in-both",
-		legacy:      `"miimon":100`,
-		document:    `"miimon":200`,
-		wantRefused: "miimon",
+		name:         "same-setting-in-both",
+		v1alpha1Form: `"miimon":100`,
+		document:     `"miimon":200`,
+		wantRefused:  "miimon",
 	},
 	{
-		name:        "unlike-setting-still-reset-by-the-document",
-		legacy:      `"miimon":100`,
-		document:    missedMaxJSON,
-		wantRefused: "miimon",
+		name:         "unlike-setting-still-reset-by-the-document",
+		v1alpha1Form: `"miimon":100`,
+		document:     missedMaxJSON,
+		wantRefused:  "miimon",
 	},
 	{
-		name:        "links-in-both",
-		legacy:      `"interfaces":["eth0","eth1"],"mode":"active-backup"`,
-		document:    missedMaxJSON,
-		wantRefused: "interfaces",
+		name:         "links-in-both",
+		v1alpha1Form: `"interfaces":["eth0","eth1"],"mode":"active-backup"`,
+		document:     missedMaxJSON,
+		wantRefused:  "interfaces",
 	},
 	{
-		name:     "primary-beside-a-bondconfig-is-allowed",
-		legacy:   `"primary":"eth0"`,
-		document: missedMaxJSON,
+		name:         "primary-beside-a-bondconfig-is-allowed",
+		v1alpha1Form: `"primary":"eth0"`,
+		document:     missedMaxJSON,
 	},
 	{
-		name:     "deviceSelectors-beside-a-bondconfig-is-allowed",
-		legacy:   `"deviceSelectors":[{"driver":"virtio_net"}]`,
-		document: missedMaxJSON,
+		name:         "deviceSelectors-beside-a-bondconfig-is-allowed",
+		v1alpha1Form: `"deviceSelectors":[{"driver":"virtio_net"}]`,
+		document:     missedMaxJSON,
 	},
 }
 
@@ -52,7 +52,7 @@ func TestBondInBothSpellingsIsRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			spec := `{"machine":{"network":{"interfaces":[{"interface":"bond0","bond":{` + tc.legacy + `}}],` +
+			spec := `{"machine":{"network":{"interfaces":[{"interface":"bond0","bond":{` + tc.v1alpha1Form + `}}],` +
 				`"bonds":{"bond0":{"links":["eth0","eth1"],"bondMode":1,` + tc.document + `}}}}}`
 
 			var c ichorconfig.Config

@@ -200,10 +200,10 @@ func TestAdoptNeverLeaksSecrets(t *testing.T) {
 		assertNoLeak(t, stdout.String(), stderr.String(), err)
 	})
 
-	t.Run("legacy diff reported, not patched", func(t *testing.T) {
+	t.Run("v1alpha1 diff reported, not patched", func(t *testing.T) {
 		k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, machine).Build()
 
-		fixture := legacyConfigPatch(cluster.Name)
+		fixture := v1alpha1ConfigPatch(cluster.Name)
 
 		currentCfg, _, err := render.Render(cluster, machine, bundle, []ichorv1alpha1.TalosConfigPatch{fixture}, nil)
 		if err != nil {

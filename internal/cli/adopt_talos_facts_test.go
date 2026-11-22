@@ -17,7 +17,7 @@ const (
 	ver113  = "v1.13"
 )
 
-const factsLegacyAll = `version: v1alpha1
+const factsV1alpha1All = `version: v1alpha1
 machine:
   type: worker
   install:
@@ -40,7 +40,7 @@ cluster:
     - https://example.invalid/a.yaml
 `
 
-const factsLegacyDefault = `version: v1alpha1
+const factsV1alpha1Default = `version: v1alpha1
 machine:
   type: controlplane
 cluster:
@@ -48,7 +48,7 @@ cluster:
     dnsDomain: cluster.local
 `
 
-const factsLegacyCustom = `version: v1alpha1
+const factsV1alpha1Custom = `version: v1alpha1
 machine:
   type: worker
 cluster:
@@ -59,7 +59,7 @@ cluster:
         - https://example.invalid/cni.yaml
 `
 
-const factsLegacyOther = `version: v1alpha1
+const factsV1alpha1Other = `version: v1alpha1
 machine:
   type: worker
 cluster:
@@ -93,15 +93,15 @@ kind: KubeFlannelCNIConfig
 `
 
 func TestReadTalosFacts(t *testing.T) {
-	testReadTalosFactsLegacy(t)
+	testReadTalosFactsV1alpha1(t)
 	testReadTalosFactsMultidoc(t)
 }
 
-func testReadTalosFactsLegacy(t *testing.T) {
+func testReadTalosFactsV1alpha1(t *testing.T) {
 	t.Helper()
 
-	t.Run("legacy form with every fact", func(t *testing.T) {
-		f, err := ReadTalosFacts([]byte(factsLegacyAll))
+	t.Run("v1alpha1 form with every fact", func(t *testing.T) {
+		f, err := ReadTalosFacts([]byte(factsV1alpha1All))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,8 +131,8 @@ func testReadTalosFactsLegacy(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy defaults are flannel with kube-proxy and no KubePrism", func(t *testing.T) {
-		f, err := ReadTalosFacts([]byte(factsLegacyDefault))
+	t.Run("v1alpha1 defaults are flannel with kube-proxy and no KubePrism", func(t *testing.T) {
+		f, err := ReadTalosFacts([]byte(factsV1alpha1Default))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -143,7 +143,7 @@ func testReadTalosFactsLegacy(t *testing.T) {
 	})
 
 	t.Run("custom CNI keeps its URLs", func(t *testing.T) {
-		f, err := ReadTalosFacts([]byte(factsLegacyCustom))
+		f, err := ReadTalosFacts([]byte(factsV1alpha1Custom))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,7 +154,7 @@ func testReadTalosFactsLegacy(t *testing.T) {
 	})
 
 	t.Run("another CNI name is other", func(t *testing.T) {
-		f, err := ReadTalosFacts([]byte(factsLegacyOther))
+		f, err := ReadTalosFacts([]byte(factsV1alpha1Other))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -328,17 +328,17 @@ func TestRunAdoptRefusesOldTalosBeforeReadingConfig(t *testing.T) {
 
 // A cluster whose nodes were generated at an older contract and upgraded in place renders cleanly
 // only at that contract: the probe must find it instead of assuming the running version.
-func TestProbeVersionContractFindsTheLegacyContract(t *testing.T) {
+func TestProbeVersionContractFindsThePre114Contract(t *testing.T) {
 	cluster := newTestCluster()
 	machine := newTestMachine(cluster.Name)
 	bundle := newTestBundle(t)
 
 	var sys *render.SystemInputs
 
-	legacy := cluster.DeepCopy()
-	legacy.Spec.VersionContract = adoptProbeFloor
+	pre114 := cluster.DeepCopy()
+	pre114.Spec.VersionContract = adoptProbeFloor
 
-	live, _, err := render.Render(legacy, machine, bundle, nil, sys)
+	live, _, err := render.Render(pre114, machine, bundle, nil, sys)
 	if err != nil {
 		t.Fatalf("rendering the v1.12 fixture: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestProbeVersionContractFindsTheLegacyContract(t *testing.T) {
 		t.Fatalf("probes = %d, want 3 (v1.14, v1.13, v1.12)", len(probes))
 	}
 
-	// v1.13 and v1.12 both render the legacy single-document form, so they tie at zero and the
+	// v1.13 and v1.12 both render the v1alpha1 single-document form, so they tie at zero and the
 	// higher one wins; v1.14 (multi-document) must have been rejected.
 	if best != ver113 || len(probes[0].UnrepresentablePaths) == 0 || len(probes[2].UnrepresentablePaths) != 0 {
 		t.Fatalf("best = %q, want v1.13 (tie with v1.12, v1.14 worse); probes = %+v", best, probes)

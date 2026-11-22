@@ -294,7 +294,7 @@ func TestKeyRotationRefusals(t *testing.T) {
 	}
 }
 
-// The legacy contract keeps the keys in single fields that cannot hold two, so there is nothing to render.
+// The pre-1.14 contract keeps the keys in single fields that cannot hold two, so there is nothing to render.
 func TestKeyRotationNeedsTheMultiDocumentContract(t *testing.T) {
 	cluster := testCluster("true")
 	cluster.Spec.VersionContract = contractV113

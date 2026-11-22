@@ -100,21 +100,21 @@ func injectKubeletServing(
 		return mergeDocument(cfg, "kubelet serving certificates", docs...)
 	}
 
-	// One legacy document carries both: a container takes a single v1alpha1.Config.
-	legacy := &mv1alpha1.Config{
+	// One v1alpha1 document carries both: a container takes a single v1alpha1.Config.
+	v1alpha1Doc := &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		MachineConfig: &mv1alpha1.MachineConfig{
-			//nolint:staticcheck // the legacy blocks are the only form a pre-1.14 contract accepts
+			//nolint:staticcheck // the v1alpha1 blocks are the only form a pre-1.14 contract accepts
 			MachineKubelet: &mv1alpha1.KubeletConfig{KubeletExtraConfig: tls},
 		},
 	}
 
 	if ca != nil {
 		//nolint:staticcheck // as above
-		legacy.ClusterConfig = &mv1alpha1.ClusterConfig{
+		v1alpha1Doc.ClusterConfig = &mv1alpha1.ClusterConfig{
 			APIServerConfig: &mv1alpha1.APIServerConfig{ExtraArgsConfig: ca},
 		}
 	}
 
-	return mergeDocument(cfg, "kubelet serving certificates", legacy)
+	return mergeDocument(cfg, "kubelet serving certificates", v1alpha1Doc)
 }

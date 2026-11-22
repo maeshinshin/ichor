@@ -38,7 +38,7 @@ func dropDefaultNodeLabels(cfg coreconfig.Provider, contract *coreconfig.Version
 	if !contract.MultidocKubernetesConfigSupported() {
 		return cfg.PatchV1Alpha1(func(c *mv1alpha1.Config) error {
 			if c.MachineConfig != nil {
-				//nolint:staticcheck // the legacy block is the only form a pre-1.14 contract has
+				//nolint:staticcheck // the v1alpha1 block is the only form a pre-1.14 contract has
 				c.MachineConfig.MachineNodeLabels = without(c.MachineConfig.MachineNodeLabels, generated)
 			}
 

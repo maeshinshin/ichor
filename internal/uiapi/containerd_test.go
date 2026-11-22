@@ -73,7 +73,7 @@ func TestSetContainerdDeviceOwnershipWritesOnlyThatField(t *testing.T) {
 
 func TestSetContainerdDeviceOwnershipRefusesAnOldContract(t *testing.T) {
 	c := discoveryCluster(nil)
-	c.Spec.VersionContract = caLegacyContract
+	c.Spec.VersionContract = caPre114Contract
 	s := &Server{Client: fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()}
 
 	if _, err := setDeviceOwnership(t, s, true); connect.CodeOf(err) != connect.CodeInvalidArgument {

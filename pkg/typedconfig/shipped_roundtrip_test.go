@@ -144,7 +144,7 @@ func roundTripKind(t *testing.T, kind string, mirror reflect.Type) {
 		t.Errorf("%s does not round trip.\n--- Talos ---\n%s\n--- through the mirror ---\n%s", kind, want, got)
 	}
 
-	// shortcut: the legacy Config document is not layout-checked, because its required fields that the mirror
+	// shortcut: the Config document is not layout-checked, because its required fields that the mirror
 	// drops are written as empty keys, and the mirror writes an unset duration as "0s"; the hand-built fixture
 	// of TestRoundTripConfig covers it. Upgrade by comparing only keys with a value.
 	if kind != "Config" {

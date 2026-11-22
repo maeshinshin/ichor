@@ -38,7 +38,7 @@ type shippedKind struct {
 var shipped = []shippedKind{
 	{"SysctlConfig", ""},
 	{"KernelModuleConfig", ""},
-	{legacyKind, "v1alpha1 Config document"},
+	{v1alpha1Kind, "v1alpha1 Config document"},
 	{"VolumeConfig", "VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL,\nplaced on its own disk)"},
 	{"UserVolumeConfig", ""},
 	{"RawVolumeConfig", "RawVolumeConfig document (an unformatted partition for a CSI\nprovisioner)"},
@@ -103,16 +103,16 @@ var shipped = []shippedKind{
 	{"KubeStaticPodConfig", ""},
 }
 
-// legacyKind is how Talos registers the legacy machine and cluster document; Ichor calls it legacyName.
+// v1alpha1Kind is how Talos registers the v1alpha1 machine and cluster document; Ichor calls it configName.
 const (
-	legacyKind = "v1alpha1"
-	legacyName = "Config"
+	v1alpha1Kind = "v1alpha1"
+	configName   = "Config"
 )
 
 // ichorName is the discriminator value of a registered kind.
 func ichorName(registeredKind string) string {
-	if registeredKind == legacyKind {
-		return legacyName
+	if registeredKind == v1alpha1Kind {
+		return configName
 	}
 
 	return registeredKind

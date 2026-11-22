@@ -59,10 +59,10 @@ type CNIKind string
 
 const (
 	// CNIFlannel is Talos's own flannel: a KubeFlannelCNIConfig document, or
-	// cluster.network.cni.name flannel, which is also the legacy default when the field is unset.
+	// cluster.network.cni.name flannel, which is also the v1alpha1 default when the field is unset.
 	CNIFlannel CNIKind = "flannel"
 	// CNINone is cluster.network.cni.name: none, or a multi-document configuration with no
-	// KubeFlannelCNIConfig and no legacy cni block: Talos installs nothing.
+	// KubeFlannelCNIConfig and no v1alpha1 cni block: Talos installs nothing.
 	CNINone CNIKind = "none"
 	// CNICustom is cluster.network.cni.name: custom. Talos applies the manifests at URLs.
 	CNICustom CNIKind = "custom"
@@ -97,9 +97,9 @@ type InlineManifestFact struct {
 // InstallFacts is the install target of a machine configuration.
 type InstallFacts struct {
 	Image string
-	// Disk is machine.install.disk (the legacy form); empty if a selector is used instead.
+	// Disk is machine.install.disk (the v1alpha1 form); empty if a selector is used instead.
 	Disk string
-	// DiskSelector is the CEL expression of the UnattendedInstallConfig document, or the legacy
+	// DiskSelector is the CEL expression of the UnattendedInstallConfig document, or the v1alpha1
 	// installDiskSelector, when one is set.
 	DiskSelector string
 	// Wipe is the install-time wipe flag (UnattendedInstallConfig provisioning.wipe, machine.install.wipe).
@@ -152,7 +152,7 @@ type TalosFacts struct {
 }
 
 // ReadTalosFacts decodes a node's machine configuration (the bytes talosConfigReader.CurrentConfig
-// returns) into TalosFacts. It handles the legacy single-document form and the v1.13+
+// returns) into TalosFacts. It handles the v1alpha1 single-document form and the v1.13+
 // multi-document form alike, through machinery's own container.
 func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 	provider, err := configloader.NewFromBytes(cfgBytes)
@@ -233,7 +233,7 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 		f.KubernetesVersion = imageTag(k.Image())
 	}
 
-	if raw := provider.RawV1Alpha1(); raw != nil && raw.ClusterConfig != nil { //nolint:staticcheck // the legacy block is where a pre-1.14 configuration states it
+	if raw := provider.RawV1Alpha1(); raw != nil && raw.ClusterConfig != nil { //nolint:staticcheck // the v1alpha1 block is where a pre-1.14 configuration states it
 		f.ScheduleOnControlPlanes = raw.ClusterConfig.AllowSchedulingOnControlPlanes //nolint:staticcheck // as above
 	}
 
@@ -277,13 +277,13 @@ func registryFacts(provider coreconfig.Provider) []RegistryMirrorFact {
 }
 
 // cniFacts derives the CNI selection. flannelDoc is true when machinery reports a flannel
-// configuration (the KubeFlannelCNIConfig document, or the legacy name flannel).
+// configuration (the KubeFlannelCNIConfig document, or the v1alpha1 name flannel).
 func cniFacts(flannelDoc bool, provider coreconfig.Provider) CNIFacts {
 	if flannelDoc {
 		return CNIFacts{Kind: CNIFlannel}
 	}
 
-	if raw := provider.RawV1Alpha1(); raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.ClusterNetwork != nil { //nolint:staticcheck // the legacy block is how a pre-1.14 configuration states its CNI
+	if raw := provider.RawV1Alpha1(); raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.ClusterNetwork != nil { //nolint:staticcheck // the v1alpha1 block is how a pre-1.14 configuration states its CNI
 		cni := raw.ClusterConfig.CNI()
 		out := CNIFacts{Name: cni.Name(), URLs: cni.URLs()}
 
@@ -301,7 +301,7 @@ func cniFacts(flannelDoc bool, provider coreconfig.Provider) CNIFacts {
 		return out
 	}
 
-	// No legacy network block. With a v1.13+ multi-document configuration, the absence of a
+	// No v1alpha1 network block. With a v1.13+ multi-document configuration, the absence of a
 	// KubeFlannelCNIConfig document means Talos installs no CNI. A configuration that states
 	// nothing about the network at all is Talos's default, flannel.
 	for _, d := range provider.Documents() {

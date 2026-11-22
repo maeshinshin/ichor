@@ -1522,7 +1522,7 @@ func (st *adoptState) hintStartOver(say adoptSay, plans []*adoptPlan) {
 type specFieldHint struct{ prefix, hint string }
 
 // specFieldHints say which spec field carries a value adopt cannot put in a patch.
-// The v1.14 documents and the legacy fields they replaced both map, because the same value
+// The v1.14 documents and the v1alpha1 fields they replaced both map, because the same value
 // reaches Ichor through the same field whichever contract the node was generated for. First
 // match wins, so the specific prefixes come before the general ones.
 const cniHint = "the CNI selection has no spec field; Ichor leaves it as the node has it only on a cluster adopted with --cni-unmanaged"

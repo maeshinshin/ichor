@@ -29,11 +29,11 @@ import (
 // mirror has no field at all, or that loses an Unstructured field with no row here, stops generation and
 // fails TestShippedKindsKeepTheirPayload. Keyed "machinery struct.Go field" like secretFields.
 var droppedPayloads = map[string]string{
-	"KubeletConfig.KubeletExtraConfig":              "free-form kubelet configuration; the typed kubelet fields of the legacy document are mirrored",
+	"KubeletConfig.KubeletExtraConfig":              "free-form kubelet configuration; the typed kubelet fields of the v1alpha1 document are mirrored",
 	"MachineConfig.MachinePods":                     "static pod manifests: mirroring them means mirroring the Kubernetes Pod type, which is large (hundreds of KB of schema) and held for a separate decision",
 	"MachineConfig.MachineBaseRuntimeSpecOverrides": "free-form OCI runtime spec override; no single schema",
 	"AdmissionPluginConfig.PluginConfiguration":     "free-form per-plugin admission configuration; the plugin name is mirrored",
-	"SchedulerConfig.SchedulerConfig":               "free-form kube-scheduler configuration; the legacy document's other scheduler fields are mirrored",
+	"SchedulerConfig.SchedulerConfig":               "free-form kube-scheduler configuration; the v1alpha1 document's other scheduler fields are mirrored",
 }
 
 // reachable returns d and every struct reachable from it through its fields, each once.

@@ -69,7 +69,7 @@ func TestNoCNIAdoptedClusterRendersTheLiveConfiguration(t *testing.T) {
 	t.Run("v1.13 selects cni none", func(t *testing.T) {
 		out := renderFor(t, contractV113, handedOver(proxyOn))
 
-		requireAll(t, out, legacyCNINone)
+		requireAll(t, out, v1alpha1CNINone)
 		requireNone(t, out, "KubeFlannelCNIConfig", "inlineManifests", "cilium")
 	})
 }

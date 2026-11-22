@@ -535,7 +535,7 @@ func (c *Cluster) generate(mirror string) error {
 	var patch, cpPatch []byte
 	if multiDoc(o.TalosVersion) {
 		patch, cpPatch = c.patchMultiDoc(manifest)
-	} else if patch, err = c.patchLegacy(manifest); err != nil {
+	} else if patch, err = c.patchV1alpha1(manifest); err != nil {
 		return err
 	}
 	patchFile := c.path("patch.yaml")
@@ -935,7 +935,7 @@ type inlineManifest struct {
 	Contents string `yaml:"contents"`
 }
 
-func (c *Cluster) patchLegacy(manifest string) ([]byte, error) {
+func (c *Cluster) patchV1alpha1(manifest string) ([]byte, error) {
 	o := c.Opts
 	net := map[string]any{"podSubnets": []string{podSubnet}, "serviceSubnets": []string{serviceSubnet}}
 	cluster := map[string]any{"network": net}

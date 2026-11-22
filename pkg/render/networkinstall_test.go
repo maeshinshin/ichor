@@ -35,8 +35,8 @@ const (
 	defaultSvcNet   = "10.96.0.0/12"
 	customPodNet    = "10.200.0.0/16"
 	customSvcNet    = "10.201.0.0/16"
-	legacyCNINone   = "name: none"
-	legacyInstall   = "install:"
+	v1alpha1CNINone = "name: none"
+	v1alpha1Install = "install:"
 	presetCiliumStr = "cilium"
 )
 
@@ -136,7 +136,7 @@ func TestTalosFlannelIsAlwaysDropped(t *testing.T) {
 		})
 
 		t.Run("v1.13 "+p+" sets cni none", func(t *testing.T) {
-			requireAll(t, renderFor(t, contractV113, set), legacyCNINone)
+			requireAll(t, renderFor(t, contractV113, set), v1alpha1CNINone)
 		})
 	}
 
@@ -195,7 +195,7 @@ func TestInstallTargetFollowsTheContract(t *testing.T) {
 				t.Errorf("want selector %s in:\n%s", tc.want, out)
 			}
 
-			requireNone(t, out, legacyInstall)
+			requireNone(t, out, v1alpha1Install)
 		})
 	}
 
@@ -206,7 +206,7 @@ func TestInstallTargetFollowsTheContract(t *testing.T) {
 
 	t.Run("v1.13 wwid", func(t *testing.T) {
 		out := renderFor(t, contractV113, install(disk{WWID: "naa.1"}, image))
-		requireAll(t, out, legacyInstall, "diskSelector:", "wwid: naa.1", image)
+		requireAll(t, out, v1alpha1Install, "diskSelector:", "wwid: naa.1", image)
 		requireNone(t, out, docUnattended)
 	})
 

@@ -210,7 +210,7 @@ var rules = []rule{
 	// Paths a rule does not name stay reboot-required.
 
 	// Registries: RegistriesConfigController (controllers/cri/registries_config.go)
-	// folds mirrors, auth and TLS, from both the legacy machine.registries and the
+	// folds mirrors, auth and TLS, from both the v1alpha1 machine.registries and the
 	// RegistryMirrorConfig/RegistryAuthConfig/RegistryTLSConfig documents, into one
 	// resource. Mirrors and TLS become containerd hosts.toml files, read per pull.
 	// Auth goes into the CRI plugin's config file (containerd.GenerateCRIConfig),
@@ -219,7 +219,7 @@ var rules = []rule{
 	// spec version changes, so a changed credential is picked up without a reboot
 	// (running pods keep running). machinery's "without a reboot" doc comment on
 	// RegistryConfig.RegistryAuth is stale.'s addendum has the file:line
-	// references. The legacy path is keyed by a host that contains dots, so the rule
+	// references. The v1alpha1 path is keyed by a host that contains dots, so the rule
 	// is the whole machine.registries.config subtree.
 	// Re-verified in the same source: files/cri_config.go renders auth into the CRIConfig
 	// EtcFileSpec (containerd.GenerateCRIConfig) and TLS into hosts.toml
@@ -241,7 +241,7 @@ var rules = []rule{
 	// Node labels, annotations and taints are reconciled onto the Kubernetes
 	// Node object by NodeLabelSpec/NodeAnnotationSpec/NodeTaintSpec and
 	// NodeApplyController, which also removes what it no longer owns. The
-	// legacy fields and the standalone KubeNodeConfig document feed the same
+	// v1alpha1 fields and the standalone KubeNodeConfig document feed the same
 	// controllers; cluster.allowScheduling* is read only to derive the
 	// control-plane taint. KubeNodeConfig.nodeIP is deliberately absent.
 	{prefix: "KubeNodeConfig.labels", safe: true},
@@ -278,7 +278,7 @@ var rules = []rule{
 	//     recreates the pod.
 	//   - secrets/root.go copies cluster.apiServer.certSANs into the Kubernetes secrets root, whose
 	//     version is the AnnotationStaticPodSecretsVersion annotation: same effect.
-	// The legacy cluster.apiServer.* tree and KubeAPIServerConfig, KubeAdmissionControlConfig,
+	// The v1alpha1 cluster.apiServer.* tree and KubeAPIServerConfig, KubeAdmissionControlConfig,
 	// KubeAuditPolicyConfig, KubeAuthorizerConfig and KubeAuthenticationConfig all feed those. The
 	// controller-manager and scheduler documents stay safe: their pods restart on change too, but
 	// they run leader-elected on every control plane and a brief gap there does not take the

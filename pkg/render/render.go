@@ -312,7 +312,7 @@ func BuildConfig(
 // TalosCluster.spec.versionContract (principle 4) and the control-plane
 // taint -- the only system-layer value these inputs support today -- folded
 // in through machinery's own AllowSchedulingOnControlPlanes option, so that
-// its representation (legacy field vs. KubeNodeConfig document) is gated by
+// its representation (v1alpha1 field vs. KubeNodeConfig document) is gated by
 // the same version contract machinery already understands, rather than
 // Ichor guessing it a second time.
 func baseConfig(

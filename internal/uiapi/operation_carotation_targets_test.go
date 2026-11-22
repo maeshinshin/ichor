@@ -36,8 +36,8 @@ const (
 	caEtcd       = ichorv1alpha1.CARotationTargetEtcd
 	caAggregator = ichorv1alpha1.CARotationTargetAggregator
 
-	// caLegacyContract has no accepted list for the aggregator CA.
-	caLegacyContract = "v1.13"
+	// caPre114Contract has no accepted list for the aggregator CA.
+	caPre114Contract = "v1.13"
 )
 
 func planCA(srv *Server, targets ...string) (*pb.PlanOperationResponse, error) {
@@ -107,7 +107,7 @@ func TestPlanCARotationRefusesWhatItCannotRotate(t *testing.T) {
 
 func TestPlanCARotationBlocksTheAggregatorOnAnOldVersionContract(t *testing.T) {
 	objs := opObjects()
-	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = caLegacyContract
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = caPre114Contract
 
 	srv, k8s := opServer(t, objs...)
 

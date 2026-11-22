@@ -71,10 +71,10 @@ func injectControlPlaneMetrics(
 	docs := []config.Document{metricsRule(subnets)}
 
 	// etcd's arguments have no standalone document in 1.14.3: cluster.etcd.extraArgs is the only
-	// form, so the legacy Config document is always rendered and a pre-1.14 contract adds the
+	// form, so the Config document is always rendered and a pre-1.14 contract adds the
 	// controller-manager and scheduler to it.
-	//nolint:staticcheck // the legacy blocks are the only form these accept
-	legacy := &mv1alpha1.Config{
+	//nolint:staticcheck // the v1alpha1 blocks are the only form these accept
+	v1alpha1Doc := &mv1alpha1.Config{
 		ConfigVersion: mv1alpha1.Version,
 		ClusterConfig: &mv1alpha1.ClusterConfig{EtcdConfig: &mv1alpha1.EtcdConfig{EtcdExtraArgs: etcd}},
 	}
@@ -89,12 +89,12 @@ func injectControlPlaneMetrics(
 		docs = append(docs, cm, sched)
 	} else {
 		//nolint:staticcheck // see above
-		legacy.ClusterConfig.ControllerManagerConfig = &mv1alpha1.ControllerManagerConfig{ExtraArgsConfig: all}
+		v1alpha1Doc.ClusterConfig.ControllerManagerConfig = &mv1alpha1.ControllerManagerConfig{ExtraArgsConfig: all}
 		//nolint:staticcheck // see above
-		legacy.ClusterConfig.SchedulerConfig = &mv1alpha1.SchedulerConfig{ExtraArgsConfig: all}
+		v1alpha1Doc.ClusterConfig.SchedulerConfig = &mv1alpha1.SchedulerConfig{ExtraArgsConfig: all}
 	}
 
-	return mergeDocument(cfg, "control-plane metrics", append(docs, legacy)...)
+	return mergeDocument(cfg, "control-plane metrics", append(docs, v1alpha1Doc)...)
 }
 
 // metricsSubnets parses allowedCIDRs, masked to their network address. Empty is an error: with

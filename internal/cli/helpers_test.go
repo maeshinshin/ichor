@@ -177,7 +177,7 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 	}
 }
 
-// legacyConfigPatch builds an unsubmitted "cluster"-layer patch carrying a setting only the v1alpha1
+// v1alpha1ConfigPatch builds an unsubmitted "cluster"-layer patch carrying a setting only the v1alpha1
 // document has, cluster.apiServer.disablePodSecurityPolicy. It used to
 // carry a dummy machine.token too, because the mirror schema made that field
 // required on any Config document; machine.token (and
@@ -186,7 +186,7 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 // simulating drift adopt cannot safely auto-patch -- never created
 // through the fake client. Whether that premise still holds now that sparse
 // capture is possible is the to revisit.
-func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
+func v1alpha1ConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 	cfg := &ichorconfig.Config{
 		Machine: &ichorconfig.Machine{Type: testRoleWorker, CertSANs: []string{"10.0.0.12"}},
 		Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{DisablePodSecurityPolicy: ptr.To(true)}},

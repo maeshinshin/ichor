@@ -95,7 +95,7 @@ const (
 
 // kubernetesImagePaths are the ChangedPaths entries a Kubernetes version change is expected to
 // produce: one image per component, in the multi-document form (Talos 1.14 contract) and in the
-// legacy v1alpha1 form. pkg/render derives all of them from spec.kubernetesVersion.
+// v1alpha1 form. pkg/render derives all of them from spec.kubernetesVersion.
 var kubernetesImagePaths = map[string]struct{}{
 	"KubeAPIServerConfig.image":         {},
 	"KubeControllerManagerConfig.image": {},

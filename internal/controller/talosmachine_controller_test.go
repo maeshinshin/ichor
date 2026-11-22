@@ -713,7 +713,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(fake.applyCalls).To(BeEmpty())
 	})
 
-	It("stays Ready when the node carries the same mirrors in the legacy machine.registries.mirrors form (Ichor upgrade)", func() {
+	It("stays Ready when the node carries the same mirrors in the v1alpha1 machine.registries.mirrors form (Ichor upgrade)", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -727,7 +727,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		rendered, hash, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		fake := &fakeTalosClient{current: legacyMirrorForm(rendered)}
+		fake := &fakeTalosClient{current: v1alpha1MirrorForm(rendered)}
 		Expect(string(fake.current)).To(ContainSubstring("mirrors:"))
 		Expect(string(fake.current)).NotTo(ContainSubstring("RegistryMirrorConfig"))
 
@@ -981,7 +981,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionAdoptionHeld)).To(BeNil())
 	})
 
-	It("reports Converged while hold-apply is set when the node differs only in the legacy registry mirror form", func() {
+	It("reports Converged while hold-apply is set when the node differs only in the v1alpha1 registry mirror form", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
 		cluster := newTestCluster(secret.Name, "v1.14")
@@ -997,7 +997,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		rendered, hash, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		fake := &fakeTalosClient{current: legacyMirrorForm(rendered)}
+		fake := &fakeTalosClient{current: v1alpha1MirrorForm(rendered)}
 		Expect(string(fake.current)).NotTo(ContainSubstring("RegistryMirrorConfig"))
 
 		reconcileOK(newTestReconciler(fake), m)

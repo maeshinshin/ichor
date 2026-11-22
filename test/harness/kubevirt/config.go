@@ -66,7 +66,7 @@ type generatedConfig struct {
 // generateControlPlaneConfig builds a control-plane config for a cluster whose control
 // planes are nodeIPs, using the Talos config generator - the same library talosctl gen
 // config uses - rather than talosctl itself, so the endpoint and subnets can be set
-// precisely through the documents it emits instead of patched into the legacy v1alpha1
+// precisely through the documents it emits instead of patched into the v1alpha1
 // section afterwards. The install disk/image match the Image Factory schematic
 // and version the VM already booted from the ISO, so there is nothing left to resolve at
 // install time.

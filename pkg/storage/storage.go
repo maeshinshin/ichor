@@ -91,7 +91,7 @@ type Preset interface {
 
 	// KubeletMounts returns the bind mounts the kubelet needs to see the volumes
 	// TalosPatches provisions. Kept apart from TalosPatches because Talos expresses
-	// kubelet extra mounts only in the legacy machine.kubelet block: a cluster whose
+	// kubelet extra mounts only in the v1alpha1 machine.kubelet block: a cluster whose
 	// version contract uses the standalone KubeletConfig document (Talos 1.14+) has no
 	// field for them, and pkg/render decides per contract whether and how to apply these.
 	KubeletMounts() []KubeletMount

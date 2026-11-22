@@ -200,3 +200,7 @@ the doc comment does.
 ## Amendment (2026-11-22): a step that failed on a transient error is retried automatically
 
 The text above that says a paused-by-failure operation never retries, and that `failureReason` means "hold, never retry", is kept as it was written. ADR 0174 supersedes it for the kinds `talos`, `kubernetes`, `config` and `node` when the error is transient: the controller retries the step after a backoff, up to five times, and pauses for a person after that. Every other failure still pauses at once and waits for a person.
+
+## Amendment (2026-11-22): a pause releases the cluster lock
+
+The sentence above that says an operator pause (`spec.paused`) keeps the lock is kept as it was written. ADR 0162 supersedes it: `setPhase` releases the lock when a pause is entered, for `spec.paused` as well as for a failed step, and the next reconcile takes it again only when the operation resumes.

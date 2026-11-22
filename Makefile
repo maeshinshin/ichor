@@ -94,6 +94,17 @@ foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster 
 	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz
 	echo "$(FOREIGN_CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz" | sha256sum -c -
 
+# TestA6Refused installs this chart, two minors below the embedded 1.20.4. The digest is the one helm.cilium.io's
+# index.yaml lists for it.
+FOREIGN_OLD_CILIUM_CHART_VERSION ?= 1.16.19
+FOREIGN_OLD_CILIUM_CHART_SHA256 ?= 91672864f438a2a45fbfac65b0f8b42a8dd76e9e712cabe602311c34f290f7a3
+
+.PHONY: foreign-old-cilium-chart
+foreign-old-cilium-chart: ## Fetch the pinned Cilium 1.16 chart TestA6Refused installs into bin/foreign/chart116/ and verify its SHA-256.
+	mkdir -p bin/foreign/chart116
+	curl -fsSL -o bin/foreign/chart116/cilium-$(FOREIGN_OLD_CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(FOREIGN_OLD_CILIUM_CHART_VERSION).tgz
+	echo "$(FOREIGN_OLD_CILIUM_CHART_SHA256)  bin/foreign/chart116/cilium-$(FOREIGN_OLD_CILIUM_CHART_VERSION).tgz" | sha256sum -c -
+
 .PHONY: adr-index
 adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
 	go run ./internal/tools/adrindex

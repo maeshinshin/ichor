@@ -4,10 +4,9 @@ sidebar_order: 2
 
 # 2. Create the cluster
 
-`ichor init` makes the node the first control plane of a new cluster. Before
-you run it, choose the endpoint: the one address that kubectl, the nodes and
-Ichor's controller use to reach the Kubernetes API. The endpoint type is that
-choice, and it is the one setting that is hard to change later.
+`ichor init` makes the node the first control plane of a new cluster. First
+choose the endpoint: the one address kubectl, the nodes and Ichor's controller use
+for the Kubernetes API. It is the one setting that is hard to change later.
 
 | Pattern | Endpoint type | Use it when |
 | --- | --- | --- |
@@ -20,16 +19,17 @@ choice, and it is the one setting that is hard to change later.
 *What stands behind the one address that each endpoint type gives the cluster.*
 
 Use the virtual IP unless your network rules it out. Only the VIP changes what
-Ichor renders. For a load balancer or a DNS name, Ichor records the address you
-give it and creates nothing behind it.
-
-Each pattern's page gives the same three ways to create the cluster: at a
-prompt, from an `init.yaml` file, and with flags. The load balancer endpoint is
-a section of the single node endpoint page, because the procedure is the same
-and only the address differs. The settings every pattern shares (the topology
-preset, the subnets, the secrets bundle's passphrase, the kubeconfig and
-sign-in) are on [Settings every pattern shares](create-the-cluster/settings-every-pattern.md).
+Ichor renders; for a load balancer or DNS name Ichor records the address and
+creates nothing behind it. Each pattern's page shows the prompt, an `init.yaml`
+and the flags (the load balancer is a section of the single node page). Shared
+settings (preset, subnets, bundle passphrase, kubeconfig, sign-in) are on
+[Settings every pattern shares](create-the-cluster/settings-every-pattern.md).
 
 > [!WARNING]
 > Changing the endpoint type or address after init re-issues every certificate
-> in the cluster. That is why init prints a warning for any type other than `vip`.
+> in the cluster, so init warns about any type but `vip`.
+
+Running `ichor init` again for a cluster whose secrets bundle Secret exists is
+refused before any node is written. The message names both routes:
+`ichor create credentials CLUSTER` to reach it, or
+`ichor adopt --cluster CLUSTER --secrets-bundle FILE` to bring it under management.

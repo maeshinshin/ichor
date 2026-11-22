@@ -159,6 +159,10 @@ lint failures are not yours.
   `bin/k8s`). `GATE_SHARDS="ctl:10 cli:4 uiapi:2 rest:3"`, `GATE_CPU` and `GATE_MEM`
   resize it. `GATE_ONLY="cli0 uiapi1"` re-runs just the named shards (e.g. the
   `INFRA` ones; `NOT RUN (queued)` means the cluster never scheduled the pod).
+- Assert an error with `Expect(err).To(MatchError(apierrors.IsNotFound, "why"))`, never
+  `Expect(apierrors.IsNotFound(err)).To(BeTrue())`: the second prints only `Expected
+  <bool>: false` and loses the error. `internal/tools/errassert` fails `make test` on any
+  `_test.go` hit of `git grep -nP 'Expect\((\w+\.)?(?!IsStatusCondition)(Is[A-Z]\w*|As)\(' -- '*_test.go'`.
 - End-to-end tests run against a Talos cluster from one of two harnesses: nodes
   on a host cluster, or `talosctl cluster create qemu` on CI runners (`make
   setup-test-e2e`). A full cluster built by `ichor init` is described in

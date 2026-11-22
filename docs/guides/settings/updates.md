@@ -8,7 +8,7 @@ The controller checks whether a newer Ichor release is published and shows it.
 The check installs nothing: Upgrade, or `helm upgrade` on a Helm install, still
 moves Ichor.
 
-![How the release check works. The controller lists the chart tags on start and every six hours, and keeps the newest final release in status.latestRelease. The dashboard shows v<X> available next to Upgrade and names it in the attention list; the CLI prints one stderr line on a terminal, at most once a day per cluster. Nothing is installed by the check: Upgrade, or helm upgrade, still moves Ichor.](../../images/settings-update-check.light.drawio.svg)
+![How the release check works. The controller lists the tags of the chart and of the Talos installer and kubelet images on start and every six hours, and keeps the newest final release in status.latestRelease. The dashboard shows v<X> available next to Upgrade and names it in the attention list; the CLI prints one stderr line on a terminal, at most once a day per cluster. Nothing is installed by the check: Upgrade, or helm upgrade, still moves Ichor.](../../images/settings-update-check.light.drawio.svg)
 
 *The release check, what it shows and what it never does.*
 

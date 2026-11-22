@@ -320,3 +320,9 @@ their own path in `spec.config`, so they cannot be refused by name. None is drop
   same setting with the same meaning. The value is accepted because it is carried.
 
 `TestNotCarriedLeavesAtAnotherShapeAreRefusedOrCarried` pins both halves.
+
+## Amendment: the static pod rows, counted again (2026-11-23)
+
+The bullet "The static pod is not in the index" gives 1,075 of 2,281 rows and says the kind has one row of its own.
+The index has 1,199 rows with the exclusion and 2,273 without. The static pod keeps two rows (`machine.staticPods`
+and its key) and about 1,074 rows of the Kubernetes `Pod` are excluded.

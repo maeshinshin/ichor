@@ -140,3 +140,13 @@ applied (`NodeDrifted`). `desiredInputsHash` now also folds in whether `CNIHando
 and `status.cni.kubeProxy` (ADR 0066), the two status values the render reads. The removal is then
 an intended change and is applied live under any `driftPolicy`, since `cluster.inlineManifests` is
 safe and needs no reboot. Hashes of clusters that have neither are unchanged.
+
+## Amendment (2026-11-23): the controller skips what is inventoried; the removal is for the Kubernetes upgrade
+
+The Decision above says Talos's `ManifestApplyController` re-applies `cluster.inlineManifests` on every Kubernetes
+upgrade. In Talos v1.14.3 it does not: `manifest_apply.go` skips an object that is already in the bootstrap-manifest
+inventory (`if inv.Contains(objMeta) { continue }`) and an object that exists, and it has no delete path. A stale
+entry is therefore not re-applied by that controller. What re-applies the bootstrap manifests is the Kubernetes
+upgrade's own sync (`PerformManifestsSync` in `pkg/cluster/kubernetes/talos_managed.go`, and Ichor's
+`SyncBootstrapManifests`, which server-side-applies the set with forced ownership). That is why Ichor stops
+rendering the inline entry once `CNIHandover` is True, and why a Kubernetes upgrade is refused until then.

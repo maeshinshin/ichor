@@ -446,6 +446,55 @@ func TestRemoveMachineRestoresTheGuardWhenTheClientDisconnects(t *testing.T) {
 	}
 }
 
+// The arming write can be stored while the client's context is cancelled under it: the Update then
+// returns an error, and the restore must still reach the server.
+func TestRemoveMachineRestoresTheGuardWhenTheArmingUpdateIsCancelled(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	base := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+	ctx, cancel := context.WithCancel(base)
+
+	s.Impersonate = func(Identity) (client.Client, error) {
+		return interceptor.NewClient(reviewing(k8s, true, &[]authv1.ResourceAttributes{}).(client.WithWatch), interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+
+				return c.Get(ctx, key, obj, opts...)
+			},
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+
+				if err := c.Update(ctx, obj, opts...); err != nil {
+					return err
+				}
+
+				cancel() // the write is stored, then the client goes away
+
+				return context.Canceled
+			},
+		}), nil
+	}
+
+	_, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
+		Machine: objectRef(opNS, "w1"), Confirm: "w1", Override: &pb.Override{},
+	}))
+	if err == nil {
+		t.Fatal("the cancelled arming update must fail")
+	}
+
+	var got ichorv1alpha1.TalosMachine
+	if err := k8s.Get(base, types.NamespacedName{Namespace: opNS, Name: "w1"}, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := deleteguard.CheckDelete(got.Annotations); err == nil {
+		t.Fatalf("a removal whose arming update was cancelled must not leave the machine armed: %v", got.Annotations)
+	}
+}
+
 func TestRemoveMachineRefusesTheLastControlPlane(t *testing.T) {
 	s, _ := opServer(t, opObjects()...)
 

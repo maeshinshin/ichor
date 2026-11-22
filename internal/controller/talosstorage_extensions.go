@@ -31,7 +31,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -80,9 +79,12 @@ func (c *ImageFactoryClient) Register(ctx context.Context, extensions []string) 
 		return id, nil
 	}
 
-	body := "customization:\n  systemExtensions:\n    officialExtensions:\n"
+	var body strings.Builder
+
+	body.WriteString("customization:\n  systemExtensions:\n    officialExtensions:\n")
+
 	for _, e := range extensions {
-		body += "      - " + e + "\n"
+		body.WriteString("      - " + e + "\n")
 	}
 
 	base := imageFactoryURL
@@ -90,7 +92,7 @@ func (c *ImageFactoryClient) Register(ctx context.Context, extensions []string) 
 		base = c.URL
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(base, "/")+"/schematics", strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(base, "/")+"/schematics", strings.NewReader(body.String()))
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +119,7 @@ func (c *ImageFactoryClient) Register(ctx context.Context, extensions []string) 
 	}
 
 	if resp.StatusCode/100 != 2 || json.Unmarshal(raw, &out) != nil || out.ID == "" {
-		return "", fmt.Errorf("Image Factory answered %s to the schematic: %.200s", resp.Status, raw)
+		return "", fmt.Errorf("the Image Factory answered %s to the schematic: %.200s", resp.Status, raw)
 	}
 
 	c.mu.Lock()
@@ -183,7 +185,7 @@ func (r *TalosStorageReconciler) ensureExtensions(
 func (r *TalosStorageReconciler) ensureExtensionsOperation(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, id string) (string, error) {
 	sum := sha256.Sum256([]byte(cluster.Name + "/" + id))
 	op := &ichorv1alpha1.TalosOperation{
-		ObjectMeta: metav1.ObjectMeta{Namespace: cluster.Namespace, Name: "storage-extensions-" + hex.EncodeToString(sum[:])[:10]},
+		Namespace: cluster.Namespace, Name: "storage-extensions-" + hex.EncodeToString(sum[:])[:10],
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: ichorv1alpha1.TalosOperationKindTalos, Paused: true,
 		},

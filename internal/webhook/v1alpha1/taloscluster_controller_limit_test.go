@@ -8,6 +8,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
+const somethingElse = "something else"
+
 // TestAutoPatchIdentityMayOnlyApplyAPatch: the automatic patcher's ServiceAccount has one write to a TalosCluster: a
 // newer patch of the same minor in the two version fields, nothing else. The controller's own
 // username has none.
@@ -43,8 +45,8 @@ func TestAutoPatchIdentityMayOnlyApplyAPatch(t *testing.T) {
 		{name: "a Kubernetes patch", user: patcher, mod: kube("v1.36.6")},
 		{name: "a minor", user: patcher, mod: kube("v1.37.0"), wantErr: "not a newer patch"},
 		{name: "a downgrade", user: patcher, mod: talos("v1.14.2"), wantErr: "not a newer patch"},
-		{name: "another field", user: patcher, mod: func(c *ichorv1alpha1.TalosCluster) { c.Spec.VersionContract = "v1.14" }, wantErr: "something else"},
-		{name: "an annotation", user: patcher, mod: func(c *ichorv1alpha1.TalosCluster) { c.Annotations = map[string]string{"a": "b"} }, wantErr: "something else"},
+		{name: "another field", user: patcher, mod: func(c *ichorv1alpha1.TalosCluster) { c.Spec.VersionContract = "v1.14" }, wantErr: somethingElse},
+		{name: "an annotation", user: patcher, mod: func(c *ichorv1alpha1.TalosCluster) { c.Annotations = map[string]string{"a": "b"} }, wantErr: somethingElse},
 		{name: "the controller writes no spec, not even a patch", user: controller, mod: talos("v1.14.5"), wantErr: "never writes"},
 		{name: "the controller changes no other spec field either", user: controller, mod: func(c *ichorv1alpha1.TalosCluster) { c.Spec.VersionContract = "v1.14" }, wantErr: "never writes"},
 		{name: "a person is not limited", user: "alice", mod: kube("v1.37.0")},
@@ -101,7 +103,7 @@ func TestStorageExtensionsIdentityMayOnlySetTheSchematicID(t *testing.T) {
 			c.Spec.TalosVersion = "v1.14.5"
 
 			return c
-		}(), wantErr: "something else"},
+		}(), wantErr: somethingElse},
 		{name: "a person is not limited", user: "alice", old: withSchematic("mine"), new: withSchematic("abc")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

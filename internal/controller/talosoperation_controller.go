@@ -236,12 +236,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// entered, so the pause is decided here, before acquireDisruptiveLock, which would take the lock
 	// back and renew it on every pass.
 	if op.Spec.Paused {
-		why := "spec.paused is true"
-		if op.Annotations[ichorv1alpha1.OperationStorageExtensionsAnnotation] != "" && len(op.Status.Machines) == 0 {
-			why = "waiting for approval: it adds the system extensions a storage preset needs and reboots every node; ichor resume operation " + op.Name
-		}
-
-		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationPaused, why)
+		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationPaused, pausedWhy(&op))
 	}
 
 	// A step already failed: stay paused and never retry it automatically; only an explicit
@@ -795,6 +790,17 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	}
 
 	return nil
+}
+
+// pausedWhy is the message of the pause a person set: for the upgrade a storage preset created, which starts
+// paused, it is the approval it waits for (ADR 0173).
+func pausedWhy(op *ichorv1alpha1.TalosOperation) string {
+	if op.Annotations[ichorv1alpha1.OperationStorageExtensionsAnnotation] != "" && len(op.Status.Machines) == 0 {
+		return "waiting for approval: it adds the system extensions a storage preset needs and reboots every node; " +
+			"ichor resume operation " + op.Name
+	}
+
+	return "spec.paused is true"
 }
 
 // clearWaitClocks removes conditionTalosUpgradeWaiting from the machines of a Talos operation that is pausing, whatever

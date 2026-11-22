@@ -21,7 +21,8 @@ func TestStorageExtensionsIdentity(t *testing.T) {
 
 	for _, name := range []string{"ichor-manager-role", "ichor-manager-secrets-role"} {
 		for tr := range rbacTriples(allRules(find(docs, kindClusterRole, name))) {
-			if tr.group == ichorGroup && tr.resource == resClusters && tr.verb != verbGetController && tr.verb != verbList && tr.verb != verbWatch {
+			reads := tr.verb == verbGetController || tr.verb == verbList || tr.verb == verbWatch
+			if tr.group == ichorGroup && tr.resource == resClusters && !reads {
 				t.Errorf("%s grants %s: the controller writes no TalosCluster, it impersonates %s", name, tr, storageExtensionsSA)
 			}
 		}
@@ -32,7 +33,8 @@ func TestStorageExtensionsIdentity(t *testing.T) {
 		t.Fatal("no Role ichor-storage-extensions-impersonate-role")
 	}
 
-	if got := rbacTriples(allRules(imp)); len(got) != 1 || !got[rbacTriple{"", "serviceaccounts", verbImpersonate, storageExtensionsSA}] {
+	want := rbacTriple{"", "serviceaccounts", verbImpersonate, storageExtensionsSA}
+	if got := rbacTriples(allRules(imp)); len(got) != 1 || !got[want] {
 		t.Errorf("the impersonation Role grants %v, want impersonate on %s only", got, storageExtensionsSA)
 	}
 
@@ -55,6 +57,7 @@ func TestStorageExtensionsIdentity(t *testing.T) {
 		find(configDocs, kindClusterRole, "storage-extensions-role"), role, storageExtensionsConfigDir+"role.yaml", chartFile)
 
 	impDocs := loadYAMLDocs(t, storageExtensionsConfigDir+"impersonate_role.yaml")
+	impFile := storageExtensionsConfigDir + "impersonate_role.yaml"
 	checkRBACRulesMatch(t, "ichor", "Role storage-extensions-impersonate-role",
-		find(impDocs, kindRole, "storage-extensions-impersonate-role"), imp, storageExtensionsConfigDir+"impersonate_role.yaml", chartFile)
+		find(impDocs, kindRole, "storage-extensions-impersonate-role"), imp, impFile, chartFile)
 }

@@ -43,6 +43,9 @@ const (
 	storageDisk      = "disk.transport == 'nvme'"
 
 	storageTestEndpoint = "10.0.0.10:50000"
+
+	iscsiToolsVersion = "v0.2.0"
+	utilLinuxVersion  = "2.41"
 )
 
 // fakeSettingReader stands in for the storage system's own API: the envtest apiserver has no
@@ -248,10 +251,10 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 				return n.Name
 			}
 
-			bareNode := mkNode(bare, map[string]string{talosExtensionLabelPrefix + "iscsi-tools": "v0.2.0"})
+			bareNode := mkNode(bare, map[string]string{talosExtensionLabelPrefix + "iscsi-tools": iscsiToolsVersion})
 			fullNode := mkNode(full, map[string]string{
-				talosExtensionLabelPrefix + "iscsi-tools":      "v0.2.0",
-				talosExtensionLabelPrefix + "util-linux-tools": "2.41",
+				talosExtensionLabelPrefix + "iscsi-tools":      iscsiToolsVersion,
+				talosExtensionLabelPrefix + "util-linux-tools": utilLinuxVersion,
 			})
 
 			got := reconcileStorage(r, s)
@@ -268,7 +271,7 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 			// After upgrading the schematic the labels appear and the condition clears.
 			var n corev1.Node
 			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: bareNode}, &n)).To(Succeed())
-			n.Labels[talosExtensionLabelPrefix+"util-linux-tools"] = "2.41"
+			n.Labels[talosExtensionLabelPrefix+"util-linux-tools"] = utilLinuxVersion
 			Expect(k8sClient.Update(ctx, &n)).To(Succeed())
 
 			ext = cond(reconcileStorage(r, s), conditionStorageExtensions)
@@ -461,8 +464,8 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		var n corev1.Node
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &n)).To(Succeed())
 		n.Labels = map[string]string{
-			talosExtensionLabelPrefix + "iscsi-tools":      "v0.2.0",
-			talosExtensionLabelPrefix + "util-linux-tools": "2.41",
+			talosExtensionLabelPrefix + "iscsi-tools":      iscsiToolsVersion,
+			talosExtensionLabelPrefix + "util-linux-tools": utilLinuxVersion,
 		}
 		Expect(k8sClient.Update(ctx, &n)).To(Succeed())
 

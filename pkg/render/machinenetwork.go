@@ -73,6 +73,10 @@ func injectNetworkDocuments(
 
 	vip := vipAddress(cluster, m)
 
+	if err := cluster.Spec.Endpoint.CheckVIPHeldBy(m); err != nil {
+		return nil, fmt.Errorf("render: %w", err)
+	}
+
 	routes, err := networkRoutes(n)
 	if err != nil {
 		return nil, err

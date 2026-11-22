@@ -83,3 +83,10 @@ The VIP is put on the link `spec.network` names (`requireVIPLink` refuses approv
 a VIP cluster). Changing a cluster's endpoint to `vip` could leave an already approved control plane with no
 `spec.network`, which never holds the VIP; the TalosCluster webhook now warns, naming those control planes, and does
 not refuse, since each node's network is set after the endpoint.
+
+A VIP an approved control plane with static addresses could not hold is refused:
+`TalosClusterEndpoint.CheckVIPHeldBy` refuses a `vip` address outside every subnet of the control plane's
+`spec.network.addresses`, or equal to one of them. The renderer refuses it (a cluster adopted with a load
+balancer's address typed `vip` would otherwise get a VIP rendered onto it once a control plane is approved with
+`--nic`), and the TalosCluster webhook refuses it when an update sets the endpoint. A DHCP control plane names no
+subnet, so it is not checked.

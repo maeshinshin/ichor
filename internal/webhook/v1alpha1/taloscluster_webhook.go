@@ -493,6 +493,10 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 		return nil, err
 	}
 
+	if err := v.vipAddressRefusal(ctx, oldObj, newObj); err != nil {
+		return nil, err
+	}
+
 	vipWarns, err := v.vipLinkWarnings(ctx, oldObj, newObj)
 	if err != nil {
 		return nil, err
@@ -513,6 +517,29 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	}
 
 	return warns, nil
+}
+
+// vipAddressRefusal refuses a vip endpoint, when this update sets it, that an approved control plane with static
+// addresses could not hold (CheckVIPHeldBy), so a load balancer's address typed vip is caught at admission.
+func (v *TalosClusterCustomValidator) vipAddressRefusal(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	e := newObj.Spec.Endpoint
+	if e.Type != ichorv1alpha1.EndpointTypeVIP || e == oldObj.Spec.Endpoint || v.APIReader == nil {
+		return nil
+	}
+
+	cps, err := deleteguard.ApprovedMachines(ctx, v.APIReader, newObj.Namespace, newObj.Name,
+		deleteguard.MachineFilter{Role: "controlplane"})
+	if err != nil {
+		return err
+	}
+
+	for i := range cps {
+		if err := e.CheckVIPHeldBy(&cps[i]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // vipLinkWarnings names the approved control planes that cannot hold a VIP this update gives the cluster: the

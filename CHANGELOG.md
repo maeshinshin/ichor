@@ -437,6 +437,11 @@ command does. Each item is described where it is listed below.
 
 ### Cluster
 
+- **A `vip` endpoint that no control plane could hold is refused.** An address outside every
+  subnet of a control plane's static `spec.network.addresses`, or equal to one of them, is
+  refused when the config is rendered and when the endpoint is set on a `TalosCluster`. The
+  message names `spec.endpoint.address` and the fix: type a load balancer's address `node`
+  (ADR 0092).
 - **Changing a cluster's endpoint to `vip` warns about control planes that cannot
   hold it.** The VIP goes on the link a node's `spec.network` names, so an
   approved control plane without one (the first node of a cluster made with a

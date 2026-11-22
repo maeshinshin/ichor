@@ -42,6 +42,7 @@ const (
 	testAdoptAddr     = "10.0.0.11"
 	testNodeAddr      = "10.0.0.10"
 	testStaticCIDR    = "192.168.0.201/16"
+	testStaticVIP     = "192.168.0.210" // inside testStaticCIDR's subnet, which a VIP needs
 	testNotIP         = "not an IP address"
 	testHWGateway     = "192.168.0.254"
 	testLinkAliasKind = "kind: LinkAliasConfig"
@@ -398,6 +399,7 @@ func TestRunInit_VIPStaticAddress(t *testing.T) {
 
 	applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
 		o.Addresses, o.Gateway, o.DNS = []string{testStaticCIDR}, testHWGateway, []string{"1.1.1.1"}
+		o.EndpointAddress = testStaticVIP
 	}, one, nil)
 	if err != nil {
 		t.Fatalf("runInit: %v", err)
@@ -476,7 +478,7 @@ func TestInitFile_StaticKeys(t *testing.T) {
 // anything is applied, exactly as it does for DHCP; with a sole link that link is the one the address goes on.
 func TestRunInit_VIPStaticAddressNeedsAnUnambiguousLink(t *testing.T) {
 	two := []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink, {Name: testSecondLink, PermanentMAC: testSecondMAC}}
-	static := func(o *initOptions) { o.Addresses = []string{testStaticCIDR} }
+	static := func(o *initOptions) { o.Addresses, o.EndpointAddress = []string{testStaticCIDR}, testStaticVIP }
 
 	applied, _, _, _, err := initWithLinks(t, static, two, nil)
 	if err == nil || !strings.Contains(err.Error(), "--nic") || applied != "" {

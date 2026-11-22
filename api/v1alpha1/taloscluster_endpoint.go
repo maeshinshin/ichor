@@ -87,3 +87,45 @@ func checkHostname(name string) error {
 
 	return nil
 }
+
+// CheckVIPHeldBy refuses a vip endpoint that control plane m could never hold: with static addresses, the VIP must
+// lie inside one of their subnets (a Layer2 VIP is a second address on the same link, so an address elsewhere is a
+// load balancer's, or a typo) and must not be one of the node's own addresses. A DHCP machine names no subnet, so
+// it is not checked. The renderer and the TalosCluster webhook both call it.
+func (e TalosClusterEndpoint) CheckVIPHeldBy(m *TalosMachine) error {
+	n := m.Spec.Network
+	if e.Type != EndpointTypeVIP || m.Spec.Role != "controlplane" || n == nil ||
+		n.Addressing != MachineAddressingStatic {
+		return nil
+	}
+
+	vip, err := netip.ParseAddr(e.Address)
+	if err != nil {
+		return nil // CheckAddress reports it
+	}
+
+	inside := false
+
+	for _, a := range n.Addresses {
+		p, err := netip.ParsePrefix(a)
+		if err != nil {
+			continue
+		}
+
+		if p.Addr() == vip {
+			return fmt.Errorf("spec.endpoint.address %s is control plane %s's own address in spec.network.addresses: "+
+				"give the VIP an address no node uses", vip, m.Name)
+		}
+
+		inside = inside || p.Contains(vip)
+	}
+
+	if !inside {
+		return fmt.Errorf("spec.endpoint.address %s is outside every subnet of control plane %s (spec.network.addresses %v), "+
+			"so no node could hold it as a VIP: if a load balancer holds it, set spec.endpoint.type to %s; "+
+			"otherwise choose a free address inside the nodes' subnet",
+			vip, m.Name, n.Addresses, EndpointTypeNode)
+	}
+
+	return nil
+}

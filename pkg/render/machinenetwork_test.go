@@ -266,6 +266,7 @@ func documentOfKind(t *testing.T, out, kind string) string {
 func TestRenderEtcdAdvertisedSubnets(t *testing.T) {
 	render := func(role string, network *ichorv1alpha1.TalosMachineNetwork) string {
 		cluster := testCluster("true")
+		cluster.Spec.Endpoint.Address = "192.168.0.210" // inside the machine's subnet, which a vip needs
 		m := testMachine("node-a", role, nil)
 		m.Spec.Network = network
 
@@ -281,4 +282,44 @@ func TestRenderEtcdAdvertisedSubnets(t *testing.T) {
 	dhcp := &ichorv1alpha1.TalosMachineNetwork{MAC: testNICMAC, Addressing: ichorv1alpha1.MachineAddressingDHCP}
 	requireNone(t, render(roleControlPlane, dhcp), "advertisedSubnets")
 	requireNone(t, render(roleControlPlane, nil), "advertisedSubnets")
+}
+
+// TestRenderVIPRefusesWhatNoNodeCouldHold: a vip endpoint that a control plane with static addresses could not
+// hold is refused at render, naming the field and the fix, and one inside its subnet still renders.
+func TestRenderVIPRefusesWhatNoNodeCouldHold(t *testing.T) {
+	render := func(addr string, addresses ...string) (string, error) {
+		cluster := testCluster("true")
+		cluster.Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: addr}
+		m := testMachine("node-a", roleControlPlane, nil)
+		m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
+			MAC: testNICMAC, Addressing: ichorv1alpha1.MachineAddressingStatic, Addresses: addresses,
+		}
+
+		out, _, err := Render(cluster, m, testBundle(t), nil, nil)
+
+		return string(out), err
+	}
+
+	for name, tc := range map[string]struct{ addr, want, fix string }{
+		"a load balancer's address outside the node subnet": {
+			"10.9.9.9", "spec.endpoint.address 10.9.9.9 is outside every subnet", "set spec.endpoint.type to node"},
+		"the node's own address": {
+			"192.168.0.201", "is control plane node-a's own address", "give the VIP an address no node uses"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := render(tc.addr, "192.168.0.201/24")
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), tc.fix) {
+				t.Fatalf("error = %v, want it to contain %q and %q", err, tc.want, tc.fix)
+			}
+		})
+	}
+
+	t.Run("an address inside the subnet renders", func(t *testing.T) {
+		out, err := render("192.168.0.210", "192.168.0.201/24")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		requireAll(t, out, "kind: Layer2VIPConfig", "name: 192.168.0.210")
+	})
 }

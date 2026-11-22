@@ -159,3 +159,7 @@ The retry every 30 s above goes on for `rotationGiveUpAfter` (thirty minutes) in
 ### Amendment (2026-11-16): the etcd snapshot advice names the create step
 
 The section "A fresh snapshot first" above describes the plan warning as it stood when this ADR was written. The warning for an etcd rotation now also names `ichor create etcd-backup`, for an operator with no `TalosEtcdBackup` yet, ahead of `ichor backup etcd NAME`, which needs an existing one to name. The route is decided in ADR 0164.
+
+## Amendment, 2026-11-22: a resume restarts the blocked clock
+
+The give-up window above was dated from the `CARotation=False/Blocked` condition's `lastTransitionTime`, which a pause for another cause (`spec.paused`, a lock held by another operation) left standing. A rotation resumed after a long pause therefore gave up on its first blocked pass. Decided: a pause removes the rotation's Blocked condition (CA rotation and key rotation alike), the same idea as ADR 0170 clearing the wait clock, so the first blocked pass after the resume starts a new window. A blocked pass itself writes its pause through the rotation's status and keeps the condition, so a streak of blocked passes still counts. No new field.

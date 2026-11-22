@@ -669,6 +669,10 @@ command does. Each item is described where it is listed below.
   pause lasted. It releases the lock when it pauses and takes it again when it
   resumes, and a retry that finds another holder waits paused on the lock. A
   pause that resumes by itself keeps the lock.
+- **A CA or key rotation resumed after a pause no longer gives up on its first
+  blocked pass.** The thirty minutes were counted from before the pause, so a
+  rotation paused for longer than that, then resumed, gave up at once. A pause now
+  clears the count and the resume starts it again.
 - A CA or key rotation blocked on one step for thirty minutes gives up and
   pauses for a person, freeing the lock, instead of holding it.
 - A Talos upgrade whose node does not come back within 20 minutes of the

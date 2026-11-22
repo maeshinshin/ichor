@@ -1,0 +1,64 @@
+<mxfile host="Electron">
+  <diagram id="CLI and UI" name="CLI and UI">
+    <mxGraphModel grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="0" page="0" pageScale="1" pageWidth="900" pageHeight="500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" style="html=0;" />
+        <mxCell id="1" parent="0" style="html=0;" />
+        <mxCell id="pn" parent="1" style="rounded=1;arcSize=3;fillColor=light-dark(#FFFFFF,#0A0A0A);strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;html=0;" value="" vertex="1">
+          <mxGeometry x="10" y="10" width="880" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="b" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Browser&#xa;Preact SPA" vertex="1">
+          <mxGeometry x="20" y="70" width="150" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="ichor CLI&#xa;Tables, -o yaml|json" vertex="1">
+          <mxGeometry x="20" y="250" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="ichor-ui backend&#xa;Connect API, stateless,&#xa;two replicas" vertex="1">
+          <mxGeometry x="300" y="60" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Shared Go packages&#xa;render, plan, diff, impact,&#xa;pre-checks, upgrade paths,&#xa;dangerous-operation checks" vertex="1">
+          <mxGeometry x="300" y="230" width="200" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="k" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Kubernetes API&#xa;Ichor's custom&#xa;resources" vertex="1">
+          <mxGeometry x="540" y="140" width="170" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="t" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="ichor-controller" vertex="1">
+          <mxGeometry x="540" y="320" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="n" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Talos&#xa;nodes" vertex="1">
+          <mxGeometry x="770" y="230" width="110" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" edge="1" parent="1" source="b" target="u" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="c" target="u" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;html=0;" value="Connect API">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="u" target="p" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;html=0;dashed=1;dashPattern=5 4;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="c" target="p" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="local">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="u" target="k" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="writes CRs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="p" target="k" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="writes CRs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="k" target="t" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="t" target="n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="only writer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="u" target="n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#737373,#A3A3A3);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;html=0;dashed=1;dashPattern=5 4;" value="reads, os:reader">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="c" target="n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;html=0;dashed=1;dashPattern=5 4;" value="init, restore cluster,&#xa;reclaim node --talosconfig">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

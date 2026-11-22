@@ -58,9 +58,6 @@
         <mxCell id="e5" edge="1" parent="1" source="d" target="n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e6" edge="1" parent="1" source="g" target="r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;html=0;dashed=1;dashPattern=5 4;" value="types">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

@@ -4,21 +4,24 @@ sidebar_order: 5
 
 # Run it
 
-Run the same command without `--plan`, plus the flags the plan told you to add:
+![The four phases of an adopt run. 1 Write: the bundle Secret, TalosCluster, held TalosMachines, patches and Ichor. 2 Cilium takeover, waiting for CNIHandover. 3 Release the holds, control planes first, each after a zero-drift check. 4 Turn sign-in on. A held machine carries the hold-apply annotation and the AdoptionHeld condition and nothing is applied to it.](../../images/adopt-run-phases.light.drawio.svg)
+
+*Nothing is applied to a node until its hold is released after a zero-drift check.*
+
+Run the plan's command without `--plan`, plus the flags the plan told you to add:
 
 ```sh
 ichor adopt --cluster prod --node 10.0.0.11 --recover-secrets \
   --recover-from 10.0.0.11 --accept-cilium-diff --accept-cilium-changes
 ```
 
-Adopt shows its steps like `ichor init` does: one line per step, the findings of
-the plan as lines of their own (`!` for what needs your attention: a skipped
-machine, Ichor-owned settings, a Cilium difference, the Helm record that will be
-deleted), and a `Done in` and `Next` at the end. It asks for consent before it
-writes anything (`--yes` skips the prompt). The patches themselves are not
-printed; add `-o yaml` (or `json`) to print them on stdout, in which case adopt
-keeps writing its `adopt: ...` lines on stderr as before. A run on a cluster with
-no CNI that Ichor has never seen looks like this:
+Adopt prints one line per step, the plan's findings as lines of their own (`!`
+marks what needs your attention: a skipped machine, Ichor-owned settings, a
+Cilium difference, the Helm record that will be deleted) and `Done in` and
+`Next` at the end. It asks for consent before it writes anything (`--yes` skips
+it). The patches are not printed; `-o yaml` (or `json`) prints them on stdout
+while the `adopt: ...` lines stay on stderr. A cluster with no CNI that Ichor
+has never seen looks like this:
 
 ```text
 Ichor adopt · prod
@@ -47,25 +50,16 @@ Next
   ichor ui
 ```
 
-The consent prompt and the reminder to back up a recovered secrets bundle stay
-as they were (the reminder is a `!` line). Then it works in phases:
+The reminder to back up a recovered secrets bundle is also a `!` line.
 
-1. Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held),
-   the patches and, if Ichor is not running yet, Ichor's install manifest. On a
-   cluster with no CNI Cilium is installed before this, as above.
-   A held machine has the annotation `ichor.maesh.dev/hold-apply`; the
-   controller reports its drift (condition `AdoptionHeld`) and applies
-   nothing.
-2. Takes over Cilium and waits for the `CNIHandover` condition. Skipped with
-   `--cni-unmanaged`.
-3. Releases the hold machine by machine, control planes first, each only after
-   a live zero-drift check. The controller applies the first render.
-4. Turns sign-in on (see [Sign-in](sign-in.md)), once every hold is released: the
-   first administrator, the switch of ichor-ui, then `spec.authentication.ichor`
-   on the `TalosCluster`.
+| Phase | What happens |
+|---|---|
+| 1 | Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held), the patches and, if Ichor is not running, its install manifest. With no CNI, Cilium is installed first. A held machine has the annotation `ichor.maesh.dev/hold-apply`; the controller reports its drift (condition `AdoptionHeld`) and applies nothing. |
+| 2 | Takes over Cilium and waits for the `CNIHandover` condition. Skipped with `--cni-unmanaged`. |
+| 3 | Releases the holds machine by machine, control planes first, each only after a live zero-drift check. The controller applies the first render. |
+| 4 | Turns sign-in on once every hold is released (see [Sign-in](sign-in.md)): the first administrator, the switch of ichor-ui, then `spec.authentication.ichor`. |
 
-Only approved machines are read. A pending one is skipped with a message;
-approve it and run adopt again.
-
-If adopt stops half-way, run it again. The writes are idempotent. A run where
-every machine already matches a fresh render says so and exits.
+Only approved machines are read; a pending one is skipped with a message.
+Approve it and run adopt again. If adopt stops half-way, run it again: the
+writes are idempotent, and a run where every machine already matches a fresh
+render says so and exits.

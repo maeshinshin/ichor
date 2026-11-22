@@ -20,11 +20,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -218,3 +221,61 @@ func TestCheckStillFailsOnAChecksumMismatch(t *testing.T) {
 		t.Fatal("bootstrapped from a snapshot that failed its check")
 	}
 }
+
+// refusingStore serves the pinned snapshot's Get with err.
+type refusingStore struct {
+	etcdbackup.Store // any call not overridden here panics
+
+	err error
+}
+
+func (s refusingStore) Get(context.Context, string) (io.ReadCloser, error) { return nil, s.err }
+
+var _ = Describe("An etcd restore whose backup storage fails after the wipe", func() {
+	run := func(err error, verified bool) (*restoreJob, *uploadTalos, bool, error) {
+		key := etcdbackup.Key{Current: uploadPassphrase}
+		talos := &uploadTalos{}
+		j := uploadJob(talos, refusingStore{err: err}, key)
+		j.verified = verified
+
+		done, stepErr := j.recoverTarget(context.Background())
+
+		return j, talos, done, stepErr
+	}
+
+	for _, verified := range []bool{false, true} {
+		suffix := " when the snapshot is checked"
+		if verified {
+			suffix = " when the snapshot is uploaded"
+		}
+
+		It("fails at once, naming the bucket and key, when the credentials are refused"+suffix, func() {
+			cause := fmt.Errorf("%w: backups/etcd-restore.snapshot.age in bucket bkt: Access Denied", etcdbackup.ErrDenied)
+			_, talos, done, err := run(cause, verified)
+
+			Expect(err).To(MatchError(ContainSubstring("bucket bkt")))
+			Expect(err).To(MatchError(ContainSubstring("Access Denied")))
+			Expect(done).To(BeFalse())
+			Expect(talos.bootstraps).To(BeZero())
+		})
+
+		It("fails at once, naming the bucket and key, when the bucket or object is gone"+suffix, func() {
+			cause := fmt.Errorf("%w: backups/etcd-restore.snapshot.age in bucket bkt: The specified bucket does not exist", etcdbackup.ErrNotFound)
+			_, talos, done, err := run(cause, verified)
+
+			Expect(err).To(MatchError(ContainSubstring("bucket bkt")))
+			Expect(err).To(MatchError(ContainSubstring("does not exist")))
+			Expect(done).To(BeFalse())
+			Expect(talos.bootstraps).To(BeZero())
+		})
+
+		It("keeps waiting on any other storage failure"+suffix, func() {
+			j, talos, done, err := run(errors.New("dial tcp 10.0.0.1:9000: i/o timeout"), verified)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(done).To(BeFalse())
+			Expect(j.note).To(ContainSubstring("i/o timeout"))
+			Expect(talos.bootstraps).To(BeZero())
+		})
+	}
+})

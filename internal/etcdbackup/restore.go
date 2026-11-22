@@ -33,6 +33,10 @@ import (
 // ErrNotFound is what Store.Get returns, wrapped, for a key that does not exist.
 var ErrNotFound = errors.New("object not found")
 
+// ErrDenied is what Store.Get returns, wrapped, when the storage refuses the credentials: a retry cannot
+// succeed, so a restore fails at once on it.
+var ErrDenied = errors.New("storage refused the credentials")
+
 // ErrTransient is in the chain of an error that came from the storage or the stream, not from the
 // snapshot: the same object may pass its check and download on a later try. Everything else the recipe
 // returns is final: a checksum mismatch, a damaged chunk, a wrong passphrase, a missing object.
@@ -68,7 +72,7 @@ func VerifyObject(ctx context.Context, store Store, key string, passphrase Key) 
 func Reader(ctx context.Context, store Store, key string, passphrase Key) (io.ReadCloser, error) {
 	rc, err := store.Get(ctx, key)
 	if err != nil {
-		if !errors.Is(err, ErrNotFound) {
+		if !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrDenied) {
 			err = transient{err}
 		}
 

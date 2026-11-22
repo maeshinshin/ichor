@@ -237,6 +237,10 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 				return false, nil
 			}
 
+			if errors.Is(err, etcdbackup.ErrNotFound) || errors.Is(err, etcdbackup.ErrDenied) {
+				return false, j.storageRefused(err)
+			}
+
 			return false, fmt.Errorf("the pinned snapshot no longer passes its check, so nothing was uploaded: %s", j.scrub.clean(err.Error()))
 		}
 
@@ -245,6 +249,10 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 
 	rd, err := etcdbackup.Reader(ctx, j.store, etcdbackup.PinnedKey(j.prefix), j.passphrase)
 	if err != nil {
+		if errors.Is(err, etcdbackup.ErrNotFound) || errors.Is(err, etcdbackup.ErrDenied) {
+			return false, j.storageRefused(err)
+		}
+
 		j.note = j.scrub.clean(err.Error())
 
 		return false, nil
@@ -274,6 +282,12 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 	}
 
 	return j.recoveryCallFailed("bootstrapping etcd from the snapshot", err)
+}
+
+// storageRefused is the final error for a backup storage that cannot serve the pinned snapshot and will not
+// on a retry: the credentials are refused, or the bucket or object is gone. The cause names both.
+func (j *restoreJob) storageRefused(err error) error {
+	return fmt.Errorf("the backup storage cannot serve the pinned snapshot, so nothing was uploaded: %s", j.scrub.clean(err.Error()))
 }
 
 // ownStep wipes the controller's own control plane, last, once every other control plane is a member of

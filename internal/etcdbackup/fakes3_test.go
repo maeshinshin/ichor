@@ -28,6 +28,8 @@ import (
 	"testing"
 )
 
+const fakeBucket = "bkt"
+
 // fakeS3 is the smallest S3 that minio-go's PutObject, GetObject (with
 // Stat), RemoveObject and ListObjectsV2 talk to, behind a TLS httptest
 // server. It proves the real minio client works against the protocol shape;
@@ -36,6 +38,9 @@ type fakeS3 struct {
 	mu      sync.Mutex
 	objects map[string][]byte // "bucket/key" -> body
 	srv     *httptest.Server
+	// refuse, when set, answers every GET and HEAD with this S3 error code and HTTP status.
+	refuse     string
+	refuseCode int
 }
 
 func newFakeS3(t *testing.T) *fakeS3 {
@@ -53,7 +58,7 @@ func (f *fakeS3) store(t *testing.T) Store {
 	t.Helper()
 
 	st, err := NewS3Store(S3Config{
-		Endpoint: f.srv.URL, Region: "us-east-1", Bucket: "bkt", AccessKeyID: "AK", SecretAccessKey: "SK", CAPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.srv.Certificate().Raw}),
+		Endpoint: f.srv.URL, Region: "us-east-1", Bucket: fakeBucket, AccessKeyID: "AK", SecretAccessKey: "SK", CAPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.srv.Certificate().Raw}),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +72,13 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	if f.refuse != "" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		w.WriteHeader(f.refuseCode)
+		_, _ = fmt.Fprintf(w, `<Error><Code>%s</Code><Message>refused</Message></Error>`, f.refuse)
+
+		return
+	}
 
 	switch {
 	case r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2":

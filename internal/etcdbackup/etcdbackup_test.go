@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"io"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -189,6 +191,35 @@ func TestS3StoreAgainstFake(t *testing.T) {
 
 	if _, err := st.Get(ctx, "a/b/"+ObjectName(base.Add(99*time.Hour))); err == nil {
 		t.Fatal("get of a missing key succeeded")
+	}
+}
+
+// A refused credential is ErrDenied and a missing bucket or key is ErrNotFound, each naming the bucket and
+// key, so a restore fails at once on them; neither is ErrTransient, which Reader would add for anything else.
+// Guard: s3Store.classify.
+func TestS3StoreClassifiesPermanentFailures(t *testing.T) {
+	cases := []struct {
+		code     string
+		status   int
+		want     error
+		wantText string
+	}{
+		{"AccessDenied", http.StatusForbidden, ErrDenied, fakeBucket},
+		{"InvalidAccessKeyId", http.StatusForbidden, ErrDenied, fakeBucket},
+		{"SignatureDoesNotMatch", http.StatusForbidden, ErrDenied, fakeBucket},
+		{"SomeOtherCode", http.StatusUnauthorized, ErrDenied, fakeBucket},
+		{"NoSuchBucket", http.StatusNotFound, ErrNotFound, fakeBucket},
+		{"NoSuchKey", http.StatusNotFound, ErrNotFound, "a/b/o"},
+	}
+
+	for _, c := range cases {
+		f := newFakeS3(t)
+		f.refuse, f.refuseCode = c.code, c.status
+
+		_, err := Reader(context.Background(), f.store(t), "a/b/o", Key{Current: "pw"})
+		if !errors.Is(err, c.want) || errors.Is(err, ErrTransient) || !strings.Contains(err.Error(), c.wantText) {
+			t.Fatalf("%s/%d: want %v naming %q and not transient, got %v", c.code, c.status, c.want, c.wantText, err)
+		}
 	}
 }
 

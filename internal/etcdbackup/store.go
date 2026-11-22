@@ -140,23 +140,30 @@ func (s *s3Store) Put(ctx context.Context, key string, r io.Reader, size int64) 
 func (s *s3Store) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	o, err := s.c.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
-		return nil, notFound(err)
+		return nil, s.classify(key, err)
 	}
 
 	// GetObject is lazy: surface a missing key now rather than on first Read.
 	if _, err := o.Stat(); err != nil {
 		_ = o.Close()
 
-		return nil, notFound(err)
+		return nil, s.classify(key, err)
 	}
 
 	return o, nil
 }
 
-// notFound wraps a missing-key answer from S3 in ErrNotFound; any other error is returned as it is.
-func notFound(err error) error {
-	if minio.ToErrorResponse(err).Code == "NoSuchKey" {
-		return fmt.Errorf("%w: %w", ErrNotFound, err)
+// classify wraps the answers of S3 that a retry cannot change: a missing bucket or key in ErrNotFound and a
+// refused credential in ErrDenied, each naming the bucket and key. Any other error is returned as it is.
+func (s *s3Store) classify(key string, err error) error {
+	r := minio.ToErrorResponse(err)
+
+	switch {
+	case r.Code == "NoSuchKey" || r.Code == "NoSuchBucket" || r.StatusCode == http.StatusNotFound:
+		return fmt.Errorf("%w: %s in bucket %s: %w", ErrNotFound, key, s.bucket, err)
+	case r.Code == "AccessDenied" || r.Code == "InvalidAccessKeyId" || r.Code == "SignatureDoesNotMatch" ||
+		r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("%w: %s in bucket %s: %w", ErrDenied, key, s.bucket, err)
 	}
 
 	return err

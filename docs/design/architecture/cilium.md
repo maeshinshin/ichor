@@ -10,7 +10,7 @@ sidebar_label: "Architecture: Cilium"
 
 *Cilium is Ichor's own Helm release.*
 
-- **Handover.** Ichor stops rendering the inline entry once the hand-over is done, so the Helm release is the only source of Cilium. The `ichor-cni` Job (installer image, hidden `ichor cni helm apply`, host network via KubePrism) needs cluster-admin-equivalent rights, so the controller does not run Helm itself.
+- **Handover.** Ichor stops rendering the inline entry once the hand-over is done, because a Kubernetes upgrade re-applies the bootstrap manifests, so a stale entry would roll Cilium back. The `ichor-cni` Job (installer image, hidden `ichor cni helm apply`, host network via KubePrism) needs cluster-admin-equivalent rights, so the controller does not run Helm itself.
 - **Values** are edited in the UI or with `ichor get|apply|edit|diff cni-values`, validated by one function in the webhook, backend and controller, and applied by the Job. Changing the layer needs `update` on `talosclusters/cilium-values`, held by `ichor-admin` only (the chart can run privileged pods on every node). The `*.secretsNamespace.name` keys are pinned to `cilium-secrets`. The operator runs one replica on a one-node cluster and two otherwise; a Helm Job failing with the same values is retried with a growing backoff.
 - **Upgrades.** A new Ichor release carries new pinned charts. Cilium upgrades only when a `cni` operation is started (`ichor upgrade cni`, or the UI), one minor at a time, rolled back by Helm on failure. The cluster rollout runs it last.
 

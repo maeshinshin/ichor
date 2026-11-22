@@ -18,7 +18,7 @@ binary (`ichor version` prints its version) and ends with it as a Helm release.
 `ichor init` waits for the hand-over. The tunnel protocol is chosen at install
 with `--cni-tunnel vxlan|geneve`.
 
-![The hand-over of Cilium on a new cluster, in three steps. First Cilium is an inline manifest in the Talos machine config. When the Cilium DaemonSet is ready, the ichor-cni Job adopts its objects as the Helm release cilium. Then the controller stops rendering the inline entry, so the Helm release is the only source of Cilium.](../images/cni-handover.light.drawio.svg)
+![The hand-over of Cilium on a new cluster, in three steps. First Cilium is an inline manifest in the Talos machine config. When the Cilium DaemonSet is ready, the ichor-cni Job adopts its objects as the Helm release cilium. Then the controller stops rendering the inline entry, because a Kubernetes upgrade re-applies the bootstrap manifests and a stale entry would roll Cilium back.](../images/cni-handover.light.drawio.svg)
 
 *Cilium starts as an inline manifest and is handed over to a Helm release.*
 

@@ -731,6 +731,37 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(m.DeletionTimestamp.IsZero()).To(BeTrue())
 		})
 
+		It("disarms the delete guard when arming it errors after the server committed the write", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			failed := false
+			f.r.Client = interceptor.NewClient(watchClient(), interceptor.Funcs{
+				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					if m, ok := obj.(*ichorv1alpha1.TalosMachine); ok && !failed && deleteguard.CheckDelete(m.Annotations) == nil {
+						failed = true
+
+						if err := c.Update(ctx, obj, opts...); err != nil {
+							return err
+						}
+
+						return errors.New("the connection dropped after the write")
+					}
+
+					return c.Update(ctx, obj, opts...)
+				},
+			})
+			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
+			spec.Confirm = f.machines[hostW1].Name
+
+			_, err := reconcileOperation(f.r, f.newOp(hostW1, spec))
+			Expect(err).To(HaveOccurred())
+			Expect(failed).To(BeTrue(), "the arming write must have been attempted")
+
+			var m ichorv1alpha1.TalosMachine
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostW1].Name}, &m)).To(Succeed())
+			Expect(deleteguard.CheckDelete(m.Annotations)).NotTo(Succeed(),
+				"an arming write that errored must not leave a plain kubectl delete allowed")
+		})
+
 		It("arms the delete guard again for a retry, so the retry's delete is allowed", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 			f.webhookGuard(1)

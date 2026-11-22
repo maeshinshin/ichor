@@ -23,6 +23,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
@@ -519,6 +520,9 @@ func (s *Server) RemoveMachine(
 	return connect.NewResponse(&pb.RemoveMachineResponse{Audit: s.opAudit(ctx, "remove", objectRef(m.Namespace, m.Name))}), nil
 }
 
+// disarmTimeout bounds the restore of the removal guard, which outlives the request.
+const disarmTimeout = 10 * time.Second
+
 // removalGuard is the set of annotations RemoveMachine arms for one delete: the webhook's allow-delete
 // and the reset opt-ins the removal flow reads.
 var removalGuard = []string{
@@ -533,6 +537,10 @@ var removalGuard = []string{
 // machine already gone has no guard left. If the restore fails too, that is joined onto err, since
 // the machine then stays armed.
 func (s *Server) disarm(ctx context.Context, armed *ichorv1alpha1.TalosMachine, before map[string]string, err error) error {
+	// A client that disconnected has cancelled ctx, which is when the restore matters most.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), disarmTimeout)
+	defer cancel()
+
 	restoreErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var cur ichorv1alpha1.TalosMachine
 		if gerr := s.Get(ctx, client.ObjectKeyFromObject(armed), &cur); apierrors.IsNotFound(gerr) {

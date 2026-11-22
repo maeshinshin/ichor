@@ -528,6 +528,10 @@ command does. Each item is described where it is listed below.
 
 ### Nodes
 
+- **A removal that fails no longer leaves the machine open to a plain delete.**
+  Removing a node from ichor-ui restores its delete guard even when the browser
+  disconnected mid-request, and the controller clears the guard when arming it
+  reports an error after the write was stored.
 - **A control plane with a static address now tells etcd to advertise from that
   subnet** (`cluster.etcd.advertisedSubnets`, rendered from `spec.network.addresses`).
   Without it Talos advertises the node's first routable address, which on a

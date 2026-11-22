@@ -405,6 +405,47 @@ func TestRemoveMachineRestoresTheGuardWhenTheDeleteIsRefused(t *testing.T) {
 	}
 }
 
+// A client that disconnects after the guard is armed cancels the request context; the delete then
+// fails and the restore must still reach the server.
+func TestRemoveMachineRestoresTheGuardWhenTheClientDisconnects(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	base := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+	ctx, cancel := context.WithCancel(base)
+
+	s.Impersonate = func(Identity) (client.Client, error) {
+		return interceptor.NewClient(reviewing(k8s, true, &[]authv1.ResourceAttributes{}).(client.WithWatch), interceptor.Funcs{
+			Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+				cancel()
+
+				return context.Canceled
+			},
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+
+				return c.Update(ctx, obj, opts...)
+			},
+		}), nil
+	}
+
+	_, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
+		Machine: objectRef(opNS, "w1"), Confirm: "w1", Override: &pb.Override{},
+	}))
+	if err == nil {
+		t.Fatal("the cancelled delete must fail")
+	}
+
+	var got ichorv1alpha1.TalosMachine
+	if err := k8s.Get(base, types.NamespacedName{Namespace: opNS, Name: "w1"}, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := deleteguard.CheckDelete(got.Annotations); err == nil {
+		t.Fatalf("a disconnected removal must not leave the machine armed: %v", got.Annotations)
+	}
+}
+
 func TestRemoveMachineRefusesTheLastControlPlane(t *testing.T) {
 	s, _ := opServer(t, opObjects()...)
 

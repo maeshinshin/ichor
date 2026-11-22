@@ -41,6 +41,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -776,7 +777,9 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 		// The guard is armed for this attempt only. A failed attempt disarms it before the pause, so a
 		// paused reset does not leave a plain kubectl delete allowed; a retry arms it again here.
 		if err := r.setDeleteGuard(ctx, m, true); err != nil {
-			return ctrl.Result{}, err
+			// The write may have committed before the error. Disarm now: a paused operation or a
+			// deleted TalosOperation would otherwise leave the guard armed with nothing to clear it.
+			return ctrl.Result{}, errors.Join(err, r.disarmDeleteGuard(ctx, m))
 		}
 
 		if err := r.Delete(ctx, m, client.Preconditions{UID: &m.UID}); err != nil && !apierrors.IsNotFound(err) {
@@ -805,6 +808,31 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 	}
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, nil
+}
+
+// disarmDeleteGuard clears allow-delete from the stored copy of m, which an arming write that
+// errored may or may not have committed. It reads again, since m can be stale, and ignores a
+// cancelled ctx so a shutdown does not strand the annotation.
+func (r *TalosOperationReconciler) disarmDeleteGuard(ctx context.Context, m *ichorv1alpha1.TalosMachine) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cur ichorv1alpha1.TalosMachine
+		if err := readerOrClient(r.APIReader, r.Client).Get(ctx, client.ObjectKeyFromObject(m), &cur); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+
+		if cur.UID != m.UID {
+			return nil
+		}
+
+		if _, ok := cur.Annotations[deleteguard.AllowDeleteAnnotation]; !ok {
+			return nil
+		}
+
+		return r.setDeleteGuard(ctx, &cur, false)
+	})
 }
 
 // setDeleteGuard arms (armed) or disarms the webhook's allow-delete annotation on m. Only

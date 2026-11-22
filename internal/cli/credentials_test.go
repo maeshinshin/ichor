@@ -913,6 +913,7 @@ func TestCreateCredentialsRefusesAKubeServerThatIsNotAnHTTPSURL(t *testing.T) {
 	f := newCredFixture(t, false, "")
 	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent"))
 	t.Setenv("TALOSCONFIG", "")
+	t.Setenv("HOME", t.TempDir())
 	createCredentialsCmd.SetContext(context.Background())
 
 	saved := clusterCredentialsOpts

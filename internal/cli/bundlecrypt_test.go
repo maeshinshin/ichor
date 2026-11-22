@@ -69,6 +69,7 @@ func useBundleCrypto(t *testing.T) *bytes.Buffer {
 // saveTestBundle is saveBundleFile that fails the test and returns the path.
 func saveTestBundle(t *testing.T, cluster string, bundle *secrets.Bundle, pass string) string {
 	t.Helper()
+	requireIsolatedHome(t)
 
 	path, err := saveBundleFile(cluster, bundle, pass)
 	if err != nil {
@@ -76,6 +77,16 @@ func saveTestBundle(t *testing.T, cluster string, bundle *secrets.Bundle, pass s
 	}
 
 	return path
+}
+
+// requireIsolatedHome fails a test that is about to write a bundle under the real HOME: a test that
+// forgot t.Setenv("HOME", t.TempDir()) leaves ~/.ichor/clusters/<name>/secrets.yaml behind.
+func requireIsolatedHome(t *testing.T) {
+	t.Helper()
+
+	if home, _ := os.UserHomeDir(); !strings.HasPrefix(home, os.TempDir()) {
+		t.Fatalf("HOME is %q, not under %s: this test would write a bundle into the real home; t.Setenv(\"HOME\", t.TempDir()) first", home, os.TempDir())
+	}
 }
 
 // savePlainBundle is saveBundleFile without encryption, for tests that fake the save seam.

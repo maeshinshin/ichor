@@ -1,0 +1,40 @@
+<mxfile host="Electron">
+  <diagram id="create the cluster node endpoint" name="create the cluster node endpoint">
+    <mxGraphModel grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="0" page="0" pageScale="1" pageWidth="740" pageHeight="360" math="0" shadow="0">
+      <root>
+        <mxCell id="0" style="html=0;" />
+        <mxCell id="1" parent="0" style="html=0;" />
+        <mxCell id="pn" parent="1" style="rounded=1;arcSize=3;fillColor=light-dark(#FFFFFF,#0A0A0A);strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;html=0;" value="" vertex="1">
+          <mxGeometry x="10" y="10" width="720" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="c" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="kubectl and the&#xa;kubeconfig" vertex="1">
+          <mxGeometry x="34" y="130" width="156" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="a" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="--endpoint-address&#xa;host:6443" vertex="1">
+          <mxGeometry x="250" y="130" width="156" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="s" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="node: the control&#xa;plane's own IP;&#xa;no failover" vertex="1">
+          <mxGeometry x="500" y="40" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="l" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="load balancer: TCP&#xa;forwarder on 6443,&#xa;no TLS termination" vertex="1">
+          <mxGeometry x="500" y="140" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="d" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="DNS name: one A&#xa;record per control&#xa;plane, no health check" vertex="1">
+          <mxGeometry x="500" y="240" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="c" target="a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="a" target="s" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="a" target="l" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="a" target="d" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

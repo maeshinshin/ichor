@@ -129,7 +129,8 @@ spec:
               ok=0; fail=0; pok=0; pfail=0; pskip=0; rt=0; n=0; cur=""
               # The server's Ready address: the headless Service answers with Ready pods only, or nothing.
               ready() {
-                nslookup fa-srv-pods.default.svc.cluster.local 2>/dev/null | awk '/^Address/ && $2 !~ /:53$/ {print $2; exit}'
+                nslookup fa-srv-pods.default.svc.cluster.local 2>/dev/null |
+                  awk '/^Address/ && $2 !~ /:53$/ {print $2; exit}'
               }
               while true; do
                 if out=$(wget -q -T 2 -O /dev/null "http://$SVC_IP" 2>&1); then

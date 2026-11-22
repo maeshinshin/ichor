@@ -596,6 +596,15 @@ command does. Each item is described where it is listed below.
   `init` stopping on `AlreadyExists`.
 
 ### Operations
+- **An operation whose step failed on a network or API blip is retried by the
+  controller.** A Talos, Kubernetes, config or node operation that paused because
+  a node or the API was briefly unreachable (`etcdserver: request timed out`, a
+  refused connection) now runs the step again after 1, 2, 4, 8 and 16 minutes,
+  then waits for a person as before. The pause says when the next attempt runs and
+  which one it is, and `status.autoRetry` holds the count. Other failures pause at
+  once and are never retried: refused credentials, a Talos upgrade request that
+  may have reached the node, a node reset, key and CA rotations and etcd restore.
+  A pause a person set is never lifted. ADR 0174.
 - **A drain is refused while a Longhorn replica still names the node, even when
   Longhorn is installed outside `longhorn-system`.** Since v0.1.2 the evacuation
   step found no Longhorn Node in that case and read it as nothing to evacuate. It

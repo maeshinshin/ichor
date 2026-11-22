@@ -45,15 +45,16 @@ import (
 // TalosStorage status condition types and reasons.
 const (
 	// conditionStorageReady is the condition Argo CD's health check reads: True once every
-	// approved machine this TalosStorage governs has converged on a render that includes it.
+	// approved machine this TalosStorage governs has converged on a render that includes it and
+	// carries the Talos system extensions the preset needs.
 	conditionStorageReady = "Ready"
 
 	// conditionStorageSystem is informational and never gates Ready: whether the storage
 	// system (layer 3) is present and configured to honour the registration layer 1 renders.
 	conditionStorageSystem = "StorageSystemConsistent"
 
-	// conditionStorageExtensions is informational and never gates Ready: whether every node this
-	// TalosStorage governs runs the Talos system extensions its preset needs.
+	// conditionStorageExtensions is whether every node this TalosStorage governs runs the Talos system
+	// extensions its preset needs. A node that lacks one holds Ready False (ADR 0173); an unknown node does not.
 	conditionStorageExtensions = "ExtensionsPresent"
 
 	// talosExtensionLabelPrefix is the Node label prefix Talos sets for each installed system
@@ -97,12 +98,22 @@ type TalosStorageReconciler struct {
 
 	// ControllerNamespace is where registry auth Secrets are read.
 	ControllerNamespace string
+
+	// Actor writes spec.schematic.id of a TalosCluster, as the ServiceAccount ichor-storage-extensions
+	// (ADR 0173); never the controller's own identity, which never writes a spec. Nil turns the
+	// automatic extension handling off.
+	Actor client.Client
+
+	// Factory registers the schematic that carries a preset's extensions. Nil turns the automatic
+	// extension handling off.
+	Factory SchematicRegistrar
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosconfigpatches,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=longhorn.io,resources=settings,resourceNames=create-default-disk-labeled-nodes,verbs=get
@@ -136,6 +147,27 @@ func (r *TalosStorageReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if preset, perr := storage.NewPreset(ts.Spec.DiskPreset); perr == nil && len(preset.RequiredExtensions()) > 0 {
 		if extensions, err = r.extensionsCondition(ctx, &ts, governed); err != nil {
 			return ctrl.Result{}, err
+		}
+	}
+
+	// A preset that cannot work is not Ready, whatever the nodes' convergence says (ADR 0173).
+	if extensions.Status == metav1.ConditionFalse && extensions.Reason == reasonStorageMissingExtensions {
+		preset, _ := storage.NewPreset(ts.Spec.DiskPreset)
+
+		reason, msg, err := r.ensureExtensions(ctx, &ts, preset, extensions.Message)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if reason != "" {
+			extensions.Reason, extensions.Message = reason, msg
+		}
+
+		if ready.Status == metav1.ConditionTrue {
+			ready.Status, ready.Reason, ready.Message = metav1.ConditionFalse, reasonStorageExtensionsMissing, extensions.Message
+			if reason != "" {
+				ready.Reason = reason
+			}
 		}
 	}
 
@@ -262,7 +294,7 @@ func (r *TalosStorageReconciler) readyCondition(
 // labels, which Talos itself sets from the running image: they need no Talos API client or
 // credentials here and reflect what is actually booted, not what a schematic ID says. A machine
 // whose Node cannot be found yet is unknown, not absent: it is counted in the governed total, and
-// the condition is Unknown unless a missing extension is already proven (False). It never gates Ready and never blocks the rest of the reconcile.
+// the condition is Unknown unless a missing extension is already proven (False). It never blocks the rest of the reconcile; Reconcile turns a False result into a Ready of False.
 func (r *TalosStorageReconciler) extensionsCondition(
 	ctx context.Context, ts *ichorv1alpha1.TalosStorage, governed []*ichorv1alpha1.TalosMachine,
 ) (metav1.Condition, error) {

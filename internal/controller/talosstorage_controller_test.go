@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -345,5 +346,177 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 			Expect(ext.Status).To(Equal(metav1.ConditionUnknown), "message: %s", ext.Message)
 			Expect(ext.Message).To(ContainSubstring("2 of 3 governed nodes reported"))
 		})
+	})
+})
+
+// fakeSchematicFactory stands in for Image Factory: the ID is a function of the extensions, as there.
+type fakeSchematicFactory struct{ calls [][]string }
+
+func (f *fakeSchematicFactory) Register(_ context.Context, extensions []string) (string, error) {
+	f.calls = append(f.calls, extensions)
+
+	return "schematic-" + strings.Join(extensions, "+"), nil
+}
+
+var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)", func() {
+	const wantID = "schematic-siderolabs/iscsi-tools+siderolabs/util-linux-tools"
+
+	var (
+		bundleRaw = newTestBundle("v1.14")
+		factory   *fakeSchematicFactory
+		r         *TalosStorageReconciler
+	)
+
+	BeforeEach(func() {
+		factory = &fakeSchematicFactory{}
+		r = &TalosStorageReconciler{
+			Client: k8sClient, APIReader: fakeSettingReader{}, Actor: k8sClient, Factory: factory,
+		}
+	})
+
+	// bareNode makes a governed machine whose Kubernetes Node carries no extension label.
+	bareNode := func(clusterName string) *ichorv1alpha1.TalosMachine {
+		m := newStorageTestMachine(clusterName, map[string]string{storageNodeKey: storageNodeValue})
+		m.Spec.Hostname = "node-" + m.Name
+		Expect(k8sClient.Update(ctx, m)).To(Succeed())
+
+		n := &corev1.Node{}
+		n.Name = m.Spec.Hostname
+		Expect(k8sClient.Create(ctx, n)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, n) })
+
+		return m
+	}
+
+	storageOps := func(clusterName string) []ichorv1alpha1.TalosOperation {
+		var all ichorv1alpha1.TalosOperationList
+
+		var mine []ichorv1alpha1.TalosOperation
+
+		Expect(k8sClient.List(ctx, &all, client.InNamespace(tmNamespace))).To(Succeed())
+
+		for _, o := range all.Items {
+			if o.Spec.ClusterRef.Name == clusterName && o.Annotations[ichorv1alpha1.OperationStorageExtensionsAnnotation] != "" {
+				mine = append(mine, o)
+			}
+		}
+
+		return mine
+	}
+
+	fetchCluster := func(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosCluster {
+		var got ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(c), &got)).To(Succeed())
+
+		return &got
+	}
+
+	It("extends the schematic once, creates one paused upgrade, and is idempotent", func() {
+		cluster := newTestCluster(newTestSecret(bundleRaw).Name, "v1.14")
+		bareNode(cluster.Name)
+		s := newRealStorage(cluster.Name)
+
+		reconcileStorage(r, s)
+
+		got := fetchCluster(cluster)
+		Expect(got.Spec.Schematic).NotTo(BeNil())
+		Expect(got.Spec.Schematic.ID).To(Equal(wantID))
+		Expect(factory.calls).To(Equal([][]string{{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}}))
+
+		ops := storageOps(cluster.Name)
+		Expect(ops).To(HaveLen(1))
+		Expect(ops[0].Spec.Kind).To(Equal(ichorv1alpha1.TalosOperationKindTalos))
+		Expect(ops[0].Spec.Paused).To(BeTrue(), "the upgrade is created waiting for approval")
+		Expect(ops[0].Annotations).To(HaveKeyWithValue(ichorv1alpha1.OperationStorageExtensionsAnnotation, wantID))
+
+		reconcileStorage(r, s)
+
+		Expect(storageOps(cluster.Name)).To(HaveLen(1), "a second pass creates no second operation")
+		Expect(fetchCluster(cluster).ResourceVersion).To(Equal(got.ResourceVersion), "a second pass writes the cluster no more")
+	})
+
+	It("is not Ready while the nodes lack the extensions, and names them and the operation", func() {
+		cluster := newTestCluster(newTestSecret(bundleRaw).Name, "v1.14")
+		m := bareNode(cluster.Name)
+		s := newRealStorage(cluster.Name)
+
+		// The node converged on the storage preparation, so Ready would be True without the gate.
+		sys, err := render.ResolveSystemInputs(ctx, k8sClient, tmNamespace, cluster)
+		Expect(err).NotTo(HaveOccurred())
+
+		rendered, _, err := render.Render(cluster, m, bundleRaw, nil, sys)
+		Expect(err).NotTo(HaveOccurred())
+		convergeMachine(m, rendered)
+
+		got := reconcileStorage(r, s)
+		ready := apimeta.FindStatusCondition(got.Status.Conditions, conditionStorageReady)
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse), "message: %s", ready.Message)
+		Expect(ready.Reason).To(Equal(reasonStorageExtensionsMissing))
+		Expect(ready.Message).To(ContainSubstring("siderolabs/iscsi-tools"))
+		Expect(ready.Message).To(ContainSubstring("siderolabs/util-linux-tools"))
+		Expect(ready.Message).To(ContainSubstring(storageOps(cluster.Name)[0].Name))
+		Expect(ready.Message).To(ContainSubstring("waiting for approval"))
+
+		// The upgrade ran: the Node now carries the labels.
+		var n corev1.Node
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: m.Spec.Hostname}, &n)).To(Succeed())
+		n.Labels = map[string]string{
+			talosExtensionLabelPrefix + "iscsi-tools":      "v0.2.0",
+			talosExtensionLabelPrefix + "util-linux-tools": "2.41",
+		}
+		Expect(k8sClient.Update(ctx, &n)).To(Succeed())
+
+		// The new schematic is part of what the machine renders, so it converges on that.
+		cluster = fetchCluster(cluster)
+		sys, err = render.ResolveSystemInputs(ctx, k8sClient, tmNamespace, cluster)
+		Expect(err).NotTo(HaveOccurred())
+
+		rendered, _, err = render.Render(cluster, m, bundleRaw, nil, sys)
+		Expect(err).NotTo(HaveOccurred())
+		convergeMachine(m, rendered)
+
+		ready = apimeta.FindStatusCondition(reconcileStorage(r, s).Status.Conditions, conditionStorageReady)
+		Expect(ready.Status).To(Equal(metav1.ConditionTrue), "message: %s", ready.Message)
+	})
+
+	It("runs no upgrade until a person approves it", func() {
+		cluster := newTestCluster(newTestSecret(bundleRaw).Name, "v1.14")
+		bareNode(cluster.Name)
+		reconcileStorage(r, newRealStorage(cluster.Name))
+
+		op := &storageOps(cluster.Name)[0]
+		opr, fake := newOpTestReconciler(nil)
+
+		mustReconcileOperation(opr, op)
+		Expect(fake.calls).To(BeEmpty(), "no machine is advanced before the approval")
+
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(pausedMessage(got)).To(ContainSubstring("waiting for approval"))
+		Expect(pausedMessage(got)).To(ContainSubstring("ichor resume operation " + op.Name))
+	})
+
+	It("writes nothing over a schematic it cannot read, and says what to do", func() {
+		cluster := newTestCluster(newTestSecret(bundleRaw).Name, "v1.14")
+		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: "custom-id"}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		s := newRealStorage(cluster.Name)
+
+		// Convergence is what would make Ready True without the extension gate.
+		m := bareNode(cluster.Name)
+		sys, err := render.ResolveSystemInputs(ctx, k8sClient, tmNamespace, cluster)
+		Expect(err).NotTo(HaveOccurred())
+
+		rendered, _, err := render.Render(cluster, m, bundleRaw, nil, sys)
+		Expect(err).NotTo(HaveOccurred())
+		convergeMachine(m, rendered)
+
+		ready := apimeta.FindStatusCondition(reconcileStorage(r, s).Status.Conditions, conditionStorageReady)
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal(reasonStorageSchematicNotMergeable))
+		Expect(ready.Message).To(ContainSubstring("siderolabs/iscsi-tools"))
+		Expect(fetchCluster(cluster).Spec.Schematic.ID).To(Equal("custom-id"))
+		Expect(storageOps(cluster.Name)).To(BeEmpty())
 	})
 })

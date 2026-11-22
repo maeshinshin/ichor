@@ -293,6 +293,19 @@ const (
 	AutoPatchServiceAccount = "ichor-auto-patch"
 )
 
+// What a storage preset's extension handling writes (ADR 0173). The controller registers a schematic with the
+// extensions the preset needs, writes its ID to spec.schematic.id as StorageExtensionsServiceAccount, and creates
+// a paused talos operation carrying OperationStorageExtensionsAnnotation, which a person resumes to approve.
+const (
+	// StorageExtensionsServiceAccount is the ServiceAccount, in the controller's namespace, that writes
+	// spec.schematic.id and nothing else. It holds patch on talosclusters only.
+	StorageExtensionsServiceAccount = "ichor-storage-extensions"
+	// OperationStorageExtensionsAnnotation holds the schematic ID an operation applies; one operation per ID.
+	OperationStorageExtensionsAnnotation = "ichor.maesh.dev/storage-extensions"
+	// StorageExtensionsStarter is the started-by annotation of such an operation.
+	StorageExtensionsStarter = "ichor-storage"
+)
+
 // IchorAutoPatchStatus is the state of the automatic patcher.
 type IchorAutoPatchStatus struct {
 	// lastOperation is the operation (namespace/name) the patcher started last.

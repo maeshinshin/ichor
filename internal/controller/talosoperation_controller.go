@@ -236,8 +236,12 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// entered, so the pause is decided here, before acquireDisruptiveLock, which would take the lock
 	// back and renew it on every pass.
 	if op.Spec.Paused {
-		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
-			reasonOperationPaused, "spec.paused is true")
+		why := "spec.paused is true"
+		if op.Annotations[ichorv1alpha1.OperationStorageExtensionsAnnotation] != "" && len(op.Status.Machines) == 0 {
+			why = "waiting for approval: it adds the system extensions a storage preset needs and reboots every node; ichor resume operation " + op.Name
+		}
+
+		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationPaused, why)
 	}
 
 	// A step already failed: stay paused and never retry it automatically; only an explicit

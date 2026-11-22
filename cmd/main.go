@@ -506,9 +506,16 @@ func main() {
 	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnidetect")
+	// The one spec write of a storage preset's extensions (ADR 0173) is made as the ServiceAccount
+	// ichor-storage-extensions, which the controller may impersonate (and only that one).
+	storageActorCfg := rest.CopyConfig(mgr.GetConfig())
+	storageActorCfg.Impersonate = rest.ImpersonationConfig{UserName: "system:serviceaccount:" + ns + ":" + ichorv1alpha1.StorageExtensionsServiceAccount}
+	storageActor, err := client.New(storageActorCfg, client.Options{Scheme: mgr.GetScheme()})
+	must(err, "Failed to create the storage extensions client")
 	must((&controller.TalosStorageReconciler{
 		ControllerNamespace: ns,
 		Client:              mgr.GetClient(), APIReader: mgr.GetAPIReader(),
+		Actor: storageActor, Factory: &controller.ImageFactoryClient{},
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosstorage")
 	// The backbone (TalosOperationReconciler) never branches on spec.kind itself, so the kind-to-executor selection
 	// happens here, in the wiring: Talos, Kubernetes, Ichor and the CNI kube-proxy switch. An unknown kind pauses

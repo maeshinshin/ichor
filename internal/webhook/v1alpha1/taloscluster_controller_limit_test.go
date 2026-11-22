@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 // TestAutoPatchIdentityMayOnlyApplyAPatch: the automatic patcher's ServiceAccount has one write to a TalosCluster: a
@@ -56,6 +57,59 @@ func TestAutoPatchIdentityMayOnlyApplyAPatch(t *testing.T) {
 			tc.mod(newObj)
 
 			err := v.limitController(settingsCtx(tc.user, false), base(), newObj)
+
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("err = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestStorageExtensionsIdentityMayOnlySetTheSchematicID: the ServiceAccount of ADR 0173 has one write to a
+// TalosCluster: spec.schematic.id, from unset or the stock schematic to a non-empty ID, nothing else.
+func TestStorageExtensionsIdentityMayOnlySetTheSchematicID(t *testing.T) {
+	t.Parallel()
+
+	const writer = "system:serviceaccount:ichor-system:ichor-storage-extensions"
+
+	withSchematic := func(id string) *ichorv1alpha1.TalosCluster {
+		c := &ichorv1alpha1.TalosCluster{}
+		c.Spec.TalosVersion = "v1.14.3"
+
+		if id != "" {
+			c.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: id}
+		}
+
+		return c
+	}
+
+	for _, tc := range []struct {
+		name     string
+		user     string
+		old, new *ichorv1alpha1.TalosCluster
+		wantErr  string
+	}{
+		{name: "from unset", user: writer, old: withSchematic(""), new: withSchematic("abc")},
+		{name: "from the stock schematic", user: writer, old: withSchematic(upgrade.DefaultSchematic), new: withSchematic("abc")},
+		{name: "over a custom schematic", user: writer, old: withSchematic("mine"), new: withSchematic("abc"), wantErr: "neither unset nor the stock"},
+		{name: "to an empty ID", user: writer, old: withSchematic(upgrade.DefaultSchematic), new: withSchematic(""), wantErr: "ID is empty"},
+		{name: "another field", user: writer, old: withSchematic(""), new: func() *ichorv1alpha1.TalosCluster {
+			c := withSchematic("abc")
+			c.Spec.TalosVersion = "v1.14.5"
+
+			return c
+		}(), wantErr: "something else"},
+		{name: "a person is not limited", user: "alice", old: withSchematic("mine"), new: withSchematic("abc")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := &TalosClusterCustomValidator{StorageExtensionsUser: writer}
+
+			err := v.limitController(settingsCtx(tc.user, false), tc.old, tc.new)
 
 			switch {
 			case tc.wantErr == "" && err != nil:

@@ -58,6 +58,7 @@ rules:
   resourceNames:
   - ichor-admin
   - ichor-auto-patch-role
+  - ichor-storage-extensions-role
   - ichor-cni-role
   - ichor-ichor-override-role
   - ichor-ichor-credentials-role
@@ -125,6 +126,7 @@ rules:
   - rbac.authorization.k8s.io
   resourceNames:
   - ichor-auto-patch-impersonate-role
+  - ichor-storage-extensions-impersonate-role
   - ichor-cni-features-role
   - ichor-cni-hubble-role
   - ichor-cni-job-role
@@ -270,6 +272,7 @@ rules:
   - rbac.authorization.k8s.io
   resourceNames:
   - ichor-auto-patch-impersonate-role
+  - ichor-storage-extensions-impersonate-role
   - ichor-cni-role
   - ichor-ichor-ui-role
   - ichor-installer-role

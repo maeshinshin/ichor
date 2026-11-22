@@ -1,0 +1,18 @@
+# The identity that writes spec.schematic.id when a storage preset needs Talos system extensions (ADR 0173).
+# The controller never writes a TalosCluster spec; it impersonates this ServiceAccount (the Role in
+# impersonate_role.yaml) for that one write. The TalosCluster admission webhook refuses anything else this
+# user writes. It holds nothing else, and it is not bound to anyone but itself.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: storage-extensions-role
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - patch

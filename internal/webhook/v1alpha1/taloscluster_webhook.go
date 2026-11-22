@@ -37,6 +37,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/release"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 var talosclusterlog = logf.Log.WithName("taloscluster-resource")
@@ -52,6 +53,7 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager, s ...*settings.Reader
 		WithDefaulter(d).
 		WithValidator(&TalosClusterCustomValidator{
 			APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient()), ControllerUser: controllerUsername(), AutoPatchUser: autoPatchUsername(),
+			StorageExtensionsUser: storageExtensionsUsername(),
 		}).
 		Complete()
 }
@@ -78,6 +80,9 @@ type TalosClusterCustomValidator struct {
 	// acts as; its one write is a newer patch of the running minor in spec.talosVersion or spec.kubernetesVersion,
 	// and anything else it writes is refused. Empty means no user is limited (tests).
 	ControllerUser, AutoPatchUser string
+	// StorageExtensionsUser is the ServiceAccount that writes spec.schematic.id for a storage preset's
+	// extensions (ADR 0173); anything else it writes is refused.
+	StorageExtensionsUser string
 }
 
 // serviceAccountUsername is the username a ServiceAccount authenticates as.
@@ -93,6 +98,10 @@ func serviceAccountUsername(ns, sa string) string {
 // API values the Deployment sets; empty when they are not set.
 func controllerUsername() string {
 	return serviceAccountUsername(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"))
+}
+
+func storageExtensionsUsername() string {
+	return serviceAccountUsername(os.Getenv("POD_NAMESPACE"), ichorv1alpha1.StorageExtensionsServiceAccount)
 }
 
 func autoPatchUsername() string {
@@ -111,6 +120,10 @@ func (v *TalosClusterCustomValidator) limitController(ctx context.Context, oldOb
 	if v.ControllerUser != "" && req.UserInfo.Username == v.ControllerUser &&
 		!apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
 		return errors.New("the controller never writes a TalosCluster spec")
+	}
+
+	if v.StorageExtensionsUser != "" && req.UserInfo.Username == v.StorageExtensionsUser {
+		return limitStorageExtensions(oldObj, newObj)
 	}
 
 	if v.AutoPatchUser == "" || req.UserInfo.Username != v.AutoPatchUser {
@@ -143,6 +156,45 @@ func (v *TalosClusterCustomValidator) limitController(ctx context.Context, oldOb
 		if !semver.IsValid(f[1]) || !semver.IsValid(f[2]) || semver.MajorMinor(f[1]) != semver.MajorMinor(f[2]) || semver.Compare(f[2], f[1]) <= 0 {
 			return refuse(fmt.Sprintf("%s %s to %s is not a newer patch of the same minor", f[0], f[1], f[2]))
 		}
+	}
+
+	return nil
+}
+
+// limitStorageExtensions limits the storage-extensions identity to its one write: spec.schematic.id, from
+// unset or the stock schematic (a schematic Ichor can read) to a non-empty ID, with nothing else changed.
+func limitStorageExtensions(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	refuse := func(why string) error {
+		return fmt.Errorf("the storage extensions identity may only set spec.schematic.id: %s", why)
+	}
+
+	a, b := oldObj.Spec.DeepCopy(), newObj.Spec.DeepCopy()
+	a.Schematic, b.Schematic = nil, nil
+
+	if !apiequality.Semantic.DeepEqual(a, b) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Labels, newObj.Labels) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Annotations, newObj.Annotations) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Finalizers, newObj.Finalizers) {
+		return refuse("something else changes")
+	}
+
+	was := ""
+	if oldObj.Spec.Schematic != nil {
+		was = oldObj.Spec.Schematic.ID
+	}
+
+	is := ""
+	if newObj.Spec.Schematic != nil {
+		is = newObj.Spec.Schematic.ID
+	}
+
+	switch {
+	case was == is:
+		return nil
+	case is == "":
+		return refuse("the new ID is empty")
+	case was != "" && was != upgrade.DefaultSchematic:
+		return refuse("the current ID " + was + " is neither unset nor the stock schematic")
 	}
 
 	return nil

@@ -169,7 +169,16 @@ func (r *DiscoveryReconciler) discover(
 			},
 		}
 
-		if err := r.Create(ctx, m); err != nil {
+		err := r.Create(ctx, m)
+		if apierrors.IsAlreadyExists(err) {
+			// Another writer (init creating the first control plane, or an overlapping sweep) made it
+			// between the Get and the Create. Its object is authoritative and is left as it is.
+			log.Info("a TalosMachine for this node was created concurrently; leaving it", "machine", hw.UUID)
+
+			return nil, nil
+		}
+
+		if err != nil {
 			return nil, fmt.Errorf("creating pending TalosMachine: %w", err)
 		}
 

@@ -585,6 +585,10 @@ command does. Each item is described where it is listed below.
   longer sends the Reset again to the same node, and the accepted Reset stays on
   the Removal condition. The condition written when Talos accepts the
   Reset says the wipe is unconfirmed until the node answers in maintenance mode.
+- A discovery pass that loses the race with `ichor init` to create the first node's `TalosMachine`
+  leaves it alone instead of failing, and `ichor init` adopts a pending machine discovery already
+  created for the same node: its approved control plane replaces the pending spec rather than
+  `init` stopping on `AlreadyExists`.
 
 ### Operations
 - **A drain is refused while a Longhorn replica still names the node, even when

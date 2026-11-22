@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -532,7 +533,12 @@ func initInstall(
 	// Step 5: create the CRs.
 	err = steps.Run("Cluster resources", func(s *step) (string, error) {
 		create := func(ctx context.Context, obj client.Object) error {
-			return createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, s)
+			err := createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, s)
+			if m, ok := obj.(*ichorv1alpha1.TalosMachine); ok {
+				return adoptDiscoveredMachine(ctx, k8sClient, m, err)
+			}
+
+			return err
 		}
 
 		err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output, s)
@@ -953,4 +959,32 @@ func buildInlineManifestsPatch(
 			Config: cfg,
 		},
 	}
+}
+
+// adoptDiscoveredMachine turns an AlreadyExists on the first node's TalosMachine into success when
+// the object is the same node's pending record: discovery created it first, so init writes the approved
+// control plane it wanted over that spec. Any other error, and another node's object, is returned as it was.
+func adoptDiscoveredMachine(ctx context.Context, c client.Client, m *ichorv1alpha1.TalosMachine, createErr error) error {
+	if !apierrors.IsAlreadyExists(createErr) {
+		return createErr
+	}
+
+	var existing ichorv1alpha1.TalosMachine
+	if err := c.Get(ctx, client.ObjectKeyFromObject(m), &existing); err != nil {
+		return err
+	}
+
+	id := existing.Spec.Identity
+	if id.UUID != m.Spec.Identity.UUID || id.Serial != m.Spec.Identity.Serial ||
+		!slices.Equal(slices.Sorted(slices.Values(id.MACAddresses)), slices.Sorted(slices.Values(m.Spec.Identity.MACAddresses))) {
+		return createErr
+	}
+
+	existing.Spec = m.Spec
+
+	return updateRetrying(ctx, c, &existing, func(fresh *ichorv1alpha1.TalosMachine) error {
+		fresh.Spec = m.Spec
+
+		return nil
+	}, io.Discard)
 }

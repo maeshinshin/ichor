@@ -411,7 +411,7 @@ func TestRunInit_FirstMachineNamesTheStockInstaller(t *testing.T) {
 // initialised, not with the raw Kubernetes AlreadyExists its Create returns.
 func TestInitInstall_SecondRunSaysAlreadyInitialised(t *testing.T) {
 	bundle := &corev1.Secret{}
-	bundle.Name, bundle.Namespace = secretsRefName("c"), "ichor-system"
+	bundle.Name, bundle.Namespace = secretsRefName("c"), ichorControllerNamespace
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(bundle.DeepCopy()).Build()
 	deps, _, _ := newFakeInitDeps(t, c)
 
@@ -465,4 +465,72 @@ func TestRunInit_SecondRunRefusesBeforeNodeWrite(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, secretsbundle.SecretKey)); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("a refused run left a secrets bundle behind: stat error = %v", err)
 	}
+}
+
+// Discovery may create the first node's pending TalosMachine before init reaches the CR step. init
+// adopts it: the object init wanted (approved control plane with its install disk) replaces the pending
+// spec, instead of init failing on AlreadyExists with the controller's unapproved machine left behind.
+const adoptTestEndpoint = "10.0.0.1:50000"
+
+func TestAdoptDiscoveredMachine(t *testing.T) {
+	const uuid = "11111111-2222-3333-4444-555555555555"
+
+	identity := ichorv1alpha1.TalosMachineIdentity{UUID: uuid, Serial: "S1", MACAddresses: []string{"aa:bb:cc:dd:ee:ff"}}
+	newMachine := func(id ichorv1alpha1.TalosMachineIdentity, spec func(*ichorv1alpha1.TalosMachineSpec)) *ichorv1alpha1.TalosMachine {
+		m := &ichorv1alpha1.TalosMachine{Spec: ichorv1alpha1.TalosMachineSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "c"}, Identity: id, Endpoint: adoptTestEndpoint,
+			ApprovalState: ichorv1alpha1.MachineApprovalStatePending,
+		}}
+		m.Name, m.Namespace = uuid, ichorControllerNamespace
+
+		if spec != nil {
+			spec(&m.Spec)
+		}
+
+		return m
+	}
+	want := func(s *ichorv1alpha1.TalosMachineSpec) {
+		s.Role, s.ApprovalState = roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved
+	}
+
+	run := func(t *testing.T, mine *ichorv1alpha1.TalosMachine) (*ichorv1alpha1.TalosMachine, error) {
+		t.Helper()
+
+		c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(newMachine(identity, nil)).Build()
+		createErr := c.Create(context.Background(), mine)
+
+		err := adoptDiscoveredMachine(context.Background(), c, mine, createErr)
+
+		var got ichorv1alpha1.TalosMachine
+		if gerr := c.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: uuid}, &got); gerr != nil {
+			t.Fatal(gerr)
+		}
+
+		return &got, err
+	}
+
+	t.Run("the same node", func(t *testing.T) {
+		got, err := run(t, newMachine(identity, want))
+		if err != nil {
+			t.Fatalf("adoptDiscoveredMachine = %v, want nil", err)
+		}
+
+		if got.Spec.Role != roleControlPlane || !got.Spec.IsApproved() {
+			t.Errorf("stored machine role=%q approved=%v, want an approved control plane", got.Spec.Role, got.Spec.IsApproved())
+		}
+	})
+
+	t.Run("another node under the same UUID is refused and left alone", func(t *testing.T) {
+		other := identity
+		other.Serial = "S2"
+
+		got, err := run(t, newMachine(other, want))
+		if err == nil {
+			t.Fatal("adoptDiscoveredMachine = nil, want the AlreadyExists error")
+		}
+
+		if got.Spec.IsApproved() {
+			t.Error("the stored machine of another node was approved")
+		}
+	})
 }

@@ -80,7 +80,7 @@ type TalosClusterReconciler struct {
 	now       func() time.Time // tests; nil means time.Now
 }
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 
 // Reconcile calls Discovery.DiscoverAll for cluster's declared range and
 // reschedules itself at discoveryRequeueInterval -- but only while

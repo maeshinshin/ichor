@@ -716,6 +716,11 @@ type CertificateExpiry struct {
 // is pending or running (ADR 0066, amendment 2026-11-22).
 const TalosClusterConfirmKubeProxySwitchAnnotation = "ichor.maesh.dev/confirm-kube-proxy-switch"
 
+// ConsentSweepServiceAccount is the ServiceAccount, in the controller's namespace, that removes
+// TalosClusterConfirmKubeProxySwitchAnnotation once no switch needs it, and nothing else. It holds patch on
+// talosclusters only, and the controller impersonates it; the TalosCluster webhook refuses any other write by it.
+const ConsentSweepServiceAccount = "ichor-consent-sweep"
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=tcl

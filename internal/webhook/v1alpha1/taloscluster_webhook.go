@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"slices"
@@ -55,7 +56,7 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager, s ...*settings.Reader
 		WithDefaulter(d).
 		WithValidator(&TalosClusterCustomValidator{
 			APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient()), ControllerUser: controllerUsername(), AutoPatchUser: autoPatchUsername(),
-			StorageExtensionsUser: storageExtensionsUsername(),
+			StorageExtensionsUser: storageExtensionsUsername(), ConsentSweepUser: consentSweepUsername(),
 		}).
 		Complete()
 }
@@ -85,6 +86,9 @@ type TalosClusterCustomValidator struct {
 	// StorageExtensionsUser is the ServiceAccount that writes spec.schematic.id for a storage preset's
 	// extensions (ADR 0173); anything else it writes is refused.
 	StorageExtensionsUser string
+	// ConsentSweepUser is the ServiceAccount that removes the kube-proxy switch consent annotation; anything
+	// else it writes is refused.
+	ConsentSweepUser string
 }
 
 // serviceAccountUsername is the username a ServiceAccount authenticates as.
@@ -104,6 +108,10 @@ func controllerUsername() string {
 
 func storageExtensionsUsername() string {
 	return serviceAccountUsername(os.Getenv("POD_NAMESPACE"), ichorv1alpha1.StorageExtensionsServiceAccount)
+}
+
+func consentSweepUsername() string {
+	return serviceAccountUsername(os.Getenv("POD_NAMESPACE"), ichorv1alpha1.ConsentSweepServiceAccount)
 }
 
 func autoPatchUsername() string {
@@ -126,6 +134,10 @@ func (v *TalosClusterCustomValidator) limitController(ctx context.Context, oldOb
 
 	if v.StorageExtensionsUser != "" && req.UserInfo.Username == v.StorageExtensionsUser {
 		return limitStorageExtensions(oldObj, newObj)
+	}
+
+	if v.ConsentSweepUser != "" && req.UserInfo.Username == v.ConsentSweepUser {
+		return limitConsentSweep(oldObj, newObj)
 	}
 
 	if v.AutoPatchUser == "" || req.UserInfo.Username != v.AutoPatchUser {
@@ -197,6 +209,23 @@ func limitStorageExtensions(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 		return refuse("the new ID is empty")
 	case was != "" && was != upgrade.DefaultSchematic:
 		return refuse("the current ID " + was + " is neither unset nor the stock schematic")
+	}
+
+	return nil
+}
+
+// limitConsentSweep limits the consent-sweep identity to its one write: removing the kube-proxy switch consent
+// annotation. Every other annotation, the spec, the labels and the finalizers stay as they were.
+func limitConsentSweep(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	rest := maps.Clone(oldObj.Annotations)
+	delete(rest, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation)
+
+	if !apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Labels, newObj.Labels) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Finalizers, newObj.Finalizers) ||
+		!maps.Equal(rest, newObj.Annotations) {
+		return errors.New("the consent sweep identity may only remove the annotation " +
+			ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation + ": something else changes")
 	}
 
 	return nil

@@ -122,3 +122,74 @@ func TestStorageExtensionsIdentityMayOnlySetTheSchematicID(t *testing.T) {
 		})
 	}
 }
+
+// TestConsentSweepIdentityMayOnlyRemoveTheConsentAnnotation: the ServiceAccount of ADR 0066's 2026-11-22
+// amendment has one write to a TalosCluster: removing the kube-proxy switch consent annotation, nothing else.
+func TestConsentSweepIdentityMayOnlyRemoveTheConsentAnnotation(t *testing.T) {
+	t.Parallel()
+
+	const (
+		sweeper = "system:serviceaccount:ichor-system:ichor-consent-sweep"
+		consent = ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation
+	)
+
+	cluster := func(annotations map[string]string) *ichorv1alpha1.TalosCluster {
+		c := &ichorv1alpha1.TalosCluster{}
+		c.Spec.TalosVersion = "v1.14.3"
+		c.Annotations = annotations
+
+		return c
+	}
+
+	for _, tc := range []struct {
+		name     string
+		user     string
+		old, new *ichorv1alpha1.TalosCluster
+		wantErr  string
+	}{
+		{name: "the consent removed", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced"}), new: cluster(nil)},
+		{name: "the consent removed, another annotation kept", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced", "a": "b"}), new: cluster(map[string]string{"a": "b"})},
+		{name: "no change", user: sweeper, old: cluster(nil), new: cluster(nil)},
+		{name: "the consent added", user: sweeper,
+			old: cluster(nil), new: cluster(map[string]string{consent: "replaced"}), wantErr: somethingElse},
+		{name: "the consent rewritten", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced"}), new: cluster(map[string]string{consent: "enabled"}), wantErr: somethingElse},
+		{name: "another annotation removed", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced", "a": "b"}), new: cluster(map[string]string{consent: "replaced"}), wantErr: somethingElse},
+		{name: "another annotation added with the removal", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced"}), new: cluster(map[string]string{"a": "b"}), wantErr: somethingElse},
+		{name: "a spec field with the removal", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced"}), new: func() *ichorv1alpha1.TalosCluster {
+				c := cluster(nil)
+				c.Spec.TalosVersion = "v1.14.5"
+
+				return c
+			}(), wantErr: somethingElse},
+		{name: "a label with the removal", user: sweeper,
+			old: cluster(map[string]string{consent: "replaced"}), new: func() *ichorv1alpha1.TalosCluster {
+				c := cluster(nil)
+				c.Labels = map[string]string{"a": "b"}
+
+				return c
+			}(), wantErr: somethingElse},
+		{name: "a person is not limited", user: "alice",
+			old: cluster(nil), new: cluster(map[string]string{consent: "replaced"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := &TalosClusterCustomValidator{ConsentSweepUser: sweeper}
+
+			err := v.limitController(settingsCtx(tc.user, false), tc.old, tc.new)
+
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("err = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}

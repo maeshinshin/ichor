@@ -110,7 +110,9 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 	o.TalosVersion = env("ICHOR_E2E_F_TALOS", o.TalosVersion)
 	o.RegistryMirror = true
 	o.RelayPort = env("ICHOR_E2E_F_RELAY_PORT", o.RelayPort)
-	o.CiliumChart = repoPath(t, foreign.CiliumChartPath)
+	if o.CiliumChart == "" {
+		o.CiliumChart = repoPath(t, foreign.CiliumChartPath)
+	}
 	if !strings.HasPrefix(o.Prefix, foreign.PrefixRoot) {
 		t.Fatal("bad prefix")
 	}

@@ -660,10 +660,15 @@ func TestA7Refused(t *testing.T) {
 
 // TestA6Refused: a Cilium more than one minor below the embedded 1.20.4 (here 1.16.x) is refused and nothing
 // is written. One minor below (1.19, TestA6Accepted119) is taken over; two below (1.18) is refused by the same rule.
-// Run `foreign up --workers 0 --cni cilium-helm --cilium-chart bin/foreign/chart116/cilium-1.16.19.tgz --cilium-set
-// tunnelProtocol=vxlan,tunnelPort=4789` first.
+// The cluster is built from bin/foreign/chart116/cilium-1.16.19.tgz (fetched from https://helm.cilium.io by hand);
+// one operator replica keeps the health check from refusing before the version rule runs.
 func TestA6Refused(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
+	chart := repoPath(t, "bin/foreign/chart116/cilium-1.16.19.tgz")
+	if _, err := os.Stat(chart); err != nil {
+		t.Skipf("the Cilium 1.16 chart is missing: %v", err)
+	}
+	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm, CiliumChart: chart,
+		CiliumSets: []string{"operator.replicas=1", "tunnelProtocol=vxlan", "tunnelPort=4789"}})
 	hashes, records := cniPaths(t, c), helmRecords(c)
 	img, _ := inner(c, "-n", nsKubeSystem, "get", "ds", nameCilium, "-o",
 		"jsonpath={.spec.template.spec.containers[0].image}")

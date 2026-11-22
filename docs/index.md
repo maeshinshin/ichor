@@ -8,41 +8,12 @@ sidebar_order: 1
 
 Ichor manages [Talos Linux](https://www.talos.dev/) clusters from Kubernetes.
 Nodes, machine configuration, upgrades and etcd backups are Kubernetes
-resources, and you work with them through the `ichor` CLI, the ichor-ui web UI,
-or by writing the resources yourself.
+resources, worked with through the `ichor` CLI, the ichor-ui web UI or by
+writing the resources yourself. Status: alpha.
 
-> Status: alpha.
-
-The commands in these docs use the `ichor` CLI, which each release publishes as
-an archive; [Getting started](guides/getting-started/install-the-cli.md)
-installs it. Building from source is covered in
-[Build from source](development/build-from-source.md).
-
-## What Ichor manages
-
-- **Clusters and machines.** A node that sits in Talos maintenance mode is
-  discovered, approved by a person in the UI or the CLI, installed and joined to
-  a cluster. Existing Talos clusters can be adopted, and machines that another
-  cluster configured can be reclaimed.
-  See [Clusters and machines](concepts/clusters-and-machines.md).
-- **Machine configuration.** Patches are typed resources built on the Talos
-  machinery types, with no raw YAML. The controller renders and applies them and
-  reports drift.
-- **Operations.** Talos, Kubernetes and Ichor upgrades, reboot-requiring
-  configuration changes, node actions, shutdown, etcd restore, and rotation of
-  CAs and keys are `TalosOperation` resources that run one node at a time with
-  etcd quorum in mind. See [Operations](concepts/operations.md) and
-  [CA and key rotation](concepts/ca-and-key-rotation.md).
-- **etcd backups.** Scheduled or on-demand, encrypted, stored in S3-compatible
-  storage; restore into a running cluster, or rebuild a cluster from the secrets
-  bundle and a snapshot alone.
-- **Cilium.** The only CNI Ichor supports, kept as a Helm release. It is the
-  one thing Ichor installs on the cluster besides itself. See
-  [CNI and Cilium](concepts/cni.md).
-
-Ichor does not boot machines (get them to maintenance mode by ISO, PXE or
-whatever you like), does not manage storage or monitoring, knows nothing about
-GitOps tools, and does not target air-gapped installs.
+The CLI is published with each release; [Getting
+started](guides/getting-started/install-the-cli.md) installs it, and [Build from
+source](development/build-from-source.md) builds it.
 
 ## How the pieces fit
 
@@ -52,55 +23,43 @@ GitOps tools, and does not target air-gapped installs.
 
 | Piece | Role |
 |---|---|
-| **Custom resources** | The API. `TalosCluster`, `TalosMachine`, `TalosConfigPatch`, `TalosOperation`, `TalosEtcdBackup`, `TalosStorage`, `MachineReclaim`, `TalosCredentialRequest`, `IchorInstallation` and `IchorUser`. See the [CRD reference](reference/crds/taloscluster.md). |
-| **`ichor-controller`** | The only component that writes to Talos nodes, apart from three CLI commands (`ichor init`, `ichor restore cluster`, `ichor reclaim node --talosconfig`). It reconciles the resources, keeps the state machine of long-running work in resource status, and never changes `spec`. |
-| **`ichor` CLI** | Bootstraps the first node (`ichor init`), adopts existing clusters, and does everything the UI does. See the [CLI reference](reference/cli/ichor.md). |
-| **`ichor-ui`** | A Preact web UI with its Go backend. It changes the world only by writing resources, reads node state from the Talos API read-only, and holds no CA key. |
+| Custom resources | The API: `TalosCluster`, `TalosMachine`, `TalosConfigPatch`, `TalosOperation`, `TalosEtcdBackup`, `TalosStorage`, `MachineReclaim`, `TalosCredentialRequest`, `IchorInstallation`, `IchorUser` ([reference](reference/crds/taloscluster.md)) |
+| `ichor-controller` | The only writer to Talos nodes, apart from three CLI commands (`ichor init`, `ichor restore cluster`, `ichor reclaim node --talosconfig`). Keeps long-running state in resource status and never changes `spec` |
+| `ichor` CLI | Bootstraps the first node, adopts clusters, does everything the UI does ([reference](reference/cli/ichor.md)) |
+| `ichor-ui` | Preact UI with a Go backend. Writes only resources, reads node state read-only, holds no CA key |
 
-Every write, from the UI, the CLI or your own tooling, is a change to a custom
-resource, so validation, RBAC and audit are the same whichever way it arrived.
-The design is in the [architecture document](design/architecture.md), and every
-decision is recorded.
+Every write is a change to a custom resource, so validation, RBAC and audit are
+the same from the UI, the CLI or your own tooling. Design: [architecture
+document](design/architecture.md).
 
-## What Ichor does
+## What Ichor manages
 
-- Discovery and approval of machines, with NIC, addressing and disk roles set at
-  approval.
-- Typed machine configuration with drift reporting, and reboot-requiring changes
-  rolled out as one operation.
-- Talos, Kubernetes, Cilium and Ichor upgrades, with the pause on failure and
-  `resume` model described in [Operations](concepts/operations.md). A first
-  install uses Talos v1.14.5, Kubernetes v1.36.6 and Cilium 1.20.4.
-- CA rotation (Talos API, Kubernetes API, and optionally etcd and aggregator)
-  and service-account and secretbox key rotation.
-- etcd backup, restore and full-loss recovery.
-- Optional Ichor-owned users with the roles viewer, operator and admin, and
-  personal kubeconfigs with no secret in them.
-- Admission that enforces the UI's checks on hand-written resources, an
-  admin-only right to change Cilium's values, and an encrypted local secrets
-  bundle. See [Security model](concepts/security.md).
-- Typed, off-by-default hardening for the clusters Ichor creates (SecureBoot,
-  kernel lockdown, kubelet serving certificates).
+| Area | What | Read |
+|---|---|---|
+| Clusters and machines | Discovery of Talos maintenance-mode nodes, approval, install and join; adopting a running cluster; reclaiming a machine another cluster configured | [Clusters and machines](concepts/clusters-and-machines.md) |
+| Machine configuration | Typed patches on the Talos machinery types, no raw YAML; drift reporting | |
+| Operations | Talos, Kubernetes, Cilium and Ichor upgrades, reboot-requiring changes, node actions, shutdown, etcd restore, pause on failure and `resume`; one node at a time with etcd quorum in mind | [Operations](concepts/operations.md) |
+| Rotation | CAs, service-account and secretbox keys | [CA and key rotation](concepts/ca-and-key-rotation.md) |
+| etcd | Scheduled or on-demand encrypted backups to S3-compatible storage; restore, or rebuild from the secrets bundle and a snapshot | [Back up etcd](guides/etcd-backup.md) |
+| Cilium | The only CNI, kept as a Helm release; the one thing Ichor installs besides itself | [CNI and Cilium](concepts/cni.md) |
+| Access | Optional Ichor users (viewer, operator, admin) with secret-free kubeconfigs; admission that enforces the UI's checks; admin-only Cilium values; encrypted local secrets bundle | [Security model](concepts/security.md) |
+| Hardening | Typed, off-by-default: SecureBoot, kernel lockdown, kubelet serving certificates | [Hardening](guides/hardening.md) |
 
-The complete list is in the [changelog](https://github.com/maeshinshin/ichor/blob/main/CHANGELOG.md).
+A first install gets the Talos, Kubernetes and Cilium versions pinned in the
+release (`ichor version`). Not in scope: booting machines (use an ISO or PXE),
+storage, monitoring, GitOps tools and air-gapped installs. Changes:
+[changelog](https://github.com/maeshinshin/ichor/blob/main/CHANGELOG.md).
 
 ## Where to go next
 
-- [Getting started](guides/getting-started.md): from the released CLI to a
-  one-node cluster and the first sign-in.
-- [Install with Helm](guides/install-with-helm.md),
-  [Adopt a running cluster](guides/adopt-a-cluster.md) and
-  [Reclaim a machine](guides/reclaim-a-machine.md): install Ichor on an existing
-  cluster, or bring existing Talos machines in.
-- [Users and login](guides/users-and-login.md),
-  [Settings](guides/settings.md) and [Hardening](guides/hardening.md).
-- [Back up etcd to S3](guides/etcd-backup.md) and
-  [Rotating the service-account and secretbox keys](guides/rotate-keys.md).
-- Concepts: [Clusters and machines](concepts/clusters-and-machines.md),
-  [Operations](concepts/operations.md), [CNI and Cilium](concepts/cni.md),
-  [Security model](concepts/security.md),
-  [CA and key rotation](concepts/ca-and-key-rotation.md),
-  [Certificate names](concepts/certificate-names.md),
-  [Sign-in and sessions](concepts/sign-in-and-sessions.md).
-- [Reference](reference/index.md): every `ichor` command and every field of
-  every custom resource.
+- [Getting started](guides/getting-started.md): the CLI to a one-node cluster and
+  the first sign-in.
+- [Install with Helm](guides/install-with-helm.md), [Adopt a running
+  cluster](guides/adopt-a-cluster.md), [Reclaim a
+  machine](guides/reclaim-a-machine.md).
+- [Users and login](guides/users-and-login.md), [Settings](guides/settings.md),
+  [Hardening](guides/hardening.md).
+- [Rotating keys](guides/rotate-keys.md).
+- Concepts: [Certificate names](concepts/certificate-names.md), [Sign-in and
+  sessions](concepts/sign-in-and-sessions.md).
+- [Reference](reference/index.md): every command and every custom resource field.

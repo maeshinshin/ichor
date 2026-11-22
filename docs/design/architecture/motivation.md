@@ -5,40 +5,26 @@ sidebar_order: 1
 
 # Motivation
 
-Running Talos with `talosctl` works well for one person and a handful of
-nodes. It gets awkward when machine configs live in a directory of YAML files,
-when several people need to see what's applied where, and when upgrades have
-to be sequenced by hand. Putting the configuration into the Kubernetes API
-gives you RBAC, audit, webhooks, and a place to hang a UI, without
-inventing a new control plane.
+`talosctl` suits one person and a handful of nodes. It strains when machine configs live in a directory of YAML, when several people must see what is applied where, and when upgrades are sequenced by hand. Putting the configuration in the Kubernetes API gives RBAC, audit, webhooks and a place for a UI, with no new control plane.
+
+![You boot the ISO; Ichor takes a machine in maintenance mode to Talos, Kubernetes and Cilium. Storage, monitoring, workloads and GitOps lie outside it.](../../images/arch-motivation.light.drawio.svg)
+
+*What Ichor does, and where it stops.*
 
 ## Goals
 
-- Declarative machine configuration as Kubernetes resources, with drift
-  detection and a view of the effective config per node.
-- Node lifecycle: discover a node in maintenance mode, approve it in a UI,
-  install, join, and later remove it safely (drain, etcd membership, reset).
-- Rolling upgrades of Talos and Kubernetes, with the cluster lock, etcd quorum
-  and storage evacuation taken care of.
-- etcd backup to S3-compatible storage, and recovery from nothing but the
-  secrets bundle and a snapshot.
-- Bootstrap of Cilium for a brand-new cluster, with no Git repository needed.
-- CLI and UI parity: anything you can do in one, you can do in the other.
+- Declarative machine configuration as Kubernetes resources, with drift detection and an effective-config view per node.
+- Node lifecycle: discover a node in maintenance mode, approve it in a UI, install, join, remove it safely (drain, etcd membership, reset).
+- Rolling Talos and Kubernetes upgrades, with the cluster lock, etcd quorum and storage evacuation handled.
+- etcd backup to S3-compatible storage; recovery from only the secrets bundle and a snapshot.
+- Cilium bootstrap for a new cluster, with no Git repository.
+- CLI and UI parity.
 
 ## Non-goals
 
-- Getting machines to maintenance mode. Boot the ISO however you like.
-- Storage or monitoring, and any CNI other than Cilium.
-- Workloads. Ichor manages the cluster (Talos, Kubernetes, Cilium) and not what
-  runs on it, and it does not sync its own resources with a Git repository; GitOps
-  of workloads, or of Ichor's resources, is the user's tooling.
-- Replacing the storage system's own controller. Volumes, replicas and disk
-  state belong to Longhorn (or whatever you run).
-- Multi-cluster management. One Ichor manages one cluster, and the UI is built
-  for that.
-- Air-gapped environments. Ichor builds nothing for an
-  installation with no route to public registries; registry mirrors exist for
-  pull-through caches and private registries.
-- IPv6, PXE provisioning. Later, maybe.
-- Know about GitOps tools. Ichor does not detect GitOps tools, does not open
-  pull requests and does not refuse a write because a tool tracks the resource.
+- Getting machines to maintenance mode: boot the ISO however you like.
+- Storage, monitoring, any CNI other than Cilium. The storage system's own controller keeps volumes, replicas and disk state.
+- Workloads. Ichor manages Talos, Kubernetes and Cilium. It does not sync its own resources from Git, detect GitOps tools, open pull requests or refuse a write because a tool tracks the resource.
+- Multi-cluster management: one Ichor, one cluster.
+- Air-gapped installs. Registry mirrors exist only for pull-through caches and private registries.
+- IPv6 and PXE provisioning: later, maybe.

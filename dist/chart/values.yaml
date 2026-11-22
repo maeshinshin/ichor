@@ -441,6 +441,11 @@ rbac:
     ##
     enabled: false
 
+  ## The secrets-bundle Secrets (TalosCluster.spec.secretsRef.name, "<cluster>-secrets" by default) that
+  ## the Role ichor-bundle-secret-role may get, and nothing else. Empty installs no Role.
+  bundleSecret:
+    names: []
+
 ## ServiceAccount configuration
 ##
 serviceAccount:

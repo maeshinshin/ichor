@@ -19,4 +19,6 @@ Cilium bootstrap, adoption and values edits, prune protection, storage preparati
 with rollback, backup, restore and full-loss recovery, certificate rotation.
 Each scenario runs through both the CLI and the backend API. Chaos cases kill
 the controller or reboot a node mid-rollout and check that status-driven
-resumption works. A short set runs per PR, the full set nightly.
+resumption works. The short set (`make test-e2e`)
+is the only e2e run wired to a make target; the hardware cases in `test/e2e/foreign/` run one at a
+time by hand, as that package's doc comment describes.

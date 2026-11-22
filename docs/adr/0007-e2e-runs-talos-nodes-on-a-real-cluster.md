@@ -223,8 +223,8 @@ asked to support.
 ## Three control planes
 
 The short e2e set uses a single-node path. The three-control-plane topology
-(three nodes, bootstrap on the first, the other two joining on their own) runs
-nightly only.
+(three nodes, bootstrap on the first, the other two joining on their own) is
+driven by hand with `make setup-test-e2e-kubevirt-ha`; no spec uses it yet.
 
 ## Running the controller under test
 

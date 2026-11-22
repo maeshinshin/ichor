@@ -18,8 +18,8 @@ limitations under the License.
 // scenarios design's "Nodes" section describes (quorum, last-control-plane, transitioning)
 // that need real etcd membership and a real kubelet drain -- envtest has neither. A
 // separate pair from "up"/"down": the short e2e set's proven single-node path is untouched,
-// and this one is heavy enough (~40Gi of Ceph for a few minutes) that it belongs in the
-// nightly set only.
+// and this one is heavy (~40Gi of Ceph for a few minutes). No spec uses it yet; it is
+// driven by hand ("make setup-test-e2e-kubevirt-ha").
 package main
 
 import (

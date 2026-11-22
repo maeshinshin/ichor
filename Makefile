@@ -178,10 +178,6 @@ cluster-gate: ## Run the gate (make test, then make lint) for GATE_REF (default 
 test-e2e: test-e2e-prereqs manifests generate fmt vet ## Run the PR-sized (short) e2e set against the cluster given by KUBECONFIG.
 	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter=short
 
-.PHONY: test-e2e-nightly
-test-e2e-nightly: test-e2e-prereqs manifests generate fmt vet ## Run the full (short + nightly) e2e set against the cluster given by KUBECONFIG.
-	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter="short || nightly"
-
 .PHONY: controller-static
 controller-static: ## Build a statically linked controller binary to copy into the verification pod (not an image)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$(LOCALBIN)/manager-static" cmd/main.go

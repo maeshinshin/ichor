@@ -55,7 +55,7 @@ setup-test-e2e-kubevirt: test-e2e-prereqs kubevirt-harness ## Boot a single-node
 cleanup-test-e2e-kubevirt: test-e2e-prereqs kubevirt-harness ## Tear down the VM, its relay pod and port-forward, and the DataVolumes setup-test-e2e-kubevirt created; a no-op if there is nothing to tear down
 	"$(LOCALBIN)/kubevirt-harness" down
 
-# --- KubeVirt harness, three control planes (nightly only: ~40Gi of Ceph for a few
+# --- KubeVirt harness, three control planes (driven by hand, no spec uses it yet: ~40Gi of Ceph for a few
 # minutes, for the removal-ordering scenarios design's "Nodes" section describes that need
 # real etcd membership and a real kubelet drain -- envtest has neither) ---
 

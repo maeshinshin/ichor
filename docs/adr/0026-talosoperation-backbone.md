@@ -196,3 +196,7 @@ the doc comment does.
 - Worker joins take no lock and still do not: a worker is not an etcd member, and only a control-plane join reaches `acquireDisruptiveLock` (covered by `joins a worker while the cluster lock is held`). The removal of a worker that was reset (ADR 0085) still takes it, as before, to serialize its drain with everything else.
 - The Cilium Helm Job (`ichor-controller/cni-helm`, ADR 0113) is unaffected: it was already a separate identity. A control-plane join still waits while it holds the lock, and the Job still waits for a machine or operation that holds it.
 - Not changed, and worth knowing: the join holds the lock only while the configuration is handed over, not while the node installs, reboots and becomes an etcd member, and nothing in the lock keeps a second join or a removal from starting after the first reconcile ends. What the lock now guarantees is that two steps never overlap; the control-plane count (the even-count refusal and the approval cap) is what paces the membership changes across time.
+
+## Amendment (2026-11-22): a step that failed on a transient error is retried automatically
+
+The text above that says a paused-by-failure operation never retries, and that `failureReason` means "hold, never retry", is kept as it was written. ADR 0174 supersedes it for the kinds `talos`, `kubernetes`, `config` and `node` when the error is transient: the controller retries the step after a backoff, up to five times, and pauses for a person after that. Every other failure still pauses at once and waits for a person.

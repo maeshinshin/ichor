@@ -4,57 +4,57 @@ sidebar_order: 7
 
 # The local secrets bundle
 
-`~/.ichor/clusters/<name>/secrets.yaml` holds every CA key of the cluster. It is an age file
-sealed with a passphrase, so a copy of it on a laptop backup or a cloud drive is
-not a copy of the cluster's keys. `ichor init`, `ichor adopt --recover-secrets`
-and `ichor export bundle` write it that way by default.
+![Where the bundle passphrase comes from and what uses the bundle. The passphrase is read from --bundle-passphrase-file, then ICHOR_BUNDLE_PASSPHRASE, then a terminal prompt or a generated passphrase. It seals secrets.yaml, which holds every CA key and is read by restore cluster, adopt, create credentials --bundle and export bundle. ichor secrets encrypt seals an older plaintext file.](../../images/hardening-secrets-bundle.light.drawio.svg)
+
+*The passphrase seals `secrets.yaml`; the commands that read it take the passphrase the same way.*
+
+`~/.ichor/clusters/<name>/secrets.yaml` holds every CA key of the cluster. It is
+an age file sealed with a passphrase, so a copy on a backup or cloud drive is
+not a copy of the keys. `ichor init`, `ichor adopt --recover-secrets` and
+`ichor export bundle` write it that way by default (`--bundle-plaintext` opts out).
 
 ## The passphrase
 
-The passphrase comes from, in order:
+In order:
 
-1. `--bundle-passphrase-file PATH`: the first line of the file. `PATH` may be a
-   descriptor, so the passphrase need not touch the disk:
-   `ichor restore ... --bundle-passphrase-file <(pass show ichor/demo)`.
-2. The environment variable `ICHOR_BUNDLE_PASSPHRASE`. Anything running as you
-   (and root) can read an environment, so prefer the file.
-3. On a terminal: a prompt when opening a file; a generated passphrase, printed
-   once, when creating one.
+1. `--bundle-passphrase-file PATH`: the first line. `PATH` may be a descriptor, so the passphrase never touches disk: `ichor restore ... --bundle-passphrase-file <(pass show ichor/demo)`.
+2. `ICHOR_BUNDLE_PASSPHRASE`. Anything running as you, and root, can read it; prefer the file.
+3. On a terminal: a prompt to open a file; a generated passphrase, printed once, to create one.
 
-Never a flag value (it would be in `ps` and your shell history). A passphrase you
-choose must be at least 12 characters. Every command that reads the bundle
-(`restore cluster`, `adopt --secrets-bundle`, `create credentials
---bundle`, `export bundle`) takes it the same way. A wrong passphrase and
-a damaged file give the same error, which names neither.
+Never a flag value (`ps`, shell history). A chosen passphrase needs 12 or more
+characters. A wrong passphrase and a damaged file give the same error.
 
-## Encrypting a bundle made before this change
+## Encrypt an older plaintext bundle
 
-A bundle file you made before this change still works, with a warning on every
-use. Encrypt it:
+A plaintext bundle still works, with a warning on every use:
 
 ```sh
 ichor secrets encrypt demo              # ~/.ichor/clusters/demo/secrets.yaml
 ichor secrets encrypt --file ./secrets.yaml
 ```
 
-The command seals the file, opens the sealed copy again, compares it with the
-original, and only then replaces the file.
+It seals the file, opens the sealed copy, compares it with the original, and
+only then replaces the file. `age -d secrets.yaml` opens it without Ichor.
 
 > [!WARNING]
-> If the plaintext file was ever copied
-> or exposed, encrypting it does not undo that: rotate the CAs
-> (`ichor rotate ca`).
+> Encrypting does not undo an earlier copy or exposure of the plaintext: rotate the CAs (`ichor rotate ca`).
 
-The `age` tool opens the file without Ichor:
-`age -d secrets.yaml`.
+## The kubeconfig beside it
 
-## The kubeconfig next to it
+The kubeconfig stays plaintext, because `kubectl` reads it. It holds the
+`system:masters` override certificate ([Users and login](../users-and-login.md)):
+once login works, move it offline, but keep it.
 
-The kubeconfig next to it stays plaintext, because `kubectl` reads it. It holds
-the `system:masters` override certificate (see
-[Users and login](../users-and-login.md)); once login works, move it offline, but
-keep it. The bundle can also make a new one: `ichor create credentials --bundle
-FILE --kube-server URL --talos-endpoints ADDRESS` writes a kubeconfig and
-talosconfig with no kubeconfig on disk. The bundle holds no addresses, so note
-the API server's address with it. The Secret in
-the cluster that holds the bundle for the controller is not affected.
+The bundle can also mint new credentials with no kubeconfig on disk:
+
+```sh
+ichor create credentials NAME --bundle secrets.yaml --kube-server URL --talos-endpoints ADDRESS
+```
+
+The bundle holds no addresses, so note the API server's address with it.
+
+The copy the controller reads is the Secret in the cluster. The commands that
+read that Secret (`create credentials`, `export bundle`, the `rotate ca`
+hand-off, `adopt --add-machine`) need the Role `ichor-bundle-secret-role`, which
+the chart installs when `rbac.bundleSecret.names` lists it. Bind it only to
+people you would give `os:admin`.

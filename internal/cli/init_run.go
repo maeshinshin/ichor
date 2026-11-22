@@ -535,7 +535,7 @@ func initInstall(
 		create := func(ctx context.Context, obj client.Object) error {
 			err := createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, s)
 			if m, ok := obj.(*ichorv1alpha1.TalosMachine); ok {
-				return adoptDiscoveredMachine(ctx, k8sClient, m, err)
+				return AdoptDiscoveredMachine(ctx, k8sClient, m, err)
 			}
 
 			return err
@@ -961,10 +961,10 @@ func buildInlineManifestsPatch(
 	}
 }
 
-// adoptDiscoveredMachine turns an AlreadyExists on the first node's TalosMachine into success when
+// AdoptDiscoveredMachine (exported so the webhook suite can run it against the real admission chain) turns an AlreadyExists on the first node's TalosMachine into success when
 // the object is the same node's pending record: discovery created it first, so init writes the approved
 // control plane it wanted over that spec. Any other error, and another node's object, is returned as it was.
-func adoptDiscoveredMachine(ctx context.Context, c client.Client, m *ichorv1alpha1.TalosMachine, createErr error) error {
+func AdoptDiscoveredMachine(ctx context.Context, c client.Client, m *ichorv1alpha1.TalosMachine, createErr error) error {
 	if !apierrors.IsAlreadyExists(createErr) {
 		return createErr
 	}

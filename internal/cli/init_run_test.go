@@ -499,7 +499,7 @@ func TestAdoptDiscoveredMachine(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(newMachine(identity, nil)).Build()
 		createErr := c.Create(context.Background(), mine)
 
-		err := adoptDiscoveredMachine(context.Background(), c, mine, createErr)
+		err := AdoptDiscoveredMachine(context.Background(), c, mine, createErr)
 
 		var got ichorv1alpha1.TalosMachine
 		if gerr := c.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: uuid}, &got); gerr != nil {
@@ -512,7 +512,7 @@ func TestAdoptDiscoveredMachine(t *testing.T) {
 	t.Run("the same node", func(t *testing.T) {
 		got, err := run(t, newMachine(identity, want))
 		if err != nil {
-			t.Fatalf("adoptDiscoveredMachine = %v, want nil", err)
+			t.Fatalf("AdoptDiscoveredMachine = %v, want nil", err)
 		}
 
 		if got.Spec.Role != roleControlPlane || !got.Spec.IsApproved() {
@@ -526,7 +526,7 @@ func TestAdoptDiscoveredMachine(t *testing.T) {
 
 		got, err := run(t, newMachine(other, want))
 		if err == nil {
-			t.Fatal("adoptDiscoveredMachine = nil, want the AlreadyExists error")
+			t.Fatal("AdoptDiscoveredMachine = nil, want the AlreadyExists error")
 		}
 
 		if got.Spec.IsApproved() {

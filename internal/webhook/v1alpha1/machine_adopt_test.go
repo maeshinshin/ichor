@@ -36,7 +36,7 @@ var _ = Describe("ichor init adopting a discovered TalosMachine", func() {
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 		identity := ichorv1alpha1.TalosMachineIdentity{
-			UUID: "00000000-0000-0000-0000-0000000000ad", Serial: "S-adopt", MACAddresses: []string{"aa:bb:cc:dd:ee:01"},
+			UUID: "00000000-0000-0000-0000-0000000000ad", Serial: "S-adopt", MACAddresses: []string{testMAC1},
 		}
 		// What discovery creates: pending, no role.
 		pending := &ichorv1alpha1.TalosMachine{
@@ -52,7 +52,7 @@ var _ = Describe("ichor init adopting a discovered TalosMachine", func() {
 		// What init wants: the same node as an approved control plane with its install disk.
 		mine := pending.DeepCopy()
 		mine.ResourceVersion, mine.UID = "", ""
-		mine.Spec.Role = "controlplane"
+		mine.Spec.Role = roleControlPlane
 		mine.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 		mine.Spec.Install = &ichorv1alpha1.TalosMachineInstall{Disk: ichorv1alpha1.TalosMachineDisk{Serial: "D1"}}
 
@@ -63,7 +63,7 @@ var _ = Describe("ichor init adopting a discovered TalosMachine", func() {
 
 		var got ichorv1alpha1.TalosMachine
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: identity.UUID}, &got)).To(Succeed())
-		Expect(got.Spec.Role).To(Equal("controlplane"))
+		Expect(got.Spec.Role).To(Equal(roleControlPlane))
 		Expect(got.Spec.IsApproved()).To(BeTrue())
 		Expect(got.UID).To(Equal(pending.UID), "the pending object was updated, not replaced")
 	})

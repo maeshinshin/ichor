@@ -55,7 +55,7 @@ func newTestControlPlane(clusterName, uuidSuffix string) *ichorv1alpha1.TalosMac
 			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: fmt.Sprintf("00000000-0000-0000-0000-0000000000%s", uuidSuffix)},
 			Endpoint:      fmt.Sprintf("10.0.1.%s:50000", uuidSuffix),
-			Role:          "controlplane",
+			Role:          roleControlPlane,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}

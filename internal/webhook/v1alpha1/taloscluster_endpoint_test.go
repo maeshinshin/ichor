@@ -84,8 +84,8 @@ func TestVIPEndpointWarnsOfControlPlanesWithoutANetwork(t *testing.T) {
 	}
 
 	reader := fake.NewClientBuilder().WithScheme(schemeOf(t)).WithObjects(
-		node("talos02", "controlplane", nil),
-		node("talos01", "controlplane", &ichorv1alpha1.TalosMachineNetwork{MAC: "aa:bb:cc:dd:ee:01"}),
+		node("talos02", roleControlPlane, nil),
+		node("talos01", roleControlPlane, &ichorv1alpha1.TalosMachineNetwork{MAC: testMAC1}),
 		node("worker", "worker", nil),
 	).Build()
 	v := &TalosClusterCustomValidator{APIReader: reader}
@@ -122,10 +122,10 @@ func TestVIPEndpointRefusedWhenNoControlPlaneCouldHoldIt(t *testing.T) {
 	const ns, cluster = "default", "c"
 
 	m := &ichorv1alpha1.TalosMachine{Name: "talos01", Namespace: ns}
-	m.Spec.ClusterRef.Name, m.Spec.Role = cluster, "controlplane"
+	m.Spec.ClusterRef.Name, m.Spec.Role = cluster, roleControlPlane
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
-		MAC: "aa:bb:cc:dd:ee:01", Addressing: ichorv1alpha1.MachineAddressingStatic, Addresses: []string{"192.168.0.201/24"},
+		MAC: testMAC1, Addressing: ichorv1alpha1.MachineAddressingStatic, Addresses: []string{"192.168.0.201/24"},
 	}
 	v := &TalosClusterCustomValidator{APIReader: fake.NewClientBuilder().WithScheme(schemeOf(t)).WithObjects(m).Build()}
 
@@ -149,3 +149,5 @@ func TestVIPEndpointRefusedWhenNoControlPlaneCouldHoldIt(t *testing.T) {
 		t.Fatalf("an unchanged endpoint was refused: %v", err)
 	}
 }
+
+const testMAC1 = "aa:bb:cc:dd:ee:01"

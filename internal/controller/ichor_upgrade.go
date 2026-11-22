@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -41,6 +40,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/oidctrust"
+	"github.com/maeshinshin/ichor/internal/transient"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
@@ -117,19 +117,6 @@ func pauseReason(err error) string {
 	}
 
 	return reasonOperationStepFailed
-}
-
-// transientFailure is true for an API server or network failure, which a later attempt may not meet; any other error is
-// a refusal or a failed step that stays until someone changes something.
-func transientFailure(err error) bool {
-	if apierrors.IsServerTimeout(err) || apierrors.IsTimeout(err) || apierrors.IsTooManyRequests(err) ||
-		apierrors.IsServiceUnavailable(err) || apierrors.IsInternalError(err) || apierrors.IsConflict(err) {
-		return true
-	}
-
-	_, network := errors.AsType[net.Error](err)
-
-	return network
 }
 
 // The operation does not need the installer Job after jobTTL: once the upgrade succeeded the new
@@ -226,7 +213,7 @@ func (r *TalosOperationReconciler) advanceIchor(
 
 	done, err := r.Advance(ctx, cluster, nil, op)
 	// An API server or network failure clears on its own: it is retried, where a failure that can persist pauses for a person.
-	if err != nil && pauseReason(err) == reasonOperationStepFailed && transientFailure(err) {
+	if err != nil && pauseReason(err) == reasonOperationStepFailed && (transient.Is(err) || apierrors.IsInternalError(err) || apierrors.IsConflict(err)) {
 		return ctrl.Result{}, err
 	}
 

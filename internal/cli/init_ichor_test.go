@@ -45,6 +45,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
+	"github.com/maeshinshin/ichor/internal/transient"
 	"github.com/maeshinshin/ichor/internal/version"
 )
 
@@ -274,8 +275,8 @@ func TestIsTransient(t *testing.T) {
 		"forbidden":                     {apierrors.NewForbidden(gr, "x", errors.New("no match for this user")), false},
 		"not found":                     {apierrors.NewNotFound(gr, "x"), false},
 	} {
-		if got := isTransient(tc.err); got != tc.want {
-			t.Errorf("%s: isTransient(%v) = %t, want %t", name, tc.err, got, tc.want)
+		if got := transient.Is(tc.err); got != tc.want {
+			t.Errorf("%s: transient.Is(%v) = %t, want %t", name, tc.err, got, tc.want)
 		}
 	}
 }

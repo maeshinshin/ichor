@@ -18,19 +18,14 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"net"
 	"strings"
-	"syscall"
 	"time"
 
 	"connectrpc.com/connect"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/client-go/discovery"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+
+	"github.com/maeshinshin/ichor/internal/transient"
 )
 
 // followRetryWindow bounds how long a --follow/--watch poll keeps retrying
@@ -42,60 +37,6 @@ var (
 	followRetryDelay  = time.Second
 	followRetryMax    = 15 * time.Second
 )
-
-// isTransient reports whether err is the API being briefly unreachable --
-// connection refused/reset, Unavailable, EOF, a timeout, discovery not yet
-// serving a group -- as opposed to an
-// answer (NotFound, PermissionDenied, ...) that retrying cannot change.
-func isTransient(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	if ce, ok := errors.AsType[*connect.Error](err); ok {
-		switch ce.Code() {
-		case connect.CodeUnavailable, connect.CodeDeadlineExceeded:
-			return true
-		case connect.CodeUnknown, connect.CodeInternal:
-			// Fall through to the cause text: a dropped connection can arrive wrapped.
-		default:
-			return false
-		}
-	}
-
-	var (
-		ne        net.Error
-		restmap   *apiutil.ErrResourceDiscoveryFailed
-		groupdisc *discovery.ErrGroupDiscoveryFailed
-	)
-
-	switch {
-	// Discovery failing while a restarted kube-apiserver has not yet served the CRD groups. The client's
-	// lazy REST mapper does not cache the failure, so the same client succeeds on the next attempt.
-	case meta.IsNoMatchError(err), errors.As(err, &restmap), errors.As(err, &groupdisc), discovery.IsGroupDiscoveryFailedError(err):
-		return true
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF),
-		errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ECONNRESET),
-		errors.Is(err, context.DeadlineExceeded),
-		errors.As(err, &ne) && ne.Timeout(),
-		apierrors.IsServerTimeout(err), apierrors.IsTimeout(err), apierrors.IsServiceUnavailable(err), apierrors.IsTooManyRequests(err):
-		return true
-	}
-
-	msg := err.Error()
-
-	// An admission webhook that cannot be called (its pod restarts with the control plane it runs on)
-	// arrives as a 500 InternalError "failed calling webhook ...: <cause>", whatever the cause. A webhook
-	// that answered and refused is Forbidden or Invalid, and stays an answer.
-	if strings.Contains(msg, "failed calling webhook") && !apierrors.IsForbidden(err) && !apierrors.IsInvalid(err) {
-		return true
-	}
-
-	// etcd timing out behind a healthy apiserver arrives as a 500 InternalError carrying its text.
-	return strings.Contains(msg, "etcdserver: request timed out") || strings.Contains(msg, "etcdserver: leader changed") ||
-		strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "unexpected EOF") || strings.HasSuffix(msg, ": EOF") || strings.Contains(msg, "i/o timeout")
-}
 
 // sleepCtx waits d, or returns ctx.Err() as soon as ctx ends.
 func sleepCtx(ctx context.Context, d time.Duration) error {
@@ -125,7 +66,7 @@ func isImpersonationDenied(err error) bool {
 // retryTransientOr is retryTransient that also retries the errors orElse accepts, within the same
 // window; a nil orElse accepts none.
 func retryTransientOr(ctx context.Context, c *apiClients, errw io.Writer, orElse func(error) bool, call func() error) error {
-	retryable := func(err error) bool { return isTransient(err) || orElse != nil && orElse(err) }
+	retryable := func(err error) bool { return transient.Is(err) || orElse != nil && orElse(err) }
 	deadline := time.Now().Add(followRetryWindow)
 	delay := followRetryDelay
 

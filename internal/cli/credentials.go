@@ -37,6 +37,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/credentials"
+	"github.com/maeshinshin/ichor/internal/transient"
 )
 
 // Credentials for the operator. A CA rotation replaces the CAs the operator's kubeconfig
@@ -337,7 +338,7 @@ func retryHandoff(ctx context.Context, errw io.Writer, what string, call func() 
 
 	return retryTransient(ctx, &apiClients{}, errw, func() error {
 		err := call()
-		if isTransient(err) && !announced {
+		if transient.Is(err) && !announced {
 			announced = true
 
 			_, _ = fmt.Fprintf(errw, "ichor: %s: the Kubernetes API is not answering (it restarts during a rotation); "+
@@ -400,7 +401,7 @@ func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, clust
 			return op.Name, nil
 		}
 
-		if !isTransient(err) || ctx.Err() != nil {
+		if !transient.Is(err) || ctx.Err() != nil {
 			return "", fmt.Errorf("acknowledging the hand-off on operation %s/%s: %w", op.Namespace, op.Name, err)
 		}
 

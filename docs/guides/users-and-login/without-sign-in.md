@@ -4,41 +4,39 @@ sidebar_order: 2
 
 # Without any sign-in
 
-ichor-ui does not start without a sign-in, Ichor users or an external OIDC provider
-(`ichorUI.oidc`), and a caller it cannot identify is served nothing: every call is
-refused, reads included. What is reachable without a login is only what the sign-in
-page needs: the page itself, `/auth/config` and the issuer's own endpoints.
+![What happens without a sign-in. The open mode and its flags (allow-unauthenticated, ichorUI.allowUnauthenticated) are removed; ichor init, adopt, helm and ichor-ui startup refuse them. Instead enable ichorUI.users or ichorUI.oidc, or, on an install with no sign-in, let ichor upgrade ichor turn users on first.](../../images/users-without-sign-in.light.drawio.svg)
+
+*There is no way to run ichor-ui open; every refusal names the fix.*
+
+ichor-ui does not start without a sign-in (Ichor users or an external OIDC
+provider, `ichorUI.oidc`), and a caller it cannot identify is served nothing,
+reads included. Reachable without a login: the sign-in page, `/auth/config`
+and the issuer's own endpoints.
 
 > [!IMPORTANT]
-> There is no way to let ichor-ui make changes without a sign-in. The open mode, where
-> anyone who can reach ichor-ui writes with its ServiceAccount's permissions, was
-> removed; so were `--allow-unauthenticated` and `ichorUI.allowUnauthenticated`, and
-> ichor-ui's ServiceAccount holds none of the `start` verbs, so no request
-> without a user can start a shutdown, a rotation or a restore.
+> The open mode, where anyone who could reach ichor-ui wrote with its
+> ServiceAccount's permissions, was removed, with `--allow-unauthenticated`
+> and `ichorUI.allowUnauthenticated`. The ServiceAccount holds none of the
+> `start` verbs, so no request without a user can start a shutdown, rotation or restore.
 
-Each of them is refused and says what to do instead:
+Where each is refused:
 
-- `ichor init` and `ichor adopt` refuse `--allow-unauthenticated` (also as
-  `ui.allowUnauthenticated: true` in an init file). Sign-in is on in every cluster
-  they set up.
-- `ichor-ui` stops at startup when it is given `--allow-unauthenticated` or
-  `ICHOR_ALLOW_UNAUTHENTICATED=true`.
-- `helm install` and `helm upgrade` fail when `ichorUI.allowUnauthenticated` is true.
-  `helm upgrade --reuse-values` carries the old value forward; pass
-  `--set ichorUI.allowUnauthenticated=null` with it, or drop `--reuse-values`.
-  Then enable `ichorUI.users` or `ichorUI.oidc`.
-- `ichor upgrade ichor` on an install whose ichor-ui has no sign-in turns Ichor's own
-  sign-in on first, as `ichor init` does: it asks (`--yes` skips the question), creates
-  the first administrator, switches ichor-ui, sets `spec.authentication.ichor` on each
-  `TalosCluster` that can carry it (Talos v1.14 or later) and prints the password once,
-  at the end. It takes `--ui-url`, `--admin-user` and the TLS and kubeconfig flags of
-  `ichor init`. The installer Job refuses an ichor-ui with no sign-in and says to use this
-  command, so an upgrade started any other way (a hand-written `TalosOperation`, the
-  controller's own patch upgrades) changes nothing. An install with the removed flag has
-  it dropped, with a `NOTICE`.
-- The chart refuses `ichorUI.enabled` with neither `ichorUI.users.enabled` (with
-  `ichorUI.users.externalURL`) nor `ichorUI.oidc.enabled`, naming what to set. A Helm
-  install is not touched by `ichor upgrade ichor`: before `helm upgrade` to this release,
-  set one of them in the values, then create the first administrator with
-  `ichor create user admin --role admin --generate --bootstrap` (see [Turn users on](turn-users-on.md)).
-  `ichorUI.enabled=false` installs Ichor without ichor-ui.
+| Where | What happens |
+|---|---|
+| `ichor init`, `ichor adopt` | Refuse `--allow-unauthenticated` (and `ui.allowUnauthenticated: true` in an init file); sign-in is on in every cluster they set up |
+| `ichor-ui` | Stops at startup on `--allow-unauthenticated` or `ICHOR_ALLOW_UNAUTHENTICATED=true` |
+| `helm install`, `helm upgrade` | Fail when `ichorUI.allowUnauthenticated` is true. `--reuse-values` carries the old value: add `--set ichorUI.allowUnauthenticated=null` or drop `--reuse-values`. Then enable `ichorUI.users` or `ichorUI.oidc` |
+| The chart | Refuses `ichorUI.enabled` with neither `ichorUI.users.enabled` (with `externalURL`) nor `ichorUI.oidc.enabled`. `ichorUI.enabled=false` installs Ichor without ichor-ui |
+
+## An install with no sign-in yet
+
+`ichor upgrade ichor` turns Ichor's own sign-in on first, as `ichor init` does:
+
+- It asks (`--yes` skips), creates the first administrator, switches ichor-ui, sets `spec.authentication.ichor` on each `TalosCluster` that can carry it (Talos v1.14 or later) and prints the password once, at the end.
+- It takes `--ui-url`, `--admin-user` and the TLS and kubeconfig flags of `ichor init`.
+- The installer Job refuses an ichor-ui with no sign-in and says to use this command, so any other upgrade (a hand-written `TalosOperation`, the controller's patch upgrades) changes nothing. An install with the removed flag has it dropped, with a `NOTICE`.
+
+A Helm install is not touched by `ichor upgrade ichor`. Before `helm upgrade`,
+set `ichorUI.users` or `ichorUI.oidc` in the values, then create the first
+administrator with `ichor create user admin --role admin --generate --bootstrap`
+([Turn users on](turn-users-on.md)).

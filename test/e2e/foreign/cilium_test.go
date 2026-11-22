@@ -476,8 +476,10 @@ func TestA1Upgrade(t *testing.T) {
 		if strings.Contains(ph, "Completed") && !strings.Contains(ph, "InProgress") && !strings.Contains(ph, "Pending") {
 			break
 		}
-		if strings.Contains(ph, "Failed") {
-			t.Fatalf("a TalosOperation failed: %q", ph)
+		// A node that fails pauses the operation, so waiting out the deadline on Paused only hides why.
+		if strings.Contains(ph, "Failed") || strings.Contains(ph, "Paused") {
+			st, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o", "jsonpath={.items[*].status}")
+			t.Fatalf("a TalosOperation failed or paused: %q\nstatus: %s", ph, st)
 		}
 		time.Sleep(15 * time.Second)
 	}

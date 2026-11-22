@@ -1,11 +1,11 @@
 ---
 title: "ichor approve"
-description: "Approve a pending node so the controller starts configuring it"
+description: "Approve a pending node, or an operation that waits for approval"
 ---
 
 ## ichor approve
 
-Approve a pending node so the controller starts configuring it
+Approve a pending node, or an operation that waits for approval
 
 ```sh
 ichor approve [command]
@@ -37,4 +37,5 @@ ichor approve [command]
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
 * [ichor approve node](ichor_approve_node.md)	 - Approve a pending node so the controller starts configuring it
+* [ichor approve operation](ichor_approve_operation.md)	 - Start an operation that waits for approval; an upgrade reboots each node in turn
 

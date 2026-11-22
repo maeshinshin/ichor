@@ -244,8 +244,11 @@ func renderOperationPaused(h *human, resp *pb.SetOperationPausedResponse) error 
 	op := resp.GetOperation()
 	state := "resumed"
 
-	if op.GetPaused() {
+	switch {
+	case op.GetPaused():
 		state = "paused"
+	case awaitingApproval(op):
+		state = "approved"
 	}
 
 	h.Block(nsName(op.GetRef()), append([]kv{{"State", state}}, opHead(h, op)...)...)
@@ -300,6 +303,8 @@ func (w *opWatch) detailIn(op *pb.Operation, stage, phase string) string {
 	switch {
 	case opBlocked(op):
 		parts = append(parts, "blocked: "+opNote(op), "resumes by itself, nothing to resume")
+	case awaitingApproval(op):
+		parts = append(parts, "waiting for approval: `ichor approve operation "+op.GetRef().GetName()+"`")
 	case op.GetPhase() == condPaused && !opFailed(op):
 		parts = append(parts, "resume with `ichor resume operation "+op.GetRef().GetName()+"`")
 	case opFailed(op):

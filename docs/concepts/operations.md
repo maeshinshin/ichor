@@ -80,8 +80,13 @@ A pause that lifts by itself, such as a rotation blocked on a step, keeps the lo
 
 ## Pause, resume and retry
 
-There are two reasons an operation is `Paused`, and they are told apart by
-`status.failureReason`.
+There are three reasons an operation is `Paused`, and they are told apart by
+`status.failureReason` and the reason of its `Paused` condition.
+
+- **It never started.** An operation created paused and marked approval-gated, such as the upgrade a storage
+  preset creates, has run no step and has the `Paused` reason `AwaitingApproval`.
+  `ichor approve operation NAME` (or Approve in the UI) starts it. The command
+  refuses an operation that is not waiting for approval.
 
 - **You paused it.** `ichor pause operation NAME` sets `spec.paused`. The
   operation stops advancing and releases the cluster lock, so a machine that is

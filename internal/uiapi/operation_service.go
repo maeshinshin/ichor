@@ -249,6 +249,8 @@ func (s *Server) SetOperationPaused(
 		}
 	}
 
+	waiting := pausedWith(op, ichorv1alpha1.OperationAwaitingApprovalReason) // an approval, audited as one
+
 	op.Spec.Paused = req.Msg.GetPaused()
 
 	if !op.Spec.Paused && op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
@@ -260,8 +262,12 @@ func (s *Server) SetOperationPaused(
 	}
 
 	action := "resume"
-	if op.Spec.Paused {
+
+	switch {
+	case op.Spec.Paused:
 		action = "pause"
+	case waiting:
+		action = "approve"
 	}
 
 	return connect.NewResponse(&pb.SetOperationPausedResponse{Operation: operationToPB(op), Audit: s.opAudit(ctx, action, ref)}), nil
@@ -963,10 +969,13 @@ const (
 	reasonOperationOwnNodeUnread = "OwnNodeUnread"
 )
 
+// conditionPaused is the TalosOperation condition that says why it is paused.
+const conditionPaused = "Paused"
+
 // pausedWith reports an operation the controller paused for reason, with no failed step behind it: a
 // pause that lifts itself never carries a failureReason.
 func pausedWith(o *ichorv1alpha1.TalosOperation, reason string) bool {
-	c := apimeta.FindStatusCondition(o.Status.Conditions, "Paused")
+	c := apimeta.FindStatusCondition(o.Status.Conditions, conditionPaused)
 
 	return o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Status.FailureReason == "" &&
 		c != nil && c.Reason == reason
@@ -1006,7 +1015,7 @@ func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alp
 
 			return fmt.Sprintf("operation %q (%s) on this cluster waits for the control-plane count to be odd again (%s); "+
 				"it resumes by itself then. Remove or approve a control plane to end the replacement",
-				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, "Paused").Message), nil
+				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, conditionPaused).Message), nil
 		}
 
 		// The controller lifts this pause itself once the machine is named (ownNodeUnread), and setPhase has already
@@ -1014,7 +1023,13 @@ func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alp
 		if pausedWith(o, reasonOperationOwnNodeUnread) {
 			return fmt.Sprintf("operation %q (%s) on this cluster is paused (%s); it resumes by itself when that clears, "+
 				"so there is nothing to resume. Or delete it with 'ichor delete operation %s'",
-				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, "Paused").Message, o.Name), nil
+				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, conditionPaused).Message, o.Name), nil
+		}
+
+		if pausedWith(o, ichorv1alpha1.OperationAwaitingApprovalReason) {
+			return fmt.Sprintf("operation %q (%s) on this cluster is waiting for approval; "+
+				"approve it with 'ichor approve operation %s', or delete it with 'ichor delete operation %s'",
+				o.Name, o.Spec.Kind, o.Name, o.Name), nil
 		}
 
 		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused {

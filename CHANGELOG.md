@@ -596,6 +596,13 @@ command does. Each item is described where it is listed below.
   `init` stopping on `AlreadyExists`.
 
 ### Operations
+
+- **`ichor approve operation` starts an operation that waits for approval.** An operation
+  that its creator marked approval-gated (`ichor.maesh.dev/awaits-approval`), such as the upgrade a storage preset creates, and that has run no step, has
+  the Paused reason `AwaitingApproval` and the message "waiting for approval … ichor
+  approve operation NAME". The command clears `spec.paused` and refuses any other
+  operation, naming `ichor resume operation`, which still works on these too. The UI
+  shows Approve instead of Resume.
 - **An operation whose step failed on a network or API blip is retried by the
   controller.** A Talos, Kubernetes, config or node operation that paused because
   a node or the API was briefly unreachable (`etcdserver: request timed out`, a
@@ -795,8 +802,8 @@ command does. Each item is described where it is listed below.
   at Image Factory, writes its ID to `spec.schematic.id` through the new
   ServiceAccount `ichor-storage-extensions` (which holds `patch` on `talosclusters`
   only; the controller still writes no spec itself), and creates a Talos upgrade
-  operation that is paused: nothing reboots until you resume it (`ichor resume
-  operation <name>`, or Resume in the UI). Until the nodes carry the extensions,
+  operation that is paused: nothing reboots until you approve it (`ichor approve
+  operation <name>`, or Approve in the UI). Until the nodes carry the extensions,
   `Ready` is False with reason `ExtensionsMissing`, naming the extensions and the
   operation. A cluster whose `spec.schematic.id` is a custom schematic is left
   alone: `Ready` is False with reason `SchematicNotMergeable` and says what to build

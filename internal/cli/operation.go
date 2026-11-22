@@ -123,6 +123,41 @@ func runSetPaused(ctx context.Context, c *apiClients, out, errw io.Writer, name 
 	return printAPI(out, resp.Msg, renderOperationPaused)
 }
 
+// awaitingApproval is true for an operation the controller marked as paused with no step run, which `ichor approve
+// operation` starts. The mark is the Paused condition's reason, so any approval-gated operation carries it.
+func awaitingApproval(op *pb.Operation) bool {
+	return op.GetPhase() == condPaused && op.GetFailureReason() == "" && slices.ContainsFunc(op.GetConditions(), func(c *pb.Condition) bool {
+		return c.GetType() == condPaused && c.GetReason() == ichorv1alpha1.OperationAwaitingApprovalReason
+	})
+}
+
+// runApproveOperation clears spec.paused of an operation waiting for approval, the same write as resume, and refuses
+// any other: resuming a failed one runs its failed step again, which an approval must never do by accident.
+func runApproveOperation(ctx context.Context, c *apiClients, out, errw io.Writer, name string) error {
+	resp, err := c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: objectRef(apiOpts.Namespace, name)}))
+	if err != nil {
+		return err
+	}
+
+	if !awaitingApproval(resp.Msg.GetOperation()) {
+		return fmt.Errorf("operation %s is not waiting for approval; to continue a failed operation or one a person paused, run `ichor resume operation %[1]s`", name)
+	}
+
+	return runSetPaused(ctx, c, out, errw, name, false)
+}
+
+var approveOperationCmd = &cobra.Command{
+	Use:     useOperationName,
+	Short:   "Start an operation that waits for approval; an upgrade reboots each node in turn",
+	Example: "  ichor approve operation storage-extensions-3f9a1c",
+	Args:    cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runApproveOperation(ctx, c, cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
+		})
+	},
+}
+
 var pauseOperationCmd = newPauseCmd("Stop the operation from advancing any further node (nothing is undone; the cluster lock is released while it waits, and a resume takes it again, or waits if another operation holds it)",
 	"  ichor pause operation upgrade-talos-x7k2p", true)
 var resumeOperationCmd = newPauseCmd("Let a paused operation continue; one paused by a failed step runs that step again, so fix the cause first",
@@ -491,7 +526,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 }
 
 func init() {
-	for _, c := range []*cobra.Command{getOperationsCmd, describeOperationCmd, pauseOperationCmd, resumeOperationCmd, deleteOperationCmd} {
+	for _, c := range []*cobra.Command{getOperationsCmd, describeOperationCmd, pauseOperationCmd, resumeOperationCmd, approveOperationCmd, deleteOperationCmd} {
 		addAPIFlags(c)
 	}
 
@@ -499,8 +534,9 @@ func init() {
 	describeCmd.AddCommand(describeOperationCmd)
 	pauseCmd.AddCommand(pauseOperationCmd)
 	resumeCmd.AddCommand(resumeOperationCmd)
+	approveCmd.AddCommand(approveOperationCmd)
 	deleteCmd.AddCommand(deleteOperationCmd)
 	getOperationsCmd.Flags().StringVar(&operationClusterFlag, "cluster", "", "only the operations of this cluster")
 	describeOperationCmd.Flags().BoolVarP(&operationOpts.Watch, "watch", "w", false, "keep polling and print progress until the operation finishes")
-	markWrites(pauseOperationCmd, resumeOperationCmd, deleteOperationCmd)
+	markWrites(pauseOperationCmd, resumeOperationCmd, approveOperationCmd, deleteOperationCmd)
 }

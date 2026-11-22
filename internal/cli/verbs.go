@@ -195,7 +195,7 @@ var approveCmd = &cobra.Command{
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
 	Annotations: groupingAnnotations(),
-	Short:       "Approve a pending node so the controller starts configuring it",
+	Short:       "Approve a pending node, or an operation that waits for approval",
 	Example:     `  ichor approve node 3f1c2a --role worker`,
 }
 

@@ -236,7 +236,9 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// entered, so the pause is decided here, before acquireDisruptiveLock, which would take the lock
 	// back and renew it on every pass.
 	if op.Spec.Paused {
-		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationPaused, pausedWhy(&op))
+		reason, why := pausedWhy(&op)
+
+		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reason, why)
 	}
 
 	// A step already failed: stay paused until a retry runs it again. A person's retry request does
@@ -802,7 +804,7 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	// control-plane count, a shutdown or a rotation under way) frees the cluster lock, so a machine that is trying to join
 	// or the removal that ends a transition is not blocked by an operation nobody is working on: an earlier reconcile may
 	// have taken the lease, and a pause does not renew it. Its resume takes the lock again (acquireDisruptiveLock).
-	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused ||
+	if phase == ichorv1alpha1.TalosOperationPhasePaused && (isStepFailure(reason) || reason == reasonOperationPaused || reason == ichorv1alpha1.OperationAwaitingApprovalReason ||
 		reason == reasonOperationNoExecutor || reason == reasonOperationOwnNodeUnread || reason == reasonOperationTransitioning ||
 		reason == reasonOperationShuttingDown || reason == reasonOperationCARotating || reason == reasonOperationKeyRotating) {
 		return r.releaseLock(ctx, op)
@@ -811,15 +813,23 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	return nil
 }
 
-// pausedWhy is the message of the pause a person set: for the upgrade a storage preset created, which starts
-// paused, it is the approval it waits for (ADR 0173).
-func pausedWhy(op *ichorv1alpha1.TalosOperation) string {
-	if op.Annotations[ichorv1alpha1.OperationStorageExtensionsAnnotation] != "" && len(op.Status.Machines) == 0 {
-		return "waiting for approval: it adds the system extensions a storage preset needs and reboots every node; " +
-			"ichor resume operation " + op.Name
-	}
+// pausedWhy is the reason and message of a pause spec.paused asked for. An operation its creator marked approval-gated
+// (OperationAwaitsApprovalAnnotation) that has run no step waits for a person to approve it (ADR 0173): a storage
+// preset's upgrade starts that way. A pause without the mark is a person's, and a resume lifts it.
+func pausedWhy(op *ichorv1alpha1.TalosOperation) (reason, message string) {
+	s := &op.Status
+	started := len(s.Machines) > 0 || s.FailureReason != "" || s.Node != nil || s.EtcdRestore != nil || s.Kubernetes != nil ||
+		s.CARotation != nil || s.KeyRotation != nil
 
-	return "spec.paused is true"
+	switch {
+	case started || op.Annotations[ichorv1alpha1.OperationAwaitsApprovalAnnotation] != ichorv1alpha1.OperationAwaitsApproval:
+		return reasonOperationPaused, "spec.paused is true"
+	case op.Annotations[ichorv1alpha1.OperationStorageExtensionsAnnotation] != "":
+		return ichorv1alpha1.OperationAwaitingApprovalReason, "waiting for approval: it adds the system extensions a storage preset needs and reboots every node; " +
+			"ichor approve operation " + op.Name
+	default:
+		return ichorv1alpha1.OperationAwaitingApprovalReason, "waiting for approval: it has not started; ichor approve operation " + op.Name
+	}
 }
 
 // clearWaitClocks removes conditionTalosUpgradeWaiting from the machines of a Talos operation that is pausing, whatever

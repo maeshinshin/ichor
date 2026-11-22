@@ -63,5 +63,5 @@ ichor approve node NAME --role controlplane|worker [flags]
 
 ### SEE ALSO
 
-* [ichor approve](ichor_approve.md)	 - Approve a pending node so the controller starts configuring it
+* [ichor approve](ichor_approve.md)	 - Approve a pending node, or an operation that waits for approval
 

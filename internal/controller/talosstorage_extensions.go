@@ -184,6 +184,7 @@ func (r *TalosStorageReconciler) ensureExtensionsOperation(ctx context.Context, 
 	op.Annotations = map[string]string{
 		ichorv1alpha1.OperationStorageExtensionsAnnotation: id,
 		ichorv1alpha1.OperationStartedByAnnotation:         ichorv1alpha1.StorageExtensionsStarter,
+		ichorv1alpha1.OperationAwaitsApprovalAnnotation:    ichorv1alpha1.OperationAwaitsApproval,
 	}
 
 	err := r.Create(ctx, op)
@@ -212,5 +213,5 @@ func (r *TalosStorageReconciler) ensureExtensionsOperation(ctx context.Context, 
 }
 
 func awaitingApproval(op *ichorv1alpha1.TalosOperation) string {
-	return fmt.Sprintf("(operation %s) is waiting for approval: ichor resume operation %s", op.Name, op.Name)
+	return fmt.Sprintf("(operation %s) is waiting for approval: ichor approve operation %s", op.Name, op.Name)
 }

@@ -303,13 +303,21 @@ const (
 
 // What a storage preset's extension handling writes (ADR 0173). The controller registers a schematic with the
 // extensions the preset needs, writes its ID to spec.schematic.id as StorageExtensionsServiceAccount, and creates
-// a paused talos operation carrying OperationStorageExtensionsAnnotation, which a person resumes to approve.
+// a paused talos operation carrying OperationStorageExtensionsAnnotation, which a person approves.
 const (
 	// StorageExtensionsServiceAccount is the ServiceAccount, in the controller's namespace, that writes
 	// spec.schematic.id and nothing else. It holds patch on talosclusters only.
 	StorageExtensionsServiceAccount = "ichor-storage-extensions"
 	// OperationStorageExtensionsAnnotation holds the schematic ID an operation applies; one operation per ID.
 	OperationStorageExtensionsAnnotation = "ichor.maesh.dev/storage-extensions"
+	// OperationAwaitsApprovalAnnotation, set to "true" by whoever creates an operation paused so that a person starts it,
+	// marks it approval-gated. An operation paused without it was paused by a person, who resumes it.
+	OperationAwaitsApprovalAnnotation = "ichor.maesh.dev/awaits-approval"
+	// OperationAwaitsApproval is the annotation's value.
+	OperationAwaitsApproval = "true"
+	// OperationAwaitingApprovalReason is the reason of the Paused condition of an approval-gated operation that is paused
+	// and has run no step: it waits for a person to approve it (ichor approve operation), which clears spec.paused.
+	OperationAwaitingApprovalReason = "AwaitingApproval"
 	// StorageExtensionsStarter is the started-by annotation of such an operation.
 	StorageExtensionsStarter = "ichor-storage"
 )

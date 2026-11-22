@@ -69,7 +69,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.
 
 #### Node and Cluster Lifecycle Commands
 
-* [ichor approve](ichor_approve.md)	 - Approve a pending node so the controller starts configuring it
+* [ichor approve](ichor_approve.md)	 - Approve a pending node, or an operation that waits for approval
 * [ichor reboot](ichor_reboot.md)	 - Reboot a node gracefully
 * [ichor reclaim](ichor_reclaim.md)	 - Reset a configured Talos node of another cluster back to maintenance mode
 * [ichor reject](ichor_reject.md)	 - Reject a pending node

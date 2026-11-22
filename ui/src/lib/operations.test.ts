@@ -6,6 +6,7 @@ import {
   confirmMatches,
   kubernetesStageProgress,
   kindNeedsTypedName,
+  awaitingApproval,
   operationState,
   pauseAction,
   planCounts,
@@ -127,4 +128,13 @@ test('a pause whose reason is OwnNodeUnread is blocked: not resumable, still pol
   assert.equal(operationState('Paused', 'boom', own), 'failed')
   assert.equal(pauseAction(false, 'blocked'), null)
   assert.ok((pollIntervalMs('blocked') ?? 0) > 3000)
+})
+
+test('an operation waits for approval only while paused with the AwaitingApproval reason and no failure', () => {
+  const waiting = [{ type: 'Paused', reason: 'AwaitingApproval' }]
+  assert.equal(awaitingApproval('Paused', '', waiting), true)
+  assert.equal(awaitingApproval('Paused', 'boom', waiting), false)
+  assert.equal(awaitingApproval('Paused', '', [{ type: 'Paused', reason: 'OperatorPaused' }]), false)
+  assert.equal(awaitingApproval('InProgress', '', waiting), false)
+  assert.equal(awaitingApproval('Paused', ''), false)
 })

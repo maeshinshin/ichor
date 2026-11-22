@@ -26,6 +26,7 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -971,5 +972,60 @@ func TestPlanConfigSaysWhenItCouldNotTellWhereTheControllerRuns(t *testing.T) {
 
 	if w := res.Msg.GetWarning(); !strings.Contains(w, "could not determine which machine runs Ichor's controller") || !strings.Contains(w, "forbidden") {
 		t.Fatalf("warning = %q", w)
+	}
+}
+
+func awaitingApprovalOp() *ichorv1alpha1.TalosOperation {
+	return &ichorv1alpha1.TalosOperation{
+		Name: "storage-extensions-x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos, Paused: true},
+		Status: ichorv1alpha1.TalosOperationStatus{
+			Phase: ichorv1alpha1.TalosOperationPhasePaused,
+			Conditions: []metav1.Condition{{
+				Type: conditionPaused, Status: metav1.ConditionTrue, Reason: ichorv1alpha1.OperationAwaitingApprovalReason, Message: "waiting for approval",
+			}},
+		},
+	}
+}
+
+func TestAnOperationWaitingForApprovalIsApprovedThroughTheResumeRPCAndAuditedAsAnApproval(t *testing.T) {
+	srv, k8s := opServer(t, append(opObjects(), awaitingApprovalOp())...)
+	ctx := context.Background()
+
+	resp, err := srv.SetOperationPaused(ctx, connect.NewRequest(&pb.SetOperationPausedRequest{Operation: objectRef(opNS, "storage-extensions-x")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := resp.Msg.GetAudit().GetAction(); got != "approve" {
+		t.Errorf("audit action = %q, want approve", got)
+	}
+
+	var got ichorv1alpha1.TalosOperation
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "storage-extensions-x"}, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Spec.Paused {
+		t.Error("spec.paused is still true")
+	}
+}
+
+func TestAnOperationWaitingForApprovalBlocksANewOneAndNamesApprove(t *testing.T) {
+	srv, k8s := opServer(t, append(opObjects(), awaitingApprovalOp())...)
+	ctx := context.Background()
+
+	cl := &ichorv1alpha1.TalosCluster{}
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: opCluster}, cl); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := srv.unfinishedOperation(ctx, cl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(got, "ichor approve operation storage-extensions-x") || strings.Contains(got, "ichor resume operation") {
+		t.Errorf("unfinishedOperation = %q, want the approve hint", got)
 	}
 }

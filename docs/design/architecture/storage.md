@@ -33,8 +33,8 @@ an upgrade even when the version does not move. Ichor does the first part (ADR 0
 it registers a schematic with the preset's extensions at Image Factory (`spec.imageFactoryURL` of the cluster, `https://factory.talos.dev` by default;
 the controller needs to reach it over https), writes its ID to `spec.schematic.id`
 through the ServiceAccount `ichor-storage-extensions`, and creates a Talos upgrade
-operation that is paused. Nothing reboots until a person resumes it
-(`ichor resume operation <name>`, or Resume in the UI). It does this only over an
+operation that is paused. Nothing reboots until a person approves it
+(`ichor approve operation <name>`, or Approve in the UI). It does this only over an
 unset or stock schematic: a schematic Ichor cannot read is never changed, and
 `Ready` says which extensions to build into it (reason `SchematicNotMergeable`).
 

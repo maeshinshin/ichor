@@ -24,7 +24,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
 import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
-import { caStageProgress, keyStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
+import { awaitingApproval, caStageProgress, keyStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
@@ -212,7 +212,7 @@ export function OperationDetail({ name }: { name: string }) {
             </AlertDescription>
           </Alert>
         )}
-        {state === 'paused' && op.startedBy === 'ichor-storage' && !op.failureReason && !op.machines.length && (
+        {awaitingApproval(op.phase, op.failureReason, op.conditions) && (
           <Alert>
             <InfoIcon />
             <AlertTitle>{t('ops.awaitingApproval')}</AlertTitle>

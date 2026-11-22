@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -420,5 +421,67 @@ func TestInProcessOperationIsStartedByTheCallersName(t *testing.T) {
 func TestPauseOperationHelpSaysTheLockIsReleased(t *testing.T) {
 	if s := pauseOperationCmd.Short; !strings.Contains(s, "lock is released") || strings.Contains(s, "stays held") {
 		t.Errorf("pause operation help = %q", s)
+	}
+}
+
+// waitingOpFixture is an operation that never ran: paused, no machine, the Paused condition says it waits for approval.
+func waitingOpFixture() *ichorv1alpha1.TalosOperation {
+	op := watchOpFixture(condPaused, "")
+	op.Spec.Paused, op.Status.Machines = true, nil
+	op.Status.Conditions = []metav1.Condition{{
+		Type: "Paused", Status: metav1.ConditionTrue, Reason: ichorv1alpha1.OperationAwaitingApprovalReason, Message: "waiting for approval",
+	}}
+
+	return op
+}
+
+func TestApproveOperationClearsThePauseOfAnOperationWaitingForApproval(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	c, k8s := watchClients(t, waitingOpFixture(), opTestObjects()...)
+
+	var out, errw bytes.Buffer
+
+	if err := runApproveOperation(context.Background(), c, &out, &errw, "x"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := opTestOps(t, k8s)[0]; got.Spec.Paused {
+		t.Fatalf("spec.paused = true after approve")
+	}
+
+	if strings.Contains(out.String(), "resumed") {
+		t.Errorf("approve printed %q, which names a resume", out.String())
+	}
+}
+
+func TestApproveOperationRefusesAnOperationThatIsNotWaitingForApproval(t *testing.T) {
+	c, k8s := failedOpClients(t)
+
+	err := runApproveOperation(context.Background(), c, &bytes.Buffer{}, &bytes.Buffer{}, "x")
+	if err == nil || !strings.Contains(err.Error(), "ichor resume operation x") {
+		t.Fatalf("want a refusal naming `ichor resume operation x`, got %v", err)
+	}
+
+	if ann := opTestOps(t, k8s)[0].Annotations[ichorv1alpha1.OperationRetryAnnotation]; ann != "" {
+		t.Errorf("a refused approve wrote the retry annotation %q", ann)
+	}
+}
+
+func TestApproveOperationRefusesAnOperationAPersonPaused(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	op := waitingOpFixture()
+	op.Status.Conditions[0].Reason = "OperatorPaused"
+
+	c, k8s := watchClients(t, op, opTestObjects()...)
+
+	err := runApproveOperation(context.Background(), c, &bytes.Buffer{}, &bytes.Buffer{}, "x")
+	if err == nil || !strings.Contains(err.Error(), "ichor resume operation x") {
+		t.Fatalf("want a refusal naming `ichor resume operation x`, got %v", err)
+	}
+
+	if !opTestOps(t, k8s)[0].Spec.Paused {
+		t.Error("a refused approve cleared spec.paused")
 	}
 }

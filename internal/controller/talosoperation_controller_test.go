@@ -323,6 +323,23 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(held).To(BeFalse(), "a paused operation waits for a person and must not hold the cluster lock")
 	})
 
+	It("pauses with OperatorPaused, not AwaitingApproval, when the approval mark is set but a step already ran", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "pm-cp1")
+		op := newOpTestOperation(cluster.Name)
+		op.Spec.Paused = true
+		op.Annotations = map[string]string{ichorv1alpha1.OperationAwaitsApprovalAnnotation: ichorv1alpha1.OperationAwaitsApproval}
+		Expect(k8sClient.Update(ctx, op)).To(Succeed())
+
+		op.Status.Machines = []ichorv1alpha1.TalosOperationMachineStatus{{Name: "pm-cp1", Phase: ichorv1alpha1.TalosOperationMachinePhaseCompleted}}
+		Expect(k8sClient.Status().Update(ctx, op)).To(Succeed())
+
+		r, _ := newOpTestReconciler(nil)
+
+		mustReconcileOperation(r, op)
+		expectPausedBecause(fetchOperation(op), reasonOperationPaused)
+	})
+
 	It("releases the cluster lock when a step failure pauses the operation", func() {
 		cluster := newOpTestCluster()
 		cp := newOpTestMachine(cluster.Name, "controlplane", "release-cp1")

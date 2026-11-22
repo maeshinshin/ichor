@@ -62,6 +62,12 @@ export function pauseAction(paused: boolean, state: OpState): 'pause' | 'resume'
   return paused || state === 'failed' ? 'resume' : 'pause'
 }
 
+// awaitingApproval is true for an operation that is paused and has run no step: the controller marks it with the
+// Paused condition's reason AwaitingApproval, and a person approves it instead of resuming it.
+export function awaitingApproval(phase: string, failureReason: string, conditions: readonly { type: string; reason: string }[] = []): boolean {
+  return phase === 'Paused' && failureReason === '' && conditions.some((c) => c.type === 'Paused' && c.reason === 'AwaitingApproval')
+}
+
 export type PlanStep = { step: number; role: string; names: string[] }
 
 // planSteps groups the plan's machines by step, in order. Machines sharing a

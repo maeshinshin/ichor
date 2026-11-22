@@ -518,7 +518,9 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(pausedMessage(got)).To(ContainSubstring("waiting for approval"))
-		Expect(pausedMessage(got)).To(ContainSubstring("ichor resume operation " + op.Name))
+		Expect(pausedMessage(got)).To(ContainSubstring("ichor approve operation " + op.Name))
+		Expect(pausedMessage(got)).NotTo(ContainSubstring("resume"))
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused).Reason).To(Equal(ichorv1alpha1.OperationAwaitingApprovalReason))
 	})
 
 	It("registers the schematic at the cluster's own Image Factory", func() {

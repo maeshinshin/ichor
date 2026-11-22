@@ -6,10 +6,10 @@ import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb
 import { useAction } from '@/hooks/use-action'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
-import { operationState, pauseAction } from '@/lib/operations'
+import { awaitingApproval, operationState, pauseAction } from '@/lib/operations'
 import { t } from '@/lib/i18n'
 
-// OperationControls: pause or resume (resuming a failed operation runs the failed step again), and delete. Deleting asks first; pausing
+// OperationControls: pause, resume or (for an operation that never ran) approve (resuming a failed operation runs the failed step again), and delete. Deleting asks first; pausing
 // changes nothing already done and can be undone, so it does not.
 export function OperationControls({
   op,
@@ -27,6 +27,7 @@ export function OperationControls({
   const [open, setOpen] = useState(false)
   const [resumeOpen, setResumeOpen] = useState(false)
   const state = operationState(op.phase, op.failureReason, op.conditions)
+  const waiting = awaitingApproval(op.phase, op.failureReason, op.conditions)
   // A restore that has started is half done; the server refuses to pause it, so only a failed one gets a button (Resume).
   const action = op.kind === OperationKind.ETCD_RESTORE && state !== 'failed' ? null : pauseAction(op.paused, state)
 
@@ -37,7 +38,7 @@ export function OperationControls({
       const res = await operationClient.setOperationPaused({ operation, paused })
       if (res.operation) onChanged(res.operation)
       setResumeOpen(false)
-      notifyDone(t(paused ? 'toast.opPaused' : 'toast.opResumed'))
+      notifyDone(t(paused ? 'toast.opPaused' : waiting ? 'toast.opApproved' : 'toast.opResumed'))
     })
   }
 
@@ -72,8 +73,8 @@ export function OperationControls({
           </ConfirmDialog>
         )}
         {action && state !== 'failed' && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => setPaused(action === 'pause')}>
-            {busy ? t('ops.pausing') : t(action === 'pause' ? 'ops.pause' : 'ops.resume')}
+          <Button size="sm" variant={waiting ? 'default' : 'outline'} disabled={busy} onClick={() => setPaused(action === 'pause')}>
+            {busy ? t('ops.pausing') : t(waiting ? 'ops.approve' : action === 'pause' ? 'ops.pause' : 'ops.resume')}
           </Button>
         )}
         {showDelete && (
@@ -93,6 +94,7 @@ export function OperationControls({
         </ConfirmDialog>
         )}
       </div>
+      {waiting && <p class="text-sm text-muted-foreground">{t('ops.approveHelp')}</p>}
       {error && !open && <ErrorAlert {...error} />}
     </div>
   )

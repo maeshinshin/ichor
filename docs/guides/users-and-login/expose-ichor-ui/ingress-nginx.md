@@ -4,9 +4,11 @@ sidebar_order: 1
 
 # Ingress-NGINX (re-encrypt to the backend)
 
-The Ingress must be in `ichor-system`, because it names the Service. Annotations
-(Ingress-NGINX annotations reference, "Backend Protocol" and "Backend Certificate
-Authentication"):
+![How Ingress-NGINX reaches ichor-ui. The browser connects to the Ingress with the certificate from the Ingress's tls Secret. The Ingress re-encrypts to ichor-ui-service on port 8443, with backend-protocol HTTPS, proxy-ssl-verify on, the CA from ichor-system/ichor-ui-ca and the name ichor-ui-service.ichor-system.svc.](../../../images/users-expose-ingress-nginx.light.drawio.svg)
+
+*NGINX terminates the browser's TLS and verifies ichor-ui against `ichor-ui-ca`.*
+
+The Ingress must be in `ichor-system`, because it names the Service.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -38,22 +40,13 @@ spec:
                   name: https
 ```
 
-- `backend-protocol: "HTTPS"` makes NGINX speak TLS to the pod.
-- `proxy-ssl-verify` is off by default; without it NGINX does not check the
-  pod's certificate.
-- `proxy-ssl-secret` takes `namespace/secretName`. The reference docs describe a
-  Secret with `tls.crt` and `tls.key` (a client certificate, which ichor-ui does
-  not ask for) that "should also contain" `ca.crt`. A Secret with only `ca.crt`,
-  which is what `ichor-ui-ca` is, is accepted by Ingress-NGINX (chart
-  4.15.1, controller 1.15.1): the request reaches ichor-ui and nginx uses the CA
-  as `proxy_ssl_trusted_certificate`. Pointing the annotation at a Secret that
-  holds another CA gives 502 (`upstream SSL certificate verify error`).
-- `proxy-ssl-name` overrides the name NGINX verifies; `proxy-ssl-server-name`
-  sends it as SNI. Use a name in the certificate. It is required: without it
-  NGINX verifies the literal name `upstream_balancer` and every request is a
-  502. A name that is not in the certificate is a 502 too (`upstream SSL
-  certificate does not match`). Ingress-NGINX takes up to about half a minute
-  to reload after an annotation change, so wait before you read a result.
-- The public certificate for browsers is the Ingress's own `tls` Secret.
-- If you supplied your own certificate, point `proxy-ssl-secret` at a Secret that
-  holds its CA as `ca.crt`.
+| Annotation | Why |
+|---|---|
+| `backend-protocol: "HTTPS"` | NGINX speaks TLS to the pod |
+| `proxy-ssl-verify` | Off by default; without it NGINX does not check the pod's certificate |
+| `proxy-ssl-secret` | `namespace/secretName`. A Secret with only `ca.crt`, which `ichor-ui-ca` is, works (chart 4.15.1, controller 1.15.1). Another CA gives 502 (`upstream SSL certificate verify error`) |
+| `proxy-ssl-name`, `proxy-ssl-server-name` | Required. The name NGINX verifies, sent as SNI; it must be in the certificate. Without it NGINX verifies `upstream_balancer`, and a wrong name gives 502 (`certificate does not match`) |
+
+- The browsers' certificate is the Ingress's own `tls` Secret.
+- With your own certificate, point `proxy-ssl-secret` at a Secret holding its CA as `ca.crt`.
+- NGINX takes up to about half a minute to reload after an annotation change: wait before reading a result.

@@ -82,6 +82,17 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 		members = []ClusterMember{{Addresses: []string{deps.Seed}}}
 	}
 
+	var nodes []corev1.Node
+
+	if deps.Target != nil {
+		var list corev1.NodeList
+		if err = deps.Target.List(ctx, &list); err != nil {
+			return nil, nil, fmt.Errorf("adopt: listing the cluster's Nodes: %w", err)
+		}
+
+		nodes = list.Items
+	}
+
 	machines := make([]*ichorv1alpha1.TalosMachine, 0, len(members))
 
 	for _, mem := range members {
@@ -89,13 +100,7 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 			return nil, nil, fmt.Errorf("adopt: cluster member %q reports no address", mem.Hostname)
 		}
 
-		// A node lists every address it holds, a Cilium cluster-pool cilium_host address among them (10.0.0.0/8 sorts
-		// first); the one adopt reached the cluster through is known to answer.
-		// shortcut: the other members keep their first address, drop when discovery can tell a pod address from a node's.
-		addr := mem.Addresses[0]
-		if slices.Contains(mem.Addresses, deps.Seed) {
-			addr = deps.Seed
-		}
+		addr := memberAddress(mem, deps.Seed, nodes)
 
 		id, err := deps.ReadIdentity(ctx, addr)
 		if err != nil {
@@ -119,6 +124,29 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 	}
 
 	return machines, members, nil
+}
+
+// memberAddress picks the address adopt dials and records for a member. A node lists every address it holds, a Cilium
+// cluster-pool cilium_host address among them (10.0.0.0/8 sorts first), so the seed adopt reached the cluster through
+// wins, then the Kubernetes Node's own InternalIP, which kubelet reports and no CNI adds to.
+func memberAddress(mem ClusterMember, seed string, nodes []corev1.Node) string {
+	if slices.Contains(mem.Addresses, seed) {
+		return seed
+	}
+
+	for i := range nodes {
+		if !memberIsNode(mem, &nodes[i]) {
+			continue
+		}
+
+		for _, a := range nodes[i].Status.Addresses {
+			if a.Type == corev1.NodeInternalIP && slices.Contains(mem.Addresses, a.Address) {
+				return a.Address
+			}
+		}
+	}
+
+	return mem.Addresses[0]
 }
 
 // checkMembership refuses an adoption whose discovered membership and the workload cluster's

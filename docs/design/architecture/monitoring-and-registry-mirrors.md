@@ -5,16 +5,17 @@ sidebar_order: 19
 
 # Monitoring and registry mirrors
 
-Ichor does not install a monitoring stack. It can expose the control-plane
-metrics that Talos binds locally by default (controller-manager, scheduler,
-etcd) and restrict scraping to a CIDR with Talos's ingress firewall. The
-controller and UI backend export Prometheus metrics, and ServiceMonitors,
-alert rules and Grafana dashboards ship with the chart as an option. The
-monitoring stack itself is a documented set of Helm values, or nothing — the
-user's choice.
+![Talos metrics go through a CIDR-limited firewall to your Prometheus; the chart can ship ServiceMonitors; registry mirrors reach every node through the system layer.](../../images/arch-monitoring-and-registry-mirrors.light.drawio.svg)
 
-Registry mirrors are optional and off by default: they are pushed to every
-node through the system layer, alongside an override for the installer image
-source and a self-hosted Image Factory URL. They serve pull-through caches and
-private registries, not air-gapped installs. Ichor does not check
-that a mirror is reachable before an upgrade.
+*Ichor exposes metrics and pushes mirrors; the monitoring stack is yours.*
+
+**Monitoring.** Ichor installs no monitoring stack.
+
+- It can expose the control-plane metrics Talos binds locally (controller-manager, scheduler, etcd) and restrict scraping to a CIDR with Talos's ingress firewall.
+- The controller and UI backend export Prometheus metrics. ServiceMonitors, alert rules and Grafana dashboards are an optional part of the chart.
+
+**Registry mirrors** are optional and off by default.
+
+- `spec.registries` is pushed to every node through the system layer. It serves pull-through caches and private registries, not air-gapped installs.
+- `spec.imageFactoryURL` names a self-hosted Image Factory: an https URL with a host, an optional port and no path. Unset means `https://factory.talos.dev`.
+- Ichor does not check that a mirror is reachable before an upgrade.

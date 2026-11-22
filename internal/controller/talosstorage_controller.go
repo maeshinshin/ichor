@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -390,13 +391,28 @@ func (r *TalosStorageReconciler) systemCondition(
 	var setting unstructured.Unstructured
 	setting.SetGroupVersionKind(longhornSettingGVK)
 
-	err = r.APIReader.Get(ctx, types.NamespacedName{Namespace: defaultLonghornNamespace, Name: longhornCreateDefaultDiskLabeledNodes}, &setting)
+	ns, err := discoverLonghornNamespace(ctx, r.APIReader)
+	switch {
+	case errors.Is(err, errMultipleLonghorn):
+		cond.Status, cond.Reason, cond.Message = metav1.ConditionFalse, reasonStorageSystemMismatch, err.Error()
+
+		return cond, nil
+	case err != nil:
+		return cond, err
+	case ns == "":
+		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageSystemAbsent
+		cond.Message = "the storage system is not installed (Longhorn has no Node object in any namespace)"
+
+		return cond, nil
+	}
+
+	err = r.APIReader.Get(ctx, types.NamespacedName{Namespace: ns, Name: longhornCreateDefaultDiskLabeledNodes}, &setting)
 
 	switch {
 	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
 		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageSystemAbsent
 		cond.Message = fmt.Sprintf("the storage system is not installed (no %s setting in namespace %q)",
-			longhornCreateDefaultDiskLabeledNodes, defaultLonghornNamespace)
+			longhornCreateDefaultDiskLabeledNodes, ns)
 
 		return cond, nil
 	case err != nil:

@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
@@ -46,7 +47,7 @@ const (
 // allowScheduling and evictionRequested may not both be true. updates records every accepted write.
 func longhornNodeFake(allowScheduling, evictionRequested bool, updates *[]map[string]any) client.Client {
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		"spec": map[string]any{fieldAllowScheduling: allowScheduling, fieldEvictionRequested: evictionRequested},
+		keySpec: map[string]any{fieldAllowScheduling: allowScheduling, fieldEvictionRequested: evictionRequested},
 	}}
 	obj.SetGroupVersionKind(longhornNodeGVK)
 	obj.SetNamespace(defaultLonghornNamespace)
@@ -186,5 +187,126 @@ var _ = Describe("storage evacuation refuses a drain it cannot evacuate", func()
 		_, err := evacuateMachine(ctx, k8sClient, &LonghornEvacuator{Client: newLonghornElsewhere("node-refuse1")},
 			cluster, m, "node-refuse1", "removal")
 		Expect(err).To(MatchError(ContainSubstring("refusing to evacuate node \"node-refuse1\"")))
+	})
+})
+
+// routedClient sends every Longhorn call to lh and everything else to the envtest API, so TalosStorage and the
+// Kubernetes Node resolve as in production while Longhorn's objects are whatever the test puts in lh.
+type routedClient struct {
+	client.Client
+
+	lh client.Client
+}
+
+func longhornRouted(lh client.Client) client.Client { return routedClient{Client: k8sClient, lh: lh} }
+
+func isLonghorn(obj runtime.Object) bool {
+	return obj.GetObjectKind().GroupVersionKind().Group == longhornGroup
+}
+
+func (r routedClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if isLonghorn(obj) {
+		return r.lh.Get(ctx, key, obj, opts...)
+	}
+
+	return r.Client.Get(ctx, key, obj, opts...)
+}
+
+func (r routedClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if isLonghorn(list) {
+		return r.lh.List(ctx, list, opts...)
+	}
+
+	return r.Client.List(ctx, list, opts...)
+}
+
+func (r routedClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if isLonghorn(obj) {
+		return r.lh.Update(ctx, obj, opts...)
+	}
+
+	return r.Client.Update(ctx, obj, opts...)
+}
+
+// longhornFakeIn is a Longhorn install in ns: a Node object for node and one replica still naming it.
+func longhornFakeIn(ns, node string, more ...string) client.WithWatch {
+	b := fake.NewClientBuilder().WithScheme(runtime.NewScheme())
+
+	for _, n := range append([]string{ns}, more...) {
+		nodeObj := &unstructured.Unstructured{Object: map[string]any{
+			keySpec: map[string]any{fieldAllowScheduling: true, fieldEvictionRequested: false},
+		}}
+		nodeObj.SetGroupVersionKind(longhornNodeGVK)
+		nodeObj.SetNamespace(n)
+		nodeObj.SetName(node)
+
+		replica := &unstructured.Unstructured{Object: map[string]any{keySpec: map[string]any{"nodeID": node}}}
+		replica.SetGroupVersionKind(longhornReplicaListGVK.GroupVersion().WithKind("Replica"))
+		replica.SetNamespace(n)
+		replica.SetName("replica-" + node)
+
+		b = b.WithObjects(nodeObj, replica)
+	}
+
+	return b.Build()
+}
+
+var _ = Describe("storage evacuation finds the namespace Longhorn runs in", func() {
+	setup := func(suffix string) (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, string) {
+		cluster := newOpTestCluster()
+		node := "node-ns-" + suffix
+		newTestStorageNode(node, map[string]string{testStorageLabelKey: testStorageLabelValue})
+		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
+
+		return cluster, newOpTestMachine(cluster.Name, roleControlPlane, suffix), node
+	}
+
+	It("requests the eviction in a namespace other than longhorn-system, and the drain waits for the replica", func() {
+		cluster, m, node := setup("other")
+		lh := longhornFakeIn("storage-ns", node)
+		e := &LonghornEvacuator{Client: longhornRouted(lh)}
+
+		progress, err := evacuateMachine(ctx, k8sClient, e, cluster, m, node, "removal")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(progress).To(Equal(storage.EvacuationWaiting))
+
+		var got unstructured.Unstructured
+		got.SetGroupVersionKind(longhornNodeGVK)
+		Expect(lh.Get(ctx, client.ObjectKey{Namespace: "storage-ns", Name: node}, &got)).To(Succeed())
+
+		evict, _, _ := unstructured.NestedBool(got.Object, "spec", fieldEvictionRequested)
+		Expect(evict).To(BeTrue())
+
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(m), m)).To(Succeed())
+		progress, err = evacuateMachine(ctx, k8sClient, e, cluster, m, node, "removal")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(progress).To(Equal(storage.EvacuationWaiting))
+	})
+
+	It("refuses when Longhorn runs in two namespaces, and requests no eviction", func() {
+		cluster, m, node := setup("two")
+		lh := longhornFakeIn("storage-a", node, "storage-b")
+
+		_, err := evacuateMachine(ctx, k8sClient, &LonghornEvacuator{Client: longhornRouted(lh)}, cluster, m, node, "removal")
+		Expect(err).To(MatchError(errMultipleLonghorn))
+		Expect(err).To(MatchError(ContainSubstring("storage-a, storage-b")))
+	})
+
+	It("does not drain when listing Longhorn's nodes fails", func() {
+		cluster, m, node := setup("fail")
+		boom := errors.New("boom")
+		failing := interceptor.NewClient(longhornFakeIn("storage-ns", node), interceptor.Funcs{
+			List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, o ...client.ListOption) error {
+				if l.GetObjectKind().GroupVersionKind() == longhornNodeListGVK {
+					return boom
+				}
+
+				return c.List(ctx, l, o...)
+			},
+		})
+
+		progress, err := evacuateMachine(ctx, k8sClient, &LonghornEvacuator{Client: longhornRouted(failing)}, cluster, m, node, "removal")
+		Expect(err).To(MatchError(boom))
+		Expect(progress).NotTo(Equal(storage.EvacuationDone))
 	})
 })

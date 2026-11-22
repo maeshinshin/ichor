@@ -68,8 +68,23 @@ func (f fakeSettingReader) Get(_ context.Context, key client.ObjectKey, obj clie
 	return nil
 }
 
-func (fakeSettingReader) List(context.Context, client.ObjectList, ...client.ListOption) error {
-	return fmt.Errorf("not used")
+// List answers the namespace discovery: one Longhorn Node in longhorn-system when a value is configured, none otherwise.
+func (f fakeSettingReader) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
+	if f.value == "" {
+		return nil
+	}
+
+	ul, ok := list.(*unstructured.UnstructuredList)
+	if !ok {
+		return fmt.Errorf("unexpected type %T", list)
+	}
+
+	n := unstructured.Unstructured{}
+	n.SetNamespace(defaultLonghornNamespace)
+	n.SetName("node")
+	ul.Items = []unstructured.Unstructured{n}
+
+	return nil
 }
 
 func newStorageTestMachine(clusterName string, nodeLabels map[string]string) *ichorv1alpha1.TalosMachine {

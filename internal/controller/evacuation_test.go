@@ -74,7 +74,7 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 		newTestStorageNode("node-resolve1", map[string]string{testStorageLabelKey: testStorageLabelValue})
 		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}, nil)
 
-		e := &LonghornEvacuator{Client: k8sClient}
+		e := &LonghornEvacuator{Client: longhornRouted(longhornFakeIn(defaultLonghornNamespace, "node-resolve1"))}
 		target, err := e.Resolve(ctx, cluster, "node-resolve1")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(target).NotTo(BeNil())
@@ -88,7 +88,7 @@ var _ = Describe("LonghornEvacuator.Resolve", func() {
 		newTestStorage(cluster.Name, metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}},
 			&metav1.Duration{Duration: 3 * time.Minute})
 
-		e := &LonghornEvacuator{Client: k8sClient}
+		e := &LonghornEvacuator{Client: longhornRouted(longhornFakeIn(defaultLonghornNamespace, "node-resolve2"))}
 		target, err := e.Resolve(ctx, cluster, "node-resolve2")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(target.timeout).To(Equal(3 * time.Minute))

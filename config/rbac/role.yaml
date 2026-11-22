@@ -234,6 +234,7 @@ rules:
   - nodes
   verbs:
   - get
+  - list
   - update
 - apiGroups:
   - longhorn.io

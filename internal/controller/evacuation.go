@@ -20,6 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,12 +49,8 @@ const defaultEvacuationTimeout = 10 * time.Minute
 // so tuning the etcd dial bound does not move this one (ADR 0057 gives Talos calls their own deadlines too).
 var storageCallTimeout = 15 * time.Second
 
-// defaultLonghornNamespace is Longhorn's documented default install namespace.
-//
-// shortcut: TalosStorageSpec carries no namespace field, so Longhorn's Node is read and written only here.
-// With Longhorn elsewhere, a node that replicas still name is refused (never drained with them on it), but a
-// node no replica names is treated as nothing to evacuate, and no eviction is ever requested. Add a namespace
-// field to TalosStorageSpec when a second install must be evacuated.
+// defaultLonghornNamespace is Longhorn's documented default install namespace, used only by tests; the
+// evacuation reads the namespace Longhorn runs in from the cluster (discoverLonghornNamespace).
 const defaultLonghornNamespace = "longhorn-system"
 
 // evacuationTarget is what StorageEvacuator.Resolve found for one node: the storage.EvacuationHook to
@@ -97,18 +96,58 @@ type LonghornEvacuator struct {
 	noted sync.Map
 }
 
-const longhornGroup = "longhorn.io"
+const (
+	longhornGroup   = "longhorn.io"
+	longhornVersion = "v1beta2"
+)
 
 var (
-	longhornNodeGVK        = schema.GroupVersionKind{Group: longhornGroup, Version: "v1beta2", Kind: "Node"}
-	longhornReplicaListGVK = schema.GroupVersionKind{Group: longhornGroup, Version: "v1beta2", Kind: "ReplicaList"}
+	longhornNodeGVK        = schema.GroupVersionKind{Group: longhornGroup, Version: longhornVersion, Kind: "Node"}
+	longhornReplicaListGVK = schema.GroupVersionKind{Group: longhornGroup, Version: longhornVersion, Kind: "ReplicaList"}
+	longhornNodeListGVK    = schema.GroupVersionKind{Group: longhornGroup, Version: longhornVersion, Kind: "NodeList"}
 )
+
+// errMultipleLonghorn means Longhorn Node objects exist in more than one namespace, so which install a
+// TalosStorage governs is unknowable.
+var errMultipleLonghorn = errors.New("more than one Longhorn namespace")
+
+// discoverLonghornNamespace finds the one namespace holding Longhorn's Node objects, read across all namespaces.
+// "" with a nil error means Longhorn is not installed (its CRD is absent, or it has no Node object).
+// errMultipleLonghorn names every namespace found. Any other list failure is returned as is, never as
+// "not installed", so a failing call cannot read as nothing to evacuate.
+func discoverLonghornNamespace(ctx context.Context, r client.Reader) (string, error) {
+	var list unstructured.UnstructuredList
+	list.SetGroupVersionKind(longhornNodeListGVK)
+
+	if err := r.List(ctx, &list); err != nil {
+		if apimeta.IsNoMatchError(err) {
+			return "", nil
+		}
+
+		return "", fmt.Errorf("listing Longhorn nodes to find its namespace: %w", err)
+	}
+
+	seen := map[string]struct{}{}
+	for _, item := range list.Items {
+		seen[item.GetNamespace()] = struct{}{}
+	}
+
+	switch names := slices.Sorted(maps.Keys(seen)); len(names) {
+	case 0:
+		return "", nil
+	case 1:
+		return names[0], nil
+	default:
+		return "", fmt.Errorf("%w (%s); Ichor evacuates one install, so remove the others and retry",
+			errMultipleLonghorn, strings.Join(names, ", "))
+	}
+}
 
 // Longhorn's own objects, in whichever namespace it is installed in: the verbs Begin, End and
 // ReplicasRemaining use and no more; talosstorages is read by Resolve.
 //
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
-// +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;update
+// +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;list;update
 // +kubebuilder:rbac:groups=longhorn.io,resources=replicas,verbs=list
 
 // Resolve implements StorageEvacuator. It reads only TalosStorage and the Node, so a test needs no Longhorn CRDs.
@@ -149,7 +188,17 @@ func (e *LonghornEvacuator) Resolve(
 		timeout = chosen.Spec.EvacuationTimeout.Duration
 	}
 
-	return &evacuationTarget{hook: hook, timeout: timeout, namespace: defaultLonghornNamespace}, nil
+	ns, err := discoverLonghornNamespace(ctx, e.Client)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns == "" {
+		// Not installed (or no Node object yet): nothing to evacuate unless a replica still names the node.
+		return nil, e.missingNode(ctx, node, errors.New("no Longhorn install in this cluster"))
+	}
+
+	return &evacuationTarget{hook: hook, timeout: timeout, namespace: ns}, nil
 }
 
 // Begin implements StorageEvacuator. Scheduling is disabled first, then the eviction requested, as
@@ -187,7 +236,7 @@ type nodeField struct {
 }
 
 // absent reports whether err means Longhorn has nothing to act on for this node: its CRD is not installed, or
-// it has no Node object in the namespace this evacuator writes to (e.g. longhorn-manager is crash-looping for
+// it has no Node object for the node (e.g. longhorn-manager is crash-looping for
 // want of iscsi-tools). A TalosStorage legitimately exists before Longhorn does, so absent is not a failure
 // by itself; missingNode decides whether it is nothing to evacuate.
 func absent(err error) bool {
@@ -196,7 +245,7 @@ func absent(err error) bool {
 
 // missingNode is what writeNodeEvacuation answers when absent holds. With no replica naming node there is
 // nothing to evacuate, and the first sighting per node is logged at info level. A replica that names node
-// lives where this evacuator does not write, so no eviction can be requested for it: the step is refused,
+// has no Node to evict through, so no eviction can be requested for it: the step is refused,
 // and the drain that follows never starts with that replica still on the node.
 func (e *LonghornEvacuator) missingNode(ctx context.Context, node string, cause error) error {
 	n, err := e.replicasOn(ctx, node)
@@ -206,8 +255,7 @@ func (e *LonghornEvacuator) missingNode(ctx context.Context, node string, cause 
 
 	if n > 0 {
 		return fmt.Errorf("refusing to evacuate node %q: %d Longhorn replica(s) name it, but Longhorn has no Node "+
-			"object for it in namespace %q, the only namespace this controller writes to, so eviction cannot be requested",
-			node, n, defaultLonghornNamespace)
+			"object for it, so eviction cannot be requested", node, n)
 	}
 
 	if _, seen := e.noted.LoadOrStore(node, struct{}{}); !seen {

@@ -148,10 +148,11 @@ command does. Each item is described where it is listed below.
   (Cluster, ADR 0163).
 - **Applying the CRDs yourself** with `kubectl apply` needs `--server-side`;
   they are too large for client-side apply (Typed configuration).
-- **A drain no longer goes ahead on a node that a Longhorn replica still names,
-  where Longhorn is installed outside `longhorn-system`.** Ichor does not request
-  eviction of such a replica in that install, so it has to leave the node by other
-  means first (Operations).
+- **Longhorn's namespace is found, not assumed, and two installs are refused.**
+  Ichor lists Longhorn's nodes across all namespaces. Exactly one namespace is
+  used for the eviction and for the consistency check. With none, nothing is
+  evacuated, unless a replica still names the node and then the drain is
+  refused. With more than one, the operation pauses and names them (Operations).
 - **A `TalosConfigPatch` that writes a bond in both spellings is refused, and so is a
   `BondConfig` enumeration above its table.** Apply the patch again with each bond setting
   in one spelling: `primary` and `deviceSelectors` stay in the `v1alpha1` entry, and every
@@ -612,15 +613,15 @@ command does. Each item is described where it is listed below.
   once and are never retried: refused credentials, a Talos upgrade request that
   may have reached the node, a node reset, key and CA rotations and etcd restore.
   A pause a person set is never lifted. ADR 0174.
-- **A drain is refused while a Longhorn replica still names the node, even when
-  Longhorn is installed outside `longhorn-system`.** Since v0.1.2 the evacuation
-  step found no Longhorn Node in that case and read it as nothing to evacuate. It
-  counted replicas only in `longhorn-system`, reported the node evacuated, and the
-  drain went ahead with replicas still on it. The step now counts replicas in every
-  namespace and refuses while one names the node. With none naming it, the node is
-  still nothing to evacuate. Ichor does not request eviction outside
-  `longhorn-system`, so a replica still on the node has to leave it some other way
-  before the drain goes ahead.
+- **Longhorn can run in any namespace, and the evacuation finds it.** Since v0.1.2
+  the evacuation read and wrote Longhorn only in `longhorn-system`. With Longhorn
+  elsewhere, a node that no replica named was reported evacuated, no eviction was
+  requested, and the drain went ahead. The step now lists Longhorn's nodes across
+  all namespaces and uses the one it finds, for the eviction and for the
+  `StorageSystemConsistent` check. If Longhorn runs in more than one namespace the
+  operation pauses and names them. If the list itself fails, the step fails and
+  retries as any transient failure; it is never read as nothing to evacuate. The
+  controller's role gains `list` on `nodes.longhorn.io`.
 - **A registry that cannot be read is no longer reported as an unsigned image.**
   An unreachable registry, or one that refuses the signature manifest, used to
   pause with `InstallerImageUnverified` and a message saying the image "is not

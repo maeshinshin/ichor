@@ -63,3 +63,6 @@ kodata/
 
 # The UI field search index holds Talos documentation text, which the repository does not (make ui-fieldindex).
 /ui/src/gen/fieldindex.json
+
+# built by `go build ./internal/tools/ichorgen` at the root
+/ichorgen

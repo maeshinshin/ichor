@@ -23,10 +23,8 @@ layers.
 - Kubernetes 1.34 or later. Longhorn's installation requirements (docs 1.14.0)
   say "Kubernetes >= v1.34".
 - A spare disk on each storage node, such as `/dev/vdb`.
-- Longhorn installed in the `longhorn-system` namespace, and nowhere else. The
-  namespace is fixed in the controller and no `TalosStorage` field or flag
-  changes it. With Longhorn elsewhere, a node no replica names is treated as
-  having nothing to evacuate, so a drain does not wait for its replicas.
+- Longhorn installed in one namespace. Ichor finds the namespace Longhorn runs
+  in by listing Longhorn's nodes; no field names it.
 
 ## Prepare the nodes
 
@@ -124,6 +122,15 @@ evacuating "NODE" timed out with storage replicas still remaining
 | Timeout | `TalosStorage.spec.evacuationTimeout`, default 10 minutes |
 | Replicas equal storage nodes (3 on 3) | Replicas have nowhere to go: the operation pauses |
 | Storage nodes exceed replicas (4 for 3) | Replicas move: the operation goes on |
+
+Namespace lookup, before the wait:
+
+| Lookup | Result |
+| --- | --- |
+| Longhorn in one namespace | That namespace is used for the eviction and for `StorageSystemConsistent`. |
+| Longhorn in more than one namespace | The operation pauses and names them. Remove the others. |
+| The lookup fails | The step fails and retries. It is never read as nothing to evacuate. |
+| No Longhorn | Nothing to evacuate, unless a replica still names the node: then the node is refused. |
 
 Either keep more storage nodes than the replica count, or lower the replica
 count.

@@ -26,9 +26,13 @@ export function IchorVersion() {
             <Badge variant="destructive">{t('version.unverified')}</Badge>
           </TooltipTrigger>
           <TooltipContent>
-            {unverified.digest !== '' ? t('version.unverifiedLast', { digest: unverified.digest }) : ''}
-            {unverified.digest !== '' && unverified.pending ? ' ' : ''}
-            {unverified.pending ? t('version.unverifiedNext') : ''}
+            {[
+              unverified.digest !== '' ? t('version.unverifiedLast', { digest: unverified.digest }) : '',
+              unverified.ever && unverified.digest === '' ? t('version.unverifiedEver') : '',
+              unverified.pending ? t('version.unverifiedNext') : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
           </TooltipContent>
         </Tooltip>
       )}

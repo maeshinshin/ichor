@@ -31,19 +31,31 @@ test('offers the release the controller found only when it is newer than the run
 })
 
 test('says nothing about a verified installer image, and names an unchecked one with its digest', () => {
-  const quiet = { installerVerification: 'Verified', installerDigest: 'sha256:a', installerSignatureSkip: false }
+  const quiet = { installerVerification: 'Verified', installerDigest: 'sha256:a', installerSignatureSkip: false, installerImageUnverified: false }
   assert.equal(installerUnverified(null), null)
   assert.equal(installerUnverified(quiet), null)
   assert.equal(installerUnverified({ ...quiet, installerVerification: '' }), null)
   assert.deepEqual(installerUnverified({ ...quiet, installerVerification: 'Skipped' }), {
     digest: 'sha256:a',
     pending: false,
+    ever: false,
   })
   // The spec says skip but no upgrade has run since: the next one will not check.
   assert.deepEqual(installerUnverified({ ...quiet, installerVerification: '', installerDigest: '', installerSignatureSkip: true }), {
     digest: '',
     pending: true,
+    ever: false,
   })
+})
+
+test('keeps saying an unchecked image once ran after a verified upgrade cleared the skip', () => {
+  const verified = {
+    installerVerification: 'Verified',
+    installerDigest: 'sha256:b',
+    installerSignatureSkip: false,
+    installerImageUnverified: true,
+  }
+  assert.deepEqual(installerUnverified(verified), { digest: '', pending: false, ever: true })
 })
 
 test('a page is stale only when its bundle and the backend are both versioned and differ', () => {

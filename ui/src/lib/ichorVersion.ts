@@ -38,15 +38,22 @@ export type InstallerUnverified = {
   digest: string
   // pending is true when the next upgrade will skip the check, whether or not the last one did.
   pending: boolean
+  // ever is true once any installer image ran unchecked, even if a verified upgrade has run since.
+  ever: boolean
 }
 
 export function installerUnverified(
-  info: { installerVerification: string; installerDigest: string; installerSignatureSkip: boolean } | null,
+  info: {
+    installerVerification: string
+    installerDigest: string
+    installerSignatureSkip: boolean
+    installerImageUnverified: boolean
+  } | null,
 ): InstallerUnverified | null {
   if (!info) return null
   const last = info.installerVerification === 'Skipped'
-  if (!last && !info.installerSignatureSkip) return null
-  return { digest: last ? info.installerDigest : '', pending: info.installerSignatureSkip }
+  if (!last && !info.installerSignatureSkip && !info.installerImageUnverified) return null
+  return { digest: last ? info.installerDigest : '', pending: info.installerSignatureSkip, ever: info.installerImageUnverified }
 }
 
 // uiIsStale says the page runs a bundle built from another Ichor version than the backend that answered it.

@@ -5,15 +5,13 @@ sidebar_order: 16
 
 # Configuration reconcile
 
-![The reconcile loop: base configs from the bundle, patches by layer and priority, validate, hash and compare with the node through COSI, then apply a difference. A difference needing no reboot is applied by the machine controller; a reboot-requiring one waits for a config operation; an API server restart is applied only by the config operation, one control plane at a time. COSI is then watched for state and drift.](../images/configuration-reconcile.light.drawio.svg)
+![Five reconcile steps; a difference with no reboot is applied by the machine controller, the other two classes wait for a config operation.](../images/configuration-reconcile.light.drawio.svg)
 
 *A difference is applied by the machine controller only when it needs no reboot.*
 
-1. Load the bundle from the Secret and generate role-specific base configs with the pinned version contract.
-2. Collect patches by layer and priority and apply them.
-3. Validate, hash, and compare with the node's current config via COSI.
-4. If different, apply. The mode (try, no-reboot, reboot, staged) is derived from the diff: Talos's `AUTO` is a hardcoded alias for `NO_REBOOT` and never inspects the change. A dry run goes first; it has no side effects and returns validation warnings worth surfacing.
-5. Watch COSI for state and drift. Drift handling is per cluster: warn only (default), or auto-correct non-reboot differences. A change in what the renderer emits (an Ichor upgrade, `render.Version`) is a desired-state change, not drift: an Ichor upgrade may apply configuration, and reboot-requiring changes wait for a config rollout.
+1. Generate role-specific base configs from the bundle with the pinned version contract, apply patches by layer and priority, then validate, hash and compare with the node via COSI.
+2. If different, apply. The mode (try, no-reboot, reboot, staged) is derived from the diff: Talos's `AUTO` is a hardcoded alias for `NO_REBOOT` and never inspects the change. A side-effect-free dry run goes first and returns validation warnings.
+3. Watch COSI for state and drift. Drift handling is per cluster: warn only (default), or auto-correct non-reboot differences. A change in what the renderer emits (an Ichor upgrade, `render.Version`) is a desired-state change, not drift: an Ichor upgrade may apply configuration, and reboot-requiring changes wait for a config rollout.
 
 | Class | Behaviour |
 |---|---|

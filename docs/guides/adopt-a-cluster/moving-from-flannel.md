@@ -4,20 +4,14 @@ sidebar_order: 4
 
 # Moving from flannel (or Calico) to a Cilium Ichor manages
 
-Ichor does not migrate a CNI, and `spec.cni.preset` cannot be changed once a
-cluster exists, so an unmanaged adoption stays unmanaged. The options:
+Ichor does not migrate a CNI, and `spec.cni.preset` is immutable, so an unmanaged adoption stays unmanaged.
 
-1. **Leave the CNI.** Adopt with `--cni-unmanaged`. Everything else Ichor does
-   keeps working. This is the default recommendation.
-2. **A new cluster.** Build one with `ichor init` and move the workloads.
-3. **A planned outage.** Ichor adopts a cluster that has no CNI (above) by installing
-   its own Cilium. You can get to that state yourself: set
-   `cluster.network.cni.name: none` in the machine configuration, remove the old CNI
-   workload, and reboot the nodes, so that every node is NotReady with no CNI
-   running. Pods have no network from the first of those steps until Cilium is up.
-   Then run `ichor adopt`. Ichor does not run the removal, so this route is yours to carry out: try it on a copy first.
+![Three ways out of an unmanaged flannel or Calico cluster: leave the CNI, build a new cluster, or take a planned outage and let adopt install Cilium.](../../images/moving-from-flannel-options.light.drawio.svg)
 
-Cilium's own documented live migration from flannel installs Cilium next to the old
-CNI with a new pod CIDR and `ipam.mode: cluster-pool`. It cannot be used here: it ends
-on `cluster-pool`, which Ichor refuses to take over (changing IPAM renumbers pods) and
-does not use (Ichor's Cilium runs `ipam.mode: kubernetes`).
+*The options, from the default recommendation to the most disruptive.*
+
+1. **Leave the CNI.** `--cni-unmanaged`; everything else keeps working.
+2. **A new cluster** with `ichor init`; move the workloads.
+3. **A planned outage.** Adopt installs its own Cilium on a cluster with no CNI. To get there yourself: set `cluster.network.cni.name: none` in the machine configuration, remove the old CNI workload, reboot the nodes until every one is NotReady. Pods have no network from the first step until Cilium is up. Then run `ichor adopt`. Ichor does not run the removal: try it on a copy first.
+
+Cilium's documented live migration from flannel does not fit: it ends on `ipam.mode: cluster-pool`, which Ichor refuses to take over (changing IPAM renumbers pods) and does not use (Ichor runs `ipam.mode: kubernetes`).

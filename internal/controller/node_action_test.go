@@ -752,8 +752,7 @@ var _ = Describe("TalosOperation node actions", func() {
 			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
 			spec.Confirm = f.machines[hostW1].Name
 
-			_, err := reconcileOperation(f.r, f.newOp(hostW1, spec))
-			Expect(err).To(HaveOccurred())
+			f.reconcile(f.newOp(hostW1, spec))
 			Expect(failed).To(BeTrue(), "the arming write must have been attempted")
 
 			var m ichorv1alpha1.TalosMachine

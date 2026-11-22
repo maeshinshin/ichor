@@ -114,9 +114,12 @@ func (e *TalosEgress) name() string {
 
 // egressTargets is everything the CRs ask the controller to reach.
 type egressTargets struct {
-	cidrs []string // machine, discovery and reclaim addresses: "10.0.0.1/32", "10.1.0.0/24"
-	names []string // host names of machines and cluster endpoints
-	s3    []urlTarget
+	cidrs []string    // machine, discovery and reclaim addresses: "10.0.0.1/32", "10.1.0.0/24"
+	names []string    // host names of machines and cluster endpoints
+	s3    []urlTarget // https/http endpoints of S3 stores
+	// factory holds the Image Factories of clusters with a TalosStorage. Only the controller dials them, so they
+	// get a policy of their own that does not select ichor-ui.
+	factory []urlTarget
 }
 
 type urlTarget struct {
@@ -221,9 +224,30 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 		}
 	}
 
-	slices.SortFunc(t.s3, func(a, b urlTarget) int {
-		return cmp.Or(cmp.Compare(a.host, b.host), cmp.Compare(a.port, b.port))
-	})
+	// A TalosStorage makes the controller register a schematic at its cluster's Image Factory.
+	var storages ichorv1alpha1.TalosStorageList
+	if err := c.List(ctx, &storages); err != nil {
+		return egressTargets{}, fmt.Errorf("listing TalosStorages: %w", err)
+	}
+
+	for i := range storages.Items {
+		for j := range clusters.Items {
+			cl := &clusters.Items[j]
+			if cl.Namespace != storages.Items[i].Namespace || cl.Name != storages.Items[i].Spec.ClusterRef.Name {
+				continue
+			}
+
+			if st, ok := parseURLTarget(cl.Spec.FactoryURL()); ok && !slices.Contains(t.factory, st) {
+				t.factory = append(t.factory, st)
+			}
+		}
+	}
+
+	for _, list := range [][]urlTarget{t.s3, t.factory} {
+		slices.SortFunc(list, func(a, b urlTarget) int {
+			return cmp.Or(cmp.Compare(a.host, b.host), cmp.Compare(a.port, b.port))
+		})
+	}
 
 	return t, nil
 }
@@ -492,11 +516,38 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 		keyEgress: buildEgress(t),
 	}
 
-	return writePolicy(ctx, e.Client, e.Namespace, e.name(), app, spec)
+	changed, err := writePolicy(ctx, e.Client, e.Namespace, e.name(), app, spec)
+	if err != nil {
+		return changed, err
+	}
+
+	factoryChanged, err := e.syncFactory(ctx, app, t.factory)
+
+	return changed || factoryChanged, err
+}
+
+// syncFactory writes the controller-only policy for the Image Factories, and removes it when no cluster needs one.
+func (e *TalosEgress) syncFactory(ctx context.Context, app string, targets []urlTarget) (bool, error) {
+	name := e.name() + "-image-factory"
+	if len(targets) == 0 {
+		return false, removePolicy(ctx, e.Client, e.Namespace, name)
+	}
+
+	rules := make([]any, 0, len(targets))
+	for _, t := range targets {
+		rules = append(rules, t.rule())
+	}
+
+	return writePolicy(ctx, e.Client, e.Namespace, name, app, map[string]any{
+		keyDescription: "Egress of the controller to the Image Factory of each cluster with a TalosStorage, to register " +
+			"a schematic. ichor-ui does not dial it. Written by the controller; edits are overwritten.",
+		keySelector: map[string]any{keyMatchLabels: map[string]any{nameLabel: app, controlPlaneLabel: valueControllerMgr}},
+		keyEgress:   rules,
+	})
 }
 
 // +kubebuilder:rbac:groups=cilium.io,namespace=ichor-system,resources=ciliumnetworkpolicies,verbs=get;list;create;update;delete
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters;talosmachines;talosetcdbackups;machinereclaims,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters;talosmachines;talosetcdbackups;machinereclaims;talosstorages,verbs=get;list;watch
 
 // Reconcile keeps the policy current. Every watched change maps to the same key.
 func (e *TalosEgress) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
@@ -543,6 +594,7 @@ func (e *TalosEgress) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&ichorv1alpha1.TalosCluster{}, one).
 		Watches(&ichorv1alpha1.TalosMachine{}, one).
 		Watches(&ichorv1alpha1.TalosEtcdBackup{}, one).
+		Watches(&ichorv1alpha1.TalosStorage{}, one).
 		Watches(&ichorv1alpha1.MachineReclaim{}, one).
 		Complete(quietExpected(e, "talosegress"))
 }

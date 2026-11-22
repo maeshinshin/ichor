@@ -314,3 +314,18 @@ func TestChartStaticFallbackCIDRsStillApply(t *testing.T) {
 		t.Errorf("world appeared next to fallback CIDRs: %v", ctrl["entity:world"])
 	}
 }
+
+// Only the controller dials an Image Factory (to register a storage preset's schematic), and the controller writes
+// that rule itself; no policy the chart ships, ichor-ui's least of all, may open a factory host.
+func TestChartPoliciesDoNotOpenAnImageFactory(t *testing.T) {
+	for _, p := range findAll(renderWithAPIs(t, ciliumAPI), kindCNP) {
+		raw, err := json.Marshal(p["spec"])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if strings.Contains(string(raw), "factory") {
+			t.Errorf("a chart policy names an Image Factory: %s", raw)
+		}
+	}
+}

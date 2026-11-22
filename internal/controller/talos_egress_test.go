@@ -35,12 +35,74 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
+
+// A TalosStorage makes the controller register a schematic at the cluster's Image Factory (spec.imageFactoryURL, else
+// factory.talos.dev), so under the default deny a policy must open that host, and only for the controller: ichor-ui
+// never dials it. A cluster with no TalosStorage never needs it.
+func TestTalosEgressOpensTheImageFactoryForTheControllerOnly(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	cluster := func(name, factory string) *ichorv1alpha1.TalosCluster {
+		c := &ichorv1alpha1.TalosCluster{Name: name, Namespace: trustNamespace}
+		c.Spec.ImageFactoryURL = factory
+
+		return c
+	}
+	storage := func(name, cluster string) *ichorv1alpha1.TalosStorage {
+		s := &ichorv1alpha1.TalosStorage{Name: name, Namespace: trustNamespace}
+		s.Spec.ClusterRef.Name = cluster
+
+		return s
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		cluster("default", ""), cluster("custom", "https://factory.example.test:8443"), cluster("none", "https://unused.example.test"),
+		storage("a", "default"), storage("b", "custom"), staticControllerPolicy(trustNamespace, "ichor")).Build()
+
+	e := &TalosEgress{Client: c, Namespace: trustNamespace}
+	if _, err := e.Sync(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	read := func(name string) string {
+		u := cnpGVK()
+		if err := c.Get(t.Context(), types.NamespacedName{Namespace: trustNamespace, Name: name}, u); err != nil {
+			t.Fatal(err)
+		}
+
+		raw, _ := json.Marshal(u.Object[keySpec])
+
+		return string(raw)
+	}
+
+	factory := read(DefaultTalosEgressPolicyName + "-image-factory")
+	for _, want := range []string{`"matchName":"factory.talos.dev"`, `"matchName":"factory.example.test"`, `"port":"8443"`} {
+		if !strings.Contains(factory, want) {
+			t.Errorf("the factory policy lacks %s: %s", want, factory)
+		}
+	}
+
+	if strings.Contains(factory, "unused.example.test") || strings.Contains(factory, "ui-backend") {
+		t.Errorf("the factory policy names a cluster without storage or selects ichor-ui: %s", factory)
+	}
+
+	if main := read(DefaultTalosEgressPolicyName); strings.Contains(main, "factory") {
+		t.Errorf("the policy that selects ichor-ui must not name an Image Factory: %s", main)
+	}
+}
 
 func TestBuildEgressCoversEveryDialedPort(t *testing.T) {
 	rules := buildEgress(egressTargets{

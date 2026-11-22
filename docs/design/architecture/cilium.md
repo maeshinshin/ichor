@@ -6,7 +6,7 @@ sidebar_label: "Architecture: Cilium"
 
 # Cilium
 
-![Cilium boots from the inline manifest, then the ichor-cni Job adopts it as a Helm release. Values layer defaults, the user's layer and Ichor-owned keys. A foreign Cilium is checked, diffed and taken over.](../images/cilium.light.drawio.svg)
+![Cilium boots from the inline manifest, then the ichor-cni Job adopts it as a Helm release. Values layer defaults, the user's layer and Ichor-owned keys. A foreign Cilium is checked, diffed and taken over.](../../images/cilium.light.drawio.svg)
 
 *Cilium is Ichor's own Helm release.*
 

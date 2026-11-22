@@ -8,7 +8,7 @@ sidebar_label: "Architecture: API"
 
 Group `ichor.maesh.dev`, version `v1alpha1`.
 
-![The ten kinds of the API. TalosCluster holds the cluster-wide settings and TalosMachine, TalosConfigPatch, TalosStorage and TalosEtcdBackup hang off it; TalosOperation, IchorInstallation, IchorUser, MachineReclaim and TalosCredentialRequest stand alone.](../images/api-kinds.light.drawio.svg)
+![The ten kinds of the API. TalosCluster holds the cluster-wide settings and TalosMachine, TalosConfigPatch, TalosStorage and TalosEtcdBackup hang off it; TalosOperation, IchorInstallation, IchorUser, MachineReclaim and TalosCredentialRequest stand alone.](../../images/api-kinds.light.drawio.svg)
 
 *The kinds of the API and how they relate.*
 

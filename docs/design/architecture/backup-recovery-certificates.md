@@ -5,7 +5,7 @@ sidebar_order: 18
 
 # Backup, recovery, certificates
 
-![Backup flows from a schedule through snapshot, verify and encrypt to a store outside the cluster; two recovery paths, a live restore and a full-loss restore, read from that store.](../images/backup-recovery-certificates.light.drawio.svg)
+![Backup flows from a schedule through snapshot, verify and encrypt to a store outside the cluster; two recovery paths, a live restore and a full-loss restore, read from that store.](../../images/backup-recovery-certificates.light.drawio.svg)
 
 *Backups feed two recovery paths; the store must live outside the cluster.*
 

@@ -5,7 +5,7 @@ sidebar_order: 4
 
 # Deployment
 
-![Ichor runs in ichor-system: controller, ichor-ui, a network policy and a ClusterIP listener on 8444 for the kube-apiserver; an edge you provide fronts ichor-ui. Three install paths differ in how login is switched on.](../images/deployment.light.drawio.svg)
+![Ichor runs in ichor-system: controller, ichor-ui, a network policy and a ClusterIP listener on 8444 for the kube-apiserver; an edge you provide fronts ichor-ui. Three install paths differ in how login is switched on.](../../images/deployment.light.drawio.svg)
 
 *Ichor runs inside the cluster it manages.*
 

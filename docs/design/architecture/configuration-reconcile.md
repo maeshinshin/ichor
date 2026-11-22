@@ -5,7 +5,7 @@ sidebar_order: 16
 
 # Configuration reconcile
 
-![Five reconcile steps; a difference with no reboot is applied by the machine controller, the other two classes wait for a config operation.](../images/configuration-reconcile.light.drawio.svg)
+![Five reconcile steps; a difference with no reboot is applied by the machine controller, the other two classes wait for a config operation.](../../images/configuration-reconcile.light.drawio.svg)
 
 *A difference is applied by the machine controller only when it needs no reboot.*
 

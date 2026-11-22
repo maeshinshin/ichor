@@ -6,7 +6,7 @@ sidebar_label: "Architecture: CNI"
 
 # CNI
 
-![Two presets: cilium, managed by Ichor, and unmanaged, for adoption only. Below, the safe order for switching kube-proxy, and the network policy gate.](../images/cni.light.drawio.svg)
+![Two presets: cilium, managed by Ichor, and unmanaged, for adoption only. Below, the safe order for switching kube-proxy, and the network policy gate.](../../images/cni.light.drawio.svg)
 
 *Cilium is the only CNI Ichor installs; `unmanaged` leaves an adopted cluster's CNI alone.*
 

@@ -434,6 +434,11 @@ type TalosClusterSpec struct {
 	// Unset (the default) changes nothing.
 	// +optional
 	Security *TalosClusterSecurity `json:"security,omitempty"`
+
+	// containerd holds typed settings for the containerd instance every node runs. Unset (the
+	// default) changes nothing.
+	// +optional
+	Containerd *TalosClusterContainerd `json:"containerd,omitempty"`
 }
 
 // TalosClusterAuthentication is spec.authentication. Each enabled entry

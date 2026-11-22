@@ -141,7 +141,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 
 	It("refuses spec.authentication below the v1.14 contract", func() {
 		old := newTestCluster()
-		old.Spec.VersionContract = "v1.13"
+		old.Spec.VersionContract = testPreMultidocContract
 		Expect(k8sClient.Create(ctx, old)).To(Succeed())
 		DeferCleanup(func() { forceDelete(old) })
 

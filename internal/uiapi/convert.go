@@ -31,6 +31,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // objectRef builds the wire ObjectRef every message that names a
@@ -370,27 +371,28 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 	}
 
 	return &pb.Cluster{
-		CniPreset:               c.Spec.CNI.Preset,
-		CniDetected:             detected,
-		CniDetectedVersion:      detectedVersion,
-		DiscoveryAddresses:      addrs,
-		DiscoveryCidrs:          cidrs,
-		Ref:                     objectRef(c.Namespace, c.Name),
-		TalosVersion:            c.Spec.TalosVersion,
-		KubernetesVersion:       c.Spec.KubernetesVersion,
-		Endpoint:                c.Spec.Endpoint.Address,
-		ControlPlaneCount:       c.Spec.ControlPlane.Count,
-		ControlPlaneSchedulable: schedulable,
-		Conditions:              conditions(c.Status.Conditions),
-		KubeProxyMode:           c.Spec.CNI.KubeProxy,
-		Certificates:            certificatesToPB(c.Status.Certificates),
-		Versions:                componentVersionsToPB(c),
-		ReleaseSet:              releaseSetToPB(),
-		CreatedAt:               createdAtToPB(c.CreationTimestamp),
-		EndpointType:            c.Spec.Endpoint.Type,
-		PodSubnets:              podSubnets,
-		ServiceSubnets:          serviceSubnets,
-		CniTunnel:               c.Spec.CNI.Tunnel,
+		CniPreset:                 c.Spec.CNI.Preset,
+		CniDetected:               detected,
+		CniDetectedVersion:        detectedVersion,
+		DiscoveryAddresses:        addrs,
+		DiscoveryCidrs:            cidrs,
+		Ref:                       objectRef(c.Namespace, c.Name),
+		TalosVersion:              c.Spec.TalosVersion,
+		KubernetesVersion:         c.Spec.KubernetesVersion,
+		Endpoint:                  c.Spec.Endpoint.Address,
+		ControlPlaneCount:         c.Spec.ControlPlane.Count,
+		ControlPlaneSchedulable:   schedulable,
+		Conditions:                conditions(c.Status.Conditions),
+		KubeProxyMode:             c.Spec.CNI.KubeProxy,
+		Certificates:              certificatesToPB(c.Status.Certificates),
+		Versions:                  componentVersionsToPB(c),
+		ReleaseSet:                releaseSetToPB(),
+		CreatedAt:                 createdAtToPB(c.CreationTimestamp),
+		EndpointType:              c.Spec.Endpoint.Type,
+		PodSubnets:                podSubnets,
+		ServiceSubnets:            serviceSubnets,
+		CniTunnel:                 c.Spec.CNI.Tunnel,
+		ContainerdDeviceOwnership: render.DeviceOwnershipEnabled(c),
 		// Rollout and Handovers stay unset: TalosClusterStatus carries
 		// neither a rollout nor a hand-over state yet (roadmap phases 6 and
 		// 4/8's controller-side work).

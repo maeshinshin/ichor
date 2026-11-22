@@ -526,6 +526,14 @@ command does. Each item is described where it is listed below.
   `ichor_reconcile_expected_errors_total`, by `controller` and `reason`
   (`conflict` or `webhook_startup`), counts them instead.
 
+- `spec.containerd.deviceOwnershipFromSecurityContext` turns on containerd's
+  `device_ownership_from_security_context` on every node, so non-root pods such
+  as KubeVirt virtual machines and CDI importers can use `volumeMode: Block`
+  volumes. Set it with `ichor set containerd-device-ownership true` or the switch
+  in the UI's cluster details. Ichor renders one fixed `CRICustomizationConfig`
+  (versionContract v1.14 or later); containerd restarts on each node, with no
+  reboot. The default is `false`, so existing clusters are unchanged (ADR 0172).
+
 ### Nodes
 
 - **A removal that fails no longer leaves the machine open to a plain delete.**

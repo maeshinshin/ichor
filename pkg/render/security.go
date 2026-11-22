@@ -284,5 +284,11 @@ func injectSecurity(
 		return nil, err
 	}
 
+	// spec.containerd is not hardening, but it is the same kind of opt-in node setting and rides here
+	// so BuildConfig's call list stays as it is.
+	if cfg, err = injectContainerd(cfg, cluster); err != nil {
+		return nil, err
+	}
+
 	return injectDiskEncryption(cfg, cluster)
 }

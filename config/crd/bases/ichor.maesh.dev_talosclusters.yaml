@@ -301,6 +301,21 @@ spec:
                   rule: self.preset != 'unmanaged' || !has(self.cilium)
                 - message: cni.unmanaged only applies to the unmanaged preset
                   rule: '!has(self.unmanaged) || self.preset == ''unmanaged'''
+              containerd:
+                description: |-
+                  containerd holds typed settings for the containerd instance every node runs. Unset (the
+                  default) changes nothing.
+                properties:
+                  deviceOwnershipFromSecurityContext:
+                    description: |-
+                      deviceOwnershipFromSecurityContext sets containerd's device_ownership_from_security_context, so
+                      a container's block and character devices are owned by the pod's runAsUser and fsGroup instead
+                      of root. Non-root workloads such as KubeVirt VMs and CDI importers need it to open a
+                      volumeMode: Block volume. A containerd restart on every node, no node reboot; pods already
+                      running keep their device ownership until they are recreated. Needs versionContract v1.14 or
+                      later. False (the default) renders nothing.
+                    type: boolean
+                type: object
               controlPlane:
                 description: controlPlane configures the control-plane topology.
                 properties:

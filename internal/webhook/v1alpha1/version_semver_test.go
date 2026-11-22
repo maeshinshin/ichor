@@ -137,7 +137,7 @@ func TestTalosClusterMovesUpButNotDown(t *testing.T) {
 	}
 
 	contractDown := newer.DeepCopy()
-	contractDown.Spec.VersionContract = "v1.13"
+	contractDown.Spec.VersionContract = testPreMultidocContract
 
 	if _, err := v.ValidateUpdate(ctx, newer, contractDown); err == nil || !strings.Contains(err.Error(), "versionContract") {
 		t.Fatalf("update that moves the contract down: err = %v", err)

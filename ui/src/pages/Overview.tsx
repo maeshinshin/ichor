@@ -34,6 +34,7 @@ import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BackupNow } from '@/components/BackupNow'
+import { ContainerdDeviceOwnership } from '@/components/ContainerdDeviceOwnership'
 import { CARotationAdvice } from '@/components/CARotationAdvice'
 import { isCniUnmanaged } from '@/lib/cni'
 import { CiliumUpgradeDialog } from '@/components/CiliumUpgradeDialog'
@@ -529,6 +530,12 @@ function Home({
                 value={`${cluster.controlPlaneCount}${cluster.controlPlaneSchedulable ? ` ${t('clusters.schedulable')}` : ''}`}
               />
             </Fields>
+            <ContainerdDeviceOwnership
+              cluster={cluster}
+              contract={versionOf('version-contract')?.current ?? ''}
+              canEdit={perms?.clusterUpdate === true}
+              onChanged={reloadCluster}
+            />
             <Card size="sm">
 <CardHeader><CardTitle>{t('cluster.conditions')}</CardTitle></CardHeader><CardContent>
               <ConditionList conditions={cluster.conditions} />

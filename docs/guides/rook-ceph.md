@@ -326,3 +326,30 @@ and Ichor will not gate it either.
 
 Removing an OSD, and the node that holds it, is still a Ceph procedure: mark the
 OSD out, wait for `active+clean`, then purge it. Ichor does not do this for you.
+
+## Using Block volumes with KubeVirt or other non-root workloads
+
+A pod that runs as a non-root user cannot open a `volumeMode: Block` volume unless
+containerd gives the device to that user. By default containerd leaves the device
+owned by root, so a KubeVirt virtual machine or a CDI importer (both run as uid 107)
+fails on a Rook `ceph-block` PVC with `blockdev: cannot open /dev/cdi-block-volume:
+Permission denied`.
+
+Turn on containerd's `device_ownership_from_security_context`, which makes the
+device follow the pod's `runAsUser` and `fsGroup`:
+
+```sh
+ichor set containerd-device-ownership true --cluster prod
+```
+
+The UI has the same switch under the cluster's details. In a manifest it is
+`spec.containerd.deviceOwnershipFromSecurityContext: true`.
+
+- Ichor renders one fixed containerd fragment into every node. You cannot give it
+  other TOML: containerd settings are typed, one at a time.
+- containerd restarts on each node; no node reboots. Pods that are running keep their
+  device ownership, so recreate a pod (or its DataVolume import) that failed before.
+- It needs `spec.versionContract` v1.14 or later.
+- The default is `false`: a cluster that does not set it is unchanged.
+
+The decision is recorded in [ADR 0172](../adr/0172-containerd-device-ownership-is-a-typed-cluster-setting-rendered-as-a-cri-customization.md).

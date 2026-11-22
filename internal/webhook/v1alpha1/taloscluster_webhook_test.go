@@ -30,7 +30,10 @@ import (
 const (
 	testTalosVersion    = "v1.14.3"
 	testVersionContract = "v1.14"
-	testK8sVersion      = "v1.36.2"
+
+	// testPreMultidocContract is the last contract before the multi-document Talos config.
+	testPreMultidocContract = "v1.13"
+	testK8sVersion          = "v1.36.2"
 )
 
 func newTestCluster() *ichorv1alpha1.TalosCluster {
@@ -93,6 +96,32 @@ var _ = Describe("TalosCluster Webhook", func() {
 		good.Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: "node", Address: "kube.example.lan"}
 		Expect(k8sClient.Create(ctx, good)).To(Succeed())
 		forceDelete(good)
+	})
+
+	It("admits spec.containerd.deviceOwnershipFromSecurityContext at contract v1.14", func() {
+		good := newTestCluster()
+		good.Spec.Containerd = &ichorv1alpha1.TalosClusterContainerd{DeviceOwnershipFromSecurityContext: true}
+		Expect(k8sClient.Create(ctx, good)).To(Succeed())
+		forceDelete(good)
+	})
+
+	It("refuses spec.containerd.deviceOwnershipFromSecurityContext below contract v1.14, at create and at update", func() {
+		bad := newTestCluster()
+		bad.Spec.VersionContract = testPreMultidocContract
+		bad.Spec.Containerd = &ichorv1alpha1.TalosClusterContainerd{DeviceOwnershipFromSecurityContext: true}
+		err := k8sClient.Create(ctx, bad)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("needs versionContract v1.14 or later"))
+
+		old := newTestCluster()
+		old.Spec.VersionContract = testPreMultidocContract
+		Expect(k8sClient.Create(ctx, old)).To(Succeed())
+		defer forceDelete(old)
+
+		old.Spec.Containerd = &ichorv1alpha1.TalosClusterContainerd{DeviceOwnershipFromSecurityContext: true}
+		err = k8sClient.Update(ctx, old)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("needs versionContract v1.14 or later"))
 	})
 
 	It("admits update", func() {

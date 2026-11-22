@@ -28,6 +28,19 @@ service ClusterService {
   rpc RemoveDiscoveryAddress(RemoveDiscoveryAddressRequest) returns (RemoveDiscoveryAddressResponse);
   // RemoveDiscoveryCidr removes one range from spec.discovery.cidrs.
   rpc RemoveDiscoveryCidr(RemoveDiscoveryCidrRequest) returns (RemoveDiscoveryCidrResponse);
+  // SetContainerdDeviceOwnership sets spec.containerd.deviceOwnershipFromSecurityContext and nothing
+  // else. The controller renders it; a containerd restart on every node follows, no reboot.
+  rpc SetContainerdDeviceOwnership(SetContainerdDeviceOwnershipRequest) returns (SetContainerdDeviceOwnershipResponse);
+}
+
+message SetContainerdDeviceOwnershipRequest {
+  ObjectRef cluster = 1;
+  bool enabled = 2;
+}
+
+message SetContainerdDeviceOwnershipResponse {
+  Cluster cluster = 1;
+  AuditRecord audit = 2;
 }
 
 message AddDiscoveryCidrRequest {
@@ -201,6 +214,8 @@ message Cluster {
   // Event per address and left out when a pending or approved TalosMachine of the cluster now has the
   // address; set by GetCluster and AddDiscoveryAddress.
   repeated string orphan_addresses = 25;
+  // containerd_device_ownership is spec.containerd.deviceOwnershipFromSecurityContext.
+  bool containerd_device_ownership = 26;
 }
 
 // ReleaseSet is one supported combination of versions, embedded in the Ichor build.

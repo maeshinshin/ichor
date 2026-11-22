@@ -23,10 +23,9 @@ limitations under the License.
 // it does not have.
 //
 // Paths are dot-separated, spelled the way machinery's own `yaml` tags (and
-// talos.dev) spell the field, rooted at the kind name for the two small
-// standalone documents Ichor allows today ("SysctlConfig",
-// "KernelModuleConfig") and at "machine"/"cluster" for the legacy "Config"
-// document (e.g. "machine.install", "cluster.apiServer.extraArgs").
+// talos.dev) spell the field, rooted at the kind name for the standalone
+// documents ("SysctlConfig", "KernelModuleConfig", "CRICustomizationConfig" and the rest) and at
+// "machine"/"cluster" for the v1alpha1 "Config" document (e.g. "machine.install", "cluster.apiServer.extraArgs").
 //
 // Why the table is short: Talos does not carry this information anywhere a
 // generator could read it.
@@ -233,6 +232,11 @@ var rules = []rule{
 	{prefix: "RegistryMirrorConfig", safe: true},
 	{prefix: "RegistryAuthConfig", safe: true},
 	{prefix: "RegistryTLSConfig", safe: true},
+
+	// CRICustomizationConfig (Talos 1.14 docs, "Containerd": applying, updating or removing one
+	// regenerates the CRI configuration and restarts CRI, no reboot). The same restart as the
+	// registry documents above.
+	{prefix: "CRICustomizationConfig", safe: true, introducedAfter: machineryconfig.TalosVersion1_13},
 
 	// Node labels, annotations and taints are reconciled onto the Kubernetes
 	// Node object by NodeLabelSpec/NodeAnnotationSpec/NodeTaintSpec and

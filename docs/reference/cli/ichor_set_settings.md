@@ -57,5 +57,5 @@ ichor set settings KEY=VALUE... [flags]
 
 ### SEE ALSO
 
-* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode or Ichor's runtime settings
+* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings
 

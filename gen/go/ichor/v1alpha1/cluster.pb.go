@@ -140,6 +140,110 @@ func (HandoverPhase) EnumDescriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{1}
 }
 
+type SetContainerdDeviceOwnershipRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cluster       *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetContainerdDeviceOwnershipRequest) Reset() {
+	*x = SetContainerdDeviceOwnershipRequest{}
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetContainerdDeviceOwnershipRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetContainerdDeviceOwnershipRequest) ProtoMessage() {}
+
+func (x *SetContainerdDeviceOwnershipRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetContainerdDeviceOwnershipRequest.ProtoReflect.Descriptor instead.
+func (*SetContainerdDeviceOwnershipRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *SetContainerdDeviceOwnershipRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+func (x *SetContainerdDeviceOwnershipRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetContainerdDeviceOwnershipResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cluster       *Cluster               `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Audit         *AuditRecord           `protobuf:"bytes,2,opt,name=audit,proto3" json:"audit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetContainerdDeviceOwnershipResponse) Reset() {
+	*x = SetContainerdDeviceOwnershipResponse{}
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetContainerdDeviceOwnershipResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetContainerdDeviceOwnershipResponse) ProtoMessage() {}
+
+func (x *SetContainerdDeviceOwnershipResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetContainerdDeviceOwnershipResponse.ProtoReflect.Descriptor instead.
+func (*SetContainerdDeviceOwnershipResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SetContainerdDeviceOwnershipResponse) GetCluster() *Cluster {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+func (x *SetContainerdDeviceOwnershipResponse) GetAudit() *AuditRecord {
+	if x != nil {
+		return x.Audit
+	}
+	return nil
+}
+
 type AddDiscoveryCidrRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
@@ -155,7 +259,7 @@ type AddDiscoveryCidrRequest struct {
 
 func (x *AddDiscoveryCidrRequest) Reset() {
 	*x = AddDiscoveryCidrRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[0]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -167,7 +271,7 @@ func (x *AddDiscoveryCidrRequest) String() string {
 func (*AddDiscoveryCidrRequest) ProtoMessage() {}
 
 func (x *AddDiscoveryCidrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[0]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -180,7 +284,7 @@ func (x *AddDiscoveryCidrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDiscoveryCidrRequest.ProtoReflect.Descriptor instead.
 func (*AddDiscoveryCidrRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{0}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AddDiscoveryCidrRequest) GetCluster() *ObjectRef {
@@ -215,7 +319,7 @@ type AddDiscoveryCidrResponse struct {
 
 func (x *AddDiscoveryCidrResponse) Reset() {
 	*x = AddDiscoveryCidrResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[1]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -227,7 +331,7 @@ func (x *AddDiscoveryCidrResponse) String() string {
 func (*AddDiscoveryCidrResponse) ProtoMessage() {}
 
 func (x *AddDiscoveryCidrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[1]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -240,7 +344,7 @@ func (x *AddDiscoveryCidrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDiscoveryCidrResponse.ProtoReflect.Descriptor instead.
 func (*AddDiscoveryCidrResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{1}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AddDiscoveryCidrResponse) GetCluster() *Cluster {
@@ -271,7 +375,7 @@ type RemoveDiscoveryAddressRequest struct {
 
 func (x *RemoveDiscoveryAddressRequest) Reset() {
 	*x = RemoveDiscoveryAddressRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +387,7 @@ func (x *RemoveDiscoveryAddressRequest) String() string {
 func (*RemoveDiscoveryAddressRequest) ProtoMessage() {}
 
 func (x *RemoveDiscoveryAddressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +400,7 @@ func (x *RemoveDiscoveryAddressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDiscoveryAddressRequest.ProtoReflect.Descriptor instead.
 func (*RemoveDiscoveryAddressRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{2}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RemoveDiscoveryAddressRequest) GetCluster() *ObjectRef {
@@ -335,7 +439,7 @@ type RemoveDiscoveryCidrRequest struct {
 
 func (x *RemoveDiscoveryCidrRequest) Reset() {
 	*x = RemoveDiscoveryCidrRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[3]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -347,7 +451,7 @@ func (x *RemoveDiscoveryCidrRequest) String() string {
 func (*RemoveDiscoveryCidrRequest) ProtoMessage() {}
 
 func (x *RemoveDiscoveryCidrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[3]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -360,7 +464,7 @@ func (x *RemoveDiscoveryCidrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDiscoveryCidrRequest.ProtoReflect.Descriptor instead.
 func (*RemoveDiscoveryCidrRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{3}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RemoveDiscoveryCidrRequest) GetCluster() *ObjectRef {
@@ -395,7 +499,7 @@ type RemoveDiscoveryAddressResponse struct {
 
 func (x *RemoveDiscoveryAddressResponse) Reset() {
 	*x = RemoveDiscoveryAddressResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[4]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -407,7 +511,7 @@ func (x *RemoveDiscoveryAddressResponse) String() string {
 func (*RemoveDiscoveryAddressResponse) ProtoMessage() {}
 
 func (x *RemoveDiscoveryAddressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[4]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -420,7 +524,7 @@ func (x *RemoveDiscoveryAddressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDiscoveryAddressResponse.ProtoReflect.Descriptor instead.
 func (*RemoveDiscoveryAddressResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{4}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RemoveDiscoveryAddressResponse) GetCluster() *Cluster {
@@ -447,7 +551,7 @@ type RemoveDiscoveryCidrResponse struct {
 
 func (x *RemoveDiscoveryCidrResponse) Reset() {
 	*x = RemoveDiscoveryCidrResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -459,7 +563,7 @@ func (x *RemoveDiscoveryCidrResponse) String() string {
 func (*RemoveDiscoveryCidrResponse) ProtoMessage() {}
 
 func (x *RemoveDiscoveryCidrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -472,7 +576,7 @@ func (x *RemoveDiscoveryCidrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDiscoveryCidrResponse.ProtoReflect.Descriptor instead.
 func (*RemoveDiscoveryCidrResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{5}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RemoveDiscoveryCidrResponse) GetCluster() *Cluster {
@@ -498,7 +602,7 @@ type DismissCARotationAdviceRequest struct {
 
 func (x *DismissCARotationAdviceRequest) Reset() {
 	*x = DismissCARotationAdviceRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -510,7 +614,7 @@ func (x *DismissCARotationAdviceRequest) String() string {
 func (*DismissCARotationAdviceRequest) ProtoMessage() {}
 
 func (x *DismissCARotationAdviceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -523,7 +627,7 @@ func (x *DismissCARotationAdviceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DismissCARotationAdviceRequest.ProtoReflect.Descriptor instead.
 func (*DismissCARotationAdviceRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{6}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DismissCARotationAdviceRequest) GetCluster() *ObjectRef {
@@ -542,7 +646,7 @@ type DismissCARotationAdviceResponse struct {
 
 func (x *DismissCARotationAdviceResponse) Reset() {
 	*x = DismissCARotationAdviceResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -554,7 +658,7 @@ func (x *DismissCARotationAdviceResponse) String() string {
 func (*DismissCARotationAdviceResponse) ProtoMessage() {}
 
 func (x *DismissCARotationAdviceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -567,7 +671,7 @@ func (x *DismissCARotationAdviceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DismissCARotationAdviceResponse.ProtoReflect.Descriptor instead.
 func (*DismissCARotationAdviceResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{7}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DismissCARotationAdviceResponse) GetAudit() *AuditRecord {
@@ -596,7 +700,7 @@ type AddDiscoveryAddressRequest struct {
 
 func (x *AddDiscoveryAddressRequest) Reset() {
 	*x = AddDiscoveryAddressRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -608,7 +712,7 @@ func (x *AddDiscoveryAddressRequest) String() string {
 func (*AddDiscoveryAddressRequest) ProtoMessage() {}
 
 func (x *AddDiscoveryAddressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[8]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -621,7 +725,7 @@ func (x *AddDiscoveryAddressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDiscoveryAddressRequest.ProtoReflect.Descriptor instead.
 func (*AddDiscoveryAddressRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{8}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AddDiscoveryAddressRequest) GetCluster() *ObjectRef {
@@ -674,7 +778,7 @@ type AddDiscoveryAddressResponse struct {
 
 func (x *AddDiscoveryAddressResponse) Reset() {
 	*x = AddDiscoveryAddressResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -686,7 +790,7 @@ func (x *AddDiscoveryAddressResponse) String() string {
 func (*AddDiscoveryAddressResponse) ProtoMessage() {}
 
 func (x *AddDiscoveryAddressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[9]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -699,7 +803,7 @@ func (x *AddDiscoveryAddressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddDiscoveryAddressResponse.ProtoReflect.Descriptor instead.
 func (*AddDiscoveryAddressResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{9}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AddDiscoveryAddressResponse) GetCluster() *Cluster {
@@ -740,7 +844,7 @@ type ListClustersRequest struct {
 
 func (x *ListClustersRequest) Reset() {
 	*x = ListClustersRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -752,7 +856,7 @@ func (x *ListClustersRequest) String() string {
 func (*ListClustersRequest) ProtoMessage() {}
 
 func (x *ListClustersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -765,7 +869,7 @@ func (x *ListClustersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClustersRequest.ProtoReflect.Descriptor instead.
 func (*ListClustersRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{10}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{12}
 }
 
 type ListClustersResponse struct {
@@ -777,7 +881,7 @@ type ListClustersResponse struct {
 
 func (x *ListClustersResponse) Reset() {
 	*x = ListClustersResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -789,7 +893,7 @@ func (x *ListClustersResponse) String() string {
 func (*ListClustersResponse) ProtoMessage() {}
 
 func (x *ListClustersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -802,7 +906,7 @@ func (x *ListClustersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClustersResponse.ProtoReflect.Descriptor instead.
 func (*ListClustersResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{11}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListClustersResponse) GetClusters() []*Cluster {
@@ -821,7 +925,7 @@ type GetClusterRequest struct {
 
 func (x *GetClusterRequest) Reset() {
 	*x = GetClusterRequest{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -833,7 +937,7 @@ func (x *GetClusterRequest) String() string {
 func (*GetClusterRequest) ProtoMessage() {}
 
 func (x *GetClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -846,7 +950,7 @@ func (x *GetClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterRequest.ProtoReflect.Descriptor instead.
 func (*GetClusterRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{12}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetClusterRequest) GetCluster() *ObjectRef {
@@ -865,7 +969,7 @@ type GetClusterResponse struct {
 
 func (x *GetClusterResponse) Reset() {
 	*x = GetClusterResponse{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -877,7 +981,7 @@ func (x *GetClusterResponse) String() string {
 func (*GetClusterResponse) ProtoMessage() {}
 
 func (x *GetClusterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[13]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -890,7 +994,7 @@ func (x *GetClusterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterResponse.ProtoReflect.Descriptor instead.
 func (*GetClusterResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{13}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetClusterResponse) GetCluster() *Cluster {
@@ -916,7 +1020,7 @@ type RolloutProgress struct {
 
 func (x *RolloutProgress) Reset() {
 	*x = RolloutProgress{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -928,7 +1032,7 @@ func (x *RolloutProgress) String() string {
 func (*RolloutProgress) ProtoMessage() {}
 
 func (x *RolloutProgress) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[14]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -941,7 +1045,7 @@ func (x *RolloutProgress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RolloutProgress.ProtoReflect.Descriptor instead.
 func (*RolloutProgress) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{14}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RolloutProgress) GetKind() RolloutKind {
@@ -998,7 +1102,7 @@ type HandoverState struct {
 
 func (x *HandoverState) Reset() {
 	*x = HandoverState{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[15]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1010,7 +1114,7 @@ func (x *HandoverState) String() string {
 func (*HandoverState) ProtoMessage() {}
 
 func (x *HandoverState) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[15]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1023,7 +1127,7 @@ func (x *HandoverState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandoverState.ProtoReflect.Descriptor instead.
 func (*HandoverState) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{15}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *HandoverState) GetComponent() string {
@@ -1100,13 +1204,15 @@ type Cluster struct {
 	// Event per address and left out when a pending or approved TalosMachine of the cluster now has the
 	// address; set by GetCluster and AddDiscoveryAddress.
 	OrphanAddresses []string `protobuf:"bytes,25,rep,name=orphan_addresses,json=orphanAddresses,proto3" json:"orphan_addresses,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// containerd_device_ownership is spec.containerd.deviceOwnershipFromSecurityContext.
+	ContainerdDeviceOwnership bool `protobuf:"varint,26,opt,name=containerd_device_ownership,json=containerdDeviceOwnership,proto3" json:"containerd_device_ownership,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *Cluster) Reset() {
 	*x = Cluster{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[16]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1118,7 +1224,7 @@ func (x *Cluster) String() string {
 func (*Cluster) ProtoMessage() {}
 
 func (x *Cluster) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[16]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1131,7 +1237,7 @@ func (x *Cluster) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Cluster.ProtoReflect.Descriptor instead.
 func (*Cluster) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{16}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Cluster) GetRef() *ObjectRef {
@@ -1309,6 +1415,13 @@ func (x *Cluster) GetOrphanAddresses() []string {
 	return nil
 }
 
+func (x *Cluster) GetContainerdDeviceOwnership() bool {
+	if x != nil {
+		return x.ContainerdDeviceOwnership
+	}
+	return false
+}
+
 // ReleaseSet is one supported combination of versions, embedded in the Ichor build.
 type ReleaseSet struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
@@ -1322,7 +1435,7 @@ type ReleaseSet struct {
 
 func (x *ReleaseSet) Reset() {
 	*x = ReleaseSet{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1334,7 +1447,7 @@ func (x *ReleaseSet) String() string {
 func (*ReleaseSet) ProtoMessage() {}
 
 func (x *ReleaseSet) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1347,7 +1460,7 @@ func (x *ReleaseSet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseSet.ProtoReflect.Descriptor instead.
 func (*ReleaseSet) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{17}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ReleaseSet) GetTalosVersion() string {
@@ -1396,7 +1509,7 @@ type ComponentVersion struct {
 
 func (x *ComponentVersion) Reset() {
 	*x = ComponentVersion{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[18]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1408,7 +1521,7 @@ func (x *ComponentVersion) String() string {
 func (*ComponentVersion) ProtoMessage() {}
 
 func (x *ComponentVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[18]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1421,7 +1534,7 @@ func (x *ComponentVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComponentVersion.ProtoReflect.Descriptor instead.
 func (*ComponentVersion) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{18}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ComponentVersion) GetName() string {
@@ -1464,7 +1577,7 @@ type CertificateExpiry struct {
 
 func (x *CertificateExpiry) Reset() {
 	*x = CertificateExpiry{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[19]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1476,7 +1589,7 @@ func (x *CertificateExpiry) String() string {
 func (*CertificateExpiry) ProtoMessage() {}
 
 func (x *CertificateExpiry) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[19]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1489,7 +1602,7 @@ func (x *CertificateExpiry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CertificateExpiry.ProtoReflect.Descriptor instead.
 func (*CertificateExpiry) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{19}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CertificateExpiry) GetName() string {
@@ -1510,7 +1623,13 @@ var File_ichor_v1alpha1_cluster_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\n" +
-	"\x1cichor/v1alpha1/cluster.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"~\n" +
+	"\x1cichor/v1alpha1/cluster.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"t\n" +
+	"#SetContainerdDeviceOwnershipRequest\x123\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\"\x8c\x01\n" +
+	"$SetContainerdDeviceOwnershipResponse\x121\n" +
+	"\acluster\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ClusterR\acluster\x121\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"~\n" +
 	"\x17AddDiscoveryCidrRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x12\n" +
 	"\x04cidr\x18\x02 \x01(\tR\x04cidr\x12\x1a\n" +
@@ -1565,7 +1684,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xb3\t\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xf3\t\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -1599,7 +1718,8 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\x0fservice_subnets\x18\x17 \x03(\tR\x0eserviceSubnets\x12\x1d\n" +
 	"\n" +
 	"cni_tunnel\x18\x18 \x01(\tR\tcniTunnel\x12)\n" +
-	"\x10orphan_addresses\x18\x19 \x03(\tR\x0forphanAddresses\"\xbd\x01\n" +
+	"\x10orphan_addresses\x18\x19 \x03(\tR\x0forphanAddresses\x12>\n" +
+	"\x1bcontainerd_device_ownership\x18\x1a \x01(\bR\x19containerdDeviceOwnership\"\xbd\x01\n" +
 	"\n" +
 	"ReleaseSet\x12#\n" +
 	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\x12)\n" +
@@ -1624,7 +1744,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\x16HANDOVER_PHASE_PENDING\x10\x01\x12\x1b\n" +
 	"\x17HANDOVER_PHASE_INJECTED\x10\x02\x12\x1a\n" +
 	"\x16HANDOVER_PHASE_ADOPTED\x10\x03\x12\x1e\n" +
-	"\x1aHANDOVER_PHASE_HANDED_OVER\x10\x042\xfc\x05\n" +
+	"\x1aHANDOVER_PHASE_HANDED_OVER\x10\x042\x88\a\n" +
 	"\x0eClusterService\x12Y\n" +
 	"\fListClusters\x12#.ichor.v1alpha1.ListClustersRequest\x1a$.ichor.v1alpha1.ListClustersResponse\x12S\n" +
 	"\n" +
@@ -1633,7 +1753,8 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\x17DismissCARotationAdvice\x12..ichor.v1alpha1.DismissCARotationAdviceRequest\x1a/.ichor.v1alpha1.DismissCARotationAdviceResponse\x12e\n" +
 	"\x10AddDiscoveryCidr\x12'.ichor.v1alpha1.AddDiscoveryCidrRequest\x1a(.ichor.v1alpha1.AddDiscoveryCidrResponse\x12w\n" +
 	"\x16RemoveDiscoveryAddress\x12-.ichor.v1alpha1.RemoveDiscoveryAddressRequest\x1a..ichor.v1alpha1.RemoveDiscoveryAddressResponse\x12n\n" +
-	"\x13RemoveDiscoveryCidr\x12*.ichor.v1alpha1.RemoveDiscoveryCidrRequest\x1a+.ichor.v1alpha1.RemoveDiscoveryCidrResponseB\xbd\x01\n" +
+	"\x13RemoveDiscoveryCidr\x12*.ichor.v1alpha1.RemoveDiscoveryCidrRequest\x1a+.ichor.v1alpha1.RemoveDiscoveryCidrResponse\x12\x89\x01\n" +
+	"\x1cSetContainerdDeviceOwnership\x123.ichor.v1alpha1.SetContainerdDeviceOwnershipRequest\x1a4.ichor.v1alpha1.SetContainerdDeviceOwnershipResponseB\xbd\x01\n" +
 	"\x12com.ichor.v1alpha1B\fClusterProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (
@@ -1649,86 +1770,93 @@ func file_ichor_v1alpha1_cluster_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_cluster_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ichor_v1alpha1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_ichor_v1alpha1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_ichor_v1alpha1_cluster_proto_goTypes = []any{
-	(RolloutKind)(0),                        // 0: ichor.v1alpha1.RolloutKind
-	(HandoverPhase)(0),                      // 1: ichor.v1alpha1.HandoverPhase
-	(*AddDiscoveryCidrRequest)(nil),         // 2: ichor.v1alpha1.AddDiscoveryCidrRequest
-	(*AddDiscoveryCidrResponse)(nil),        // 3: ichor.v1alpha1.AddDiscoveryCidrResponse
-	(*RemoveDiscoveryAddressRequest)(nil),   // 4: ichor.v1alpha1.RemoveDiscoveryAddressRequest
-	(*RemoveDiscoveryCidrRequest)(nil),      // 5: ichor.v1alpha1.RemoveDiscoveryCidrRequest
-	(*RemoveDiscoveryAddressResponse)(nil),  // 6: ichor.v1alpha1.RemoveDiscoveryAddressResponse
-	(*RemoveDiscoveryCidrResponse)(nil),     // 7: ichor.v1alpha1.RemoveDiscoveryCidrResponse
-	(*DismissCARotationAdviceRequest)(nil),  // 8: ichor.v1alpha1.DismissCARotationAdviceRequest
-	(*DismissCARotationAdviceResponse)(nil), // 9: ichor.v1alpha1.DismissCARotationAdviceResponse
-	(*AddDiscoveryAddressRequest)(nil),      // 10: ichor.v1alpha1.AddDiscoveryAddressRequest
-	(*AddDiscoveryAddressResponse)(nil),     // 11: ichor.v1alpha1.AddDiscoveryAddressResponse
-	(*ListClustersRequest)(nil),             // 12: ichor.v1alpha1.ListClustersRequest
-	(*ListClustersResponse)(nil),            // 13: ichor.v1alpha1.ListClustersResponse
-	(*GetClusterRequest)(nil),               // 14: ichor.v1alpha1.GetClusterRequest
-	(*GetClusterResponse)(nil),              // 15: ichor.v1alpha1.GetClusterResponse
-	(*RolloutProgress)(nil),                 // 16: ichor.v1alpha1.RolloutProgress
-	(*HandoverState)(nil),                   // 17: ichor.v1alpha1.HandoverState
-	(*Cluster)(nil),                         // 18: ichor.v1alpha1.Cluster
-	(*ReleaseSet)(nil),                      // 19: ichor.v1alpha1.ReleaseSet
-	(*ComponentVersion)(nil),                // 20: ichor.v1alpha1.ComponentVersion
-	(*CertificateExpiry)(nil),               // 21: ichor.v1alpha1.CertificateExpiry
-	(*ObjectRef)(nil),                       // 22: ichor.v1alpha1.ObjectRef
-	(*AuditRecord)(nil),                     // 23: ichor.v1alpha1.AuditRecord
-	(*Override)(nil),                        // 24: ichor.v1alpha1.Override
-	(*timestamppb.Timestamp)(nil),           // 25: google.protobuf.Timestamp
-	(*Condition)(nil),                       // 26: ichor.v1alpha1.Condition
+	(RolloutKind)(0),   // 0: ichor.v1alpha1.RolloutKind
+	(HandoverPhase)(0), // 1: ichor.v1alpha1.HandoverPhase
+	(*SetContainerdDeviceOwnershipRequest)(nil),  // 2: ichor.v1alpha1.SetContainerdDeviceOwnershipRequest
+	(*SetContainerdDeviceOwnershipResponse)(nil), // 3: ichor.v1alpha1.SetContainerdDeviceOwnershipResponse
+	(*AddDiscoveryCidrRequest)(nil),              // 4: ichor.v1alpha1.AddDiscoveryCidrRequest
+	(*AddDiscoveryCidrResponse)(nil),             // 5: ichor.v1alpha1.AddDiscoveryCidrResponse
+	(*RemoveDiscoveryAddressRequest)(nil),        // 6: ichor.v1alpha1.RemoveDiscoveryAddressRequest
+	(*RemoveDiscoveryCidrRequest)(nil),           // 7: ichor.v1alpha1.RemoveDiscoveryCidrRequest
+	(*RemoveDiscoveryAddressResponse)(nil),       // 8: ichor.v1alpha1.RemoveDiscoveryAddressResponse
+	(*RemoveDiscoveryCidrResponse)(nil),          // 9: ichor.v1alpha1.RemoveDiscoveryCidrResponse
+	(*DismissCARotationAdviceRequest)(nil),       // 10: ichor.v1alpha1.DismissCARotationAdviceRequest
+	(*DismissCARotationAdviceResponse)(nil),      // 11: ichor.v1alpha1.DismissCARotationAdviceResponse
+	(*AddDiscoveryAddressRequest)(nil),           // 12: ichor.v1alpha1.AddDiscoveryAddressRequest
+	(*AddDiscoveryAddressResponse)(nil),          // 13: ichor.v1alpha1.AddDiscoveryAddressResponse
+	(*ListClustersRequest)(nil),                  // 14: ichor.v1alpha1.ListClustersRequest
+	(*ListClustersResponse)(nil),                 // 15: ichor.v1alpha1.ListClustersResponse
+	(*GetClusterRequest)(nil),                    // 16: ichor.v1alpha1.GetClusterRequest
+	(*GetClusterResponse)(nil),                   // 17: ichor.v1alpha1.GetClusterResponse
+	(*RolloutProgress)(nil),                      // 18: ichor.v1alpha1.RolloutProgress
+	(*HandoverState)(nil),                        // 19: ichor.v1alpha1.HandoverState
+	(*Cluster)(nil),                              // 20: ichor.v1alpha1.Cluster
+	(*ReleaseSet)(nil),                           // 21: ichor.v1alpha1.ReleaseSet
+	(*ComponentVersion)(nil),                     // 22: ichor.v1alpha1.ComponentVersion
+	(*CertificateExpiry)(nil),                    // 23: ichor.v1alpha1.CertificateExpiry
+	(*ObjectRef)(nil),                            // 24: ichor.v1alpha1.ObjectRef
+	(*AuditRecord)(nil),                          // 25: ichor.v1alpha1.AuditRecord
+	(*Override)(nil),                             // 26: ichor.v1alpha1.Override
+	(*timestamppb.Timestamp)(nil),                // 27: google.protobuf.Timestamp
+	(*Condition)(nil),                            // 28: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_cluster_proto_depIdxs = []int32{
-	22, // 0: ichor.v1alpha1.AddDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	18, // 1: ichor.v1alpha1.AddDiscoveryCidrResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	23, // 2: ichor.v1alpha1.AddDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	22, // 3: ichor.v1alpha1.RemoveDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	22, // 4: ichor.v1alpha1.RemoveDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	18, // 5: ichor.v1alpha1.RemoveDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	23, // 6: ichor.v1alpha1.RemoveDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	18, // 7: ichor.v1alpha1.RemoveDiscoveryCidrResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	23, // 8: ichor.v1alpha1.RemoveDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	22, // 9: ichor.v1alpha1.DismissCARotationAdviceRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	23, // 10: ichor.v1alpha1.DismissCARotationAdviceResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	22, // 11: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	24, // 12: ichor.v1alpha1.AddDiscoveryAddressRequest.override:type_name -> ichor.v1alpha1.Override
-	18, // 13: ichor.v1alpha1.AddDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	23, // 14: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	18, // 15: ichor.v1alpha1.ListClustersResponse.clusters:type_name -> ichor.v1alpha1.Cluster
-	22, // 16: ichor.v1alpha1.GetClusterRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	18, // 17: ichor.v1alpha1.GetClusterResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	0,  // 18: ichor.v1alpha1.RolloutProgress.kind:type_name -> ichor.v1alpha1.RolloutKind
-	1,  // 19: ichor.v1alpha1.HandoverState.phase:type_name -> ichor.v1alpha1.HandoverPhase
-	25, // 20: ichor.v1alpha1.HandoverState.last_transition_time:type_name -> google.protobuf.Timestamp
-	22, // 21: ichor.v1alpha1.Cluster.ref:type_name -> ichor.v1alpha1.ObjectRef
-	26, // 22: ichor.v1alpha1.Cluster.conditions:type_name -> ichor.v1alpha1.Condition
-	16, // 23: ichor.v1alpha1.Cluster.rollout:type_name -> ichor.v1alpha1.RolloutProgress
-	17, // 24: ichor.v1alpha1.Cluster.handovers:type_name -> ichor.v1alpha1.HandoverState
-	21, // 25: ichor.v1alpha1.Cluster.certificates:type_name -> ichor.v1alpha1.CertificateExpiry
-	20, // 26: ichor.v1alpha1.Cluster.versions:type_name -> ichor.v1alpha1.ComponentVersion
-	19, // 27: ichor.v1alpha1.Cluster.release_set:type_name -> ichor.v1alpha1.ReleaseSet
-	25, // 28: ichor.v1alpha1.Cluster.created_at:type_name -> google.protobuf.Timestamp
-	25, // 29: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
-	12, // 30: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
-	14, // 31: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
-	10, // 32: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
-	8,  // 33: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:input_type -> ichor.v1alpha1.DismissCARotationAdviceRequest
-	2,  // 34: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:input_type -> ichor.v1alpha1.AddDiscoveryCidrRequest
-	4,  // 35: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:input_type -> ichor.v1alpha1.RemoveDiscoveryAddressRequest
-	5,  // 36: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:input_type -> ichor.v1alpha1.RemoveDiscoveryCidrRequest
-	13, // 37: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
-	15, // 38: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
-	11, // 39: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
-	9,  // 40: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:output_type -> ichor.v1alpha1.DismissCARotationAdviceResponse
-	3,  // 41: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:output_type -> ichor.v1alpha1.AddDiscoveryCidrResponse
-	6,  // 42: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:output_type -> ichor.v1alpha1.RemoveDiscoveryAddressResponse
-	7,  // 43: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:output_type -> ichor.v1alpha1.RemoveDiscoveryCidrResponse
-	37, // [37:44] is the sub-list for method output_type
-	30, // [30:37] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	24, // 0: ichor.v1alpha1.SetContainerdDeviceOwnershipRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	20, // 1: ichor.v1alpha1.SetContainerdDeviceOwnershipResponse.cluster:type_name -> ichor.v1alpha1.Cluster
+	25, // 2: ichor.v1alpha1.SetContainerdDeviceOwnershipResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	24, // 3: ichor.v1alpha1.AddDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	20, // 4: ichor.v1alpha1.AddDiscoveryCidrResponse.cluster:type_name -> ichor.v1alpha1.Cluster
+	25, // 5: ichor.v1alpha1.AddDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	24, // 6: ichor.v1alpha1.RemoveDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	24, // 7: ichor.v1alpha1.RemoveDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	20, // 8: ichor.v1alpha1.RemoveDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
+	25, // 9: ichor.v1alpha1.RemoveDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	20, // 10: ichor.v1alpha1.RemoveDiscoveryCidrResponse.cluster:type_name -> ichor.v1alpha1.Cluster
+	25, // 11: ichor.v1alpha1.RemoveDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	24, // 12: ichor.v1alpha1.DismissCARotationAdviceRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	25, // 13: ichor.v1alpha1.DismissCARotationAdviceResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	24, // 14: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	26, // 15: ichor.v1alpha1.AddDiscoveryAddressRequest.override:type_name -> ichor.v1alpha1.Override
+	20, // 16: ichor.v1alpha1.AddDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
+	25, // 17: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	20, // 18: ichor.v1alpha1.ListClustersResponse.clusters:type_name -> ichor.v1alpha1.Cluster
+	24, // 19: ichor.v1alpha1.GetClusterRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	20, // 20: ichor.v1alpha1.GetClusterResponse.cluster:type_name -> ichor.v1alpha1.Cluster
+	0,  // 21: ichor.v1alpha1.RolloutProgress.kind:type_name -> ichor.v1alpha1.RolloutKind
+	1,  // 22: ichor.v1alpha1.HandoverState.phase:type_name -> ichor.v1alpha1.HandoverPhase
+	27, // 23: ichor.v1alpha1.HandoverState.last_transition_time:type_name -> google.protobuf.Timestamp
+	24, // 24: ichor.v1alpha1.Cluster.ref:type_name -> ichor.v1alpha1.ObjectRef
+	28, // 25: ichor.v1alpha1.Cluster.conditions:type_name -> ichor.v1alpha1.Condition
+	18, // 26: ichor.v1alpha1.Cluster.rollout:type_name -> ichor.v1alpha1.RolloutProgress
+	19, // 27: ichor.v1alpha1.Cluster.handovers:type_name -> ichor.v1alpha1.HandoverState
+	23, // 28: ichor.v1alpha1.Cluster.certificates:type_name -> ichor.v1alpha1.CertificateExpiry
+	22, // 29: ichor.v1alpha1.Cluster.versions:type_name -> ichor.v1alpha1.ComponentVersion
+	21, // 30: ichor.v1alpha1.Cluster.release_set:type_name -> ichor.v1alpha1.ReleaseSet
+	27, // 31: ichor.v1alpha1.Cluster.created_at:type_name -> google.protobuf.Timestamp
+	27, // 32: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
+	14, // 33: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
+	16, // 34: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
+	12, // 35: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
+	10, // 36: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:input_type -> ichor.v1alpha1.DismissCARotationAdviceRequest
+	4,  // 37: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:input_type -> ichor.v1alpha1.AddDiscoveryCidrRequest
+	6,  // 38: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:input_type -> ichor.v1alpha1.RemoveDiscoveryAddressRequest
+	7,  // 39: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:input_type -> ichor.v1alpha1.RemoveDiscoveryCidrRequest
+	2,  // 40: ichor.v1alpha1.ClusterService.SetContainerdDeviceOwnership:input_type -> ichor.v1alpha1.SetContainerdDeviceOwnershipRequest
+	15, // 41: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
+	17, // 42: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
+	13, // 43: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
+	11, // 44: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:output_type -> ichor.v1alpha1.DismissCARotationAdviceResponse
+	5,  // 45: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:output_type -> ichor.v1alpha1.AddDiscoveryCidrResponse
+	8,  // 46: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:output_type -> ichor.v1alpha1.RemoveDiscoveryAddressResponse
+	9,  // 47: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:output_type -> ichor.v1alpha1.RemoveDiscoveryCidrResponse
+	3,  // 48: ichor.v1alpha1.ClusterService.SetContainerdDeviceOwnership:output_type -> ichor.v1alpha1.SetContainerdDeviceOwnershipResponse
+	41, // [41:49] is the sub-list for method output_type
+	33, // [33:41] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_cluster_proto_init() }
@@ -1743,7 +1871,7 @@ func file_ichor_v1alpha1_cluster_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_cluster_proto_rawDesc), len(file_ichor_v1alpha1_cluster_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   20,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

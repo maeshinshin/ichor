@@ -58,6 +58,9 @@ const (
 	// ClusterServiceRemoveDiscoveryCidrProcedure is the fully-qualified name of the ClusterService's
 	// RemoveDiscoveryCidr RPC.
 	ClusterServiceRemoveDiscoveryCidrProcedure = "/ichor.v1alpha1.ClusterService/RemoveDiscoveryCidr"
+	// ClusterServiceSetContainerdDeviceOwnershipProcedure is the fully-qualified name of the
+	// ClusterService's SetContainerdDeviceOwnership RPC.
+	ClusterServiceSetContainerdDeviceOwnershipProcedure = "/ichor.v1alpha1.ClusterService/SetContainerdDeviceOwnership"
 )
 
 // ClusterServiceClient is a client for the ichor.v1alpha1.ClusterService service.
@@ -80,6 +83,9 @@ type ClusterServiceClient interface {
 	RemoveDiscoveryAddress(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryAddressRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryAddressResponse], error)
 	// RemoveDiscoveryCidr removes one range from spec.discovery.cidrs.
 	RemoveDiscoveryCidr(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error)
+	// SetContainerdDeviceOwnership sets spec.containerd.deviceOwnershipFromSecurityContext and nothing
+	// else. The controller renders it; a containerd restart on every node follows, no reboot.
+	SetContainerdDeviceOwnership(context.Context, *connect.Request[v1alpha1.SetContainerdDeviceOwnershipRequest]) (*connect.Response[v1alpha1.SetContainerdDeviceOwnershipResponse], error)
 }
 
 // NewClusterServiceClient constructs a client for the ichor.v1alpha1.ClusterService service. By
@@ -135,18 +141,25 @@ func NewClusterServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(clusterServiceMethods.ByName("RemoveDiscoveryCidr")),
 			connect.WithClientOptions(opts...),
 		),
+		setContainerdDeviceOwnership: connect.NewClient[v1alpha1.SetContainerdDeviceOwnershipRequest, v1alpha1.SetContainerdDeviceOwnershipResponse](
+			httpClient,
+			baseURL+ClusterServiceSetContainerdDeviceOwnershipProcedure,
+			connect.WithSchema(clusterServiceMethods.ByName("SetContainerdDeviceOwnership")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // clusterServiceClient implements ClusterServiceClient.
 type clusterServiceClient struct {
-	listClusters            *connect.Client[v1alpha1.ListClustersRequest, v1alpha1.ListClustersResponse]
-	getCluster              *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
-	addDiscoveryAddress     *connect.Client[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse]
-	dismissCARotationAdvice *connect.Client[v1alpha1.DismissCARotationAdviceRequest, v1alpha1.DismissCARotationAdviceResponse]
-	addDiscoveryCidr        *connect.Client[v1alpha1.AddDiscoveryCidrRequest, v1alpha1.AddDiscoveryCidrResponse]
-	removeDiscoveryAddress  *connect.Client[v1alpha1.RemoveDiscoveryAddressRequest, v1alpha1.RemoveDiscoveryAddressResponse]
-	removeDiscoveryCidr     *connect.Client[v1alpha1.RemoveDiscoveryCidrRequest, v1alpha1.RemoveDiscoveryCidrResponse]
+	listClusters                 *connect.Client[v1alpha1.ListClustersRequest, v1alpha1.ListClustersResponse]
+	getCluster                   *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
+	addDiscoveryAddress          *connect.Client[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse]
+	dismissCARotationAdvice      *connect.Client[v1alpha1.DismissCARotationAdviceRequest, v1alpha1.DismissCARotationAdviceResponse]
+	addDiscoveryCidr             *connect.Client[v1alpha1.AddDiscoveryCidrRequest, v1alpha1.AddDiscoveryCidrResponse]
+	removeDiscoveryAddress       *connect.Client[v1alpha1.RemoveDiscoveryAddressRequest, v1alpha1.RemoveDiscoveryAddressResponse]
+	removeDiscoveryCidr          *connect.Client[v1alpha1.RemoveDiscoveryCidrRequest, v1alpha1.RemoveDiscoveryCidrResponse]
+	setContainerdDeviceOwnership *connect.Client[v1alpha1.SetContainerdDeviceOwnershipRequest, v1alpha1.SetContainerdDeviceOwnershipResponse]
 }
 
 // ListClusters calls ichor.v1alpha1.ClusterService.ListClusters.
@@ -184,6 +197,11 @@ func (c *clusterServiceClient) RemoveDiscoveryCidr(ctx context.Context, req *con
 	return c.removeDiscoveryCidr.CallUnary(ctx, req)
 }
 
+// SetContainerdDeviceOwnership calls ichor.v1alpha1.ClusterService.SetContainerdDeviceOwnership.
+func (c *clusterServiceClient) SetContainerdDeviceOwnership(ctx context.Context, req *connect.Request[v1alpha1.SetContainerdDeviceOwnershipRequest]) (*connect.Response[v1alpha1.SetContainerdDeviceOwnershipResponse], error) {
+	return c.setContainerdDeviceOwnership.CallUnary(ctx, req)
+}
+
 // ClusterServiceHandler is an implementation of the ichor.v1alpha1.ClusterService service.
 type ClusterServiceHandler interface {
 	ListClusters(context.Context, *connect.Request[v1alpha1.ListClustersRequest]) (*connect.Response[v1alpha1.ListClustersResponse], error)
@@ -204,6 +222,9 @@ type ClusterServiceHandler interface {
 	RemoveDiscoveryAddress(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryAddressRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryAddressResponse], error)
 	// RemoveDiscoveryCidr removes one range from spec.discovery.cidrs.
 	RemoveDiscoveryCidr(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error)
+	// SetContainerdDeviceOwnership sets spec.containerd.deviceOwnershipFromSecurityContext and nothing
+	// else. The controller renders it; a containerd restart on every node follows, no reboot.
+	SetContainerdDeviceOwnership(context.Context, *connect.Request[v1alpha1.SetContainerdDeviceOwnershipRequest]) (*connect.Response[v1alpha1.SetContainerdDeviceOwnershipResponse], error)
 }
 
 // NewClusterServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -255,6 +276,12 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 		connect.WithSchema(clusterServiceMethods.ByName("RemoveDiscoveryCidr")),
 		connect.WithHandlerOptions(opts...),
 	)
+	clusterServiceSetContainerdDeviceOwnershipHandler := connect.NewUnaryHandler(
+		ClusterServiceSetContainerdDeviceOwnershipProcedure,
+		svc.SetContainerdDeviceOwnership,
+		connect.WithSchema(clusterServiceMethods.ByName("SetContainerdDeviceOwnership")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.ClusterService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ClusterServiceListClustersProcedure:
@@ -271,6 +298,8 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 			clusterServiceRemoveDiscoveryAddressHandler.ServeHTTP(w, r)
 		case ClusterServiceRemoveDiscoveryCidrProcedure:
 			clusterServiceRemoveDiscoveryCidrHandler.ServeHTTP(w, r)
+		case ClusterServiceSetContainerdDeviceOwnershipProcedure:
+			clusterServiceSetContainerdDeviceOwnershipHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -306,4 +335,8 @@ func (UnimplementedClusterServiceHandler) RemoveDiscoveryAddress(context.Context
 
 func (UnimplementedClusterServiceHandler) RemoveDiscoveryCidr(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr is not implemented"))
+}
+
+func (UnimplementedClusterServiceHandler) SetContainerdDeviceOwnership(context.Context, *connect.Request[v1alpha1.SetContainerdDeviceOwnershipRequest]) (*connect.Response[v1alpha1.SetContainerdDeviceOwnershipResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.SetContainerdDeviceOwnership is not implemented"))
 }

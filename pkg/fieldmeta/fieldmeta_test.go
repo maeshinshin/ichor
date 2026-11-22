@@ -165,6 +165,7 @@ func TestAssess_Rules(t *testing.T) {
 		{name: "registry tls", match: "machine.registries.config.registry.local:5000.tls.ca", nonMatch: pathKubeletMounts},
 		{name: "RegistryAuthConfig", match: "RegistryAuthConfig.password", nonMatch: pathKubeletMounts},
 		{name: "RegistryTLSConfig", match: "RegistryTLSConfig.ca", nonMatch: pathKubeletMounts},
+		{name: "CRICustomizationConfig is safe", match: "CRICustomizationConfig.content", nonMatch: pathKubeletMounts},
 		{name: "RegistryMirrorConfig", match: "RegistryMirrorConfig.endpoints", nonMatch: pathKubeletMounts},
 		{name: "KubeNodeConfig labels", match: "KubeNodeConfig.labels.x", nonMatch: "KubeNodeConfig.nodeIP.validSubnets"},
 		{

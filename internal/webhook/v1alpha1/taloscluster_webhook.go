@@ -37,6 +37,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/release"
+	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
@@ -222,6 +223,10 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 	}
 
 	if err := validateCiliumValues(nil, obj); err != nil {
+		return nil, err
+	}
+
+	if err := render.ValidateContainerd(obj); err != nil {
 		return nil, err
 	}
 
@@ -418,6 +423,13 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// check can still be edited for something else.
 	if err := v.validateChangedVersions(ctx, oldObj, newObj); err != nil {
 		return nil, err
+	}
+
+	// Only a change is checked, so an object stored before the rule can still be edited for something else.
+	if !apiequality.Semantic.DeepEqual(oldObj.Spec.Containerd, newObj.Spec.Containerd) {
+		if err := render.ValidateContainerd(newObj); err != nil {
+			return nil, err
+		}
 	}
 
 	warns, err := v.validateSecurityUpdate(ctx, oldObj, newObj)

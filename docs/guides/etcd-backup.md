@@ -41,8 +41,8 @@ It validates first, never overwrites, and removes the Secret if the backup is re
 | Flag | Default |
 |---|---|
 | `--s3-prefix` | the cluster's name (two clusters in one bucket need two) |
-| `--schedule` | `0 * * * *` (five-field cron, UTC) |
-| `--keep-last` | 24 |
+| `--schedule` (`spec.schedule`) | `0 * * * *` (five-field cron, UTC) |
+| `--keep-last` (`spec.retention.keepLast`) | 24; older snapshots are deleted after a successful upload |
 | `--s3-region`, `--s3-ca-file` (kept as `ca.crt`), `--credentials-secret` (`NAME-s3`) | |
 | `ICHOR_S3_SESSION_TOKEN` | optional session token |
 
@@ -89,6 +89,7 @@ kubectl -n default get talosetcdbackup nightly -o yaml
 - `status.lastSnapshot` is the newest; `status.snapshots` is every one kept,
   which `ichor restore etcd` offers.
 
+`spec.suspend: true` stops new snapshots; existing ones are kept and not pruned.
 The Backups page shows the same. `ichor backup etcd nightly` takes one more
 snapshot outside the schedule. A failed backup is retried every five minutes:
 fix the Secret or the bucket.

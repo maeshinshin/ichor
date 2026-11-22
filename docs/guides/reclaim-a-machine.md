@@ -1,6 +1,6 @@
 # Reclaim a machine
 
-In the UI this is "Reset and add"; the resource behind it is a `MachineReclaim`.
+"Reset and add" in the UI and `ichor reclaim node` in the CLI are one flow (reset-and-add); the resource behind it is a `MachineReclaim`.
 Which command fits your machine: [Adopt a running Talos cluster](adopt-a-cluster.md#what-you-have-in-front-of-you).
 
 A node that already runs a configured Talos never reaches maintenance mode, so

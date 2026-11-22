@@ -4,9 +4,6 @@ sidebar_order: 4
 
 # 4. Check the cluster
 
-The commands below use [`kubectl`](https://kubernetes.io/docs/tasks/tools/) once,
-to list the nodes.
-
 ```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
 ichor get cluster demo
@@ -35,28 +32,21 @@ installed    v{{version}}
 new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
 ```
 
-`ichor get cluster NAME` prints versions, endpoint and health in a few lines;
-`ichor describe cluster NAME` adds the network, CNI, control plane, certificate expiry and
-every condition (with ✓, `!`, ✗ or … in front). Every machine should be Ready
-(✓). `ichor version` shows the CLI and the installed Ichor version; they should
-both say the release you installed.
-With sign-in on, these commands also print the sign-in line from [step 3](approve-machines.md) on
-stderr. The output below leaves it out.
+`get cluster` prints versions, endpoint and health; `describe cluster` adds the
+network, CNI, control plane, certificate expiry and every condition (✓, `!`, ✗ or …).
+Every machine should be Ready (✓), and `ichor version` should show the release you
+installed for both CLI and installed Ichor. With sign-in on, these commands print
+the sign-in line from [step 3](approve-machines.md) on stderr; the output below omits it.
 
 > [!TIP]
-> The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
-> command for the full response. A table cell is never cut off, but a long
-> machine name is shown in short form (see [step 3](approve-machines.md));
-> `-o yaml` prints it whole.
->
-> Colour appears only on a terminal. Set `NO_COLOR` to turn it off.
+> Add `-o yaml` or `-o json` to any command for the full response, with long
+> machine names whole. Colour appears only on a terminal; `NO_COLOR` turns it off.
 
-The same goes for the operations. `ichor get operations` shows each one with a
-glyph for its phase and what it is doing; `ichor describe operation NAME` adds the
-state of every machine. `--follow` (on `upgrade`, `rollout config` and the node
-actions) and `ichor describe operation NAME --watch` keep one live line with the phase and
-message, and end it with the time the operation took. In a pipe or CI log they
-print a line per change instead:
+`ichor get operations` shows each operation's phase and activity; `ichor describe
+operation NAME` adds each machine's state. `--follow` (on `upgrade`, `rollout
+config` and the node actions) and `describe operation NAME --watch` keep one
+live line and end it with the duration; in a pipe or CI log they print a line per
+change:
 
 ```console
 $ ichor get operations
@@ -75,7 +65,9 @@ operation upgrade-talos-x7k2p · cluster demo
 
 *Following an operation to its end.*
 
-A failed step ends the line with ✗ Failed, prints the reason and exits with an
-error that names `ichor resume operation NAME`. `ichor upgrade talos --list`
-(and `kubernetes`) prints the versions on offer as a table; `-o yaml`
-and `-o json` of these commands print what they always printed.
+A failed step ends with ✗ Failed, the reason, and an error naming `ichor resume
+operation NAME`. A step that failed on a transient error is first retried by the
+controller itself, with backoff, up to five times (`status.autoRetry` shows the
+count and the next retry); an operation that waits for approval is started with
+`ichor approve operation NAME`. `ichor upgrade talos --list` (and `kubernetes`)
+prints the versions on offer.

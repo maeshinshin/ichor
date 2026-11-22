@@ -4,10 +4,9 @@ sidebar_order: 3
 
 # 3. Approve machines
 
-`ichor init` registers the first node itself. Other nodes are found in
-maintenance mode by scanning addresses you give, and wait as pending machines
-until you approve them. Point the scan at them (`init` takes
-`--discover-address` and `--discover-cidr` too):
+`ichor init` registers the first node. Other nodes are found in maintenance
+mode by scanning addresses you give (`init` takes `--discover-address` and
+`--discover-cidr` too) and wait as pending until you approve them:
 
 ![Five steps from left to right: discovery finds the node in maintenance mode, it waits as a pending machine until you approve it, you approve it, the controller applies the configuration while the node installs Talos and reboots, and the node joins as a control plane or a worker. A machine with a weak identity is refused, instead of approved.](../../images/approve-machine-path.light.drawio.svg)
 
@@ -19,69 +18,56 @@ ichor get nodes --cluster demo
 ichor approve node NAME --role worker --install-disk /dev/sda
 ```
 
-`NAME` is the pending machine from the list. A machine is named after its
-hardware UUID, so the list shows the first eight characters of it, as long as
-those are unique; pass that short name as it is, or the full UUID. If a short
-name fits more than one machine, the command refuses and lists the candidates.
-The other commands that take a machine name accept the short name too.
+`NAME` is the pending machine from the list: the first eight characters of its
+hardware UUID while unique (or the full UUID); an ambiguous short name is
+refused with the candidates. Other commands accept it too.
 
-The command asks for confirmation unless `--yes`, then prints one line (`-o yaml`
-prints the machine as before):
-
-```text
-✓ approved fa70962a as worker in demo
-```
-
-If the install disk, a disk role or the NIC you named was not among those
-discovery recorded on the node, a `!` line follows: advice, not a refusal.
-`approve` also takes a hostname, labels, a static address and extra disk roles;
-see `ichor approve node --help`.
-
-> [!WARNING]
-> A machine with a weak identity (no UUID, serial or permanent MAC) is refused.
+The command asks to confirm unless `--yes`, then prints `✓ approved fa70962a as
+worker in demo` (`-o yaml` prints the machine). A `!` line after it is advice, not
+a refusal: the disk, disk role or NIC was not among those discovery recorded.
+`approve` also takes a hostname, labels, a static address and extra disk roles
+(`ichor approve node --help`). A machine with no UUID, serial or permanent MAC is refused.
 
 After approval the controller renders and applies the configuration; the node
 installs Talos, reboots and joins.
 
 > [!NOTE]
-> With the `single` preset there is nothing to approve, so skip this step. With
-> the default `standard` preset, approve the two further control planes first,
-> with `--role controlplane` (see [Virtual IP](create-the-cluster/vip.md#flags));
-> workers follow, as above.
+> The `single` preset has nothing to approve: skip this step. With `standard`,
+> approve the two further control planes first with `--role controlplane` (see
+> [Virtual IP](create-the-cluster/vip.md#flags)), then workers.
+
+To turn a pending machine away, `ichor reject node NAME`. It is recorded, never
+deleted, and approving it later reverses it. `spec.approvalState` (`pending`,
+`approved`, `rejected`) is the status; `spec.approvalDecision` records who
+decided (`actor`) and when (`at`).
+
+An operation that waits for approval (for example an upgrade, which reboots each
+node in turn) is started with `ichor approve operation NAME`.
 
 ## The sign-in line
 
-Sign-in is always on, so the first of these commands prints this line on
-stderr, and so do the commands in [step 4](check-the-cluster.md). The address
-after `--issuer` is your cluster's issuer, which is `https://localhost:8443` when
-you gave no `--ui-url`:
+Sign-in is always on, so the CLI prints this on stderr until you log in:
 
 ```text
 ichor: ichor-ui requires OIDC and there is no usable ichor-ui login; using your own kubeconfig and RBAC in this process instead (to use ichor-ui, run `ichor auth login --issuer https://localhost:8443 --audience ichor-ui`)
 ```
 
-It means the CLI could not reach ichor-ui through a login, so it runs the
-command itself with your kubeconfig and your Kubernetes permissions. The
-command still works, and the later steps run the same way.
-
-To go through ichor-ui and its users instead, sign in once. The `--issuer` is
-the `--ui-url` you chose, or `https://localhost:8443` when you gave none (`ichor
-ui` must be running while you sign in):
+The command still works: it runs in this process with your kubeconfig and
+Kubernetes permissions, as do the later steps. To go through ichor-ui and its
+users, log in once. The issuer is your `--ui-url`, or `https://localhost:8443`
+(`ichor ui` must be running):
 
 ```sh
 ichor auth login --issuer https://192.168.1.60 --audience ichor-ui
 ```
 
-> [!NOTE]
-> The login opens your browser, so the URL must be reachable from this machine.
-> If ichor-ui has no certificate of its own, it uses one from the Ichor serving
-> CA, which your machine does not trust. Export that CA and pass it to the login:
+The login opens your browser, so the URL must be reachable from this machine. If
+ichor-ui uses a certificate from the Ichor serving CA, which your machine does
+not trust, export that CA and pass it:
 
 ```sh
 kubectl -n ichor-system get configmap ichor-ui-ca -o jsonpath='{.data.ca\.crt}' > ichor-ca.crt
 ichor auth login --issuer https://192.168.1.60 --audience ichor-ui --ca-file ichor-ca.crt
 ```
 
-The warning stops once the login is cached. [Users and login](../users-and-login.md)
-explains the CA and `--ca-file`, which the other `ichor auth` commands and the user
-commands take too.
+The warning stops once the login is cached. See [Users and login](../users-and-login.md).

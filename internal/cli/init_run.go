@@ -196,6 +196,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
+	if err := refuseInitialisedCluster(ctx, opts, deps, cluster); err != nil {
+		return err
+	}
+
 	// --install-disk unset on a terminal is asked for below, once the node can list its disks.
 	pickDisk := opts.InstallDisk == "" && bundleTerminal()
 	if opts.InstallDisk == "" && !pickDisk {
@@ -348,6 +352,47 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	return waitForUIReady(ctx, k8sClient, deps)
 }
 
+// alreadyInitialised is the refusal for a cluster whose bundle Secret exists. Both init checks for it use this,
+// so the refusal before the node is written and the one after it say the same thing.
+func alreadyInitialised(cluster, secret string) error {
+	return fmt.Errorf("init: the cluster is already initialised: secrets bundle Secret %q exists; "+
+		"to reach it, run 'ichor create credentials %s'; to bring it under Ichor's management, run 'ichor adopt --cluster %s --secrets-bundle FILE'",
+		secret, cluster, cluster)
+}
+
+// refuseInitialisedCluster runs before the first node is written. When the kubeconfig this machine has reaches
+// the cluster and its bundle Secret is there, the cluster was initialised and init must not apply a configuration to
+// a node or bootstrap it. A kubeconfig that is missing or unreadable, a server that does not answer within the
+// timeout, or a Get that fails all pass: the check then knows nothing, and the Secret create refuses after the write.
+// A dry run connects to nothing (init_dryrun_test pins that), so it does not look at all.
+// shortcut: a machine with no kubeconfig for the cluster is written to before the refusal; drop when the node can say
+// itself that it is configured.
+func refuseInitialisedCluster(ctx context.Context, opts initOptions, deps initDeps, cluster *ichorv1alpha1.TalosCluster) error {
+	if opts.DryRun {
+		return nil
+	}
+
+	data, err := os.ReadFile(currentKubeconfigFile(""))
+	if err != nil {
+		return nil
+	}
+
+	c, err := deps.NewK8sClient(data)
+	if err != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var secret corev1.Secret
+	if err := c.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: secretsRefName(cluster.Name)}, &secret); err != nil {
+		return nil
+	}
+
+	return alreadyInitialised(cluster.Name, secret.Name)
+}
+
 // confirmApply asks before the irreversible apply to endpoint, unless --yes was given.
 func confirmApply(deps initDeps, endpoint string) error {
 	if deps.AssumeYes {
@@ -439,7 +484,7 @@ func initInstall(
 		// AlreadyExists here, on the first try, means a previous init created the bundle: say so, not the raw error.
 		err := createRetrying(ctx, k8sClient, bundleSecret, s)
 		if apierrors.IsAlreadyExists(err) {
-			return "", fmt.Errorf("init: the cluster is already initialised: secrets bundle Secret %q exists", bundleSecret.Name)
+			return "", alreadyInitialised(opts.Cluster, bundleSecret.Name)
 		}
 
 		if err != nil {

@@ -4,34 +4,25 @@ sidebar_order: 3
 
 # Network policies
 
-On a cluster whose CNI is Cilium, Ichor's namespace is default-deny in both
-directions with one allow per flow. The chart renders them
-(`networkPolicy.cilium.enabled`), and `ichor init` and the installer Job apply
-the same set on any other install. Nothing outside the cluster is allowed by a
-fixed rule. What Ichor reaches is named by the controller, which keeps three
-policies of its own from the objects that name them:
+On a Cilium cluster, `ichor-system` is default-deny in both directions with one allow per flow. The chart renders the policies (`networkPolicy.cilium.enabled`); `ichor init` and the installer Job apply the same set elsewhere. No fixed rule allows anything outside the cluster: the controller names what Ichor reaches, in three policies of its own.
+
+![ichor-system is default-deny. The controller and ichor-ui reach Talos nodes, the registries and the OIDC issuer through three controller-kept policies; a scraper you name may reach the metrics port 8443.](../../images/ih-network-policies.light.drawio.svg)
+
+*Default-deny plus one allow per flow.*
 
 | Policy | Allows | Taken from |
 |---|---|---|
-| `ichor-controller-talos-egress` | the controller and ichor-ui to Talos nodes and cluster endpoints, and the controller to S3 stores | the endpoints and addresses of `TalosCluster`, `TalosMachine`, `MachineReclaim` and `TalosEtcdBackup` |
-| `ichor-controller-release-check` | the controller to the chart and image registries of the release check | the repositories the controller is configured with; absent while `updateCheck` is off |
-| `ichor-ui-oidc-egress` | ichor-ui to its external OIDC issuer | `ICHOR_OIDC_ISSUER` or `--oidc-issuer` of the ichor-ui Deployment; absent without one |
+| `ichor-controller-talos-egress` | controller and ichor-ui to Talos nodes and cluster endpoints; controller to S3 stores and to the Image Factory of a cluster with a `TalosStorage` (`spec.imageFactoryURL`, default `https://factory.talos.dev`) | endpoints and addresses of `TalosCluster`, `TalosMachine`, `MachineReclaim`, `TalosEtcdBackup` |
+| `ichor-controller-release-check` | controller to the release check's chart and image registries | the controller's configured repositories; absent while `updateCheck` is off |
+| `ichor-ui-oidc-egress` | ichor-ui to its external OIDC issuer | `ICHOR_OIDC_ISSUER` or `--oidc-issuer` of the ichor-ui Deployment (a change takes about a minute); absent without one |
 
-Names are matched with Cilium's `toFQDNs`, which needs the DNS proxy: Cilium's
-`enable-l7-proxy` must be on (it is in the Cilium Ichor installs) and the pods'
-DNS goes through the rule to `kube-dns` that Ichor's policies carry. On a Cilium
-you manage yourself with the L7 proxy off, a name is never allowed: set
-`networkPolicy.cilium.dynamicTalosEgress=false` to fall back to `world` rules, or
-turn Ichor's policies off with `networkPolicy.cilium.enabled=false`.
-`externalCIDRs` and `talosCIDRs` add fixed addresses next to the named ones.
-
-A new issuer on the ichor-ui Deployment reaches ichor-ui within about a minute.
+- Names match with Cilium's `toFQDNs`, which needs the DNS proxy: `enable-l7-proxy` on (it is, in the Cilium Ichor installs) and the pods' DNS through the `kube-dns` rule Ichor carries.
+- On a Cilium you manage with the L7 proxy off, a name is never allowed: set `networkPolicy.cilium.dynamicTalosEgress=false` to fall back to `world` rules, or `networkPolicy.cilium.enabled=false`.
+- `externalCIDRs` and `talosCIDRs` add fixed addresses beside the named ones.
 
 ## Metrics
 
-The controller's metrics port (8443) is closed to every pod until
-you name a scraper. With the chart, set
-`networkPolicy.cilium.metricsNamespaces` (and `metricsPodLabels`):
+The controller's metrics port (8443) is closed to every pod until you name a scraper. The scraper also needs the `metrics-reader` ClusterRole. ichor-ui's `/metrics` shares the UI's port, so no network policy separates it; it answers only a caller whose token may `get` `/metrics`.
 
 ```sh
 helm upgrade ichor ichor/ichor --version X.Y.Z \
@@ -40,15 +31,7 @@ helm upgrade ichor ichor/ichor --version X.Y.Z \
   --set 'networkPolicy.cilium.metricsPodLabels.app\.kubernetes\.io/name=prometheus'
 ```
 
-The scraper also needs the `metrics-reader` ClusterRole. ichor-ui's `/metrics`
-shares the port the UI is served on, so no network policy can separate it; it
-answers only a caller whose token may `get` `/metrics`.
-
-### Without a chart value
-
-With `ichor init` or the installer Job there is no value to carry the
-namespace; add a policy of your own, which adds to Ichor's (change the
-namespace and labels to your Prometheus's, and the port if you changed it):
+With `ichor init` or the installer Job there is no chart value; add a policy of your own, which adds to Ichor's (set your Prometheus's namespace and labels, and the port if changed):
 
 ```yaml
 apiVersion: cilium.io/v2

@@ -6,8 +6,17 @@ export type ConditionTone = 'good' | 'bad' | 'neutral'
 // everything else is neutral so a False never looks like a failure by default.
 const healthTypes = /(Ready|Available|Healthy|Synced|Approved|Present)$/
 
+// Progress conditions: True means in progress, False means done unless the reason is a failure one. This
+// list must equal controller.ProgressFailureReasons; TestUIProgressFailureReasonsMatchController checks it.
+const progressTypes = ['TalosUpgrade', 'KubernetesUpgrade']
+const progressFailureReasons = ['FellBack', 'VerifyTimedOut']
+
 // CiliumUpgradeAvailable merely ends in a health word: "an upgrade is available" is not health.
-export function conditionTone(type: string, status: string): ConditionTone {
+export function conditionTone(type: string, status: string, reason = ''): ConditionTone {
+  if (progressTypes.includes(type)) {
+    if (status !== 'False') return 'neutral'
+    return progressFailureReasons.includes(reason) ? 'bad' : 'good'
+  }
   if (type === 'CiliumUpgradeAvailable') return 'neutral'
   if (!healthTypes.test(type)) return 'neutral'
   if (status === 'True') return 'good'

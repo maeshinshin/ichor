@@ -31,3 +31,15 @@ test('a Ready condition shows its reason, else its status', () => {
   assert.equal(readyLabel({ status: 'True', reason: 'Converged' }), 'Converged')
   assert.equal(readyLabel({ status: 'True', reason: '' }), 'True')
 })
+
+// The CLI marks these conditions the same way (internal/cli/human.go conditionMark): True is in progress,
+// False with a failure reason is failed, False otherwise is done.
+test('an upgrade condition False with a failure reason is bad', () => {
+  for (const type of ['TalosUpgrade', 'KubernetesUpgrade']) {
+    assert.equal(conditionTone(type, 'False', 'FellBack'), 'bad')
+    assert.equal(conditionTone(type, 'False', 'VerifyTimedOut'), 'bad')
+    assert.equal(conditionTone(type, 'False', 'Converged'), 'good')
+    assert.equal(conditionTone(type, 'True', 'Upgrading'), 'neutral')
+    assert.equal(conditionTone(type, 'Unknown', 'FellBack'), 'neutral')
+  }
+})

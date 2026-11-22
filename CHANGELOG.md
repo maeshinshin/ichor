@@ -834,6 +834,9 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
+- **The UI shows a Talos or Kubernetes upgrade that fell back, or whose verification
+  timed out, as failed.** Its `TalosUpgrade` or `KubernetesUpgrade` condition was
+  neutral; it now has the failure tone, as `ichor status` already marks it.
 - **The Storage page lists each `TalosStorage` with the nodes it governs and the
   disk preset it uses.** It is read-only: a `TalosStorage` is still changed as a
   custom resource, and the page writes nothing.

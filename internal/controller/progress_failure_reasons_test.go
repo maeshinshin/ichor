@@ -4,6 +4,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -64,5 +67,28 @@ func TestProgressFailureReasonsCoverUpgradeReasons(t *testing.T) {
 		if !values[v] {
 			t.Errorf("ProgressFailureReasons holds %q, which no upgrade reason constant has", v)
 		}
+	}
+}
+
+// TestUIProgressFailureReasonsMatchController keeps the list in ui/src/lib/conditions.ts equal to
+// ProgressFailureReasons, so the UI and the CLI cannot disagree on what a failed upgrade is.
+func TestUIProgressFailureReasonsMatchController(t *testing.T) {
+	src, err := os.ReadFile("../../ui/src/lib/conditions.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := regexp.MustCompile(`const progressFailureReasons = \[([^\]]*)\]`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("progressFailureReasons not found in conditions.ts")
+	}
+
+	ui := map[string]bool{}
+	for _, r := range regexp.MustCompile(`'([^']+)'`).FindAllSubmatch(m[1], -1) {
+		ui[string(r[1])] = true
+	}
+
+	if !maps.Equal(ui, ProgressFailureReasons) {
+		t.Errorf("conditions.ts progressFailureReasons = %v, controller.ProgressFailureReasons = %v", ui, ProgressFailureReasons)
 	}
 }

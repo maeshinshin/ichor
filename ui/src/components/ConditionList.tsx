@@ -8,8 +8,8 @@ import { conditionTone } from '@/lib/conditions'
 import { t } from '@/lib/i18n'
 
 // ConditionBadge shows a condition's True/False/Unknown as a stock Badge, coloured by whether that status is healthy for its type.
-export function ConditionBadge({ type, status }: { type: string; status: string }) {
-  return <ToneBadge tone={conditionTone(type, status)}>{status || 'Unknown'}</ToneBadge>
+export function ConditionBadge({ type, status, reason }: { type: string; status: string; reason?: string }) {
+  return <ToneBadge tone={conditionTone(type, status, reason)}>{status || 'Unknown'}</ToneBadge>
 }
 
 // ConditionList is the one place conditions are rendered: type, status badge,
@@ -37,7 +37,7 @@ export function ConditionList({ conditions }: { conditions: Condition[] }) {
                 <div class="font-normal text-muted-foreground md:hidden">{c.lastTransitionTime ? formatDate(timestampDate(c.lastTransitionTime)) : '-'}</div>
               </TableCell>
               <TableCell>
-                <ConditionBadge type={c.type} status={c.status} />
+                <ConditionBadge type={c.type} status={c.status} reason={c.reason} />
               </TableCell>
               <TableCell className="text-muted-foreground max-md:hidden">{c.reason || '-'}</TableCell>
               <TableCell className="min-w-64 whitespace-normal max-md:hidden">{c.message || '-'}</TableCell>

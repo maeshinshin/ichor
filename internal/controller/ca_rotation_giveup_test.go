@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -105,6 +106,33 @@ var _ = Describe("a CA rotation whose step keeps failing", func() {
 		Expect(op.Status.FailureReason).To(BeEmpty())
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 		Expect(fetchOperation(op).Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation))
+	})
+
+	It("times the give-up window from the first blocked pass after a resume, not from before the pause", func() {
+		f := newCARotFixture()
+		f.world.nodes[f.machines[0].Name].down = true
+
+		op := f.step(f.newOp())
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(BeEmpty())
+
+		// Blocked for longer than the window, then paused by hand and resumed.
+		time.Sleep(rotationGiveUpAfter + time.Second)
+
+		cur := fetchOperation(op)
+		cur.Spec.Paused = true
+		Expect(k8sClient.Update(ctx, cur)).To(Succeed())
+		op = f.step(cur)
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+		cur = fetchOperation(op)
+		cur.Spec.Paused = false
+		Expect(k8sClient.Update(ctx, cur)).To(Succeed())
+
+		op = f.step(cur)
+		Expect(op.Status.FailureReason).To(BeEmpty())
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Reason).To(Equal(reasonCARotationBlocked))
 	})
 
 	It("refuses other disruptive work while the stage it recorded is half-applied", func() {

@@ -758,7 +758,17 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 		apimeta.RemoveStatusCondition(&op.Status.Conditions, conditionOperationPaused)
 	}
 
+	// A pause for any other cause also ends a rotation's blocked streak, so the resume times the give-up window from
+	// its own first blocked pass (ADR 0120). A blocked pass itself pauses through the rotation's status, not here.
 	if phase == ichorv1alpha1.TalosOperationPhasePaused {
+		for _, cond := range []struct{ typ, reason string }{
+			{conditionCARotation, reasonCARotationBlocked}, {conditionKeyRotation, reasonKeyRotationBlocked},
+		} {
+			if c := apimeta.FindStatusCondition(op.Status.Conditions, cond.typ); c != nil && c.Reason == cond.reason {
+				apimeta.RemoveStatusCondition(&op.Status.Conditions, cond.typ)
+			}
+		}
+
 		if err := r.clearWaitClocks(ctx, op); err != nil {
 			return err
 		}

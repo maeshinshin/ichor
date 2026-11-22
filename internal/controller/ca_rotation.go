@@ -279,9 +279,8 @@ func (r *TalosOperationReconciler) giveUpBlocked(ctx context.Context, op *ichorv
 }
 
 // blockedFor is how long cond has read Blocked with reason. Its transition time moves when a pass makes
-// progress, so it dates the current streak of blocked passes; zero when cond is not blocked.
-// shortcut: a pause (spec.paused, a lock held elsewhere) does not restart the streak, so a rotation resumed after
-// a long pause can give up on its first blocked pass; drop when the streak is kept in status.
+// progress, so it dates the current streak of blocked passes; zero when cond is not blocked. A pause for another
+// cause (spec.paused, a lock held elsewhere) removes the condition in setPhase, so a resume starts a new streak.
 func blockedFor(cond *metav1.Condition, reason string) time.Duration {
 	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != reason {
 		return 0

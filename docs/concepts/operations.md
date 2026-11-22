@@ -74,9 +74,17 @@ removal locks as the machine; the Cilium Helm Job locks too.
 
 | Cause | Reason | Way out |
 |---|---|---|
-| Never started: created paused and approval-gated, such as the upgrade a storage preset creates | `AwaitingApproval` | `ichor approve operation NAME` (Approve in the UI); refused on any other operation |
+| Never started: created paused with the annotation `ichor.maesh.dev/awaits-approval`, such as the upgrade a storage preset creates | `AwaitingApproval` | `ichor approve operation NAME` (Approve in the UI); refused on any other operation |
 | You paused it: `ichor pause operation NAME` sets `spec.paused`, stops advancing and releases the lock | | `ichor resume operation NAME` takes the lock again |
-| A step failed: never retried by itself, nothing rolled back across the cluster, lock released | `failureReason` | fix the cause, then `ichor resume operation NAME` (Resume in the UI) runs the failed step again |
+| A step failed: nothing is rolled back across the cluster, lock released | `failureReason` | a transient failure is retried automatically (below); otherwise fix the cause, then `ichor resume operation NAME` (Resume in the UI) runs the failed step again |
+
+**Automatic retry** (ADR 0174). Operations of kind `talos`, `kubernetes`,
+`config` and `node` whose step failed on a transient error (a node or the API
+unreachable, an etcd timeout) are retried after 1, 2, 4, 8 and 16 minutes, five
+attempts per step. The message says "Retrying automatically at TIME (attempt N
+of 5)", and `status.autoRetry` holds the count. Never retried automatically: a
+step whose request may already have reached the node, a node reset, a person's
+pause, and the other kinds. After the fifth attempt it waits for a person.
 
 The retry request is an annotation, never a change to `spec`:
 

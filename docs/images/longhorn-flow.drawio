@@ -1,0 +1,52 @@
+<mxfile host="Electron">
+  <diagram id="Longhorn flow" name="Longhorn flow">
+    <mxGraphModel grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="0" page="0" pageScale="1" pageWidth="900" pageHeight="350" math="0" shadow="0">
+      <root>
+        <mxCell id="0" style="html=0;" />
+        <mxCell id="1" parent="0" style="html=0;" />
+        <mxCell id="pn" parent="1" style="rounded=1;arcSize=3;fillColor=light-dark(#FFFFFF,#0A0A0A);strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;html=0;" value="" vertex="1">
+          <mxGeometry x="10" y="10" width="880" height="330" as="geometry" />
+        </mxCell>
+        <mxCell id="a" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="You apply a&#xa;TalosStorage,&#xa;longhorn-v1" vertex="1">
+          <mxGeometry x="24" y="30" width="156" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="b" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="You approve the&#xa;storage-extensions&#xa;operation" vertex="1">
+          <mxGeometry x="200" y="30" width="156" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="c" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="ichor rollout&#xa;config: Ready=True,&#xa;Prepared" vertex="1">
+          <mxGeometry x="376" y="30" width="156" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="You install the&#xa;Longhorn chart&#xa;with Helm" vertex="1">
+          <mxGeometry x="552" y="30" width="156" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="StorageSystem&#xa;Consistent=True" vertex="1">
+          <mxGeometry x="728" y="30" width="156" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="r" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="A node operation waits for replicas to leave the node.&#xa;Replicas = storage nodes: nowhere to go, so it pauses&#xa;after the evacuation timeout (10 minutes by default)." vertex="1">
+          <mxGeometry x="24" y="170" width="540" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="f" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Storage nodes&#xa;&gt; replicas: it finishes" vertex="1">
+          <mxGeometry x="584" y="170" width="156" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="g" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Pods under a&#xa;Deployment or&#xa;StatefulSet drain" vertex="1">
+          <mxGeometry x="744" y="170" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Workloads without a controller are refused by the drain." vertex="1">
+          <mxGeometry x="24" y="260" width="860" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" edge="1" parent="1" source="a" target="b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="b" target="c" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="c" target="d" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="d" target="e" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#16A34A,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

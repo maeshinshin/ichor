@@ -99,9 +99,9 @@ Amended: after the removal the executor connects to the `kubernetes` Service's c
   (as ADR 0057 does for images). The DaemonSet does not reappear by itself when enabling: see the 2026-10-28
   amendment.
 - The operation is created by hand (or by the UI/CLI); the admission guard (ADR 0013) still needs the
-  annotation on the spec change. `ichor set kube-proxy <mode>` confirms before starting: it states that the
-  configuration is applied without a reboot while the kubelet and control plane components restart on each machine,
-  and the number of machines.
+  annotation on the spec change. `ichor set kube-proxy <mode>` confirms before starting: it states that no
+  machine reboots and that the kubelet and control plane components are not restarted, and the number of machines
+  (amended: see the 2026-11-22 amendment).
 
 ## Amendment: one-shot, Git-friendly confirmation
 
@@ -201,3 +201,9 @@ found nothing to wait for and completed in about a second.
   is removed (also retried). A conflict can no longer leave a changed mode with no operation. The removal happens for
   every `cni` start, including one whose spec was already changed (a retry, or a Git-first change that carried the
   annotation), which is the case where it used to be left behind.
+
+## Amendment (2026-11-22): what a switch does to a node
+
+- The switch restarts neither the kubelet nor any control plane component, and no machine reboots. It changes Cilium's configuration and the kube-proxy DaemonSet. The plan the CLI and the UI print says so; an earlier text said the kubelet and control plane components restart on each machine, which was wrong for this operation.
+- A connection through a ClusterIP survives the switch, because the old side keeps serving until the new side is verified. A request opened at the moment kube-proxy returns on a node can still time out once; clients retry.
+- After `replaced`, the `ip kube-proxy` and `ip6 kube-proxy` nftables tables (or kube-proxy's iptables chains, in iptables mode) stay on every node until it reboots. They are frozen at the endpoints of the moment kube-proxy stopped and go stale as endpoints change. They are harmless while Cilium translates a Service address first, which it does for traffic from pods and from the node's own network namespace. Switching back to `enabled` makes kube-proxy rewrite its own tables. The `KUBE-` chains kubelet keeps in iptables (`KUBE-FIREWALL`, `KUBE-IPTABLES-HINT`, `KUBE-KUBELET-CANARY`) are not kube-proxy's and are there in both modes.

@@ -481,7 +481,7 @@ function effectText(effect: number, kind: OpKind, caTargets: string[]): string {
     case OperationEffect.REBOOT:
       return t(kind === 'config' ? 'ops.plan.effectConfigReboot' : 'ops.plan.effectReboot')
     case OperationEffect.RESTART_COMPONENTS:
-      return t(kind === 'config' ? 'ops.plan.effectConfigRestart' : 'ops.plan.effectRestart')
+      return t(kind === 'config' ? 'ops.plan.effectConfigRestart' : kind === 'cni' ? 'ops.plan.effectKubeProxy' : 'ops.plan.effectRestart')
     case OperationEffect.STOP:
       return t('ops.plan.effectStop')
     case OperationEffect.CA_ROTATION:

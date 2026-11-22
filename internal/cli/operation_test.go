@@ -285,6 +285,23 @@ func TestPlanTextForAConfigRestartSaysNoReboot(t *testing.T) {
 	}
 }
 
+func TestPlanTextForAKubeProxySwitchDoesNotSayTheKubeletRestarts(t *testing.T) {
+	// The switch leaves the kubelet and kube-apiserver running, so the plan must not promise a restart.
+	p := &pb.PlanOperationResponse{
+		Effect: pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS, MaxUnavailable: 1,
+		Machines: []*pb.PlannedMachine{{Name: opCP, Role: roleControlPlane, Step: 1}},
+	}
+
+	got := planText(pb.OperationKind_OPERATION_KIND_CNI, "c", p)
+	if strings.Contains(got, "restart on each node") {
+		t.Errorf("the plan says components restart on each node:\n%s", got)
+	}
+
+	if !strings.Contains(got, "not restarted") {
+		t.Errorf("the plan does not say the kubelet is left running:\n%s", got)
+	}
+}
+
 func TestHeadlineForAKubeProxySwitchSaysItStartsWhenTheSpecAlreadySaysTheTarget(t *testing.T) {
 	// The second run of `ichor set kube-proxy replaced --yes`: the spec already says replaced.
 	mode := string(cni.KubeProxyReplaced)

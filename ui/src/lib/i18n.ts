@@ -686,6 +686,8 @@ export const en = {
   'ops.plan.effectReboot': 'Each node is upgraded and reboots.',
   'ops.plan.effectRestart':
     'Configuration is applied without a reboot; the kubelet and control plane components restart on each node.',
+  'ops.plan.effectKubeProxy':
+    "No node reboots, and the kubelet and control plane components are not restarted; the switch changes Cilium's configuration and the kube-proxy DaemonSet.",
   'ops.plan.effectStop':
     'Every node is powered off and stays off until you start it again. The Kubernetes API goes down.',
   'ops.plan.effectNone': 'No node is touched; a Job applies the new install manifest.',

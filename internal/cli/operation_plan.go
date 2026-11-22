@@ -84,6 +84,9 @@ func keyRotationText(stages []string) string {
 		"rotation finished cannot be restored.\n", strings.Join(stages, ", "))
 }
 
+// kubeProxySwitchText is what a kube-proxy switch does to a node; the UI says the same in ops.plan.effectKubeProxy.
+const kubeProxySwitchText = "No node reboots, and the kubelet and control plane components are not restarted; the switch changes Cilium's configuration and the kube-proxy DaemonSet."
+
 // configRestartText is what a config operation whose changes need no reboot does; the UI says the same in
 // ops.plan.effectConfigRestart.
 const configRestartText = "Restarts the Kubernetes API server on each control plane, one at a time; no reboot."
@@ -108,6 +111,12 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS:
 		if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
 			b.WriteString(configRestartText + "\n")
+
+			break
+		}
+
+		if kind == pb.OperationKind_OPERATION_KIND_CNI {
+			b.WriteString(kubeProxySwitchText + "\n")
 
 			break
 		}

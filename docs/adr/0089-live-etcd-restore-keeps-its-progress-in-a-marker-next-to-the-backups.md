@@ -301,3 +301,7 @@ The controller pod and the control plane's Node are now also found when the mach
 ## Amendment (2026-11-16): `restore --live` and `--recover-cluster` are `ichor restore etcd` and `ichor restore cluster`
 
 Throughout this ADR, `ichor restore --live` is `ichor restore etcd` (it keeps `--follow` and has no `--override-reason`, as written) and `ichor restore --recover-cluster` is `ichor restore cluster`. The verb-first command surface renamed both. The marker and the resume rules are unchanged.
+
+## Amendment, 2026-11-22: a refused credential and a missing bucket or object fail the restore at once
+
+Decided by the maintainer 2026-11-22. After the wipe, a failure of the backup storage that cannot succeed on a retry no longer waits out the tail timeout: an authentication failure (S3 codes `AccessDenied`, `InvalidAccessKeyId` and `SignatureDoesNotMatch`, or HTTP 401 or 403) and a NotFound (`NoSuchBucket` or `NoSuchKey`, or HTTP 404) fail the step at once, in the check of the pinned snapshot and in the download that follows it. The operation pauses with `StepFailed` and a message that names the bucket, the object and the storage's answer. Every other storage failure, including a wrong endpoint, a timeout, a 5xx and a read that breaks mid-stream, is still a wait bounded by the tail timeout. A missing object after a passed check used to wait too; it is final now, as it already was during the check.

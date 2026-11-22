@@ -811,6 +811,11 @@ command does. Each item is described where it is listed below.
   upload, when the snapshot download fails or breaks mid-stream, and when the
   check of the pinned copy after the wipe meets a transport failure. A checksum
   mismatch, a damaged chunk and a missing object still fail it.
+- A restore fails at once when the backup storage refuses its credentials or
+  the bucket or object is gone, naming the bucket, the object and the
+  storage's answer, instead of waiting sixty minutes with the node's etcd
+  already wiped. Any other storage failure still waits. Before, a missing
+  object after the check passed waited as well.
 
 - **A `retry` on a failed etcd restore now resumes it.** A person's `retry` on a
   paused restore used to be consumed and then pause the restore again at once

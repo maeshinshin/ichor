@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -44,7 +43,7 @@ func TestNewJobPinsTheUserAndBoundsResources(t *testing.T) {
 func TestJobTerminationMessageSelectsByThePrefixedJobNameLabel(t *testing.T) {
 	pod := func(name string, labels map[string]string) *corev1.Pod {
 		return &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name, Labels: labels},
+			Namespace: "ns", Name: name, Labels: labels,
 			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
 				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: name}},
 			}}},

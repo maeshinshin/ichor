@@ -41,6 +41,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -1380,5 +1381,43 @@ var _ = Describe("a key rotation that can never run", func() {
 		editSecret(f.secret.Name, func(data map[string][]byte) { delete(data, secretsbundle.KeyRotationKey) })
 
 		expectFailedAtOnce(f, f.step(op), "the new keys cannot be found")
+	})
+
+	It("pauses on a failed step at once when finalizing finds neither the new keys nor keyrotation.yaml", func() {
+		f := newKeyRotFixture(fastBundle())
+		op, _ := f.runUntil(f.newOp(bothTargets), atStage(ichorv1alpha1.KeyRotationStageFinalizing))
+
+		editSecret(f.secret.Name, func(data map[string][]byte) { delete(data, secretsbundle.KeyRotationKey) })
+
+		expectFailedAtOnce(f, f.step(op), "neither carries the new keys")
+	})
+
+	// The two net-only failures cannot be provoked through the API, so a spec proves the API refuses what they
+	// guard against: a versionContract the machinery cannot parse, and a TalosConfigPatch that carries the
+	// service-account or encryption setting.
+	It("cannot be given a versionContract the machinery fails to parse: the CRD pattern refuses it", func() {
+		f := newKeyRotFixture(fastBundle())
+
+		for _, bad := range []string{"1.14", "v1", "v1.x", "latest", ""} {
+			f.cluster.Spec.VersionContract = bad
+			Expect(k8sClient.Update(ctx, f.cluster)).NotTo(Succeed(), "versionContract %q", bad)
+		}
+	})
+
+	It("cannot be given a TalosConfigPatch that overrides the service-account or encryption setting", func() {
+		f := newKeyRotFixture(fastBundle())
+
+		patch := &unstructured.Unstructured{}
+		Expect(patch.UnmarshalJSON([]byte(`{"apiVersion": "ichor.maesh.dev/v1alpha1", "kind": "TalosConfigPatch",
+			"metadata": {"generateName": "kr-", "namespace": "` + tmNamespace + `"},
+			"spec": {"clusterRef": {"name": "` + f.cluster.Name + `"}, "layer": "` + layerCluster + `",
+				"config": {"cluster": {"serviceAccount": {"key": "x"}, "secretboxEncryptionSecret": "x"}}}}`))).To(Succeed())
+
+		// Either the API server refuses the unknown fields or it prunes them; neither leaves a way to override.
+		if err := k8sClient.Create(ctx, patch); err == nil {
+			cluster, _, _ := unstructured.NestedMap(patch.Object, "spec", "config", "cluster")
+			Expect(cluster).NotTo(HaveKey("serviceAccount"))
+			Expect(cluster).NotTo(HaveKey("secretboxEncryptionSecret"))
+		}
 	})
 })

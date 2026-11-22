@@ -161,3 +161,5 @@ KubeSchedulerConfig.config.parallelism
 KubeSchedulerConfig.config.podInitialBackoffSeconds
 KubeSchedulerConfig.config.podMaxBackoffSeconds
 KubeSchedulerConfig.config.delayCacheUntilActive
+KubeSchedulerConfig.config.enableProfiling
+KubeSchedulerConfig.config.enableContentionProfiling

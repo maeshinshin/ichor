@@ -132,17 +132,37 @@ func (g *generator) subsetFor(upstream *types.Named, omits map[string]string, ke
 
 			continue
 		case fld.Anonymous() && jsonName == "":
-			// An embedded struct flattened into the upstream JSON is named by its type, and a subset only omits it.
-			// One with a JSON name (Pod's metadata) is an ordinary field below.
+			// An embedded struct flattened into the upstream JSON: its fields are carried as fields of this subset,
+			// unless an omits row names it, in which case the whole struct stays out.
 			key := upstream.Obj().Name() + "." + fld.Name()
-			if _, ok := omits[key]; !ok {
-				st.problems = append(st.problems, fmt.Sprintf("%s embeds %s, which a subset does not flatten: add the omits row %q", s.name, fld.Type(), key))
+			if _, ok := omits[key]; ok {
+				st.hit[key] = true
+				s.omitted = append(s.omitted, fld.Name())
 
 				continue
 			}
 
-			st.hit[key] = true
-			s.omitted = append(s.omitted, fld.Name())
+			emb, ok := fld.Type().Underlying().(*types.Struct)
+			if !ok {
+				st.problems = append(st.problems, fmt.Sprintf("%s embeds %s, which is not a struct: add the omits row %q", s.name, fld.Type(), key))
+
+				continue
+			}
+
+			for j := range emb.NumFields() {
+				ef := emb.Field(j)
+				name, skipped := jsonTagName(emb.Tag(j))
+
+				if skipped || !ef.Exported() || ef.Anonymous() || name == "" {
+					st.problems = append(st.problems, fmt.Sprintf("%s embeds %s, whose field %s cannot be flattened: add the omits row %q", s.name, fld.Type(), ef.Name(), key))
+
+					continue
+				}
+
+				s.fields = append(s.fields, subsetField{
+					goName: ef.Name(), jsonName: name, typeExpr: g.subsetTypeExpr(ef.Type(), omits), markers: g.schemaMarkers(ef),
+				})
+			}
 
 			continue
 		case skip || !fld.Exported():

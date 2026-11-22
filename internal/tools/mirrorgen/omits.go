@@ -26,8 +26,6 @@ const (
 	// reasonInexpressible: the type has no CRD schema (a float, an unknown quantity type, a struct field with
 	// no JSON tag, a list with no list type).
 	reasonInexpressible = "its type cannot be written as a CRD schema"
-	// reasonEmbedded: an embedded struct, which a subset does not flatten into its parent.
-	reasonEmbedded = "it is an embedded struct, which a subset does not flatten"
 	// reasonRawExtension: the value is an arbitrary object, which a typed document must not carry.
 	reasonRawExtension = "its value is free-form (a runtime.RawExtension), and a typed document does not carry free-form YAML"
 	// reasonStatus: the kubelet reports the status of a running pod. An operator never writes it into a static pod
@@ -71,6 +69,4 @@ var kubeSchedulerOmits = map[string]string{
 	"KubeSchedulerConfiguration.clientConnection": reasonInexpressible,
 	"KubeSchedulerConfiguration.extenders":        reasonInexpressible,
 	"KubeSchedulerProfile.pluginConfig":           reasonRawExtension,
-	// Embedded inline, so it has no JSON name of its own: the row is the embedded type's name.
-	"KubeSchedulerConfiguration.DebuggingConfiguration": reasonEmbedded,
 }

@@ -92,6 +92,9 @@ func TestSubsetRefusesWhatItOmits(t *testing.T) {
 		},
 		"kube-proxy enabled":                   {proxyEnabled, "KubeProxyConfigV1Alpha1.enabled"},
 		"a scheduler field the subset carries": {scheduler(object{"percentageOfNodesToScore": 50}), ""},
+		"a scheduler debugging field the subset carries": {
+			scheduler(object{"enableProfiling": true, "enableContentionProfiling": false}), "",
+		},
 		"a scheduler profile": {
 			scheduler(object{"profiles": []any{object{"schedulerName": "x"}}}), "",
 		},
@@ -123,5 +126,27 @@ func TestSubsetRefusesWhatItOmits(t *testing.T) {
 				t.Fatalf("error %q does not name %s", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestSchedulerDebuggingFieldsRender reads a Talos scheduler document that sets the two fields of the embedded
+// DebuggingConfiguration, and wants Document to write both back into the rendered config.
+func TestSchedulerDebuggingFieldsRender(t *testing.T) {
+	d := k8s.NewKubeSchedulerConfigV1Alpha1()
+	d.PodConfig = mmeta.Unstructured{Object: map[string]any{"enableProfiling": true, "enableContentionProfiling": false}}
+
+	typed, err := ichorv1alpha1.TalosConfigPatchDocumentFromMachinery(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := typed.Document()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.(*k8s.KubeSchedulerConfigV1Alpha1).PodConfig.Object
+	if got["enableProfiling"] != true || got["enableContentionProfiling"] != false {
+		t.Fatalf("rendered scheduler config = %v, want enableProfiling true and enableContentionProfiling false", got)
 	}
 }

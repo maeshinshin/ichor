@@ -1065,6 +1065,7 @@ command does. Each item is described where it is listed below.
   follows `spec.kubernetesVersion`, kube-proxy's `enabled` is
   `spec.cni.kubeProxy`, and a patch cannot switch the kube-scheduler off). The
   scheduler's plugin arguments (`profiles[].pluginConfig`) cannot be set.
+  The scheduler's `enableProfiling` and `enableContentionProfiling` can be set.
   `kubectl` refuses a manifest with a field outside a subset, naming its path,
   because it validates strictly by default; a client that does not ask for
   strict validation has the field removed by the API server without being

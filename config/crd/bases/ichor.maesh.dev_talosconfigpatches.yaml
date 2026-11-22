@@ -1049,10 +1049,13 @@ spec:
                           config:
                             description: KubeSchedulerConfigurationSubset mirrors
                               k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration.
-                              Ichor does not carry DebuggingConfiguration, clientConnection,
-                              extenders, leaderElection.
+                              Ichor does not carry clientConnection, extenders, leaderElection.
                             properties:
                               delayCacheUntilActive:
+                                type: boolean
+                              enableContentionProfiling:
+                                type: boolean
+                              enableProfiling:
                                 type: boolean
                               parallelism:
                                 format: int32

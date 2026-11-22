@@ -3274,6 +3274,16 @@ func (in *KubeSchedulerConfigurationSubset) DeepCopyInto(out *KubeSchedulerConfi
 		*out = new(int32)
 		**out = **in
 	}
+	if in.EnableProfiling != nil {
+		in, out := &in.EnableProfiling, &out.EnableProfiling
+		*out = new(bool)
+		**out = **in
+	}
+	if in.EnableContentionProfiling != nil {
+		in, out := &in.EnableContentionProfiling, &out.EnableContentionProfiling
+		*out = new(bool)
+		**out = **in
+	}
 	if in.PercentageOfNodesToScore != nil {
 		in, out := &in.PercentageOfNodesToScore, &out.PercentageOfNodesToScore
 		*out = new(int32)

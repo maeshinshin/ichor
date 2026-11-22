@@ -2352,10 +2352,14 @@ type KubeProxyConfigurationSubset struct {
 	WindowsRunAsService bool `json:"windowsRunAsService,omitempty"`
 }
 
-// KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry DebuggingConfiguration, clientConnection, extenders, leaderElection.
+// KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry clientConnection, extenders, leaderElection.
 type KubeSchedulerConfigurationSubset struct {
 	// +optional
 	Parallelism *int32 `json:"parallelism,omitempty"`
+	// +optional
+	EnableProfiling *bool `json:"enableProfiling,omitempty"`
+	// +optional
+	EnableContentionProfiling *bool `json:"enableContentionProfiling,omitempty"`
 	// +optional
 	PercentageOfNodesToScore *int32 `json:"percentageOfNodesToScore,omitempty"`
 	// +optional

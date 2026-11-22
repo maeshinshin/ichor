@@ -204,8 +204,10 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.cluster.proxy.resources.limits` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
 | `spec.config.cluster.proxy.resources.requests` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
 | `spec.config.cluster.scheduler` | `object` | no | ClusterScheduler is the object at cluster.scheduler. |
-| `spec.config.cluster.scheduler.config` | `object` | no | KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry DebuggingConfiguration, clientConnection, extenders, leaderElection. |
+| `spec.config.cluster.scheduler.config` | `object` | no | KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry clientConnection, extenders, leaderElection. |
 | `spec.config.cluster.scheduler.config.delayCacheUntilActive` | `boolean` | no |  |
+| `spec.config.cluster.scheduler.config.enableContentionProfiling` | `boolean` | no |  |
+| `spec.config.cluster.scheduler.config.enableProfiling` | `boolean` | no |  |
 | `spec.config.cluster.scheduler.config.parallelism` | `integer` | no |  |
 | `spec.config.cluster.scheduler.config.percentageOfNodesToScore` | `integer` | no |  |
 | `spec.config.cluster.scheduler.config.podInitialBackoffSeconds` | `integer` | no |  |

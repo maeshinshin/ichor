@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/maeshinshin/ichor/test/internal/kube"
+	"github.com/maeshinshin/ichor/test/utils"
 )
 
 const (
@@ -300,20 +301,58 @@ func upDemo() error {
 	return nil
 }
 
+// downDemo deletes what up-demo created for the prefix, found by listing the outer cluster, so it
+// needs neither the scale nor the HA env that created the lab.
 func downDemo() error {
-	cp, worker, err := demoNames()
+	cp, _, err := demoNames()
 	if err != nil {
 		return err
 	}
 
-	vms := []string{cp, worker}
-	if demoHA() {
-		vms = []string{cp, cp + "2", cp + "3", cp + "4"}
+	return downDemoPrefix(strings.TrimSuffix(cp, "-cp"), listNames, deleteNames)
+}
+
+func listNames(resource string) ([]string, error) {
+	out, err := utils.Run(kube.Command("-n", namespace, "get", resource, "-o", "jsonpath={.items[*].metadata.name}"))
+
+	return strings.Fields(out), err
+}
+
+func deleteNames(resource string, names []string) error {
+	args := append([]string{"-n", namespace, verbDelete, resource}, names...)
+	_, err := utils.Run(kube.Command(append(args, "--wait=true", "--timeout=120s", "--ignore-not-found")...))
+
+	return err
+}
+
+// downDemoPrefix deletes the VMs <prefix>-cp[N] and <prefix>-w[N] and their -iso/-system DataVolumes.
+// The match is exact (`lh` never matches `lh2-cp`), and only names that were listed are deleted.
+func downDemoPrefix(prefix string, list func(string) ([]string, error), del func(string, []string) error) error {
+	owned := regexp.MustCompile("^" + regexp.QuoteMeta(prefix) + `-(cp|w)[0-9]*`)
+
+	for _, r := range []struct{ resource, suffix string }{{"vm", ""}, {"dv", "-(iso|system)"}} {
+		all, err := list(r.resource)
+		if err != nil {
+			return fmt.Errorf("listing %s: %w", r.resource, err)
+		}
+
+		match := regexp.MustCompile(owned.String() + r.suffix + "$")
+		var names []string
+
+		for _, n := range all {
+			if match.MatchString(n) {
+				names = append(names, n)
+			}
+		}
+
+		if len(names) == 0 {
+			continue
+		}
+
+		if err := del(r.resource, names); err != nil {
+			return fmt.Errorf("deleting %s: %w", r.resource, err)
+		}
 	}
 
-	if c, w := demoScale(); c > 0 {
-		vms = append(numbered(cp, c+1), numbered(worker, w)...)
-	}
-
-	return deleteVMs(vms...)
+	return nil
 }

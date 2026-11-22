@@ -73,8 +73,8 @@ but booted from another media").
 control planes (`<prefix>-cp`, `-cp2`, `-cp3`, no worker; `NO_WORKER` is ignored) and prints `CP_IP`, `CP2_IP`
 and `CP3_IP`; every launcher pod carries the label `ichor.maesh.dev/e2e-group: <prefix>`, so an outer Service can
 select all of one demo's VMs. `ICHOR_UI_DEMO_HA=extra` creates only a fourth control plane, `<prefix>-cp4`
-(prints `CP4_IP`), next to a running HA demo, to replace one of its control planes. `down-demo` with either
-value also deletes `-cp2`, `-cp3` and `-cp4` and their DataVolumes.
+(prints `CP4_IP`), next to a running HA demo, to replace one of its control planes. `down-demo` deletes whatever VMs and
+DataVolumes exist for the prefix, whatever shape created them.
 
 ```sh
 NS=ichor-e2e   # the outer namespace; see Steps
@@ -189,7 +189,7 @@ C=OUTER_CONTEXT; P=ichor-ui-demo3; NS=ichor-e2e
 kubectl --context $C -n $NS delete pod $P-tools
 kubectl --context $C -n $NS delete deployment $P-registry
 kubectl --context $C -n $NS delete service $P-registry
-ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_E2E_NAMESPACE=$NS ./bin/kubevirt-harness down-demo   # VMs $P-cp/-w and their 4 DataVolumes
+ICHOR_UI_DEMO_PREFIX=$P ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_E2E_NAMESPACE=$NS ./bin/kubevirt-harness down-demo   # every VM $P-cp*/-w* and its DataVolumes; no scale or HA env needed
 rm -f bin/ui-demo.kubeconfig   # only if it is for this cluster
 # the shared Service ichor-ui-demo: delete it only when no demo is left
 ```

@@ -230,8 +230,7 @@ func removedCommandRegexp(cmd string) *regexp.Regexp {
 // "<path from the repository root> <command>", with why. Everything else that names one tells a reader to
 // run a command that does not exist.
 var stillNamedByDesign = map[string]string{
-	"CONTRIBUTING.md node reboot":                  "the rule that says never to run it: the command is verb first",
-	"docs/design/architecture/nodes.md node reset": "the note that says when the command was removed",
+	"CONTRIBUTING.md node reboot": "the rule that says never to run it: the command is verb first",
 }
 
 // TestNoGuideNamesARemovedCommand is TestNoADRNamesARemovedCommand for the places a reader acts on: a

@@ -83,8 +83,8 @@ previous A/B slot is a failure.
 Talos cordons, drains and uncordons in its own Upgrade sequence
 (`Sequencer.Upgrade`, Talos 1.14.3), so Ichor does only the storage-evacuation
 hook. `UpgradeRequest.Preserve` is deprecated and a plain upgrade never touches
-etcd data. The controller never bumps the version contract; only the spec write
-of a user-started operation does.
+etcd data. The controller never bumps the version contract; a user-started
+operation's spec update does.
 
 ## Kubernetes
 

@@ -5,16 +5,20 @@ source of truth for the project.
 
 ## Summary
 
+![The pages of the architecture in reading order, grouped by what they answer: why, who and where, the API, the interfaces, then the cluster lifecycle, the integrations and backup and recovery.](../images/architecture-map.light.drawio.svg)
+
+*The architecture pages, grouped; the list below is the reading order.*
+
 Ichor manages Talos Linux clusters through Kubernetes custom resources. A
-controller renders machine configuration from typed resources and applies it
-to nodes, walks upgrades through the cluster, backs up etcd, and handles the
-lifecycle of nodes from maintenance mode to removal. A CLI and a web UI expose
-the same operations.
+controller renders machine configuration from typed resources, applies it to
+nodes, walks upgrades through the cluster, backs up etcd and handles a node's
+life from maintenance mode to removal. A CLI and a web UI expose the same
+operations.
 
-Ichor stops at the Talos layer, with one component it installs itself: Cilium is the only CNI and Ichor's own Helm release. Storage systems,
-monitoring and any GitOps tool are the user's business; Ichor only prepares the
-Talos side for them and coordinates with them around node operations.
-
+Ichor stops at the Talos layer plus one component it installs itself: Cilium is
+the only CNI, as Ichor's own Helm release. Storage, monitoring and GitOps tools
+are the user's business; Ichor prepares the Talos side for them and coordinates
+around node operations.
 
 ## The parts
 

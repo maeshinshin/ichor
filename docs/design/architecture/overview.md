@@ -10,34 +10,31 @@ sidebar_label: "Architecture: Overview"
 
 *Ichor runs inside the cluster it manages; ichor-ui reads nodes and never writes to them, and the controller is the only writer, apart from three CLI commands that cannot wait for it (`init`, `restore cluster`, `reclaim node --talosconfig`).*
 
-Three deliverables come out of one repository:
+## Deliverables
 
-- `ichor`, the CLI. Bootstraps the first node, adopts existing clusters, and
-  offers every operation the UI has. It is also the recovery path that does not
-  depend on a running controller.
-- `ichor-controller` (plus `ichor-installer`, a Job image). The controller is
-  the only component that writes to Talos nodes, apart from the three CLI
-  commands named above (`init`, `restore cluster`, `reclaim node --talosconfig`).
-  Two replicas, leader election.
-- `ichor-ui`, a Go backend that embeds the Preact SPA. It reads and writes CRs,
-  reads logs and state from the Talos API, and never writes to nodes.
+Three come out of one repository.
+
+| Deliverable | What it is |
+|---|---|
+| `ichor`, the CLI | Bootstraps the first node, adopts existing clusters and offers every operation the UI has. It is also the recovery path that needs no running controller. |
+| `ichor-controller` (plus `ichor-installer`, a Job image) | The only writer to Talos nodes, apart from the three CLI commands named above. Two replicas, leader election. |
+| `ichor-ui` | A Go backend embedding the Preact SPA. It reads and writes CRs, reads logs and state from the Talos API, and never writes to nodes. |
 
 `api/` (CRD types) and `proto/` (Connect definitions) are the shared contracts.
 Deliverables don't import each other; shared code lives under `pkg/`. The
 controller's entry point stays at kubebuilder's `cmd/main.go`, which the
-generated Makefile is tied to; the CLI and the UI backend are
-added beside it. The Kustomize base under `config/` is the source of truth for
-manifests, and the Helm chart in `dist/chart` is generated from it.
+generated Makefile is tied to; the CLI and the UI backend sit beside it. The
+Kustomize base under `config/` is the source of truth for manifests, and the Helm
+chart in `dist/chart` is generated from it.
 
 ## Data flow
 
-Every write, from the UI, the CLI or a user's own tooling, is a change to a custom
-resource. The controller is the only thing that turns those into Talos API
-calls; the three CLI commands that write to a node themselves (`init`,
-`restore cluster`, `reclaim node --talosconfig`) are the exceptions. This keeps validation, RBAC and audit identical regardless of how a
-change arrived. Reads come from two places: CR status (via the API
-server) and raw node state and logs (via the Talos API, read-only).
+Every write, from the UI, the CLI or a user's own tooling, is a change to a
+custom resource, and the controller alone turns it into Talos API calls (the
+three CLI exceptions aside). Validation, RBAC and audit are therefore identical
+however a change arrived. Reads come from CR status (via the API server) and from
+raw node state and logs (via the Talos API, read-only).
 
-Long-running work — upgrades, hand-overs, topology changes — keeps its state
-machine in CR status, not in memory. A controller restart or a leader change
-resumes from where it left off.
+Long-running work (upgrades, hand-overs, topology changes) keeps its state
+machine in CR status, not memory, so a controller restart or leader change
+resumes where it left off.

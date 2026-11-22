@@ -4,11 +4,13 @@ sidebar_order: 2
 
 # Install the chart
 
+![The Helm install path: add the repository, helm install with the CNI preflight, create the first admin, adopt the cluster, then optionally enable the Cilium policies with helm upgrade.](../../images/ih-install.light.drawio.svg)
+
+*Install, sign in, adopt.*
+
 ## Where the chart lives
 
-The chart is published by a workflow that runs when a `v*` tag is pushed, as a
-Helm repository on the docs site and as an OCI artifact, with the images next
-to it. Both hold the same signed archive:
+A workflow on each `v*` tag publishes the same signed archive as a Helm repository on the docs site and as an OCI artifact, with the images beside it. Helm is yours to [install](https://helm.sh/docs/intro/install/).
 
 ```sh
 helm repo add ichor https://ichor.maesh.dev/charts
@@ -19,17 +21,12 @@ helm repo update
 oci://ghcr.io/maeshinshin/charts/ichor
 ```
 
-The chart's default images are `ghcr.io/maeshinshin/ichor-controller` and
-`ghcr.io/maeshinshin/ichor-ui`, by digest. To install a chart and images you
-built yourself, see [Build from source](../../development/build-from-source.md#install-your-own-chart).
-The chart `version` has no leading `v` (for example
-`{{version}}`); `appVersion` and the image tags have it (`v{{version}}`). The published
-images are multi-arch (linux/amd64 and linux/arm64). Helm is not provided by Ichor; [install it](https://helm.sh/docs/intro/install/)
-yourself.
+- Default images: `ghcr.io/maeshinshin/ichor-controller` and `ichor-ui`, by digest, multi-arch (linux/amd64, linux/arm64). Your own build: [Build from source](../../development/build-from-source.md#install-your-own-chart).
+- The chart `version` has no leading `v` (`{{version}}`); `appVersion` and image tags do (`v{{version}}`).
 
 ## Install
 
-For a cluster that already has a pod network:
+On a cluster that already has a pod network:
 
 ```sh
 helm install ichor ichor/ichor --version X.Y.Z \
@@ -39,11 +36,9 @@ ichor create user admin --role admin --generate --bootstrap
 ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 ```
 
-The OCI form installs the same chart without adding the repository:
-`helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z …`.
+The OCI form needs no repository: `helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z …`.
 
-Adopt does not apply the network policies on a Helm install. When they apply,
-it tells you to run:
+On a Helm install adopt does not apply the network policies; when they apply it tells you to run:
 
 ```sh
 helm upgrade ichor ichor/ichor --version X.Y.Z \
@@ -52,21 +47,30 @@ helm upgrade ichor ichor/ichor --version X.Y.Z \
 
 ## Values
 
-Values worth knowing (see `dist/chart/values.yaml` for all of them):
+All values: `dist/chart/values.yaml`.
 
 | Value | Default | Meaning |
 |---|---|---|
-| `networkPolicy.cilium.enabled` | `null` | Ichor's `CiliumNetworkPolicy` objects (see [Network policies](network-policies.md)). `null` renders them when the cluster serves Cilium's `CiliumNetworkPolicy` API, `true` renders them regardless (Cilium's CRD must exist), `false` renders none. |
-| `networkPolicy.cilium.metricsNamespaces`, `metricsPodLabels` | `[]`, `{}` | Who may open the controller's metrics port. Empty: nobody. Name your Prometheus's namespace, and optionally its pod labels. |
+| `networkPolicy.cilium.enabled` | `null` | `null` renders Ichor's `CiliumNetworkPolicy` objects when the cluster serves that API; `true` renders them regardless (the CRD must exist); `false` renders none. See [Network policies](network-policies.md). |
+| `networkPolicy.cilium.metricsNamespaces`, `metricsPodLabels` | `[]`, `{}` | Who may open the controller's metrics port. Empty: nobody. |
 | `preflight.cni` | `true` | Refuse to install when every node is NotReady with the network-plugin message. Skipped by `helm template` and `--dry-run`. |
-| `installer.enabled` | `false` | Leave off: a Helm install is upgraded by Helm. |
-| `ichorUI.port` | `8443` | The HTTPS port of ichor-ui. |
-| `ichorUI.tls.secretName` | unset | Your own certificate for ichor-ui. Unset uses a leaf from the Ichor serving CA. |
-| `ichorUI.tls.caConfigMap`, `caSecret`, `caKey` | `ichor-ui-ca`, unset, `ca.crt` | The CA the ServiceMonitor (`prometheus.enabled`) verifies the HTTPS port against: the ConfigMap, or the Secret when `caSecret` is set. |
-| `settings.readOnly` | `false` | Hand the runtime settings to the chart: the `IchorInstallation` settings fields are ignored and the webhook denies writes. |
-| `updateCheck.enabled` | `true` | Look for a newer Ichor release in the chart repository and show it on the dashboard (see [Updates](../settings/updates.md)). `false` stops the requests and removes their egress rule. |
+| `installer.enabled` | `false` | Leave off: Helm upgrades a Helm install. |
+| `ichorUI.port` | `8443` | HTTPS port of ichor-ui. |
+| `ichorUI.tls.secretName` | unset | Your certificate for ichor-ui. Unset: a leaf of the Ichor serving CA. |
+| `ichorUI.tls.caConfigMap`, `caSecret`, `caKey` | `ichor-ui-ca`, unset, `ca.crt` | The CA the ServiceMonitor (`prometheus.enabled`) verifies against: the ConfigMap, or the Secret when `caSecret` is set. |
+| `rbac.bundleSecret.names` | `[]` | Secrets-bundle Secrets (`<cluster>-secrets` by default) that the Role `ichor-bundle-secret-role` may `get`, for the CLI commands that read a bundle (`ichor adopt`, `create credentials`, `rotate ca`, `export bundle`), bound with a RoleBinding. Empty installs no Role. |
+| `settings.readOnly` | `false` | The chart is the only source of runtime settings: `IchorInstallation` settings fields are ignored and the webhook denies writes. |
+| `updateCheck.enabled` | `true` | Look for a newer release and show it on the dashboard ([Updates](../settings/updates.md)). `false` stops the requests and their egress rule. |
 
-## Settings on a Helm install
+## The IchorInstallation of a Helm install
 
-See [Settings](../settings.md#a-helm-install). `settings.readOnly: true` makes the
-chart the only source.
+The cluster-scoped `IchorInstallation` named `ichor` holds `spec.deployment` (who deploys Ichor) and the runtime settings. On a Helm install `spec.deployment.manager` is `helm` (`installer` or omitted means the installer Job or `ichor init`); the CLI reads it to refuse installer commands and print the Helm command. A field you set wins; an unset one falls back to the chart value. `status.effective` shows each value and its source (`spec` or `deployment`). Full schema: [IchorInstallation](../../reference/crds/ichorinstallation.md); how to change them: [Settings](../settings.md#a-helm-install).
+
+| Field | Changes |
+|---|---|
+| `spec.deployment.manager` | `installer` (default) or `helm`. |
+| `spec.users.tokenTTL`, `refreshLifetime` | Lifetime of issued tokens (1m to 1h) and of refresh tokens (1h to 720h). |
+| `spec.defaults.driftPolicy` | `warnOnly` or `autoCorrect`: the drift policy a new `TalosCluster` gets; existing ones are untouched. |
+| `spec.updateCheck.enabled` | The newer-release check (chart `updateCheck.enabled`). |
+| `spec.autoPatch.enabled`, `components`, `window` | Automatic patch releases: on or off, which of `talos`, `kubernetes`, `cilium`, and the daily UTC `HH:MM-HH:MM` window. See [Automatic patching](../settings/automatic-patching.md). |
+| `spec.installerSignature.mode`, `installerDigest`, `installerRepository` | The installer-image check of an installer-run upgrade; unused by `helm upgrade` ([installer image](installer-image.md)). |

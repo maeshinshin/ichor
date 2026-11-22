@@ -231,7 +231,7 @@ func TestUnverifiedInstallerImageConditionIsSticky(t *testing.T) {
 		return apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.ConditionInstallerImageUnverified)
 	}
 
-	record := func(verification string) {
+	run := func(verification string) {
 		t.Helper()
 
 		img := pinnedInstallerImage{Digest: testInstallerDigest, Verification: verification}
@@ -240,20 +240,20 @@ func TestUnverifiedInstallerImageConditionIsSticky(t *testing.T) {
 		}
 	}
 
-	record(ichorv1alpha1.InstallerImageVerified)
+	run(ichorv1alpha1.InstallerImageVerified)
 
 	if got := read(); got != nil {
 		t.Fatalf("a verified run set %+v", got)
 	}
 
-	record(ichorv1alpha1.InstallerImageSkipped)
+	run(ichorv1alpha1.InstallerImageSkipped)
 
 	got := read()
 	if got == nil || got.Status != metav1.ConditionTrue || !strings.Contains(got.Message, testInstallerDigest) {
 		t.Fatalf("after a skipped run the condition = %+v; want True naming %s", got, testInstallerDigest)
 	}
 
-	record(ichorv1alpha1.InstallerImageVerified)
+	run(ichorv1alpha1.InstallerImageVerified)
 
 	if got := read(); got == nil || got.Status != metav1.ConditionTrue {
 		t.Fatalf("a later verified run left the condition %+v; want it still True", got)

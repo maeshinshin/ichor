@@ -127,7 +127,8 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll pending machines", func() {
 		pin, err := NewMaintenancePin(getMachine(tmNamespace, "refresh-pin").Status.MaintenanceFingerprint)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(pin.verify(tls.ConnectionState{PeerCertificates: []*x509.Certificate{parse(newCert)}})).To(Succeed())
-		Expect(IsMaintenancePinMismatch(pin.verify(tls.ConnectionState{PeerCertificates: []*x509.Certificate{parse(oldCert)}}))).To(BeTrue())
+		err = pin.verify(tls.ConnectionState{PeerCertificates: []*x509.Certificate{parse(oldCert)}})
+		Expect(err).To(MatchError(IsMaintenancePinMismatch, "the old certificate is refused by the refreshed pin"))
 	})
 
 	It("leaves a pending machine alone when a different identity answers at its address", func() {

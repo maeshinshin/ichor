@@ -216,7 +216,7 @@ var _ = Describe("StorageService.CreateStorage", func() {
 		Expect(err).To(MatchError(ContainSubstring("talosstorages")))
 
 		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: "rook-operator"}, &ichorv1alpha1.TalosStorage{})
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the refused create must not have written the TalosStorage")
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the refused create must not have written the TalosStorage"))
 	})
 
 	It("refuses a rook-v1 TalosStorage that carries a diskSelector", func() {
@@ -234,7 +234,7 @@ var _ = Describe("StorageService.CreateStorage", func() {
 			},
 		}
 		err := k8sClient.Create(ctx, ts)
-		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "the API server refuses it")
+		Expect(err).To(MatchError(apierrors.IsInvalid, "the API server refuses it"))
 		Expect(err).To(MatchError(ContainSubstring("rook-v1 writes no disk config")))
 	})
 
@@ -249,7 +249,7 @@ var _ = Describe("StorageService.CreateStorage", func() {
 		Expect(err).To(MatchError(ContainSubstring("needs a disk selector")))
 
 		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: "longhorn-page"}, &ichorv1alpha1.TalosStorage{})
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(err).To(MatchError(apierrors.IsNotFound, "the refused create writes nothing"))
 	})
 
 	It("refuses an empty node selector, which would select every node", func() {

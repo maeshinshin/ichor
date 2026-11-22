@@ -315,7 +315,7 @@ func ensureNodeCSRRBAC() {
 
 	for _, o := range []client.Object{role, binding} {
 		if err := k8sClient.Create(ctx, o); err != nil {
-			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue(), "creating %T: %v", o, err)
+			Expect(err).To(MatchError(apierrors.IsAlreadyExists, "creating the RBAC object either succeeds or finds it already there"))
 		}
 	}
 }

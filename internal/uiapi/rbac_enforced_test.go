@@ -275,7 +275,8 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		Expect(saClient.Get(ctx, client.ObjectKeyFromObject(op), &got)).To(Succeed())
 		Expect(got.Annotations).To(HaveKey(ichorv1alpha1.CredentialsHandoffAnnotation))
 
-		Expect(apierrors.IsForbidden(saClient.Update(ctx, &got))).To(BeTrue(), "the ServiceAccount holds no update on TalosOperations")
+		err = saClient.Update(ctx, &got)
+		Expect(err).To(MatchError(apierrors.IsForbidden, "the ServiceAccount holds no update on TalosOperations"))
 	})
 
 	// The backend re-reads an IchorUser (get, no list) and patches one named Secret,

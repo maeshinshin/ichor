@@ -13,7 +13,7 @@
         <mxCell id="n1" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Cilium is set up;&#xa;init applies seven&#xa;Gateway API CRDs" vertex="1">
           <mxGeometry x="210" y="40" width="156" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="n2" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="You apply a&#xa;CiliumLoadBalancerIPPool&#xa;and a&#xa;CiliumL2AnnouncementPolicy" vertex="1">
+        <mxCell id="n2" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="You apply a&#xa;Cilium IP pool and&#xa;an L2 announcement&#xa;policy" vertex="1">
           <mxGeometry x="386" y="40" width="156" height="90" as="geometry" />
         </mxCell>
         <mxCell id="n3" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="A Service of type&#xa;LoadBalancer gets&#xa;an address from&#xa;the pool" vertex="1">

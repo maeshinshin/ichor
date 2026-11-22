@@ -22,7 +22,7 @@
         <mxCell id="n4" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Maintenance mode:&#xa;pending machine,&#xa;you approve it" vertex="1">
           <mxGeometry x="738" y="40" width="156" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="r" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Refused: an approved Ichor machine, or a control plane whose removal breaks etcd quorum" vertex="1">
+        <mxCell id="r" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Refused:&#xa;an approved Ichor&#xa;machine, or a control&#xa;plane that would&#xa;break etcd quorum" vertex="1">
           <mxGeometry x="210" y="160" width="156" height="120" as="geometry" />
         </mxCell>
         <mxCell id="e1" edge="1" parent="1" source="n0" target="n1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">

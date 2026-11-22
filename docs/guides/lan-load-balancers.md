@@ -7,7 +7,7 @@ Cilium's kube-proxy replacement, so `ichor init` takes `--kube-proxy replaced`
 with them (Cilium 1.20.4 documentation). They are set by `ichor init` only; an
 existing cluster is not changed by either flag.
 
-![Five steps in a row: ichor init with kube-proxy replaced, Gateway API and L2 announcements; Cilium is set up and init applies seven Gateway API CRDs; you apply a CiliumLoadBalancerIPPool and a CiliumL2AnnouncementPolicy; a Service of type LoadBalancer gets an address from the pool; one node answers ARP for it on the LAN.](../images/lan-load-balancers-flow.light.drawio.svg)
+![Five steps in a row: ichor init with kube-proxy replaced, Gateway API and L2 announcements; Cilium is set up and init applies seven Gateway API CRDs; you apply a Cilium IP pool and an L2 announcement policy (CiliumLoadBalancerIPPool, CiliumL2AnnouncementPolicy); a Service of type LoadBalancer gets an address from the pool; one node answers ARP for it on the LAN.](../images/lan-load-balancers-flow.light.drawio.svg)
 
 *What init does, and the two objects you add.*
 

@@ -201,17 +201,22 @@ func TestB3B4B6EnabledAdopt(t *testing.T) {
 		}
 	}
 	// B3: the controller reaches the nodes with a certificate minted from the recovered bundle.
-	_, _ = kube.Poll("TalosMachines Ready", 3*time.Minute, func() (string, bool) {
-		st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-			"jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}")
+	// adopt sets spec.authentication.ichor, so every control plane is Ready=False/APIServerRestartRequired until
+	// `ichor rollout config` (internal/cli/config.go): the controller reached it and rendered its configuration.
+	const readyJSONPath = "jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type==\"Ready\")].status}/" +
+		"{.status.conditions[?(@.type==\"Ready\")].reason} {end}"
+	settled := func(st string) bool {
 		f := strings.Fields(st)
-		return "", len(f) == 2 && f[0] == valTrue && f[1] == valTrue
+		return len(f) == 2 && !strings.Contains(st, "=/") &&
+			!strings.Contains(strings.ReplaceAll(st, "=False/APIServerRestartRequired", ""), "=False")
+	}
+	_, _ = kube.Poll("TalosMachines Ready", 3*time.Minute, func() (string, bool) {
+		st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", readyJSONPath)
+		return "", settled(st)
 	})
-	st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
-		"jsonpath={range .items[*]}{.metadata.name}={.status.conditions[?(@.type==\"Ready\")].status}/"+
-			"{.status.conditions[?(@.type==\"Ready\")].reason} {end}")
+	st, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", readyJSONPath)
 	t.Logf("TalosMachines Ready: %s", st)
-	if strings.Contains(st, "=False") || strings.Contains(st, "=/") {
+	if !settled(st) {
 		t.Errorf("B3: a TalosMachine is not Ready (the controller must reach the nodes): %s", st)
 	}
 	b3CanaryReadable(t, c)

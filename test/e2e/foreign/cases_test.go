@@ -52,6 +52,8 @@ func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) 
 	waitCluster(t, c, "{.status.conditions[?(@.type==\"CNIHandover\")].status}", valTrue)
 	noCNIJob(t, c)
 	holdCleared(t, c)
+	time.Sleep(3 * time.Minute) // the controller renders and applies; it must change no CNI-relevant path
+	// after the wait: adopt switches ichor-ui to sign-in, and its rollout is still running right after adopt returns
 	pods, _ := inner(c, "-n", crNS, "get", "pods", "--no-headers")
 	t.Logf("pods in %s:\n%s", crNS, pods)
 	for l := range strings.SplitSeq(strings.TrimSpace(pods), "\n") {
@@ -64,7 +66,6 @@ func managedAdopted(t *testing.T, c *foreign.Cluster, before map[string]string) 
 	if strings.Contains(nodes, "NotReady") {
 		t.Errorf("nodes not Ready: %s", nodes)
 	}
-	time.Sleep(3 * time.Minute) // the controller renders and applies; it must change no CNI-relevant path
 	sameHashes(t, before, cniPaths(t, c))
 	out, err := ichorCLI(t, c, "get", "cluster", c.Opts.Prefix)
 	if err != nil || !strings.Contains(out, "Cilium  ") || strings.Contains(out, "unmanaged") {

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"connectrpc.com/connect"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -80,6 +81,16 @@ func signedInAs(user string, rules []rbacv1.PolicyRule) (*Server, context.Contex
 		RoleRef:      rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: cniClusterRole, Name: role.Name},
 		Subjects:     []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: rbacv1.UserKind, Name: user}},
 	})).To(Succeed())
+
+	// The API server's RBAC authorizer reads roles from an informer, so a new binding is not seen at once. Wait
+	// until the first rule is granted, or the impersonated call is refused for a role it already holds.
+	Eventually(func(g Gomega) {
+		sar := &authv1.SubjectAccessReview{Spec: authv1.SubjectAccessReviewSpec{User: user, ResourceAttributes: &authv1.ResourceAttributes{
+			Group: rules[0].APIGroups[0], Resource: rules[0].Resources[0], Verb: rules[0].Verbs[0], Namespace: testNamespace,
+		}}}
+		g.Expect(k8sClient.Create(ctx, sar)).To(Succeed())
+		g.Expect(sar.Status.Allowed).To(BeTrue())
+	}).Should(Succeed())
 
 	s := &Server{
 		Client: k8sClient, ControllerNamespace: testNamespace,

@@ -439,16 +439,18 @@ $(ENVTEST): $(LOCALBIN)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
 
 .PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
-$(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary, and build it with the plugins of .custom-gcl.yml.
 	@# The custom build replaces the versioned binary, so the symlink stays valid and go-install-tool skips next time.
-	@if [ -f .custom-gcl.yml ] && [ ! -f "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION).custom" ]; then \
+	@# The binary itself is asked for the plugin on every run (this target is phony): a marker file, or the file target
+	@# alone, would keep a plain go install over the same path.
+	@if [ -f .custom-gcl.yml ] && ! "$(GOLANGCI_LINT)" linters 2>/dev/null | grep -q '^logcheck:'; then \
 		echo "Building custom golangci-lint with plugins..." && \
 		$(GOLANGCI_LINT) custom --destination $(LOCALBIN) --name golangci-lint-custom && \
-		mv -f $(LOCALBIN)/golangci-lint-custom "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)" && \
-		touch "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION).custom"; \
+		mv -f $(LOCALBIN)/golangci-lint-custom "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)"; \
 	fi
+
+$(GOLANGCI_LINT): $(LOCALBIN)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
@@ -456,12 +458,12 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 # $3 - specific version of package
 define go-install-tool
 @# readlink fails when the tool is not installed yet, which the install below handles. go version reports the Go a
-@# binary was built with; a rebuild also drops the .custom marker of an earlier custom golangci-lint build.
+@# binary was built with; a rebuild replaces the plugin-enabled golangci-lint, which its target then rebuilds.
 @[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] && [ "$$(go version "$(1)-$(3)" 2>/dev/null | awk '{print $$NF}')" = "$$(go env GOVERSION)" ] || { \
 set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
-rm -f "$(1)" "$(1)-$(3).custom" ;\
+rm -f "$(1)" ;\
 GOBIN="$(LOCALBIN)" go install $${package} ;\
 mv "$(LOCALBIN)/$$(basename "$(1)")" "$(1)-$(3)" ;\
 } ;\

@@ -55,11 +55,11 @@ generator had no table for:
   actually is. KMS, TPM and node-ID key sources carry no secret (an endpoint URL, hardware-sealed,
   or derived) and stay. One table entry, keyed by machinery's own type and field name (`EncryptionKey.KeyStatic`),
   drops it from both `block.EncryptionKey` and the older, already-mirrored
-  `v1alpha1.EncryptionKey` (legacy per-partition disk encryption), since both share that name and
+  `v1alpha1.EncryptionKey` (v1alpha1 per-partition disk encryption), since both share that name and
   the table is keyed by bare name, not by package.
 - **A genuine name collision**, the first the generator has hit: `block.EncryptionKey`,
   `EncryptionKeyKMS`, `EncryptionKeyTPM` and `EncryptionKeyNodeID` all share a bare name with an
-  existing, unrelated mirror struct generated from the legacy `v1alpha1.EncryptionKey` family
+  existing, unrelated mirror struct generated from the v1alpha1 `v1alpha1.EncryptionKey` family
   (older, per-partition disk encryption, already mirrored via `v1alpha1.Config`). Mirror struct
   names are one flat Go namespace (`zz_generated.mirror.go`), so this is a real conflict, not a
   type-keyed or field-keyed question the existing tables could resolve. A new, small table,

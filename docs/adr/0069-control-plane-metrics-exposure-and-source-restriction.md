@@ -19,14 +19,14 @@ v1.14.3 source (`siderolabs/talos@v1.14.3` and `pkg/machinery@v1.14.3`).
   `extraArgs`; below the 1.14 contract it is `cluster.controllerManager.extraArgs`.
 - **kube-scheduler.** Same file, default `"bind-address": 127.0.0.1`, `MergeDenied` only for the
   kubeconfig and `config` arguments. Document `KubeSchedulerConfig`, field `extraArgs`;
-  legacy `cluster.scheduler.extraArgs`.
+  v1alpha1 `cluster.scheduler.extraArgs`.
 - **The kubelet probes keep working.** Both static pods probe `Host: localhost`
   (`k8stemplates/controller-manager.go`, `scheduler.go`), which a `0.0.0.0` bind still answers.
 - **etcd.** `services/etcd.go` has a deny list of arguments Talos owns (`listen-peer-urls`,
   `listen-client-urls`, `listen-client-http-urls`, certificates, ...). `listen-metrics-urls` is not in
   it, and Talos sets nothing for it, so `cluster.etcd.extraArgs` can carry it. etcd has no
   standalone 1.14 document (`v1alpha1_etcdconfig.go`); `cluster.etcd.extraArgs` is the only form,
-  so the legacy `Config` document is rendered for etcd under every contract. `listen-metrics-urls`
+  so the `Config` document is rendered for etcd under every contract. `listen-metrics-urls`
   is an upstream etcd flag and Talos passes it through untouched.
 - **Ports.** Controller-manager 10257 and scheduler 10259 (HTTPS, bearer token with RBAC for
   `/metrics`), etcd 2381 (plain HTTP). Talos 1.14 already serves etcd's `/metrics` over mTLS on
@@ -85,7 +85,7 @@ cluster at run time. The machine controller's input hash already includes the cl
 
 Patch override: the typed patch kinds are `Config`, `SysctlConfig`, `KernelModuleConfig` and the
 volume kinds, so there is no way to write `NetworkRuleConfig`, `KubeSchedulerConfig` or
-`KubeControllerManagerConfig` in a patch. Under a 1.14 contract a legacy `cluster.scheduler` patch
+`KubeControllerManagerConfig` in a patch. Under a 1.14 contract a v1alpha1 `cluster.scheduler` patch
 is also rejected by Talos next to the standalone document (already true before this ADR). What a patch
 can override is etcd's argument (`cluster.etcd.extraArgs`). For the rest the answer is the
 switch in the spec, as with ADR 0066. Disabled renders byte-identically to unset.

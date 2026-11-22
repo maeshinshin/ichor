@@ -62,8 +62,8 @@ as ADR 0025 already decided.
 
 - `UserVolumeConfig` is rejected without `minSize` or `maxSize`: the preset now sets `maxSize: 100%`.
 - Under a v1.14 contract the base config uses standalone `KubeletConfig` and `KubeNodeConfig`
-  documents, and Talos rejects the legacy `machine.kubelet` / `machine.nodeLabels` next to them.
-  The preset no longer returns the legacy `Config` document: `TalosPatches` is the volume only,
+  documents, and Talos rejects the v1alpha1 `machine.kubelet` / `machine.nodeLabels` next to them.
+  The preset no longer returns the `Config` document: `TalosPatches` is the volume only,
   `KubeletMounts()` is separate data. Render puts the Node label/annotation into a `KubeNodeConfig`
   document under 1.14+ and into `machine.nodeLabels`, `nodeAnnotations` and `kubelet.extraMounts` below it.
 - The standalone `KubeletConfig` has no extra-mount field, so under 1.14+ **the kubelet bind mount

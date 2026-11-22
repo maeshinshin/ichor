@@ -2,7 +2,7 @@
 
 Status: Accepted, amended · Date: 2026-10-27 · Design section: Nodes (approval, disk roles)
 
-Decided: `TalosMachine.spec.network` (one primary link chosen by permanent MAC, DHCP or static addressing, optional VLAN, DNS servers) and `TalosMachine.spec.disks` (roles `ephemeral` and `userVolume` on disks identified like `spec.install.disk`) are written at approval by the UI form and `ichor approve node` flags; `pkg/render` emits a `LinkAliasConfig` alias `net0` with a CEL selector on the permanent MAC and refers to the alias from `DHCPv4Config`, `LinkConfig`, `VLANConfig` and `ResolverConfig`, a `VolumeConfig` for EPHEMERAL and a `UserVolumeConfig` per volume, and the legacy `machine.network.interfaces` before the multi-document contract; link addressing documents are classified live in `pkg/fieldmeta`, aliases and everything else keep the reboot-required default; bonds, the `storage` role and `unused` are not done
+Decided: `TalosMachine.spec.network` (one primary link chosen by permanent MAC, DHCP or static addressing, optional VLAN, DNS servers) and `TalosMachine.spec.disks` (roles `ephemeral` and `userVolume` on disks identified like `spec.install.disk`) are written at approval by the UI form and `ichor approve node` flags; `pkg/render` emits a `LinkAliasConfig` alias `net0` with a CEL selector on the permanent MAC and refers to the alias from `DHCPv4Config`, `LinkConfig`, `VLANConfig` and `ResolverConfig`, a `VolumeConfig` for EPHEMERAL and a `UserVolumeConfig` per volume, and the v1alpha1 `machine.network.interfaces` before the multi-document contract; link addressing documents are classified live in `pkg/fieldmeta`, aliases and everything else keep the reboot-required default; bonds, the `storage` role and `unused` are not done
 
 ## Context
 
@@ -32,7 +32,7 @@ node with a second disk could not put EPHEMERAL or a data volume on it.
      `parent: net0` carries the addresses and routes, or has a `DHCPv4Config` of its own.
    - DNS servers: a `ResolverConfig` `nameservers` list, merged into the generator's own `ResolverConfig`.
    Contract 1.11 and older render one `machine.network.interfaces` entry with `deviceSelector.permanentAddr`, the VLAN
-   under it, and `machine.network.nameservers`; the legacy default route is `0.0.0.0/0` or `::/0` by gateway family.
+   under it, and `machine.network.nameservers`; the v1alpha1 default route is `0.0.0.0/0` or `::/0` by gateway family.
 4. Disk rendering: a `VolumeConfig` named `EPHEMERAL` whose `provisioning.diskSelector.match` is the same CEL expression
    `spec.install` uses (`diskExpression`), which replaces the generator's own EPHEMERAL document by merge; a
    `UserVolumeConfig` per volume with that selector, `grow: true`, `maxSize` if given, otherwise `minSize: 1GiB` because

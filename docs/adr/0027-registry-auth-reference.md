@@ -121,7 +121,7 @@ for the secrets bundle.
   `render_test` package so it can import `internal/controller` without an import cycle through
   `pkg/render`).
 - **Debt: this feature is built on a field machinery itself marks deprecated.**
-  `injectRegistries` nests its output under the legacy
+  `injectRegistries` nests its output under the
   `v1alpha1.Config.MachineConfig.MachineRegistries` (`//nolint:staticcheck` suppresses the
   `SA1019` warning at the call site), not under the modern standalone `RegistryMirrorConfig`/
   `RegistryAuthConfig` documents (package `config/types/cri`) machinery's own doc comment points

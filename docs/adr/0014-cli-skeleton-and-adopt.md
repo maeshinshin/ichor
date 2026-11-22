@@ -149,10 +149,10 @@ configuration is exactly the acceptance comparison.
 
 Step 5 also has to not leak secrets, which drove the scope decision in
 `adopt_plan.go`: **only `SysctlConfig` and `KernelModuleConfig` documents are
-ever captured automatically.** The legacy v1alpha1 `Config` document is
+ever captured automatically.** The v1alpha1 `Config` document is
 deliberately never captured.
 
-**Why the legacy `Config` document is never captured.** A sparse `Config`
+**Why the `Config` document is never captured.** A sparse `Config`
 document is representable without touching anything sensitive: the secret-bearing
 fields that mirror `secrets.Bundle` (the CAs, the join/bootstrap tokens, the etcd
 encryption key, the service-account signing key, which are Ichor's own root of
@@ -191,14 +191,14 @@ just to widen what `adopt` can automate. `SysctlConfig` and
 surface is kernel parameters and module names — there is no credential
 shape anywhere in either one to worry about missing.
 
-The consequence: a difference confined to the legacy Config document comes
+The consequence: a difference confined to the Config document comes
 back from `buildAdoptPlan` as `UnrepresentablePaths` — field *names*
 only, safe to print — with no patch. `runAdopt` reports these and leaves
 that machine's drift for the operator to patch by hand, through a
 `TalosConfigPatch` they write themselves and can see the contents of
 before it goes anywhere. This is pinned by
-`TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched`, and
-`TestAdoptNeverLeaksSecrets` includes the case ("legacy diff reported, not
+`TestBuildAdoptPlan_V1alpha1DiffIsNeverAutoPatched`, and
+`TestAdoptNeverLeaksSecrets` includes the case ("v1alpha1 diff reported, not
 patched") that the report itself never leaks either.
 
 ### Confirmation and output
@@ -220,7 +220,7 @@ full rendered machine configuration.
   version restores a way to target a subdirectory; every new subcommand
   needs the same by-hand move this ADR describes for `adopt.go`.
 - adopt's zero-drift guarantee has a known, now-permanent-by-design gap:
-  differences confined to the legacy Config document are reported, not
+  differences confined to the Config document are reported, not
   patched. This is not a missing function waiting to be written; it is a
   deliberate refusal, because the Config document's field surface has no
   stable boundary between "safe to auto-capture" and "a credential" --

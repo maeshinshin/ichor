@@ -22,9 +22,9 @@ Kubernetes executor, ADR 0024 the hand-over.
 - `manifest_apply.go` has no delete (or prune) call at all. Enabling therefore creates the DaemonSet; disabling
   only stops Talos managing it. 
 - At the `v1.14` contract the setting is the `KubeProxyConfig` document's `enabled` field (default mode
-  `nftables`), and the legacy `cluster.proxy` block cannot coexist with that document (validation error
+  `nftables`), and the v1alpha1 `cluster.proxy` block cannot coexist with that document (validation error
   "can't be used with KubeProxyConfig document"). `pkg/typedconfig` has no `KubeProxyConfig` kind, and the Cilium
-  preset's `TalosPatches` emits the legacy block, so a replaced cluster at the v1.14 contract failed to render.
+  preset's `TalosPatches` emits the v1alpha1 block, so a replaced cluster at the v1.14 contract failed to render.
   Nothing in Talos clears the rules kube-proxy programmed.
 
 ## Decision 2: what represents the switch
@@ -39,7 +39,7 @@ go one at a time and then the workers.
 status, so a cluster that never switched keeps its configuration hash. From the moment Ichor owns the value (the
 cluster replaces kube-proxy, or a switch set the status) `cluster.proxy.disabled` from patches is dropped (as the
 hand-over drops the inline manifest); an enabled cluster that never switched renders exactly as before, at the contract-appropriate form: the `KubeProxyConfig`
-document from v1.14, the legacy block before. `fieldmeta` classifies the change as reboot-required, so the
+document from v1.14, the v1alpha1 block before. `fieldmeta` classifies the change as reboot-required, so the
 machine controller refuses it on every node and only the operation applies it, one node at a time.
 
 ## Decision 3: the order
@@ -94,7 +94,7 @@ Amended: after the removal the executor connects to the `kubernetes` Service's c
 
 ## Consequences
 
-- Existing replaced clusters at the v1.14 contract render again; the legacy block in their patches is ignored.
+- Existing replaced clusters at the v1.14 contract render again; the v1alpha1 block in their patches is ignored.
 - Applying `KubeProxyConfig.enabled` takes effect without a reboot, because the controller reads the config live
   (as ADR 0057 does for images). The DaemonSet does not reappear by itself when enabling: see the 2026-10-28
   amendment.

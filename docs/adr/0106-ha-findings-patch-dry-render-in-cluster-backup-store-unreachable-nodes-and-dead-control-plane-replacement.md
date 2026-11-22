@@ -12,7 +12,7 @@ Four gaps in an Ichor-made three control plane cluster are closed here (P2, P3, 
 
 ### 1. A patch that cannot render is refused at admission (P2)
 
-A `Config` patch that set `cluster.apiServer.*` was accepted, then every machine went `RenderFailed`: "kube-apiserver config is already set in v1alpha1 config (.cluster.apiServer)". Under a multi-document contract the base config already carries a `KubeAPIServerConfig` document and Talos refuses the legacy block next to it. The controller hides the cause in the condition message, so the author saw only "rendering machine configuration failed".
+A `Config` patch that set `cluster.apiServer.*` was accepted, then every machine went `RenderFailed`: "kube-apiserver config is already set in v1alpha1 config (.cluster.apiServer)". Under a multi-document contract the base config already carries a `KubeAPIServerConfig` document and Talos refuses the v1alpha1 block next to it. The controller hides the cause in the condition message, so the author saw only "rendering machine configuration failed".
 
 The webhook `vtalosconfigpatch-v1alpha1.kb.io` (`internal/webhook/v1alpha1/talosconfigpatch_webhook.go`) reads the cluster, its secrets bundle and system inputs the way the controller does, renders each approved machine the patch selects with and without the patch, and refuses when only the render with the patch fails, with the render error in the message. It does not check when the secrets bundle is not readable yet, or the cluster is missing (nothing to render against), nor a machine that already fails without the patch (the patch did not break it, and the fix for the other cause must not be blocked). Delete is not checked. The cost is two renders per selected machine per write; renders take milliseconds.
 

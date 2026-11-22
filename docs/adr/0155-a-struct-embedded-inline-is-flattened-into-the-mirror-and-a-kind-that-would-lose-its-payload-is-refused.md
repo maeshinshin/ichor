@@ -21,7 +21,7 @@ Seven of the 67 `accept` kinds (the bond, bridge, dummy, VRF and veth links, and
 ## Held back
 
 - **Nine kinds carry a free-form payload**: KubeletConfig, KubeProxyConfig, KubeSchedulerConfig, KubeAdmissionControlConfig, KubeAuditPolicyConfig, KubeAuthenticationConfig, KubeAuthorizerConfig, KubeCredentialProviderConfig and KubeStaticPodConfig. Three of them would have no field at all. Carrying the payload means mirroring an upstream Kubernetes type (for the static pod, the Pod type, whose schema is several hundred kilobytes), which is a decision about the size of the CRD and not a change to the generator. They stay `accept` and unshipped until it is made.
-- **KubeExternalManifestConfig** has a `headers` map whose usual content is an authorization header. ADR 0152 dropped the same map from the legacy document as a credential; the same decision has to be made for this kind before it ships.
+- **KubeExternalManifestConfig** has a `headers` map whose usual content is an authorization header. ADR 0152 dropped the same map from the v1alpha1 document as a credential; the same decision has to be made for this kind before it ships.
 
 ## Rejected
 

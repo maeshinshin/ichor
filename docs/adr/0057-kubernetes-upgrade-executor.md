@@ -48,7 +48,7 @@ from `spec.kubernetesVersion`; for a control plane the diff against the node is 
 `ChangedPaths` on a render at two versions. Nothing hand-writes a component switch.
 
 The existing apply path cannot do it by itself, and that is useful. `pkg/fieldmeta` has no rule for these
-paths (it only knows the legacy `cluster.apiServer.*` prefixes, and `cluster.proxy` and the kubelet are
+paths (it only knows the v1alpha1 `cluster.apiServer.*` prefixes, and `cluster.proxy` and the kubelet are
 deliberately absent), so `TalosMachineReconciler` classifies a version change as reboot-required and refuses it
 on every node (`RebootRequired`). That keeps the roll gated by the operation: no node changes until the
 executor's turn, one control plane at a time. The executor applies with `NO_REBOOT` itself, accepting a changed

@@ -14,7 +14,7 @@ layer 1 and layer 4 disagreed. That gap, noted in ADR 0050 decision 2, is closed
 
 **1. Where.** `injectNodeLabels` (`pkg/render/nodelabels.go`) merges the labels with the same
 version-contract branch as `nodeRegistrationDocs`: `KubeNodeConfig.labels` from Talos 1.14,
-legacy `machine.nodeLabels` below it (a legacy block next to the multi-document base fails
+v1alpha1 `machine.nodeLabels` below it (a v1alpha1 block next to the multi-document base fails
 validation).
 
 **2. Precedence.** It runs after `injectStorage` and before every `TalosConfigPatch`.

@@ -17,5 +17,5 @@ On a three-control-plane Talos v1.13 cluster each node lists its own name and ad
 
 ## Rejected
 
-- Per-node SAN patches: `machine.certSANs` is only capturable in the legacy document, which adopt never captures.
+- Per-node SAN patches: `machine.certSANs` is only capturable in the v1alpha1 document, which adopt never captures.
 - A `--cert-sans` flag: the union is derivable; the user can still edit `spec.certSANs` of an existing cluster.

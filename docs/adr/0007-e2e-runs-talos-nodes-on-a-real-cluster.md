@@ -134,7 +134,7 @@ Constraints the harness has to respect:
   `extraKernelArgs: [console=ttyS0,115200n8]` gives a serial console for the
   ISO boot. Keeping it *past* the install reboot would need
   `machine.install.extraKernelArgs` and `grubUseUKICmdline: false` in the
-  machine config — and on Talos 1.14 that means hand-editing the legacy
+  machine config — and on Talos 1.14 that means hand-editing the
   v1alpha1 section of a config whose install and network settings live in their
   own documents (`UnattendedInstallConfig`, `KubeNetworkConfig`,
   `KubeFlannelCNIConfig`), which the API rejects as incompatible.

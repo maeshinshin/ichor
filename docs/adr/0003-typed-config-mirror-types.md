@@ -91,7 +91,7 @@ machinery types. Nothing about the Talos field catalogue is hand-maintained.
   the kind from whichever field is set — was rejected because Talos's own
   documents carry a kind, so this way the YAML reads like a Talos config
   document and the validation error says which kind it expected.
-  The legacy v1alpha1 document has no `kind` string in Talos itself, so its
+  The v1alpha1 document has no `kind` string in Talos itself, so its
   discriminator value is **`Config`**, matching the Go type name. That is now
   published API surface.
 - Phase 1 ships `TalosConfigPatch` without `documents[]`; the generator is the
@@ -159,7 +159,7 @@ Four constraints on closing it:
   CRD before any override.
 - **There is no fourth option.** Every one of the eleven is still
   `meta.Unstructured` in Talos's *modern*, non-deprecated documents too, so
-  moving the allow-list off the legacy `Config` document would relocate this
+  moving the allow-list off the `Config` document would relocate this
   wall rather than remove it.
 
 Everything except `MachinePods` and `PluginConfiguration` would land the CRD
@@ -230,7 +230,7 @@ specs-go's `LinuxSeccomp`/`LinuxSyscall` shape changes.
 The drop mechanism has a second, unrelated reason to drop a field: not because
 it can't be represented, but because it must not be. Nine machinery fields
 carry cluster secret material — join tokens, CA key pairs, etcd and
-service-account encryption keys — reachable through the legacy `Config`
+service-account encryption keys — reachable through the v1alpha1 `Config`
 document the same as everything else:
 
 `ClusterConfig.ClusterSecret`, `ClusterConfig.BootstrapToken`,
@@ -261,7 +261,7 @@ distinction to pick the right table.
 `omitempty` in machinery, so while the field stayed required a sparse `Config`
 document (one that doesn't carry every field a full machine config would)
 could never validate against the mirror, which would stand in the way of
-`adopt` capturing a legacy `Config` document sparsely. With the field gone
+`adopt` capturing a `Config` document sparsely. With the field gone
 entirely, a sparse `Config` document is representable.
 
 **CEL was considered and rejected.** A `+kubebuilder:validation:XValidation`
@@ -377,7 +377,7 @@ comfortably inside the ceiling.
 `typeRenames` is a third type-keyed table (after `fieldOverrides` and
 `secretFields`). Phase 3 (disk roles, ADR 0012) added it to resolve the
 generator's first mirror-struct name collision: `block.EncryptionKey` and three
-sibling types share a bare name with the already-mirrored, unrelated legacy
+sibling types share a bare name with the already-mirrored, unrelated v1alpha1
 `v1alpha1.EncryptionKey` family, so the `block` versions are renamed
 `VolumeEncryptionKey` and so on on the mirror side.
 
@@ -385,7 +385,7 @@ sibling types share a bare name with the already-mirrored, unrelated legacy
 `typeRenames` is applied to `name` *before* the field loop runs. A key built
 from `name` would therefore see `VolumeEncryptionKey.KeyStatic` for the `block`
 type, not `EncryptionKey.KeyStatic`: one `"EncryptionKey.KeyStatic"` entry
-would drop the field from the legacy type only, and the modern side would keep
+would drop the field from the v1alpha1 type only, and the modern side would keep
 `KeyStatic` (and so the passphrase nested inside it) in the CRD schema, for all
 three kinds that embed it (`VolumeConfig`, `UserVolumeConfig`,
 `RawVolumeConfig`) — the exact category of hole `secretFields` exists to close,

@@ -2,12 +2,12 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Nodes (approval, disk roles), CNI, Bootstrap
 
-Decided: `TalosCluster.spec.network {podSubnets, serviceSubnets}` (optional, fixed once set) and `TalosMachine.spec.install {disk, image}` carry the values ADR 0075 could not express; the system layer renders them as the v1.14 documents (`KubeNetworkConfig`, `UnattendedInstallConfig`) from that contract and as the legacy fields before it, and drops Talos's own CNI (the `KubeFlannelCNIConfig` document, or `cluster.network.cni.name: none`) for every preset but flannel; approval (`ichor approve node --install-disk`, the UI form) sets the install disk, `ichor init` stops writing `machine.install`, hostnames are RFC 1123 checked, and `adopt` names the spec field for each such drift path. This is option C of ADR 0075 with the per-node half also as a spec field, not a patch kind.
+Decided: `TalosCluster.spec.network {podSubnets, serviceSubnets}` (optional, fixed once set) and `TalosMachine.spec.install {disk, image}` carry the values ADR 0075 could not express; the system layer renders them as the v1.14 documents (`KubeNetworkConfig`, `UnattendedInstallConfig`) from that contract and as the v1alpha1 fields before it, and drops Talos's own CNI (the `KubeFlannelCNIConfig` document, or `cluster.network.cni.name: none`) for every preset but flannel; approval (`ichor approve node --install-disk`, the UI form) sets the install disk, `ichor init` stops writing `machine.install`, hostnames are RFC 1123 checked, and `adopt` names the spec field for each such drift path. This is option C of ADR 0075 with the per-node half also as a spec field, not a patch kind.
 
 ## Context
 
 ADR 0075 left open how a v1.14 cluster gets non-default subnets, an install disk and "no flannel". At the v1.14 contract
-the generator emits its defaults, no spec field carried those values, and the legacy `Config` fields conflict with the
+the generator emits its defaults, no spec field carried those values, and the v1alpha1 `Config` fields conflict with the
 v1.14 documents, so a correct cluster could not be built, adopted, or have a maintenance node installed.
 
 ## Decision
@@ -30,7 +30,7 @@ v1.14 documents, so a correct cluster could not be built, adopted, or have a mai
    Talos's disk environment (`disk.wwid == "..."`, `disk.serial == "..."`, `"/dev/disk/by-id/x" in disk.symlinks`,
    `disk.bus_path == "..."`, `disk.dev_path == "..."`) and `wipe: false` (what the generator writes). Before v1.14 it
    renders `machine.install` (`diskSelector.wwid|serial|busPath`; `installDisk` for a by-id or device path, because the
-   legacy selector has no symlink match). A machine with no `install` renders none, as before.
+   v1alpha1 selector has no symlink match). A machine with no `install` renders none, as before.
 4. Approval. `ApproveMachineRequest.install` and `Machine.install` (proto), `ichor approve node --install-disk
    <wwid:ID | serial:S | /dev/disk/by-id/... | /pci... | /dev/sdX> [--install-image]`. The UI form lists the disks that
    `GetNode` already reads from a maintenance-mode machine (`Disk.dev_path` is new on the wire) and picks the most
@@ -63,12 +63,12 @@ for a machine with neither. It changes in two cases.
   field is for approval of a node that has not installed yet, which receives the whole config at first apply.
 - A cluster whose bootstrap patch still carries `machine.install` (written by an older `ichor init`) keeps working
   while its machine has no `spec.install`. Setting both at v1.14 fails validation inside Talos (`UnattendedInstallConfig`
-  conflicts with `machine.install`), and the render error says so; remove the legacy field from the patch first.
+  conflicts with `machine.install`), and the render error says so; remove the v1alpha1 field from the patch first.
 
 ## Not done
 
 - Cert SANs, the DNS domain, install wipe and extra kernel arguments still have no field (certSANs stays in the init
-  bootstrap patch as a legacy `Config`; whether Talos accepts that next to the v1.14 documents is an open question).
+  bootstrap patch as a v1alpha1 `Config`; whether Talos accepts that next to the v1.14 documents is an open question).
 - No TalosOperation resets a node to apply a changed install disk.
 - The disk list in the approval form comes from `GetNode`, so for a machine that no one can reach it is a typed path.
 - Whether Talos v1.14.3 can apply the removal of `KubeFlannelCNIConfig` without a reboot is not known; until it is, the

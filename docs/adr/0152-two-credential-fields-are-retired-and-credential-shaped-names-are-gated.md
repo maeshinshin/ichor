@@ -2,13 +2,13 @@
 
 Status: Accepted, amended · Date: 2026-11-12 · Design section: Typed configuration · Builds on: 0003, 0012, 0099, 0101
 
-Decided: the registry client identity (`machine.registries.config.<host>.tls.clientIdentity`, a certificate and a PEM private key) and `cluster.extraManifestHeaders` (HTTP headers, usually `Authorization`) are dropped from the legacy `v1alpha1` document mirror and retired from the `TalosConfigPatch` and `TalosCluster` CRDs through the installer's retired-field list, as an exception to the append-only rule; and the generator's suspicious-name scan is now a test that fails on any credential-shaped field that is neither dropped nor on a reviewed list with a reason. Amended 2026-11-15: `TalosCluster.spec.cni.custom.documents`, the deprecated and unused second copy of the document union, is retired whole by the same exception; `spec.cni.custom` and `spec.cni.custom.source` stay.
+Decided: the registry client identity (`machine.registries.config.<host>.tls.clientIdentity`, a certificate and a PEM private key) and `cluster.extraManifestHeaders` (HTTP headers, usually `Authorization`) are dropped from the v1alpha1 `v1alpha1` document mirror and retired from the `TalosConfigPatch` and `TalosCluster` CRDs through the installer's retired-field list, as an exception to the append-only rule; and the generator's suspicious-name scan is now a test that fails on any credential-shaped field that is neither dropped nor on a reviewed list with a reason. Amended 2026-11-15: `TalosCluster.spec.cni.custom.documents`, the deprecated and unused second copy of the document union, is retired whole by the same exception; `spec.cni.custom` and `spec.cni.custom.source` stay.
 
 ## Context
 
 `secretFields` (`internal/tools/mirrorgen/main.go`) drops the credential fields of the mirrored Talos types so a credential cannot be stored in a CR (design principle 2, ADR 0003, ADR 0012). Two fields were missed and shipped in v0.1.0, v0.1.1 and v0.2.0:
 
-- `PEMEncodedCertificateAndKey.Key`, reached through `RegistryTLSConfig.clientIdentity`. The same key is refused when it arrives as a `RegistryTLSConfig` document, because that kind is classified `secret` (ADR 0149); the legacy document was the way around it.
+- `PEMEncodedCertificateAndKey.Key`, reached through `RegistryTLSConfig.clientIdentity`. The same key is refused when it arrives as a `RegistryTLSConfig` document, because that kind is classified `secret` (ADR 0149); the v1alpha1 document was the way around it.
 - `ClusterConfig.ExtraManifestHeaders`, a map sent as HTTP headers when Talos fetches `extraManifests`. Its normal use is a bearer token or basic-auth header for a private source.
 
 The generator already printed `PEMEncodedCertificateAndKey.Key` among its "suspicious name" survivors, in a list of seventeen, and nothing failed. The headers field has no credential word in its name and was never listed.

@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-11-11 · Design section: Bootstrap · Supersedes: 0141
 
-Decided: `ichor adopt` no longer takes the union of the nodes' certSANs. `spec.certSANs` is only the SANs every node has in both its `machine.certSANs` and, on a control plane, its kube-apiserver SANs, and whatever a node's own `machine.certSANs` (and legacy `cluster.apiServer.certSANs`) hold beyond it is captured into that node's `adopt-<machine>` patch, as the network interfaces (ADR 0139) and ResolverConfig (ADR 0140) are. Nothing changes on a node, and the "need consent" lines and the per-node "gains the subject alternative names" line are gone.
+Decided: `ichor adopt` no longer takes the union of the nodes' certSANs. `spec.certSANs` is only the SANs every node has in both its `machine.certSANs` and, on a control plane, its kube-apiserver SANs, and whatever a node's own `machine.certSANs` (and v1alpha1 `cluster.apiServer.certSANs`) hold beyond it is captured into that node's `adopt-<machine>` patch, as the network interfaces (ADR 0139) and ResolverConfig (ADR 0140) are. Nothing changes on a node, and the "need consent" lines and the per-node "gains the subject alternative names" line are gone.
 
 ## Context
 

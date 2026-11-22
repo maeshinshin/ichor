@@ -11,10 +11,10 @@ Decided: the set of Talos config document kinds is read from the `registry.Regis
 ## Decisions
 
 1. **The list is derived.** The registry package is `internal` to machinery, so its `Kinds()` cannot be imported. The test loads `config/types/...` with `go/packages`, finds every call to that package's `Register`, and takes the first argument's constant value from the type checker. An argument that is not a constant string fails the test rather than being skipped.
-2. **One row per registered kind, keyed by the string Talos registers.** The legacy machine and cluster document registers as `v1alpha1`; Ichor calls it `Config`.
+2. **One row per registered kind, keyed by the string Talos registers.** The v1alpha1 machine and cluster document registers as `v1alpha1`; Ichor calls it `Config`.
 3. **Four classes.**
    - `accept`: Ichor represents the kind in `TalosConfigPatch`.
-   - `secret`: the document carries credentials, so Ichor refuses it. Every kind that implements machinery's `SecretDocument` and is neither a volume document nor the legacy `v1alpha1` document (both are mirrored with their secret fields dropped) is in this class.
+   - `secret`: the document carries credentials, so Ichor refuses it. Every kind that implements machinery's `SecretDocument` and is neither a volume document nor the v1alpha1 `v1alpha1` document (both are mirrored with their secret fields dropped) is in this class.
    - `ichor-owned`: Ichor renders the document itself from a spec field, so a patch must not set it.
    - `unstructured`: the document is raw YAML or text with no schema to mirror.
 4. **`SwapVolumeConfig` is `accept` with `KeyStatic` dropped.** The volume documents carry a static disk-encryption passphrase only as one key source of an otherwise ordinary document, and `EncryptionKey.KeyStatic` is already dropped by the generator (ADR 0012). Swap follows the same rule instead of being refused whole.

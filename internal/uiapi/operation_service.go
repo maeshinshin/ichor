@@ -230,7 +230,7 @@ func (s *Server) GetOperation(
 	return connect.NewResponse(&pb.GetOperationResponse{Operation: out}), nil
 }
 
-// SetOperationPaused writes spec.paused: pausing keeps the cluster lock and undoes nothing.
+// SetOperationPaused writes spec.paused: pausing releases the cluster lock and undoes nothing.
 // Resuming an operation that paused itself after a failed step also sets the retry annotation to "true",
 // so the controller runs the failed step again.
 func (s *Server) SetOperationPaused(

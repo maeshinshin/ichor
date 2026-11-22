@@ -341,10 +341,10 @@ type TalosOperationSpec struct {
 	// +optional
 	Node *TalosOperationNodeSpec `json:"node,omitempty"`
 
-	// paused stops the operation from advancing any further machine. It
-	// does not undo a machine already advanced, and it does not release
-	// the cluster lock -- the operation is not finished, only halted.
-	// It has no effect on an etcd restore that has started: the
+	// paused stops the operation before its next pass: the pass already
+	// running completes, and no machine already advanced is undone. A paused
+	// operation releases the cluster lock (ADR 0162); clearing paused resumes
+	// it and takes the lock again. It has no effect on an etcd restore that has started: the
 	// restore takes the Kubernetes API away and the controller drives it to the
 	// end, or to a failed step that pauses it, whatever this field says.
 	// +kubebuilder:default=false
@@ -660,7 +660,8 @@ type TalosOperationStatus struct {
 	LastRetry *metav1.Time `json:"lastRetry,omitempty"`
 
 	// autoRetry is the automatic retry of a step that failed on a transient error: which step, how many
-	// times it was retried, and when the next retry runs (ADR 0174). Absent until a step is first retried.
+	// times it was retried, and when the next retry runs (ADR 0174). Set when such a failure schedules a
+	// retry; cleared by a retry a person requests, and when the operation completes.
 	// +optional
 	AutoRetry *TalosOperationAutoRetryStatus `json:"autoRetry,omitempty"`
 

@@ -11,30 +11,25 @@ sidebar_order: 20
 
 ## The CLI
 
-- Parity with the UI: both write CRs, share the Go packages for rendering,
-  planning (diff, impact, pre-checks, upgrade paths) and dangerous-operation
-  checks, and use the same Connect API. The CLI computes locally when it cannot
-  reach the backend (`--local`).
-- It prints for people by default (tables, aligned blocks), with `-o yaml|json`
-  for scripts, `--follow`/`--watch`, and interactive confirmation skipped by
-  `--yes`.
-- It never writes to a Talos node, except `init` and full-loss recovery
-  (`restore cluster`), which predate the cluster and so have no controller, and
-  `reclaim node --talosconfig`, which acts with the operator's own credential
-  that Ichor never stores. `adopt` only reads from nodes.
-- `ichor ui` opens a port-forward to ichor-ui and re-establishes it on another
-  pod when the current one goes away.
+- Same CRs, Go packages (render, plan, diff, impact, pre-checks, upgrade paths,
+  dangerous-operation checks) and Connect API as the UI; it computes locally when
+  the backend is unreachable (`--local`).
+- Prints for people; `-o yaml|json` for scripts, `--follow`/`--watch`, `--yes`
+  skips confirmation.
+- Writes to a Talos node only for `init`, `restore cluster` (both predate the
+  controller) and `reclaim node --talosconfig` (the operator's own credential,
+  never stored). `adopt` only reads.
+- `ichor ui` port-forwards to ichor-ui and moves to another pod when its pod goes.
 
 ## The UI
 
-A Vite + Preact + TypeScript SPA built with preactcn, embedded in the Go backend.
-The backend talks to the API server and, read-only, to the Talos API; the browser
-talks only to the backend. It survives drains: stateless, two replicas where
-possible, graceful termination that asks clients to reconnect, and streams that
-resume from a token (resourceVersion, last log timestamp, progress sequence).
-
-It is built for one cluster: no cluster list, and a top bar with the cluster's
-name, its Talos, Kubernetes and Ichor versions and a health badge.
+A Vite + Preact + TypeScript SPA built with preactcn, embedded in the Go
+backend, which talks to the API server and, read-only, the Talos API; the browser
+talks only to the backend. Stateless, two replicas where possible, graceful
+termination asks clients to reconnect, streams resume from a token
+(resourceVersion, last log timestamp, progress sequence). One cluster: no
+cluster list; a top bar shows its name, Talos, Kubernetes and Ichor versions and
+a health badge.
 
 | Screen | Holds |
 |---|---|
@@ -52,13 +47,12 @@ A merged multi-node log viewer is planned.
 
 ## Searching config fields
 
-A patch is edited by searching for a field, not by picking a document kind
-first. The Configuration page's Search fields button opens a command-palette
-dialog over every field of every Talos document kind Ichor accepts; a row shows
-the field's path, kind, type and Talos's description. Choosing one puts the field
-in the patch's document of that kind, or in a new one that also shows an input
-for each field the kind requires. A kind's own row adds a document, so a patch
-can hold two of one kind.
+The Configuration page's Search fields button opens a command-palette dialog over
+every field of every Talos document kind Ichor accepts (path, kind, type, Talos's
+description). Choosing one puts it in the patch's document of that kind, or a new
+one that also asks for the kind's required fields. A kind's own row adds a
+document, so a patch can hold two of one kind. The whole-document JSON `Textarea`
+and the kind `Select` still work.
 
 | Field type | Control |
 |---|---|
@@ -67,16 +61,9 @@ can hold two of one kind.
 | Talos lists the allowed values | `Select` |
 | object, array, map | `Textarea` of JSON |
 
-The JSON `Textarea` of the whole document stays below the chosen fields and edits
-the same text, and the kind `Select` still works.
-
-The rows come from `ui/src/gen/fieldindex.json`, generated at build time and
-shipped as its own chunk of the UI bundle, so the browser reads no schema and
-ichor-ui's role gains no permission. `make ui-fieldindex` writes it (the UI
-targets run it first); it is not committed. It is built from the
-`TalosConfigPatch` CRD schema (paths, types, required) and the Talos machinery
-documentation tables (descriptions, allowed values), which the CRD schema mostly
-lacks. The API server stays the only validator: a value that does not fit is
-refused at save with the server's own message. `KubeStaticPodConfig` has one row,
-its own, and none for the 1,075 fields of the Kubernetes `Pod` inside it (ADR
-0039's amendment).
+The rows come from `ui/src/gen/fieldindex.json`, built by `make ui-fieldindex`
+(the UI targets run it; not committed) from the `TalosConfigPatch` CRD schema and
+the Talos machinery documentation tables, and shipped as its own chunk: the
+browser reads no schema and ichor-ui gains no permission. The API server stays
+the only validator and refuses a bad value at save. `KubeStaticPodConfig` has one
+row, none for the 1,075 fields of the Kubernetes `Pod` inside it (ADR 0039).

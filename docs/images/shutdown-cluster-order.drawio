@@ -1,0 +1,34 @@
+<mxfile host="Electron">
+  <diagram id="Shutdown order" name="Shutdown order">
+    <mxGraphModel grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="0" page="0" pageScale="1" pageWidth="900" pageHeight="180" math="0" shadow="0">
+      <root>
+        <mxCell id="0" style="html=0;" />
+        <mxCell id="1" parent="0" style="html=0;" />
+        <mxCell id="pn" parent="1" style="rounded=1;arcSize=3;fillColor=light-dark(#FFFFFF,#0A0A0A);strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;html=0;" value="" vertex="1">
+          <mxGeometry x="10" y="10" width="880" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="b0" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="1  Workers&#xa;drained, then stopped&#xa;(not the controller's node)" vertex="1">
+          <mxGeometry x="30" y="40" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="b1" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="2  One forced burst&#xa;every control plane,&#xa;the controller's node last" vertex="1">
+          <mxGeometry x="250" y="40" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="ShutDown&#xa;nodes are off; you&#xa;power them on" vertex="1">
+          <mxGeometry x="470" y="40" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Completed&#xa;every node answers on&#xa;a new boot" vertex="1">
+          <mxGeometry x="690" y="40" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" edge="1" parent="1" source="b0" target="b1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="b1" target="b2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="b2" target="b3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -17,6 +17,8 @@ limitations under the License.
 package cli
 
 import (
+	"regexp"
+
 	appsv1 "k8s.io/api/apps/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,7 +42,42 @@ func loadKubeconfig(path string) (*rest.Config, error) {
 		rules.ExplicitPath = path
 	}
 
-	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{}).ClientConfig()
+	cfg, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{}).ClientConfig()
+	if err != nil {
+		return nil, scrubKubeconfigError(rules, err)
+	}
+
+	return cfg, nil
+}
+
+// urlPassword matches the password of a URL's userinfo, which client-go quotes whole when it rejects a
+// proxy-url or a server; it is also what an unparseable URL leaves nothing else to find it by.
+var urlPassword = regexp.MustCompile(`://[^/@\s:]*:([^/@\s]+)@`)
+
+// scrubKubeconfigError rewrites err with every credential of the kubeconfig the rules load replaced.
+// shortcut: only values client-go is known to quote (URL passwords) plus the kubeconfig's own token,
+// password and key data; drop it if client-go stops quoting config values in errors.
+func scrubKubeconfigError(rules *clientcmd.ClientConfigLoadingRules, err error) error {
+	raw, lerr := rules.Load()
+	if lerr != nil { // a load error names the file and the parse position, never a value
+		return err
+	}
+
+	var secretValues []string
+
+	for _, c := range raw.Clusters {
+		for _, u := range []string{c.Server, c.ProxyURL} {
+			for _, m := range urlPassword.FindAllStringSubmatch(u, -1) {
+				secretValues = append(secretValues, m[1])
+			}
+		}
+	}
+
+	for _, a := range raw.AuthInfos {
+		secretValues = append(secretValues, a.Token, a.Password, string(a.ClientKeyData))
+	}
+
+	return newScrubber(secretValues...)(err)
 }
 
 // cliScheme is every type a CLI command needs a typed client for: Ichor's

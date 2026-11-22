@@ -131,3 +131,44 @@ func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 		t.Fatalf("expected the error to name the unknown field \"token\", got: %v", err)
 	}
 }
+
+// client-go quotes the proxy-url and the server of a kubeconfig it cannot parse, userinfo password
+// included; the error reaches stderr and, from the installer Job, the termination message.
+func TestLoadKubeconfigErrorsCarryNoCredential(t *testing.T) {
+	const kc = `apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://x
+    proxy-url: "http://user:SENTINELPASS@%zz"
+users:
+- name: u
+  user:
+    token: SENTINELTOKEN
+contexts:
+- name: x
+  context: {cluster: c, user: u}
+current-context: x
+`
+
+	p := filepath.Join(t.TempDir(), "kubeconfig")
+	if err := os.WriteFile(p, []byte(kc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadKubeconfig(p)
+	if err == nil {
+		t.Fatal("a kubeconfig with an unparseable proxy-url loaded")
+	}
+
+	for _, secret := range []string{"SENTINELPASS", "SENTINELTOKEN"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("error quotes %s: %v", secret, err)
+		}
+	}
+
+	if !strings.Contains(err.Error(), "proxy-url") {
+		t.Errorf("error lost its cause: %v", err)
+	}
+}

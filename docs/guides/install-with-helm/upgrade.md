@@ -12,4 +12,4 @@ sidebar_order: 9
 - `ichor` commands that would run the installer Job refuse and print the Helm command. The UI's Helm detection is limited, so some of its upgrade prompts may still describe the installer path.
 
 > [!IMPORTANT]
-> `helm uninstall` keeps the CRDs, and so every cluster object. Cilium is a separate release and stays.
+> `helm uninstall` keeps the CRDs by default (`crd.keep: true`), and so every cluster object. Cilium is a separate release and stays.

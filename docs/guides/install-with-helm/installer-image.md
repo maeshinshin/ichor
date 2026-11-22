@@ -43,7 +43,7 @@ ichor upgrade ichor v0.0.1900000001-g1a2b3c4 --skip-signature-check
 
 - The plan warns before you confirm; the controller emits Warning Event `InstallerSignatureSkipped`.
 - `status.installerImage.verification` becomes `Skipped`, and the condition `InstallerImageUnverified` becomes True on `IchorInstallation`. It is sticky: only a person clears it, by removing it from `status.conditions`.
-- `ichor version` says "signature NOT checked"; the UI shows an "Installer not verified" badge on every page and an alert on the cluster page.
+- `ichor version` says "signature NOT checked"; the UI shows an "Installer not verified" badge in the header of every page (hidden on a narrow window) and an alert in the attention list of the Overview page.
 - No controller flag or chart value turns the check off. A fork that signs its own images cannot yet name its own signer; it skips the same way.
 
 ## The flag is not one-shot

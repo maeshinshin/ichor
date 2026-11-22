@@ -96,4 +96,4 @@ export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
 ichor rollout config --cluster demo --follow
 ```
 
-With one control plane the Kubernetes API is down for about a minute.
+With one control plane the Kubernetes API is unavailable while its kube-apiserver restarts.

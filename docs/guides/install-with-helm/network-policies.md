@@ -15,7 +15,7 @@ On a Cilium cluster, `ichor-system` is default-deny in both directions with one 
 | `ichor-controller-talos-egress` | controller and ichor-ui to Talos nodes and cluster endpoints; controller to S3 stores | endpoints and addresses of `TalosCluster`, `TalosMachine`, `MachineReclaim`, `TalosEtcdBackup` |
 | `ichor-controller-talos-egress-image-factory` | the controller only (`control-plane=controller-manager`), never ichor-ui, to the Image Factory of a cluster with a `TalosStorage` (`spec.imageFactoryURL`, default `https://factory.talos.dev`) | `spec.imageFactoryURL` of each such `TalosCluster`; absent when none has a `TalosStorage` |
 | `ichor-controller-release-check` | controller to the release check's chart and image registries | the controller's configured repositories; absent while `updateCheck` is off |
-| `ichor-ui-oidc-egress` | ichor-ui to its external OIDC issuer | `ICHOR_OIDC_ISSUER` or `--oidc-issuer` of the ichor-ui Deployment (a change takes about a minute); absent without one |
+| `ichor-ui-oidc-egress` | ichor-ui to its external OIDC issuer | `ICHOR_OIDC_ISSUER` or `--oidc-issuer` of the ichor-ui Deployment (a change is picked up within 30 seconds); absent without one |
 
 - Names match with Cilium's `toFQDNs`, which needs the DNS proxy: `enable-l7-proxy` on (it is, in the Cilium Ichor installs) and the pods' DNS through the `kube-dns` rule Ichor carries.
 - On a Cilium you manage with the L7 proxy off, a name is never allowed: set `networkPolicy.cilium.dynamicTalosEgress=false` to fall back to `world` rules, or `networkPolicy.cilium.enabled=false`.

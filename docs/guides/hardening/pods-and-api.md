@@ -18,7 +18,7 @@ spec:
 ```
 
 - Both need `versionContract` v1.14 or later; on an older contract Ichor refuses the option rather than raising the contract.
-- Run `ichor rollout config --cluster NAME --follow` (or start the rollout on the cluster page). With one control plane the API is down for about a minute; the whole operation takes a few minutes.
+- Run `ichor rollout config --cluster NAME --follow` (or start the rollout on the cluster page). With one control plane the Kubernetes API is unavailable while its kube-apiserver restarts; Ichor waits up to 3 minutes for it to answer before it pauses the operation.
 - `podSecurity` changes only the levels you set (`enforce`, `audit`, `warn`; Talos defaults are baseline, restricted, restricted) and adds `exemptNamespaces` to `kube-system`, which stays exempt.
 - Existing pods are not evicted; new and updated pods that break `enforce` are rejected. Namespaces with privileged workloads (storage, CNI add-ons) need an exemption.
 

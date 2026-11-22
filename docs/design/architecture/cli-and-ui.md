@@ -65,5 +65,6 @@ The rows come from `ui/src/gen/fieldindex.json`, built by `make ui-fieldindex`
 (the UI targets run it; not committed) from the `TalosConfigPatch` CRD schema and
 the Talos machinery documentation tables, and shipped as its own chunk: the
 browser reads no schema and ichor-ui gains no permission. The API server stays
-the only validator and refuses a bad value at save. `KubeStaticPodConfig` has one
-row, none for the 1,075 fields of the Kubernetes `Pod` inside it (ADR 0039).
+the only validator and refuses a bad value at save. `KubeStaticPodConfig` has two
+rows (the collection and its key), none for the 1,000-odd fields of the Kubernetes
+`Pod` inside it (ADR 0039).

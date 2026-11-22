@@ -4,7 +4,7 @@ sidebar_order: 5
 
 # Sign in and get a kubeconfig
 
-![How the CLI signs in and what it can produce. ichor auth login opens the browser login page and caches tokens in ~/.ichor/auth. ichor create kubeconfig writes a kubeconfig, and kubectl then runs ichor auth token, which uses the cache. ichor create talosconfig issues a short-lived read-only talosconfig.](../../images/users-sign-in-flow.light.drawio.svg)
+![ichor auth login caches tokens; ichor create kubeconfig writes a kubeconfig that runs ichor auth token; ichor create talosconfig issues a short-lived read-only talosconfig.](../../images/users-sign-in-flow.light.drawio.svg)
 
 *One browser login feeds both `kubectl` and a read-only `talosctl`.*
 

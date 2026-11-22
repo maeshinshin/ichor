@@ -4,7 +4,7 @@ sidebar_order: 1
 
 # Ingress firewall
 
-![How the firewall is applied and what happens when it is wrong. Setting spec.security.firewall makes the webhook check the controller and control plane addresses. A failed check is refused. If it passes, Talos blocks everything except the ichor-fw rules and your allow entries, without a reboot. On a cluster created before the check, a wrong control plane CIDR locks Ichor out; recovery is a temporary apid rule patched in with talosctl from a talosAPICIDRs host.](../../images/hardening-firewall.light.drawio.svg)
+![The webhook checks the controller and control plane addresses and refuses a firewall that fails. A passing one blocks all but the ichor-fw rules. A lock-out is undone with a temporary apid rule.](../../images/hardening-firewall.light.drawio.svg)
 
 *The webhook refuses a firewall that would cut Ichor off; the way back is a temporary apid rule.*
 
@@ -24,9 +24,9 @@ spec:
 ```
 
 Enabled sets `NetworkDefaultActionConfig` to `block` and renders one
-`NetworkRuleConfig` per service, named `ichor-fw-<service>` (Talos v1.14).
-Talos always accepts `lo`, `siderolink` and `kubespan`, and in block mode
-rate-limited ICMP and pod-to-service traffic. Ichor opens:
+`NetworkRuleConfig` per service, `ichor-fw-<service>` (Talos v1.14). Talos
+still accepts `lo`, `siderolink`, `kubespan`, rate-limited ICMP and
+pod-to-service traffic. Ichor opens:
 
 | Rule | Port | Sources | On |
 |---|---|---|---|
@@ -78,9 +78,9 @@ talosctl -e NODE -n NODE patch machineconfig --patch @rule.yaml
 #   ingress: [{subnet: CONTROL_PLANE_IP/32}]
 ```
 
-The machine is Ready again within tens of seconds, and the controller removes
-the rule once the corrected spec applies. With no `talosAPICIDRs` entry the way
-back is the node's console or a reset.
+The machine is Ready within tens of seconds, and the controller removes the
+rule once the corrected spec applies. Without a `talosAPICIDRs` entry the way
+back is the console or a reset.
 
-- A pod's traffic to another node's host ports arrives as its node's address, so node-CIDR rules cannot tell pods on one node apart.
-- Ichor does not yet apply the firewall in Talos's `try` mode with an automatic revert.
+- Pod traffic to another node's host ports arrives as its node's address, so node-CIDR rules cannot tell pods apart.
+- Ichor does not yet use Talos's `try` mode with an automatic revert.

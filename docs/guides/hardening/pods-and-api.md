@@ -4,7 +4,7 @@ sidebar_order: 3
 
 # Pods and the API server
 
-![How a Pod Security or audit change reaches the control planes. The option needs versionContract v1.14 or later. The control plane then shows Ready=False APIServerRestartRequired until ichor rollout config runs, which restarts the kube-apiserver on one control plane at a time without rebooting a node.](../../images/hardening-api-restart.light.drawio.svg)
+![A Pod Security or audit change leaves the control plane at APIServerRestartRequired until ichor rollout config restarts the kube-apiserver, one control plane at a time.](../../images/hardening-api-restart.light.drawio.svg)
 
 *Nothing restarts until you run the rollout.*
 

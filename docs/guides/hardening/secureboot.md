@@ -4,7 +4,7 @@ sidebar_order: 6
 
 # SecureBoot, UKI and kernel lockdown
 
-![The path that moves an installed node onto SecureBoot. Set secureBoot.mode, plus the confirm annotation for Required, and back up etcd. Remove the node with ichor delete node and a system-disk wipe, boot it from the SecureBoot ISO with the firmware in setup mode so the keys are enrolled, approve it again, and wait for SecureBoot=True before the next node.](../../images/hardening-secureboot-move.light.drawio.svg)
+![To move a node onto SecureBoot: set the mode, back up etcd, remove the node with a system-disk wipe, boot the SecureBoot ISO, approve it, wait for SecureBoot=True.](../../images/hardening-secureboot-move.light.drawio.svg)
 
 *Changing the mode never touches an installed node; each one is wiped and reinstalled in turn.*
 
@@ -15,12 +15,11 @@ spec:
     kernelLockdown: integrity          # or confidentiality; checked, not rendered
 ```
 
-Talos (v1.14) boots a signed Unified Kernel Image (UKI) through systemd-boot,
-so the firmware verifies kernel, initramfs and command line. It needs UEFI and
-a fresh install from the SecureBoot images; a GRUB install cannot become UKI.
-Image Factory serves the installer as
-`<image factory>/metal-installer-secureboot/<schematic>:<version>` (the factory
-is `spec.imageFactoryURL`, default `factory.talos.dev`) and the ISO as
+Talos (v1.14) boots a signed Unified Kernel Image (UKI), so the firmware
+verifies kernel, initramfs and command line. It needs UEFI and a fresh install
+from the SecureBoot images. Image Factory (`spec.imageFactoryURL`, default
+`factory.talos.dev`) serves the installer as
+`metal-installer-secureboot/<schematic>:<version>` and the ISO as
 `metal-amd64-secureboot.iso`.
 
 ## What the modes do
@@ -36,12 +35,9 @@ reconfigured or wiped.
 
 ## Reading the state
 
-Each node's state comes from Talos (`talosctl get securitystate`) into
-`TalosMachine.status.security`; the conditions `SecureBoot` and
-`KernelLockdown` exist per machine and, summarised, on the cluster. The UI's
-node page (Talos details, System) shows the same. `SecureBoot` reasons:
-`SecureBootOn`, `SecureBootOff` (a UKI node whose firmware has it disabled),
-`NotUKI` (GRUB), `ModeOffButSecureBoot`.
+`TalosMachine.status.security` holds each node's state (`talosctl get securitystate`);
+the `SecureBoot` and `KernelLockdown` conditions sit on each machine and, summarised, on the cluster. `SecureBoot` reasons:
+`SecureBootOn`, `SecureBootOff` (UKI, firmware has it disabled), `NotUKI` (GRUB), `ModeOffButSecureBoot`.
 
 ## Lockdown
 
@@ -55,9 +51,9 @@ under SecureBoot, else `none`.
 
 ## Moving an installed cluster
 
-A GRUB install cannot become UKI, key enrolment happens in the firmware, and a
-TPM disk key is bound to the SecureBoot state (PCR 7), so Ichor never changes an
-installed node. One node at a time, as for [disk encryption](disk-encryption.md):
+Ichor never changes an installed node (a GRUB install cannot become UKI, keys
+enrol in the firmware, a TPM key is bound to PCR 7). One node at a time, as for
+[disk encryption](disk-encryption.md):
 
 1. Set the mode (and the confirm annotation for `Required`).
 2. Back up etcd ([Back up etcd to S3](../etcd-backup.md)).
@@ -87,8 +83,6 @@ into maintenance mode and never starts the ISO. `--wipe-mode`:
 | `system-disk-and-user-disks` | The system disk and every user disk (only when their data is expendable) |
 
 Keep the ISO attached or first in the boot order before you remove the node.
-Ichor's `system-disk` sends the same Talos reset mode as
-`talosctl reset --wipe-mode system-disk`; do not read Ichor's `all` as
+Ichor's `system-disk` sends Talos's `system-disk` reset mode; its `all` is not
 `talosctl reset --wipe-mode all`. After the wipe Ichor looks for the machine
-every 15 seconds for 3 minutes, so it appears as pending soon after booting.
-The remove deletes the node's Kubernetes Node.
+every 15 seconds for 3 minutes.

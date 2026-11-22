@@ -4,7 +4,7 @@ sidebar_order: 6
 
 # Disable a user and the override
 
-![How fast disabling a user takes effect, and the override. Setting disabled true on the IchorUser applies in ichor-ui within 10 seconds and for kubectl at the next token refresh, at most 5 minutes later. The override, the admin certificate and Talos os:admin in the cluster folder, works independently of login.](../../images/users-disable-override.light.drawio.svg)
+![Disabling a user takes effect in ichor-ui within 10 seconds and for kubectl within 5 minutes. The override works independently of login.](../../images/users-disable-override.light.drawio.svg)
 
 *A token already issued cannot be taken back; its 5-minute lifetime is the limit.*
 

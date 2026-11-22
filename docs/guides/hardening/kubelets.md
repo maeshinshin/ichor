@@ -4,7 +4,7 @@ sidebar_order: 4
 
 # Kubelet serving certificates
 
-![How a kubelet serving certificate is issued. The kubelet asks the kubelet-serving signer. Ichor's controller checks the requester, subject, usages and names, which it reads from the Talos API. A request that passes is approved, one it cannot place stays pending, and one that fails a check is denied with a reason. kube-controller-manager signs approved requests with the Kubernetes CA. verifyFromAPIServer then makes the kube-apiserver verify kubelets, once every node has a certificate.](../../images/hardening-kubelet-serving.light.drawio.svg)
+![The kubelet asks for a certificate. Ichor's controller approves, leaves pending or denies it; kube-controller-manager signs approved requests. verifyFromAPIServer then enforces them.](../../images/hardening-kubelet-serving.light.drawio.svg)
 
 *Ichor's controller is the only approver, and only for its own checks.*
 
@@ -14,9 +14,9 @@ spec:
     kubeletServingCertificates: {enabled: true, verifyFromAPIServer: false}
 ```
 
-A Talos kubelet serves a self-signed certificate on 10250 by default, so the
-kube-apiserver cannot verify it for logs, exec, port-forward and metrics (a
-metrics-server needs `--kubelet-insecure-tls`). `enabled` renders
+A Talos kubelet serves a self-signed certificate on 10250, which the
+kube-apiserver cannot verify (a metrics-server needs `--kubelet-insecure-tls`).
+`enabled` renders
 `serverTLSBootstrap: true` for every kubelet (the `KubeletConfig` document from
 v1.14, `machine.kubelet.extraConfig` before). Each kubelet restarts once.
 
@@ -35,9 +35,9 @@ csr`) and a Warning Event on the TalosCluster. It leaves a request pending
 when it cannot place it (the name is not one of the cluster's machines, or the
 node cannot be read now); you can approve that yourself.
 
-Until a request is approved and signed the kubelet keeps its old certificate,
-so switching on cannot take a node down. The renewal is approved the same way,
-and after a Kubernetes CA rotation the kubelet asks again.
+Until a request is signed the kubelet keeps its old certificate, so switching
+on cannot take a node down. Renewals are approved the same way; after a
+Kubernetes CA rotation the kubelet asks again.
 
 `kubectl get csr` shows the approver `IchorKubeletServing`. The cluster
 condition `KubeletServingCertificates` is True when every machine has a

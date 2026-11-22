@@ -3,7 +3,7 @@
 Ichor prepares the Talos side of a node for Rook/Ceph and nothing else. Rook,
 Ceph and the choice of disks stay with you.
 
-![How a node is made ready for Rook. Ichor leaves the disk raw (option A, TalosStorage rook-v1) or carves a raw partition (option B, a TalosConfigPatch). The disk must have no partition or filesystem. You then exempt rook-ceph from Pod Security, name the nodes and devices in the chart values and install the two Rook charts. Rook takes the device, and an Ichor drain waits on Rook's PodDisruptionBudgets.](../images/rook-ceph-node-prep.light.drawio.svg)
+![A node is made ready for Rook in four steps: leave a raw disk or carve a raw partition, exempt rook-ceph from Pod Security, name the devices, install the two charts. Rook then takes the device.](../images/rook-ceph-node-prep.light.drawio.svg)
 
 *Ichor leaves a raw disk or partition and exempts the namespace; the Rook charts and the device names are yours.*
 

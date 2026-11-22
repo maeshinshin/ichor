@@ -4,7 +4,7 @@ sidebar_order: 5
 
 # Disk encryption
 
-![The path that encrypts an existing node. Set diskEncryption and the confirm-disk-encryption-wipe annotation, back up etcd, then remove the node with ichor delete node and approve the rediscovered machine again. Its volumes come up encrypted with luks2. Repeat per node: workers first, then control planes, keeping etcd quorum.](../../images/hardening-disk-encryption-wipe.light.drawio.svg)
+![To encrypt an existing node: set the option and annotation, back up etcd, remove the node, approve it again, and repeat for each node, workers first.](../../images/hardening-disk-encryption-wipe.light.drawio.svg)
 
 *Talos encrypts a volume only when it creates it, so every existing node is wiped and rejoined, one at a time.*
 

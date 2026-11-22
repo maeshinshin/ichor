@@ -4,7 +4,7 @@ sidebar_order: 1
 
 # Turn users on
 
-![The order for turning users on. A new cluster uses ichor init or ichor adopt; an existing install sets ichorUI.users.enabled and externalURL in the chart values. Both create the first admin before anything requires a login, then set spec.authentication.ichor on the TalosCluster, then run ichor rollout config, which restarts the kube-apiserver on one control plane at a time. After that every request to ichor-ui needs a login.](../../images/users-turn-on.light.drawio.svg)
+![Create the first admin, set spec.authentication.ichor, then run ichor rollout config, in that order. A new cluster uses ichor init or adopt; an existing install uses chart values.](../../images/users-turn-on.light.drawio.svg)
 
 *The first admin exists before the switch, so nobody is locked out.*
 
@@ -29,15 +29,13 @@ ichor-ui at your own address:
 ichor init --ui-url https://ichor.example.com --admin-user admin ...
 ```
 
-`ichor init` installs from the manifest in the binary, not the Helm chart, so
-it applies in place what `ichorUI.users.enabled` and `ichorUI.users.externalURL`
-render: the ichor-ui flags, internal port and key volumes, the Service's
-internal port, and the empty `ichor-user-credentials` Secret. Then it creates
+`ichor init` installs from the manifest in the binary and applies in place what
+`ichorUI.users.enabled` and `externalURL` render (ichor-ui flags, internal
+port, key volumes, the empty `ichor-user-credentials` Secret). Then it creates
 the first admin (`--admin-user`, default `admin`, role `admin`) and sets
-`spec.authentication.ichor` on the TalosCluster, in that order. It prints the
-matching Helm values and the admin's generated password to stderr, and retries
-transient API errors (an etcd timeout right after the API server comes up) for
-a few minutes.
+`spec.authentication.ichor`, in that order. It prints the matching Helm values
+and the generated password to stderr, and retries transient API errors for a
+few minutes.
 
 > [!WARNING]
 > The password is printed once, even when a later step failed, and is stored
@@ -82,10 +80,8 @@ if a change waits for a reboot.
 
 ## Control plane rollout
 
-Talos applies the login settings without a reboot but restarts the
-kube-apiserver on each change (tens of seconds of `/readyz` down per control
-plane). The machine controller does not apply it by itself: machines report
-`APIServerRestartRequired`, and `ichor rollout config` (or Apply in the UI
-Overview's attention list) rolls it out one control plane at a time, no drain,
-waiting for `/readyz` before the next. With one control plane the API is
-unavailable while it restarts.
+Talos restarts the kube-apiserver on each change (tens of seconds of `/readyz`
+down per control plane), without a reboot. Machines report
+`APIServerRestartRequired` until `ichor rollout config` (or Apply in the UI
+Overview) rolls it out one control plane at a time, no drain, waiting for
+`/readyz`. With one control plane the API is down while it restarts.

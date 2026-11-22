@@ -4,7 +4,7 @@ sidebar_order: 2
 
 # Cilium: WireGuard and Helm values
 
-![What changes Cilium's configuration. Setting spec.security.wireGuard reruns the Cilium Helm Job and rolls the agent DaemonSet one node at a time, then CNIValuesApplied turns True. Writing spec.cni.cilium.values needs update on talosclusters/cilium-values, which ichor-admin holds; an ichor-operator write that changes the values is refused.](../../images/hardening-cilium.light.drawio.svg)
+![Setting wireGuard reruns the Cilium Helm Job and rolls the agents. Writing the Cilium values needs update on talosclusters/cilium-values, which only ichor-admin holds.](../../images/hardening-cilium.light.drawio.svg)
 
 *A typed option or a Helm value changes the agents; only admins may write the values.*
 

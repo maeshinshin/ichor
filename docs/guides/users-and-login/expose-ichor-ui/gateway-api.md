@@ -4,7 +4,7 @@ sidebar_order: 2
 
 # Gateway API: BackendTLSPolicy
 
-![How a Gateway reaches ichor-ui. The browser connects to the Gateway and its HTTPRoute, whose listener has a hostname. The Gateway re-encrypts to ichor-ui-service on port 8443. A BackendTLSPolicy in ichor-system names the host name and the CA ConfigMap ichor-ui-ca. It needs Gateway API v1.4 or later CRDs, and a route in another namespace needs a ReferenceGrant.](../../../images/users-expose-gateway.light.drawio.svg)
+![The browser reaches the Gateway, which re-encrypts to ichor-ui-service on 8443; a BackendTLSPolicy names the CA ConfigMap and host name.](../../../images/users-expose-gateway.light.drawio.svg)
 
 *The `BackendTLSPolicy` tells the Gateway which CA and name to verify ichor-ui with.*
 

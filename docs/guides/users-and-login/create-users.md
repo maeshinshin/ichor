@@ -4,7 +4,7 @@ sidebar_order: 4
 
 # Create users and roles
 
-![The built-in roles and the rules around them. viewer reads clusters, machines, operations and nodes. operator adds editing machines and config and starting routine operations. admin adds deletes, user administration, sign-in settings, the Cilium Helm values and the destructive operations. A role is the Kubernetes group ichor:NAME. A user may grant only roles they hold, and the last enabled admin cannot be deleted, disabled or demoted.](../../images/users-roles.light.drawio.svg)
+![viewer reads; operator adds editing and routine operations; admin adds deletes, users, sign-in, Cilium values and destructive operations. Each role is the group ichor:NAME.](../../images/users-roles.light.drawio.svg)
 
 *Each role includes the one before it; two rules keep the roles from being worn away.*
 

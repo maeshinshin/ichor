@@ -4,7 +4,7 @@ sidebar_order: 2
 
 # Without any sign-in
 
-![What happens without a sign-in. The open mode and its flags (allow-unauthenticated, ichorUI.allowUnauthenticated) are removed; ichor init, adopt, helm and ichor-ui startup refuse them. Instead enable ichorUI.users or ichorUI.oidc, or, on an install with no sign-in, let ichor upgrade ichor turn users on first.](../../images/users-without-sign-in.light.drawio.svg)
+![The open mode and its flags are removed and refused everywhere. Enable ichorUI.users or ichorUI.oidc, or let ichor upgrade ichor turn users on.](../../images/users-without-sign-in.light.drawio.svg)
 
 *There is no way to run ichor-ui open; every refusal names the fix.*
 

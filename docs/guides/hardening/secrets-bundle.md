@@ -4,7 +4,7 @@ sidebar_order: 7
 
 # The local secrets bundle
 
-![Where the bundle passphrase comes from and what uses the bundle. The passphrase is read from --bundle-passphrase-file, then ICHOR_BUNDLE_PASSPHRASE, then a terminal prompt or a generated passphrase. It seals secrets.yaml, which holds every CA key and is read by restore cluster, adopt, create credentials --bundle and export bundle. ichor secrets encrypt seals an older plaintext file.](../../images/hardening-secrets-bundle.light.drawio.svg)
+![A passphrase from a file, the environment or a prompt seals secrets.yaml, which restore, adopt, create credentials and export bundle read.](../../images/hardening-secrets-bundle.light.drawio.svg)
 
 *The passphrase seals `secrets.yaml`; the commands that read it take the passphrase the same way.*
 

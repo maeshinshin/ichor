@@ -4,7 +4,7 @@ sidebar_order: 3
 
 # Expose ichor-ui over https
 
-![How ichor-ui is reached. Browsers and the ichor CLI go through your edge, an Ingress, a Gateway or a load balancer, to ichor-ui on HTTPS port 8443, which serves your certificate or a leaf of the Ichor serving CA. The kube-apiserver fetches login keys from the internal port 8444, which must never be routed from an edge.](../../images/users-expose-ui.light.drawio.svg)
+![Browsers and the CLI reach ichor-ui on HTTPS 8443 through your edge. The kube-apiserver uses internal port 8444, which is never routed.](../../images/users-expose-ui.light.drawio.svg)
 
 *One TLS listener on 8443; making it reachable is your job.*
 

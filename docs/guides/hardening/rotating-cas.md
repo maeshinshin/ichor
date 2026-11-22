@@ -4,7 +4,7 @@ sidebar_order: 8
 
 # Rotating the CAs
 
-![The stages of a CA rotation. Accepting, AwaitingCredentials, Issuing, Dropping, Finalizing, Done. AwaitingCredentials waits for the credentials-handoff annotation and changes nothing on a node. Issuing makes three passes, and for etcd reboots each control plane after every pass. Deleting the operation takes it back until Issuing; later it is refused. After Done, run ichor export bundle NAME.](../../images/hardening-rotate-ca.light.drawio.svg)
+![A rotation runs Accepting, AwaitingCredentials, Issuing, Dropping, Finalizing, Done. It pauses until the hand-off annotation is set, and can be deleted until Issuing.](../../images/hardening-rotate-ca.light.drawio.svg)
 
 *A rotation pauses until you hold working credentials for the new CAs.*
 

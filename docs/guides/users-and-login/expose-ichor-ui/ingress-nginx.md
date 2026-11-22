@@ -4,7 +4,7 @@ sidebar_order: 1
 
 # Ingress-NGINX (re-encrypt to the backend)
 
-![How Ingress-NGINX reaches ichor-ui. The browser connects to the Ingress with the certificate from the Ingress's tls Secret. The Ingress re-encrypts to ichor-ui-service on port 8443, with backend-protocol HTTPS, proxy-ssl-verify on, the CA from ichor-system/ichor-ui-ca and the name ichor-ui-service.ichor-system.svc.](../../../images/users-expose-ingress-nginx.light.drawio.svg)
+![The browser reaches Ingress-NGINX, which re-encrypts to ichor-ui-service on 8443 and verifies it against ichor-ui-ca.](../../../images/users-expose-ingress-nginx.light.drawio.svg)
 
 *NGINX terminates the browser's TLS and verifies ichor-ui against `ichor-ui-ca`.*
 

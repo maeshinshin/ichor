@@ -4,7 +4,7 @@ sidebar_order: 3
 
 # Load balancer passthrough (operator certificate)
 
-![How a passthrough load balancer reaches ichor-ui. A LoadBalancer Service or TCP passthrough terminates nothing, so the browser or CLI sees ichor-ui's own certificate. You supply that certificate with --ui-tls-secret or ichorUI.tls.secretName. Without it only clients that trust the Ichor CA can verify.](../../../images/users-expose-load-balancer.light.drawio.svg)
+![A passthrough load balancer terminates nothing, so clients see ichor-ui's own certificate, which you supply or clients verify against the Ichor CA.](../../../images/users-expose-load-balancer.light.drawio.svg)
 
 *Nothing terminates TLS, so clients see the certificate ichor-ui serves: supply yours.*
 

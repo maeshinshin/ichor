@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -413,8 +415,54 @@ func TestInitInstall_SecondRunSaysAlreadyInitialised(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(bundle.DeepCopy()).Build()
 	deps, _, _ := newFakeInitDeps(t, c)
 
-	_, _, err := initInstall(context.Background(), initOptions{}, deps, c, bundle, nil, nil, nil)
+	_, _, err := initInstall(context.Background(), initOptions{Cluster: "c"}, deps, c, bundle, nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "already initialised") {
 		t.Fatalf("initInstall error = %v, want a refusal saying the cluster is already initialised", err)
+	}
+
+	// Both routes are named: the command that reaches the cluster, and the one that brings it under management.
+	for _, want := range []string{"ichor create credentials c", "ichor adopt"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not name %q", err, want)
+		}
+	}
+}
+
+// A second init on a machine that has lost its local bundle file still has a kubeconfig that reaches the
+// cluster. It must refuse before the node is written: no ApplyInsecure, no bootstrap, no bundle file left behind.
+func TestRunInit_SecondRunRefusesBeforeNodeWrite(t *testing.T) {
+	home := withTempHome(t)
+
+	kubeconfig := filepath.Join(home, "kubeconfig")
+	if err := os.WriteFile(kubeconfig, []byte("apiVersion: v1\nkind: Config\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("KUBECONFIG", kubeconfig)
+
+	bundle := &corev1.Secret{}
+	bundle.Name, bundle.Namespace = secretsRefName(testInitClusterName), testNamespace
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(bundle).Build()
+	deps, maint, boot := newFakeInitDeps(t, k8sClient)
+
+	opts := validInitOptions()
+
+	err := runInit(context.Background(), opts, deps)
+	if err == nil || !strings.Contains(err.Error(), "already initialised") {
+		t.Fatalf("runInit error = %v, want the already-initialised refusal", err)
+	}
+
+	if maint.callCount != 0 || boot.bootstrapCalled {
+		t.Fatalf("the node was written before the refusal: ApplyInsecure calls=%d, Bootstrap called=%v",
+			maint.callCount, boot.bootstrapCalled)
+	}
+
+	dir, err := bundleDir(opts.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, secretsbundle.SecretKey)); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a refused run left a secrets bundle behind: stat error = %v", err)
 	}
 }

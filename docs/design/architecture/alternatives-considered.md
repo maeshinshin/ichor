@@ -5,18 +5,13 @@ sidebar_order: 23
 
 # Alternatives considered
 
-Raw YAML patches. Easier to start with, impossible to validate, preview or
-explain in a UI, and they tie user files to a Talos version. Rejected in
-favour of typed documents.
+![Four rejected alternatives on the left, each with the choice made instead on the right: typed documents instead of raw YAML patches, Cilium as the only thing Ichor installs, separate CRDs, and one repository.](../../images/alternatives-considered.light.drawio.svg)
 
-Ichor installing storage and monitoring itself. It would double the surface
-area, duplicate what the storage controllers already do, and keep
-us on the upgrade treadmill of every project we wrap. Ichor installs Cilium only.
+*What Ichor chose, and what it chose against.*
 
-Fewer CRDs. `TalosEtcdBackup` and `TalosStorage` could fold into
-`TalosCluster`. They are kept separate so their RBAC and Git diffs stay
-focused; merging later would need a migration, splitting later wouldn't.
-
-Multiple repositories. The three deliverables share the CRD types and the
-Connect definitions; separate repositories would mean a fourth one for those
-and version skew to manage. One repository, three release artifacts.
+| Rejected | Why |
+|---|---|
+| Raw YAML patches | Cannot be validated, previewed or explained in a UI, and tie user files to a Talos version. |
+| Ichor installing storage and monitoring | Doubles the surface, duplicates the storage controllers, and puts Ichor on the upgrade treadmill of every project it wraps. |
+| Fewer CRDs (`TalosEtcdBackup` and `TalosStorage` folded into `TalosCluster`) | Separate kinds keep RBAC and Git diffs focused. Merging later needs a migration; splitting later does not. |
+| One repository per deliverable | The three deliverables share the CRD types and the Connect definitions. Separate repositories need a fourth one for those, and version skew. |

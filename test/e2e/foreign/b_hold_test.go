@@ -153,12 +153,11 @@ func analyseHold(t *testing.T, smp []sample) {
 	}
 }
 
-// TestB3B4B6EnabledAdopt (B2 enabled, B3 recovery, B4 enabled-mode KubePrism, B6 hold): adopts the cluster of
-// TestB2RefusedEnabledReplacementOn after its replacement was switched off (TestHelmSetKPR).
+// TestB3B4B6EnabledAdopt (B2 enabled, B3 recovery, B6 hold): adopts a cluster that keeps kube-proxy, with KubePrism on
+// (adopt refuses KubePrism off in either kube-proxy mode, so the B4 enabling step no longer exists) and Cilium not
+// replacing kube-proxy.
 func TestB3B4B6EnabledAdopt(t *testing.T) {
-	c := build(t, bOpts(false, true, "kubeProxyReplacement=true"))
-	// adopt refuses the cluster while kube-proxy and Cilium both route Services
-	helmSet(t, c, "kubeProxyReplacement=false")
+	c := build(t, bOpts(false, false, "kubeProxyReplacement=false"))
 	b3Canary(t, c)
 	prism := kubePrismState(t, c)
 	t.Logf("KubePrism before adoption: %v", prism)

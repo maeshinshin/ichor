@@ -24,9 +24,9 @@ import (
 
 // TestB2ReplacedAdopt (B2): kube-proxy disabled in Talos and replaced by Cilium is adopted as spec.cni.kubeProxy:
 // replaced.
-// Cluster: cilium-helm, --no-kube-proxy, then TestHelmSet with kubeProxyReplacement=true.
+// Cluster: cilium-helm, --no-kube-proxy (the harness sets kubeProxyReplacement=true).
 func TestB2ReplacedAdopt(t *testing.T) {
-	c := build(t, bOpts(true, false, "kubeProxyReplacement=false"))
+	c := build(t, bOpts(true, false))
 	takeoverAdopt(t, c)
 	waitHandover(t, c, "")
 	membership(t, c)

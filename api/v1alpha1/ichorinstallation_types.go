@@ -310,14 +310,6 @@ const (
 	StorageExtensionsServiceAccount = "ichor-storage-extensions"
 	// OperationStorageExtensionsAnnotation holds the schematic ID an operation applies; one operation per ID.
 	OperationStorageExtensionsAnnotation = "ichor.maesh.dev/storage-extensions"
-	// OperationAwaitsApprovalAnnotation, set to "true" by whoever creates an operation paused so that a person starts it,
-	// marks it approval-gated. An operation paused without it was paused by a person, who resumes it.
-	OperationAwaitsApprovalAnnotation = "ichor.maesh.dev/awaits-approval"
-	// OperationAwaitsApproval is the annotation's value.
-	OperationAwaitsApproval = "true"
-	// OperationAwaitingApprovalReason is the reason of the Paused condition of an approval-gated operation that is paused
-	// and has run no step: it waits for a person to approve it (ichor approve operation), which clears spec.paused.
-	OperationAwaitingApprovalReason = "AwaitingApproval"
 	// StorageExtensionsStarter is the started-by annotation of such an operation.
 	StorageExtensionsStarter = "ichor-storage"
 )

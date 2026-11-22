@@ -104,6 +104,16 @@ const OperationRetryRequested = "true"
 // audit log.
 const OperationStartedByAnnotation = "ichor.maesh.dev/started-by"
 
+// OperationAwaitsApprovalAnnotation, set to OperationAwaitsApproval by whoever creates an operation paused so that a
+// person starts it, marks it approval-gated. An operation paused without it was paused by a person, who resumes it.
+const (
+	OperationAwaitsApprovalAnnotation = "ichor.maesh.dev/awaits-approval"
+	OperationAwaitsApproval           = "true"
+	// OperationAwaitingApprovalReason is the reason of the Paused condition of an approval-gated operation that is
+	// paused and has run no step: it waits for a person to approve it (ichor approve operation), which clears spec.paused.
+	OperationAwaitingApprovalReason = "AwaitingApproval"
+)
+
 // OperationFromVersionAnnotation records the version a Talos or Kubernetes upgrade moves from, stamped
 // by the UI backend when it creates the operation together with the spec change. Display only.
 const OperationFromVersionAnnotation = "ichor.maesh.dev/from-version"

@@ -276,6 +276,13 @@ type IchorInstallationStatus struct {
 	InstallerImage *IchorInstallerImageStatus `json:"installerImage,omitempty"`
 }
 
+// ConditionInstallerImageUnverified is True once an installer image ran with its signature unchecked
+// (spec.installerSignature.mode skip): the Ichor upgrade's Job or the Cilium Helm Job. It is sticky:
+// a later verified run, an upgrade that clears the skip or the next skipped run's digest never
+// remove it, and its lastTransitionTime is the first unchecked run. Only a person clears it, by
+// removing it from status.conditions.
+const ConditionInstallerImageUnverified = "InstallerImageUnverified"
+
 // ConditionAutoPatchHalted is True while automatic patching is stopped by an automatic operation that failed
 // or paused. A person clears it with spec.autoPatch.acknowledgedHalt, or a later manual operation
 // of the same cluster that completes does.

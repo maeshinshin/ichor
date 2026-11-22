@@ -8,6 +8,8 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -209,5 +211,51 @@ func TestAdvanceCNIHelmJobStartsNoJobForAnUnverifiedImage(t *testing.T) {
 	want := cniTestInstallation().Spec.InstallerRepository + "@" + testInstallerDigest
 	if got := job.Spec.Template.Spec.Containers[0].Image; got != want {
 		t.Fatalf("Job image = %q, want %q", got, want)
+	}
+}
+
+// An image that ran unchecked leaves InstallerImageUnverified on the IchorInstallation, and a
+// verified run afterwards, which rewrites status.installerImage, does not take it off.
+func TestUnverifiedInstallerImageConditionIsSticky(t *testing.T) {
+	inst := cniTestInstallation()
+	c := cniFakeClient(t, inst.DeepCopy())
+
+	read := func() *metav1.Condition {
+		t.Helper()
+
+		var got ichorv1alpha1.IchorInstallation
+		if err := c.Get(t.Context(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &got); err != nil {
+			t.Fatal(err)
+		}
+
+		return apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.ConditionInstallerImageUnverified)
+	}
+
+	record := func(verification string) {
+		t.Helper()
+
+		img := pinnedInstallerImage{Digest: testInstallerDigest, Verification: verification}
+		if err := recordInstallerImage(t.Context(), c, inst.DeepCopy(), img, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	record(ichorv1alpha1.InstallerImageVerified)
+
+	if got := read(); got != nil {
+		t.Fatalf("a verified run set %+v", got)
+	}
+
+	record(ichorv1alpha1.InstallerImageSkipped)
+
+	got := read()
+	if got == nil || got.Status != metav1.ConditionTrue || !strings.Contains(got.Message, testInstallerDigest) {
+		t.Fatalf("after a skipped run the condition = %+v; want True naming %s", got, testInstallerDigest)
+	}
+
+	record(ichorv1alpha1.InstallerImageVerified)
+
+	if got := read(); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("a later verified run left the condition %+v; want it still True", got)
 	}
 }

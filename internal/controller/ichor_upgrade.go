@@ -30,6 +30,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -392,6 +393,18 @@ func recordInstallerImage(
 	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
 		Version: inst.Spec.Version, Repository: inst.Spec.InstallerRepository, Digest: img.Digest,
 		Verification: img.Verification, Signer: img.Signer, ResolvedAt: &now,
+	}
+
+	// Sticky: a verified run rewrites installerImage above but never touches this condition, and
+	// SetStatusCondition keeps lastTransitionTime, so it still dates the first unchecked run.
+	// shortcut: the Patch is a merge patch of the whole conditions list; a writer with a stale copy
+	// can drop it until the next skipped run sets it again. Drop it with an optimistic lock if that bites.
+	if img.Verification == ichorv1alpha1.InstallerImageSkipped {
+		apimeta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
+			Type: ichorv1alpha1.ConditionInstallerImageUnverified, Status: metav1.ConditionTrue, Reason: "SignatureSkipped",
+			Message: fmt.Sprintf("an installer image ran with its signature NOT checked: %s@%s for %s (latest unchecked run)",
+				inst.Spec.InstallerRepository, img.Digest, inst.Spec.Version),
+		})
 	}
 
 	if err := c.Status().Patch(ctx, inst, client.MergeFrom(orig)); err != nil {

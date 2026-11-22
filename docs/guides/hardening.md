@@ -1,14 +1,12 @@
 # Hardening the clusters Ichor creates
 
-Every hardening option below is a typed field of `spec.security` on the
-`TalosCluster`. All of them are off unless you set them, for new and
-existing clusters alike. A cluster without `spec.security` renders the same
-machine configuration, byte for byte, as before the field existed. Ichor renders
-the options at the system layer, below every `TalosConfigPatch`, so a patch can
-still override what they render.
+Every hardening option is a typed field of `spec.security` on the `TalosCluster`.
+All are off unless you set them, on new and existing clusters. Without
+`spec.security` the machine configuration is byte for byte what it was before
+the field existed. Ichor renders the options at the system layer, below every
+`TalosConfigPatch`, so a patch can still override them.
 
-You change an option by editing the `TalosCluster` (in the UI, with the CLI, or
-by writing the CR). The controller applies it; it never edits your `spec`.
+Edit the `TalosCluster` (UI, CLI or CR); the controller applies it and never edits your `spec`.
 
 ## How a change reaches the nodes
 
@@ -18,28 +16,36 @@ by writing the CR). The controller applies it; it never edits your `spec`.
 
 ## The options
 
-| Option | Field | What it does | Rollout impact |
-|---|---|---|---|
-| [Ingress firewall](hardening/ingress-firewall.md) | `spec.security.firewall` | Talos ingress firewall in block mode, with the rules Ichor, Talos and Cilium need | No reboot. Lock-out risk, see [Ingress firewall](hardening/ingress-firewall.md#not-to-lock-ichor-out) |
-| [WireGuard](hardening/cilium.md) | `spec.security.wireGuard` | Cilium encrypts pod traffic between nodes | Rolling restart of the Cilium agents (Ichor starts it), no node reboot |
-| [Pod Security](hardening/pods-and-api.md) | `spec.security.podSecurity` | Pod Security admission levels and exempt namespaces | kube-apiserver restarts on each control plane, no node reboot |
-| [Audit policy](hardening/pods-and-api.md) | `spec.security.audit` | One of three kube-apiserver audit policy presets | kube-apiserver restarts on each control plane, no node reboot |
-| [Disk encryption](hardening/disk-encryption.md) | `spec.security.diskEncryption` | LUKS2 on STATE and EPHEMERAL | Wipe and rejoin of every node, see [Disk encryption](hardening/disk-encryption.md#existing-machines) |
-| [SecureBoot](hardening/secureboot.md) | `spec.security.secureBoot` | Uses Talos's signed UKI installer, reports each node's SecureBoot state, refuses a `Required` cluster's unsecured machines where it can | Never touches an installed node: reset and add each one, see [SecureBoot](hardening/secureboot.md#moving-an-installed-cluster) |
-| [Kubelet serving certificates](hardening/kubelets.md) | `spec.security.kubeletServingCertificates` | Kubelets serve certificates signed by the Kubernetes CA; Ichor approves the requests; optionally the kube-apiserver verifies them | Kubelet restart on each node (no node reboot); with `verifyFromAPIServer` also a kube-apiserver restart, see [Kubelet serving certificates](hardening/kubelets.md#verifyfromapiserver) |
-| [Kernel lockdown](hardening/secureboot.md#lockdown) | `spec.security.kernelLockdown` | Checks each node's lockdown level and reports a node below it | Checked only: the level is baked into the boot asset |
-| [Talos API from pods](hardening/pods-and-api.md#talos-api-access-from-kubernetes-pods) | (a `Config` patch) | Warns about `kubernetesTalosAPIAccess` (`os:admin` most strongly); rendered on control planes only | None |
+| Option | Field | Rollout impact |
+|---|---|---|
+| [Ingress firewall](hardening/ingress-firewall.md) | `firewall` | No reboot; [lock-out risk](hardening/ingress-firewall.md#not-to-lock-ichor-out) |
+| [WireGuard](hardening/cilium.md) | `wireGuard` | Cilium agents restart, no reboot |
+| [Pod Security](hardening/pods-and-api.md) | `podSecurity` | kube-apiserver restarts per control plane |
+| [Audit policy](hardening/pods-and-api.md) | `audit` | kube-apiserver restarts per control plane |
+| [Disk encryption](hardening/disk-encryption.md) | `diskEncryption` | [Wipe and rejoin every node](hardening/disk-encryption.md#existing-machines) |
+| [SecureBoot](hardening/secureboot.md) | `secureBoot` | Never touches an installed node: [reset and add each](hardening/secureboot.md#moving-an-installed-cluster) |
+| [Kubelet serving certificates](hardening/kubelets.md) | `kubeletServingCertificates` | Kubelet restarts; `verifyFromAPIServer` also restarts the kube-apiserver |
+| [Kernel lockdown](hardening/secureboot.md#lockdown) | `kernelLockdown` | Checked only: the level is baked into the boot asset |
+| [Talos API from pods](hardening/pods-and-api.md#talos-api-access-from-kubernetes-pods) | a `Config` patch | None; warned about |
 
-## What is here
+All fields are under `spec.security`.
 
-- [Ingress firewall](hardening/ingress-firewall.md): the rules Ichor opens, the lock-out risk and the way back.
-- [Cilium: WireGuard and Helm values](hardening/cilium.md): transparent encryption, and who may change the Cilium values.
-- [Pods and the API server](hardening/pods-and-api.md): Pod Security, the audit policy and pod access to the Talos API.
-- [Kubelet serving certificates](hardening/kubelets.md): the kubelets' certificates and how Ichor approves them.
-- [Disk encryption](hardening/disk-encryption.md): LUKS2 for STATE and EPHEMERAL, and how existing machines are wiped.
-- [SecureBoot, UKI and kernel lockdown](hardening/secureboot.md): the signed boot path and moving an installed cluster onto it.
+## Related pages
+
 - [The local secrets bundle](hardening/secrets-bundle.md): the passphrase, and encrypting the bundle file.
-- [Rotating the CAs](hardening/rotating-cas.md): rotating the etcd, aggregator, Talos API and Kubernetes API CAs.
+- [Rotating the CAs](hardening/rotating-cas.md): etcd, aggregator, Talos API and Kubernetes API CAs.
+
+## Ichor's own hardening
+
+These protect Ichor itself, not the cluster it manages.
+
+| Item | What it is |
+|---|---|
+| `ichor-storage-extensions` | ServiceAccount the controller impersonates to write `spec.schematic.id` for a storage preset's extensions. It holds `patch` on `talosclusters` only; the controller writes no spec itself. The upgrade it creates waits for `ichor approve operation NAME` |
+| `ichor-consent-sweep` | ServiceAccount the controller impersonates to remove one annotation, the kube-proxy switch consent. The webhook allows nothing else |
+| `ichor-bundle-secret-role` | Role that grants `get` on the secrets bundle Secret and nothing else; installed when the chart value `rbac.bundleSecret.names` lists it. `create credentials`, `export bundle`, the `rotate ca` hand-off and `adopt --add-machine` need it bound. The Secret holds every CA key, so bind it only to people you would give `os:admin` |
+| `InstallerImageUnverified` | `IchorInstallation` condition, True once an installer image ran with its signature unchecked (`--skip-signature-check`). A later verified run does not clear it; only a person removes it from `status.conditions` |
+| Image Factory egress | When a cluster has a `TalosStorage`, the controller (not ichor-ui) may reach that cluster's Image Factory, `spec.imageFactoryURL` (default `https://factory.talos.dev`), over https. The Cilium policy for it is separate and removed when no cluster needs it |
 
 ## Not modelled
 

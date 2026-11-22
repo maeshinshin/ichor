@@ -5,98 +5,105 @@ sidebar_order: 10
 
 # Bootstrap
 
+![Two ways in. ichor init generates the secrets bundle, settles the shape, applies the config to control plane 1 with only Cilium inline, bootstraps etcd, creates the CRs and waits for CNIHandover. ichor adopt plans read-only, writes after consent with every machine held, takes over Cilium and releases machines one at a time after a zero-drift check. Adopt sorts each difference into class A, stored as patches; class B, listed and needing consent; and class C, which blocks the machine.](../../images/bootstrap.light.drawio.svg)
+
+*`init` creates a cluster; `adopt` brings a running one under management, and nothing is applied to a node until its release.*
+
+## `ichor init`
+
 ```sh
 ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
 ```
 
-1. Generate the secrets bundle locally; nag the user to back it up.
-2. Settle the shape of the cluster: topology preset, endpoint (a VIP is
-   recommended even for one node, because changing the endpoint later means
-   re-issuing certificates), disk roles for the first node.
-3. Apply the rendered config to the first control plane. Its inline manifest
-   carries only Cilium, the one component Kubernetes cannot start without: the
-   chart pinned in the binary, rendered with Helm's Go SDK, no network at init
-   time and the same bytes every run. Everything else is applied
-   later through the API server, with every write retried for a few minutes on
-   a transient error.
-4. Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret, apply
-   Ichor's install manifest.
-5. Create the CRs and the `IchorInstallation`, then apply
-   Ichor's NetworkPolicies once Cilium is Ready.
-6. Wait for the `CNIHandover` condition on the `TalosCluster`. `init` shows its
-   steps as a short list with a spinner on a terminal (one line per change in a
-   pipe or a log), and the last reason when the wait runs out; the controller
-   keeps working either way.
+- Generate the secrets bundle locally and nag the user to back it up.
+- Settle the shape. Use a VIP as the endpoint even for one node: changing it
+  later means re-issuing certificates.
+- The first control plane's inline manifest carries only Cilium, the one
+  component Kubernetes cannot start without. The chart is pinned in the binary
+  and rendered with Helm's Go SDK, so there is no network at init time and the
+  same bytes every run. Everything else goes through the API server, each write
+  retried for a few minutes on a transient error.
+- Bootstrap etcd, fetch the kubeconfig, store the bundle as a Secret, apply
+  Ichor's install manifest, create the CRs and the `IchorInstallation`, and
+  apply Ichor's NetworkPolicies once Cilium is Ready.
+- Wait for the `CNIHandover` condition on the `TalosCluster`. On a terminal
+  `init` shows a short step list with a spinner (one line per change in a pipe
+  or log) and the last reason if the wait runs out. The controller keeps working
+  either way.
 
-There are no flags to choose a CNI.
-Adding later nodes goes through the normal approval flow; `init` is the
-special case of approving the first control plane.
+There is no flag to choose a CNI. Later nodes go through the normal approval
+flow; `init` is the special case of approving the first control plane.
 
-`ichor adopt` brings a running Talos cluster that Ichor did not create under
-management. It takes Talos v1.14 and later only, because sign-in is always on and only
-v1.14 can carry Ichor's issuer. It refuses a node below Talos v1.14 with "upgrade Talos
-first", writing nothing, and it refuses a new `TalosCluster` whose version contract is
-below v1.14. The contract is
-probed on the first control plane alone, from its running version down to v1.12 (the
-one with the fewest unrepresentable paths wins; the probe goes below the floor so that a
-configuration generated for an older contract is refused by name), and `--version-contract v1.14`
-is the way out when an older contract wins on a control plane that runs v1.14. The v1.14 floor is the
-check every node of an adoption passes; a node added with `--add-machine` to a cluster that was adopted
-before passes a v1.12 floor, since that cluster's sign-in and issuer exist already. Above that floor, a cluster is adopted as it runs, whatever its version against this Ichor's set: a version
-the compatibility table does not know at all is refused, and an incompatible pair is reported and adopted. It works in four phases, and nothing is applied to a node until the
-last one:
+## `ichor adopt`
 
-1. Plan (`--plan` stops here and writes nothing). Read-only inspection with
-   the operator's own talosconfig: Talos and Kubernetes versions, the CNI and
-   where it came from, the kube-proxy setting, KubePrism, inline manifests
-   and each approved machine's live config. The `versionContract` is probed
-   from the running version down to v1.12 and the one with the fewest
-   unrepresentable paths is chosen (`--version-contract` overrides it).
-2. Write, after consent. The bundle Secret, the `TalosCluster` (annotation
+Brings a running Talos cluster Ichor did not create under management.
+
+**Floor.** Talos v1.14 and later only, because sign-in is always on and only
+v1.14 can carry Ichor's issuer. A node below it is refused with "upgrade Talos
+first", writing nothing, and so is a new `TalosCluster` whose version contract
+is below v1.14. A node added with `--add-machine` to a cluster adopted earlier
+passes a v1.12 floor instead, since that cluster's sign-in and issuer exist. Above the floor a cluster is adopted as it
+runs: a version the compatibility table does not know is refused; an
+incompatible pair is reported and adopted.
+
+**Contract probe.** On the first control plane alone, from its running version
+down to v1.12 (below the floor so an older configuration is refused by name).
+The contract with the fewest unrepresentable paths wins; `--version-contract
+v1.14` is the way out when an older one wins on a v1.14 control plane.
+
+Four phases; nothing is applied to a node until the last.
+
+1. **Plan** (`--plan` stops here and writes nothing). Read-only inspection with
+   the operator's talosconfig: Talos and Kubernetes versions, the CNI and its
+   origin, the kube-proxy setting, KubePrism, inline manifests and each approved
+   machine's live config.
+2. **Write**, after consent: the bundle Secret, the `TalosCluster` (annotation
    `ichor.maesh.dev/adopted`), the `TalosMachine`s (identity read over the
    authenticated API), the `TalosConfigPatch`es and, if Ichor is not running,
-   Ichor's install manifest. Every `TalosMachine` carries the annotation
+   its install manifest. Every `TalosMachine` carries
    `ichor.maesh.dev/hold-apply`: the reconciler computes and reports drift
    (`AdoptionHeld`) and never applies.
-3. Cilium takeover (see [Cilium](cilium.md)), skipped for an unmanaged CNI. A cluster
-   with no CNI at all is different: its nodes are NotReady, so
-   Ichor's own pods could not start. Adopt then installs Ichor's pinned Cilium
-   itself, in process, as Ichor's own Helm release, and waits for the nodes to
-   be Ready before it installs Ichor or writes any CR; the order is Cilium,
-   Ichor, CRs, hand-over, release. The cluster is adopted as the managed
-   `cilium` preset and `--cni-unmanaged` is refused there. This needs KubePrism
-   on port 7445 on every node and a pod CIDR on every node.
-4. Release of the hold, one machine at a time, control planes first, only
-   after a live zero-drift check passes. The controller then applies the
-   first render under the cluster lock like any rollout.
+3. **Cilium takeover** (see [Cilium](cilium.md)), skipped for an unmanaged CNI.
+   A cluster with no CNI has NotReady nodes, so Ichor's pods could not start:
+   adopt installs Ichor's pinned Cilium itself, in process, as Ichor's own Helm
+   release, and waits for Ready nodes before installing Ichor or writing any CR.
+   Order: Cilium, Ichor, CRs, hand-over, release. The cluster is adopted as the
+   managed `cilium` preset and `--cni-unmanaged` is refused. It needs KubePrism
+   on port 7445 and a pod CIDR on every node.
+4. **Release** of the hold, one machine at a time, control planes first, only
+   after a live zero-drift check passes. The controller then applies the first
+   render under the cluster lock like any rollout.
 
-The old "zero drift or nothing" rule now sorts differences into three classes.
-Class A is representable: sysctl and kernel-module documents, and values that
-have spec fields (subnets, install disk); adopt stores them as
-patches. Class B is Ichor-owned (the Cilium inline entry, KubePrism,
-kube-proxy when replaced, removal of Talos's flannel); the first render
-changes them, so they are listed and need consent, and they do not block.
-Class C is everything else, including other inline or extra manifests; it
-blocks that machine, with the path list and a hint, and adopt leaves it
-untouched.
+### Differences
 
-Secrets. `--secrets-bundle FILE` takes a `talosctl gen secrets` file. With
-`--recover-secrets` (and `--recover-from ADDRESS`, a control plane) adopt
-rebuilds the bundle from that node's machine config, read-only, and stores it
-under `~/.ichor/clusters/<name>/` with mode 0600. A wrong or partial bundle
-cannot get through, because it shows up as secret-field drift and no patch is
-produced. After adoption the controller uses a certificate minted from the
-bundle. The previous administrators' client certificates stay valid, so adopt
-prints, and the UI shows as a dismissible notice (condition
-`CARotationAdvised`), the advice to run `ichor rotate ca`. Nothing
-starts a rotation.
+| Class | Holds | Result |
+|---|---|---|
+| A, representable | sysctl and kernel-module documents; values with spec fields (subnets, install disk) | stored as patches |
+| B, Ichor-owned | the Cilium inline entry, KubePrism, kube-proxy when replaced, removal of Talos's flannel | listed; need consent; do not block |
+| C, everything else | including other inline or extra manifests | blocks that machine, with the path list and a hint; left untouched |
 
-Ichor can also be installed with Helm: `helm install` of the chart
-in `dist/chart` (published as the Helm repository `https://ichor.maesh.dev/charts` and as
-`oci://ghcr.io/maeshinshin/charts/ichor` once a release tag is pushed) installs Ichor, not a cluster. `ichor adopt` then
-detects the Helm release, skips its own install step, never creates an
+### Secrets
+
+`--secrets-bundle FILE` takes a `talosctl gen secrets` file. With
+`--recover-secrets` (and `--recover-from ADDRESS`, a control plane) adopt rebuilds
+the bundle read-only from that node's machine config and stores it under
+`~/.ichor/clusters/<name>/` (0600). A wrong or partial bundle cannot get through:
+it shows as secret-field drift and no patch is produced.
+
+After adoption the controller uses a certificate minted from the bundle. The
+previous administrators' client certificates stay valid, so adopt prints, and the
+UI shows as a dismissible notice (condition `CARotationAdvised`), the advice to
+run `ichor rotate ca`. Nothing starts a rotation.
+
+## Installing with Helm
+
+`helm install` of the chart in `dist/chart` (Helm repository
+`https://ichor.maesh.dev/charts`, or `oci://ghcr.io/maeshinshin/charts/ichor`
+once a release tag is pushed) installs Ichor, not a cluster. `ichor adopt` then
+detects the release, skips its install step, never creates an
 `IchorInstallation`, requires Ichor's version to equal the CLI's, and registers
-the cluster. A Helm-installed Ichor is upgraded with `helm upgrade`. The chart
-refuses to install on a cluster with no pod network (`preflight.cni`); that one
-case is covered by `ichor bootstrap cni`, which runs the same Cilium step as
-adopt. The chart never ships Cilium. See `docs/guides/install-with-helm.md`.
+the cluster. Upgrade with `helm upgrade`.
+
+The chart never ships Cilium and refuses a cluster with no pod network
+(`preflight.cni`); `ichor bootstrap cni` covers that case with the same Cilium
+step as adopt. See `docs/guides/install-with-helm.md`.

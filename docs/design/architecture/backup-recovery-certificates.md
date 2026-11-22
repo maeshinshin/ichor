@@ -27,6 +27,6 @@ The store must be outside the cluster being restored (not `minio.minio.svc`, nor
 - Ichor's own Talos client certificates are short-lived and renewed automatically; an expired one would lock Ichor out with no way back.
 - CA rotation (Talos and Kubernetes; etcd and aggregator on request) follows the Talos procedure through the machinery of upgrades. The service-account and secretbox keys rotate in a separate key-rotation operation.
 - After every node accepts the new CAs it waits until the operator holds credentials valid for both (written by the CLI, or downloaded in the UI); otherwise the stage that changes what the API servers present would lock the operator out.
-- In-cluster clients cannot hold both Kubernetes CAs, so before dropping the old one the controller waits for the new one in every namespace, then a settle delay. Its own client trusts the new CA early through a process-wide trust pool.
+- In-cluster clients cannot hold both Kubernetes CAs, so before dropping the old one the controller waits for the new one in every namespace, then a settle delay. Its own client trusts the new CA early through a process-wide trust pool; its leader election outlives the API server restart.
 - After the old CAs are dropped and every Node has been Ready for a while, it restarts the clients that keep the old CA, one at a time (CoreDNS, kube-proxy, the CNI, ichor-ui). Other clients that load the CA once may need a restart.
 - Expiry dates show in status, the UI and metrics.

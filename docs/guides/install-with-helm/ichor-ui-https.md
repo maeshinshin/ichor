@@ -4,23 +4,17 @@ sidebar_order: 7
 
 # ichor-ui is HTTPS only
 
-ichor-ui serves TLS on 8443 and no plain HTTP. The Service port is
-named `https`. The certificate is yours (`ichorUI.tls.secretName`) or a leaf from
-the Ichor serving CA, whose public part the controller publishes as the
-ConfigMap and Secret `ichor-ui-ca` in `ichor-system`. How to put an Ingress, a
-Gateway or a load balancer in front is in [Users and login](../users-and-login/expose-ichor-ui.md).
+![An edge reaches ichor-ui over HTTPS on port 8443. The certificate is yours or a leaf of the Ichor serving CA, whose public part is published as ichor-ui-ca.](../../images/ih-ichor-ui-https.light.drawio.svg)
+
+*ichor-ui serves TLS only.*
+
+- ichor-ui serves TLS on 8443, with no plain HTTP; the Service port is named `https`.
+- The certificate is yours (`ichorUI.tls.secretName`) or a leaf of the Ichor serving CA, published as the ConfigMap and Secret `ichor-ui-ca` in `ichor-system`.
+- Ingress, Gateway or load balancer in front: [Users and login](../users-and-login/expose-ichor-ui.md).
 
 > [!WARNING]
-> ichor-ui no longer serves plain HTTP. Point the edge at ichor-ui on 8443 before you upgrade.
+> Re-point a plain-HTTP edge at `https://<ichor-ui>:8443` and trust `ichor-ui-ca` before you upgrade.
 
-Moving an existing release:
-
-- Plain HTTP edge: ichor-ui no longer serves plain HTTP. Re-point the edge at
-  `https://<ichor-ui>:8443` and trust `ichor-ui-ca` before you upgrade. The
-  value `ichorUI.plaintextPort` was removed; a values file that still sets it
-  is ignored.
-- An install that already served TLS on 8080 sets `ichorUI.port=8080` to keep
-  its Service and edge as they are.
-- The ServiceMonitor verifies against `ichor-ui-ca` by default; override with
-  `ichorUI.tls.caConfigMap`, `caSecret` and `caKey`. It never skips
-  verification.
+- `ichorUI.plaintextPort` was removed; a values file that sets it is ignored.
+- An install that already served TLS on 8080 sets `ichorUI.port=8080` to keep its Service and edge.
+- The ServiceMonitor verifies against `ichor-ui-ca`; override with `ichorUI.tls.caConfigMap`, `caSecret`, `caKey`. It never skips verification.

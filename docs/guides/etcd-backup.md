@@ -1,36 +1,31 @@
 # Back up etcd to S3
 
-A `TalosEtcdBackup` takes an etcd snapshot on a schedule, encrypts it with a key
-derived from the cluster's secrets bundle, stores it in an S3 bucket and keeps
-the newest few. It is the only snapshot `ichor restore` reads, and nothing is
-backed up until you create one. This page sets one up. The design is in
-[Backup, recovery, certificates](../design/architecture/backup-recovery-certificates.md).
+A `TalosEtcdBackup` snapshots etcd on a schedule, encrypts it with a key derived
+from the cluster's secrets bundle, stores it in S3 and keeps the newest few. It
+is the only snapshot `ichor restore` reads; nothing is backed up until you
+create one. Design: [Backup, recovery, certificates](../design/architecture/backup-recovery-certificates.md).
 
-Ichor does not create the bucket. You bring a bucket and credentials; Ichor
-writes the two objects that use them.
+![Five steps in a row: you create the credentials Secret and the TalosEtcdBackup, the controller snapshots etcd at once and then on schedule, the snapshot is encrypted with a key from the secrets bundle, it is stored in an S3 bucket outside the cluster with the newest keepLast kept, and ichor restore etcd and restore cluster read it.](../images/etcd-backup-flow.light.drawio.svg)
+
+*From the two objects you create to a snapshot a restore can read.*
 
 ## What you need
 
-- **A bucket that already exists, outside the cluster.** A restore takes the
-  cluster's Kubernetes API down, and a store inside the cluster (a Service such
-  as `minio.minio.svc`, or an address in the pod or service range) goes with it,
-  so the restore cannot finish. The `TalosEtcdBackup` carries a `StoreInCluster`
-  warning condition while its endpoint looks like that, and `ichor create etcd-backup` prints
-  the same warning.
-- **An access key and secret for it**, allowed to list, read, write and delete
-  objects under the prefix. Delete is how old snapshots are pruned.
-- **The `update` verb on `talosetcdbackups/secret-references`.** The credentials
-  Secret is read with Ichor's own rights, so naming it, or changing the endpoint,
-  bucket or prefix, is gated like the other Secret references
+- **A bucket outside the cluster**, which Ichor does not create. A restore takes
+  the Kubernetes API down, and a store inside the cluster (`minio.minio.svc`, a
+  pod or service address) goes with it. Such an endpoint sets the `StoreInCluster`
+  warning condition, and `ichor create etcd-backup` prints it too.
+- **An access key and secret** allowed to list, read, write and delete under the
+  prefix (delete prunes old snapshots).
+- **The `update` verb on `talosetcdbackups/secret-references`**, which gates
+  naming the Secret or changing the endpoint, bucket or prefix
   ([Security model](../concepts/security.md)).
-- **An endpoint that is `https://`.** A plain `http://` endpoint sends the access
-  key id in clear and is refused unless you also say `--s3-insecure`.
+- **An `https://` endpoint.** `http://` needs `--s3-insecure`.
 
 ## Create it
 
-Give the credentials in the environment, not as flags, so they do not show in
-`ps` or the shell history. These are the variables `ichor restore cluster`
-reads too:
+Credentials go in the environment, not flags (the variables `ichor restore
+cluster` reads too):
 
 ```sh
 export ICHOR_S3_ACCESS_KEY_ID=...
@@ -39,23 +34,22 @@ ichor create etcd-backup nightly --cluster prod \
   --s3-endpoint https://s3.example.com --s3-bucket ichor-backups
 ```
 
-This writes a Secret named `nightly-s3` in the namespace Ichor is installed in
-(`--ichor-namespace`, `ichor-system` by default: the controller reads it from
-there, not from the namespace of the backup) and a `TalosEtcdBackup` named
-`nightly` in `--namespace`. It refuses an endpoint, bucket or prefix the API
-would refuse before it writes anything, never overwrites a Secret or a backup that
-exists, and removes the Secret again if the `TalosEtcdBackup` is refused.
+This writes the Secret `nightly-s3` in `--ichor-namespace` (`ichor-system`, where
+the controller reads it) and the `TalosEtcdBackup` `nightly` in `--namespace`.
+It validates first, never overwrites, and removes the Secret if the backup is refused.
 
-Optional flags: `--s3-prefix` (default the cluster's name; two clusters in one bucket need two prefixes),
-`--s3-region`, `--s3-ca-file` (a PEM bundle that signs the endpoint, kept in the Secret as `ca.crt`),
-`--schedule` (a five-field cron expression in UTC, default `0 * * * *`), `--keep-last` (default 24)
-and `--credentials-secret` (default `NAME-s3`). `ICHOR_S3_SESSION_TOKEN` adds a session token.
+| Flag | Default |
+|---|---|
+| `--s3-prefix` | the cluster's name (two clusters in one bucket need two) |
+| `--schedule` | `0 * * * *` (five-field cron, UTC) |
+| `--keep-last` | 24 |
+| `--s3-region`, `--s3-ca-file` (kept as `ca.crt`), `--credentials-secret` (`NAME-s3`) | |
+| `ICHOR_S3_SESSION_TOKEN` | optional session token |
 
 ### By hand
 
-The same two objects, for a GitOps repository or a cluster you reach with `kubectl` only. The
-Secret goes in the controller's namespace; its keys are `accessKeyID` and `secretAccessKey`,
-and optionally `sessionToken` and `ca.crt`.
+For GitOps, or a cluster you reach with `kubectl` only. The Secret's keys are
+`accessKeyID`, `secretAccessKey`, optionally `sessionToken` and `ca.crt`.
 
 ```sh
 kubectl -n ichor-system create secret generic nightly-s3 \
@@ -83,50 +77,44 @@ spec:
         name: nightly-s3
 ```
 
-## See that it works
-
-The controller takes the first snapshot as soon as it sees the object, then on
-the schedule. Look at the object:
+## Check it
 
 ```sh
 kubectl -n default get talosetcdbackup nightly -o yaml
 ```
 
-- `status.conditions`, type `Ready`: `True` with reason `Succeeded` while the
-  newest snapshot is fresher than twice the schedule interval. `False` with
-  `Failed` carries the reason in its message (a missing key in the Secret, a
-  bucket that does not exist, an endpoint that cannot be reached); `Stale` means
-  the last success is too old. A `StoreInCluster` condition is the warning above.
-- `status.lastSnapshot`: the key, time, size and source machine of the newest
-  snapshot. `status.snapshots` lists every snapshot kept, which is what
-  `ichor restore etcd` offers.
+- `Ready` is `True` (`Succeeded`) while the newest snapshot is fresher than
+  twice the schedule interval; `False` is `Failed` (reason in the message: a
+  missing key, no bucket, unreachable endpoint) or `Stale`.
+- `status.lastSnapshot` is the newest; `status.snapshots` is every one kept,
+  which `ichor restore etcd` offers.
 
-The Backups page of the UI shows the same, and `ichor backup etcd nightly` asks for one more snapshot
-outside the schedule.
+The Backups page shows the same. `ichor backup etcd nightly` takes one more
+snapshot outside the schedule. A failed backup is retried every five minutes:
+fix the Secret or the bucket.
 
-If it is `Failed`, fix the Secret or the bucket; the controller retries every five minutes.
-Changing the credentials is an edit of the Secret. Pointing the object at another
-Secret, endpoint, bucket or prefix needs the `update` verb on `talosetcdbackups/secret-references` again.
+## Restoring
 
-## Keep these
+`ichor restore etcd` (the controller reads the snapshot through the same Secret)
+and `ichor restore cluster` (needs the bundle and bucket) read these snapshots.
+A restore fails at once, with the cause, when the store refuses the credentials
+or the bucket or snapshot object is gone; fix that and start it again.
 
-Snapshots are encrypted with a key derived from the cluster's secrets bundle.
-`ichor restore cluster` needs the bundle (`~/.ichor/clusters/NAME/secrets.yaml`,
-and `retired-keys.yaml` after a [key rotation](rotate-keys.md)) and the bucket,
-and nothing else that survives the loss of the cluster. A bucket without the bundle cannot be restored from.
+> [!IMPORTANT]
+> Keep the bundle: `~/.ichor/clusters/NAME/secrets.yaml`, plus
+> `retired-keys.yaml` after a [key rotation](rotate-keys.md). A bucket without
+> the bundle cannot be restored from.
 
 ## Before a rotation or a risky change
 
-[CA rotation](../concepts/ca-and-key-rotation.md) and the other operations that
-restart control planes ask you to hold a snapshot first. There are two routes:
+[CA rotation](../concepts/ca-and-key-rotation.md) and other operations that
+restart control planes ask for a snapshot first.
 
-| | `ichor create etcd-backup`, then `ichor backup etcd NAME` | `ichor snapshot etcd --node NODE` |
+| | `ichor backup etcd NAME` (after `create etcd-backup`) | `ichor snapshot etcd --node NODE` |
 |---|---|---|
 | Setup | a bucket outside the cluster, once | none |
-| The file | encrypted, in your bucket | **plaintext**, on your disk: it holds every Kubernetes Secret |
-| `ichor restore etcd` and `restore cluster` read it | yes | no |
-| Gets you | a snapshot Ichor can restore, kept under the retention | a copy you hold yourself |
+| File | encrypted, in your bucket | **plaintext** on your disk, holding every Secret |
+| Read by `ichor restore` | yes | no |
 
-Use the first route. The second is a stopgap for a cluster that has no backup yet:
-`ichor restore` does not take the file, so it gives you the data and not a restore
-Ichor performs for you, and it must be kept as carefully as the secrets themselves.
+Use the first. The second is a stopgap for a cluster with no backup: it gives
+you data, not a restore, and must be kept as carefully as the secrets.

@@ -176,3 +176,21 @@ func TestDemoDisks(t *testing.T) {
 		t.Fatal("accepted a junk count")
 	}
 }
+
+// The single-node harness has no Ichor to install Cilium, and the e2e suite asserts the node is ready, so it
+// keeps the generator's flannel; the HA harness installs Cilium itself and drops it.
+func TestGenerateControlPlaneConfigKeepsFlannelOnRequest(t *testing.T) {
+	t.Parallel()
+
+	for _, withFlannel := range []bool{true, false} {
+		cfg, err := generateControlPlaneConfig("t", []string{"10.1.2.3"}, withFlannel)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got := strings.Contains(string(cfg.machineConfig), "KubeFlannelCNIConfig")
+		if got != withFlannel {
+			t.Fatalf("flannel in the control-plane config = %v, want %v", got, withFlannel)
+		}
+	}
+}

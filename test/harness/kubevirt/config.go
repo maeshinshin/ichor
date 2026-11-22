@@ -76,7 +76,10 @@ type generatedConfig struct {
 // once per node, not once per node's own config. The cluster endpoint pins to nodeIPs[0]
 // (this harness has no VIP/load balancer); WithEndpointList carries every node so Talos's
 // own endpoint controllers, and talosctl, know about all of them.
-func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generatedConfig, error) {
+//
+// withFlannel keeps the generator's flannel CNI document. Only the single-node harness sets it: nothing there
+// installs Cilium, and the e2e suite needs a ready node. The HA harness has Ichor install Cilium and drops it.
+func generateControlPlaneConfig(clusterName string, nodeIPs []string, withFlannel bool) (*generatedConfig, error) {
 	endpoint := fmt.Sprintf("https://%s:6443", nodeIPs[0])
 	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
 
@@ -104,8 +107,10 @@ func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generate
 	if err := assertEndpoint(cfg, endpoint); err != nil {
 		return nil, err
 	}
-	if cfg, err = withoutFlannel(cfg); err != nil {
-		return nil, err
+	if !withFlannel {
+		if cfg, err = withoutFlannel(cfg); err != nil {
+			return nil, err
+		}
 	}
 
 	machineConfig, err := cfg.Bytes()
@@ -117,8 +122,10 @@ func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generate
 	if err != nil {
 		return nil, fmt.Errorf("generating worker config: %w", err)
 	}
-	if wcfg, err = withoutFlannel(wcfg); err != nil {
-		return nil, err
+	if !withFlannel {
+		if wcfg, err = withoutFlannel(wcfg); err != nil {
+			return nil, err
+		}
 	}
 	workerConfig, err := wcfg.Bytes()
 	if err != nil {

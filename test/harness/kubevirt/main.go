@@ -321,7 +321,7 @@ func waitForMaintenance(step, ip string, timeout time.Duration) error {
 // reboots it), waits for the authenticated API, bootstraps etcd, and waits for the node to
 // report running/ready. It returns the admin talosconfig that authenticates against it.
 func installAndBootstrap(ip string) ([]byte, error) {
-	cfg, err := generateControlPlaneConfig(vmName, []string{ip})
+	cfg, err := generateControlPlaneConfig(vmName, []string{ip}, true)
 	if err != nil {
 		return nil, err
 	}

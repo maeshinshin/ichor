@@ -136,7 +136,7 @@ func bootHAToMaintenance() ([]string, error) {
 // generated from -- the removal-ordering verification needs the real bundle to
 // dial these same nodes' real Talos API, not a fresh unrelated one.
 func configureAndBootstrapHA(ips []string) ([]byte, *secrets.Bundle, error) {
-	cfg, err := generateControlPlaneConfig(haCluster, ips[:haCount])
+	cfg, err := generateControlPlaneConfig(haCluster, ips[:haCount], false)
 	if err != nil {
 		return nil, nil, err
 	}

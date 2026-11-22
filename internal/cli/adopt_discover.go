@@ -89,7 +89,13 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 			return nil, nil, fmt.Errorf("adopt: cluster member %q reports no address", mem.Hostname)
 		}
 
+		// A node lists every address it holds, a Cilium cluster-pool cilium_host address among them (10.0.0.0/8 sorts
+		// first); the one adopt reached the cluster through is known to answer.
+		// shortcut: the other members keep their first address, drop when discovery can tell a pod address from a node's.
 		addr := mem.Addresses[0]
+		if slices.Contains(mem.Addresses, deps.Seed) {
+			addr = deps.Seed
+		}
 
 		id, err := deps.ReadIdentity(ctx, addr)
 		if err != nil {

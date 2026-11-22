@@ -5,6 +5,9 @@ import "testing"
 const (
 	consentSweepConfigDir = "../../config/rbac/ichor-consent-sweep/"
 	consentSweepSA        = "ichor-consent-sweep"
+	managerRole           = "ichor-manager-role"
+	managerSecretsRole    = "ichor-manager-secrets-role"
+	resServiceAccounts    = "serviceaccounts"
 )
 
 // TestConsentSweepIdentity pins ADR 0066's 2026-11-22 amendment: the removal of the kube-proxy switch consent
@@ -18,7 +21,7 @@ func TestConsentSweepIdentity(t *testing.T) {
 		t.Fatalf("the chart renders no ServiceAccount %s", consentSweepSA)
 	}
 
-	for _, name := range []string{"ichor-manager-role", "ichor-manager-secrets-role"} {
+	for _, name := range []string{managerRole, managerSecretsRole} {
 		for tr := range rbacTriples(allRules(find(docs, kindClusterRole, name))) {
 			reads := tr.verb == verbGetController || tr.verb == verbList || tr.verb == verbWatch
 			if tr.group == ichorGroup && tr.resource == resClusters && !reads {
@@ -32,7 +35,7 @@ func TestConsentSweepIdentity(t *testing.T) {
 		t.Fatal("no Role ichor-consent-sweep-impersonate-role")
 	}
 
-	want := rbacTriple{"", "serviceaccounts", verbImpersonate, consentSweepSA}
+	want := rbacTriple{"", resServiceAccounts, verbImpersonate, consentSweepSA}
 	if got := rbacTriples(allRules(imp)); len(got) != 1 || !got[want] {
 		t.Errorf("the impersonation Role grants %v, want impersonate on %s only", got, consentSweepSA)
 	}

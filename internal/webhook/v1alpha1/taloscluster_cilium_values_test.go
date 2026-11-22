@@ -107,7 +107,7 @@ var _ = Describe("TalosCluster Webhook: Cilium values", func() {
 
 	It("checks the stored values again when the kube-proxy mode or the tunnel changes", func() {
 		for _, edit := range []func(*ichorv1alpha1.TalosCluster){
-			func(c *ichorv1alpha1.TalosCluster) { c.Spec.CNI.KubeProxy = "replaced" },
+			func(c *ichorv1alpha1.TalosCluster) { c.Spec.CNI.KubeProxy = proxyReplaced },
 			func(c *ichorv1alpha1.TalosCluster) { c.Spec.CNI.Tunnel = "geneve" },
 		} {
 			old := withValues(unknownKey)
@@ -137,7 +137,7 @@ var _ = Describe("TalosCluster Webhook: Cilium values", func() {
 	It("does not enforce the guards that need the machine configuration or the live cluster", func() {
 		// bpf.masquerade against forwardKubeDNSToHost, KubePrism and the Gateway API CRDs stay with the UI and CLI.
 		c := withValues(`{"bpf":{"masquerade":true},"gatewayAPI":{"enabled":true}}`)
-		c.Spec.CNI.KubeProxy = "replaced" // Gateway API needs it; the mode is in the spec, so the webhook checks it
+		c.Spec.CNI.KubeProxy = proxyReplaced // Gateway API needs it; the mode is in the spec, so the webhook checks it
 		_, err := v.ValidateCreate(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
 	})

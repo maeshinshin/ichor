@@ -8,7 +8,12 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-const somethingElse = "something else"
+const (
+	somethingElse       = "something else"
+	proxyReplaced       = "replaced"
+	aPersonIsNotLimited = "a person is not limited"
+	alice               = "alice"
+)
 
 // TestAutoPatchIdentityMayOnlyApplyAPatch: the automatic patcher's ServiceAccount has one write to a TalosCluster: a
 // newer patch of the same minor in the two version fields, nothing else. The controller's own
@@ -23,7 +28,7 @@ func TestAutoPatchIdentityMayOnlyApplyAPatch(t *testing.T) {
 
 	base := func() *ichorv1alpha1.TalosCluster {
 		c := &ichorv1alpha1.TalosCluster{}
-		c.Spec.TalosVersion, c.Spec.KubernetesVersion = "v1.14.3", "v1.36.1"
+		c.Spec.TalosVersion, c.Spec.KubernetesVersion = testTalosVersion, "v1.36.1"
 
 		return c
 	}
@@ -49,7 +54,7 @@ func TestAutoPatchIdentityMayOnlyApplyAPatch(t *testing.T) {
 		{name: "an annotation", user: patcher, mod: func(c *ichorv1alpha1.TalosCluster) { c.Annotations = map[string]string{"a": "b"} }, wantErr: somethingElse},
 		{name: "the controller writes no spec, not even a patch", user: controller, mod: talos("v1.14.5"), wantErr: "never writes"},
 		{name: "the controller changes no other spec field either", user: controller, mod: func(c *ichorv1alpha1.TalosCluster) { c.Spec.VersionContract = "v1.14" }, wantErr: "never writes"},
-		{name: "a person is not limited", user: "alice", mod: kube("v1.37.0")},
+		{name: aPersonIsNotLimited, user: alice, mod: kube("v1.37.0")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -79,7 +84,7 @@ func TestStorageExtensionsIdentityMayOnlySetTheSchematicID(t *testing.T) {
 
 	withSchematic := func(id string) *ichorv1alpha1.TalosCluster {
 		c := &ichorv1alpha1.TalosCluster{}
-		c.Spec.TalosVersion = "v1.14.3"
+		c.Spec.TalosVersion = testTalosVersion
 
 		if id != "" {
 			c.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: id}
@@ -104,7 +109,7 @@ func TestStorageExtensionsIdentityMayOnlySetTheSchematicID(t *testing.T) {
 
 			return c
 		}(), wantErr: somethingElse},
-		{name: "a person is not limited", user: "alice", old: withSchematic("mine"), new: withSchematic("abc")},
+		{name: aPersonIsNotLimited, user: alice, old: withSchematic("mine"), new: withSchematic("abc")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -135,7 +140,7 @@ func TestConsentSweepIdentityMayOnlyRemoveTheConsentAnnotation(t *testing.T) {
 
 	cluster := func(annotations map[string]string) *ichorv1alpha1.TalosCluster {
 		c := &ichorv1alpha1.TalosCluster{}
-		c.Spec.TalosVersion = "v1.14.3"
+		c.Spec.TalosVersion = testTalosVersion
 		c.Annotations = annotations
 
 		return c
@@ -148,34 +153,34 @@ func TestConsentSweepIdentityMayOnlyRemoveTheConsentAnnotation(t *testing.T) {
 		wantErr  string
 	}{
 		{name: "the consent removed", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced"}), new: cluster(nil)},
+			old: cluster(map[string]string{consent: proxyReplaced}), new: cluster(nil)},
 		{name: "the consent removed, another annotation kept", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced", "a": "b"}), new: cluster(map[string]string{"a": "b"})},
+			old: cluster(map[string]string{consent: proxyReplaced, "a": "b"}), new: cluster(map[string]string{"a": "b"})},
 		{name: "no change", user: sweeper, old: cluster(nil), new: cluster(nil)},
 		{name: "the consent added", user: sweeper,
-			old: cluster(nil), new: cluster(map[string]string{consent: "replaced"}), wantErr: somethingElse},
+			old: cluster(nil), new: cluster(map[string]string{consent: proxyReplaced}), wantErr: somethingElse},
 		{name: "the consent rewritten", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced"}), new: cluster(map[string]string{consent: "enabled"}), wantErr: somethingElse},
+			old: cluster(map[string]string{consent: proxyReplaced}), new: cluster(map[string]string{consent: "enabled"}), wantErr: somethingElse},
 		{name: "another annotation removed", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced", "a": "b"}), new: cluster(map[string]string{consent: "replaced"}), wantErr: somethingElse},
+			old: cluster(map[string]string{consent: proxyReplaced, "a": "b"}), new: cluster(map[string]string{consent: proxyReplaced}), wantErr: somethingElse},
 		{name: "another annotation added with the removal", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced"}), new: cluster(map[string]string{"a": "b"}), wantErr: somethingElse},
+			old: cluster(map[string]string{consent: proxyReplaced}), new: cluster(map[string]string{"a": "b"}), wantErr: somethingElse},
 		{name: "a spec field with the removal", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced"}), new: func() *ichorv1alpha1.TalosCluster {
+			old: cluster(map[string]string{consent: proxyReplaced}), new: func() *ichorv1alpha1.TalosCluster {
 				c := cluster(nil)
 				c.Spec.TalosVersion = "v1.14.5"
 
 				return c
 			}(), wantErr: somethingElse},
 		{name: "a label with the removal", user: sweeper,
-			old: cluster(map[string]string{consent: "replaced"}), new: func() *ichorv1alpha1.TalosCluster {
+			old: cluster(map[string]string{consent: proxyReplaced}), new: func() *ichorv1alpha1.TalosCluster {
 				c := cluster(nil)
 				c.Labels = map[string]string{"a": "b"}
 
 				return c
 			}(), wantErr: somethingElse},
-		{name: "a person is not limited", user: "alice",
-			old: cluster(nil), new: cluster(map[string]string{consent: "replaced"})},
+		{name: aPersonIsNotLimited, user: alice,
+			old: cluster(nil), new: cluster(map[string]string{consent: proxyReplaced})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

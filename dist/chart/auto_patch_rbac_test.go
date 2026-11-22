@@ -25,7 +25,7 @@ func TestAutoPatchIdentity(t *testing.T) {
 	managers := 0
 
 	for _, d := range docs {
-		isManager := nameOf(d) == "ichor-manager-role" || nameOf(d) == "ichor-manager-secrets-role"
+		isManager := nameOf(d) == managerRole || nameOf(d) == managerSecretsRole
 		if !isManager || (d["kind"] != kindClusterRole && d["kind"] != kindRole) {
 			continue
 		}
@@ -54,7 +54,7 @@ func TestAutoPatchIdentity(t *testing.T) {
 	}
 
 	got := rbacTriples(allRules(imp))
-	if len(got) != 1 || !got[rbacTriple{"", "serviceaccounts", verbImpersonate, "ichor-auto-patch"}] {
+	if len(got) != 1 || !got[rbacTriple{"", resServiceAccounts, verbImpersonate, "ichor-auto-patch"}] {
 		t.Errorf("the impersonation Role grants %v, want impersonate on ichor-auto-patch only", got)
 	}
 

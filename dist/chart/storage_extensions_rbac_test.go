@@ -19,7 +19,7 @@ func TestStorageExtensionsIdentity(t *testing.T) {
 		t.Fatalf("the chart renders no ServiceAccount %s", storageExtensionsSA)
 	}
 
-	for _, name := range []string{"ichor-manager-role", "ichor-manager-secrets-role"} {
+	for _, name := range []string{managerRole, managerSecretsRole} {
 		for tr := range rbacTriples(allRules(find(docs, kindClusterRole, name))) {
 			reads := tr.verb == verbGetController || tr.verb == verbList || tr.verb == verbWatch
 			if tr.group == ichorGroup && tr.resource == resClusters && !reads {
@@ -33,7 +33,7 @@ func TestStorageExtensionsIdentity(t *testing.T) {
 		t.Fatal("no Role ichor-storage-extensions-impersonate-role")
 	}
 
-	want := rbacTriple{"", "serviceaccounts", verbImpersonate, storageExtensionsSA}
+	want := rbacTriple{"", resServiceAccounts, verbImpersonate, storageExtensionsSA}
 	if got := rbacTriples(allRules(imp)); len(got) != 1 || !got[want] {
 		t.Errorf("the impersonation Role grants %v, want impersonate on %s only", got, storageExtensionsSA)
 	}

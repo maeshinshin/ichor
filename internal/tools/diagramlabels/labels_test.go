@@ -11,8 +11,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -169,5 +171,53 @@ func TestProblemsFlagsHTMLLineBreaksAndPassesAMissingHTMLKey(t *testing.T) {
 	got, err := problems("x.drawio", []byte(model))
 	if err != nil || len(got) != 1 || !strings.Contains(got[0], `cell "br"`) || !strings.Contains(got[0], "line break") {
 		t.Errorf("got %q, %v; want one line-break problem naming cell \"br\"", got, err)
+	}
+}
+
+var (
+	fenced     = regexp.MustCompile("(?s)```.*?(?:```|$)|~~~.*?(?:~~~|$)")
+	inlineCode = regexp.MustCompile("`[^`\n]*`")
+	embed      = regexp.MustCompile(`\]\([^)\s]*light\.drawio\.svg\)`)
+)
+
+// hasDiagram reports whether a page embeds a light draw.io diagram outside code.
+func hasDiagram(page string) bool {
+	return embed.MatchString(inlineCode.ReplaceAllString(fenced.ReplaceAllString(page, ""), ""))
+}
+
+// TestEveryPageHasADiagram gates the docs rule that every published page embeds a diagram. It walks what
+// site/src/content.config.ts globs (docs/**/*.md minus adr/**) and skips the generated reference pages.
+func TestEveryPageHasADiagram(t *testing.T) {
+	docs := filepath.Join(repoRoot, "docs")
+	var missing []string
+	err := filepath.WalkDir(docs, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return err
+		}
+		rel, _ := filepath.Rel(docs, path)
+		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(rel, "adr/") || strings.HasPrefix(rel, "reference/cli/") || strings.HasPrefix(rel, "reference/crds/") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err == nil && !hasDiagram(string(b)) {
+			missing = append(missing, rel)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) > 0 {
+		t.Errorf("pages without a draw.io diagram (docs/development/contributing-docs.md, Diagrams):\n%s", strings.Join(missing, "\n"))
+	}
+}
+
+func TestHasDiagramIgnoresCode(t *testing.T) {
+	const img = "![x](../images/a.light.drawio.svg)"
+	for page, want := range map[string]bool{img: true, "`" + img + "`": false, "```md\n" + img + "\n```\n": false, "```\n```\n" + img: true} {
+		if got := hasDiagram(page); got != want {
+			t.Errorf("hasDiagram(%q) = %v, want %v", page, got, want)
+		}
 	}
 }

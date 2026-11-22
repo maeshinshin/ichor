@@ -214,4 +214,4 @@ Edit Style, save the light file and run `make docs-diagrams` again.
 `go test ./internal/tools/diagramlabels/` (also run by `make test`) fails on any
 cell with `html=1`, any `<br>` or `<div>` in a label and any `foreignObject` in
 an SVG under `docs/images`, and names the file and cell. A cell with no `html`
-key passes, because draw.io reads it as plain text.
+key passes, because draw.io reads it as plain text. `TestEveryPageHasADiagram` in the same package fails on any published page (not `adr/`, `reference/cli/` or `reference/crds/`) with no embed of a `*.light.drawio.svg` outside code.

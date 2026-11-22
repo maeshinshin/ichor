@@ -326,8 +326,11 @@ type GetIchorInstallationResponse struct {
 	// installer_signature_skip is true while spec.installerSignature.mode is skip: the next Ichor upgrade
 	// will not check the installer image's signature.
 	InstallerSignatureSkip bool `protobuf:"varint,15,opt,name=installer_signature_skip,json=installerSignatureSkip,proto3" json:"installer_signature_skip,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// installer_image_unverified is true once an installer image has run with its signature unchecked
+	// (the IchorInstallation's InstallerImageUnverified condition). A later verified run does not clear it.
+	InstallerImageUnverified bool `protobuf:"varint,16,opt,name=installer_image_unverified,json=installerImageUnverified,proto3" json:"installer_image_unverified,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *GetIchorInstallationResponse) Reset() {
@@ -463,6 +466,13 @@ func (x *GetIchorInstallationResponse) GetInstallerSkipReason() string {
 func (x *GetIchorInstallationResponse) GetInstallerSignatureSkip() bool {
 	if x != nil {
 		return x.InstallerSignatureSkip
+	}
+	return false
+}
+
+func (x *GetIchorInstallationResponse) GetInstallerImageUnverified() bool {
+	if x != nil {
+		return x.InstallerImageUnverified
 	}
 	return false
 }
@@ -3501,7 +3511,7 @@ var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a\x1cichor/v1alpha1/cluster.proto\"\x1d\n" +
-	"\x1bGetIchorInstallationRequest\"\xf7\x05\n" +
+	"\x1bGetIchorInstallationRequest\"\xb5\x06\n" +
 	"\x1cGetIchorInstallationResponse\x12+\n" +
 	"\x11installed_version\x18\x01 \x01(\tR\x10installedVersion\x12%\n" +
 	"\x0etarget_version\x18\x02 \x01(\tR\rtargetVersion\x12+\n" +
@@ -3518,7 +3528,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x10installer_digest\x18\f \x01(\tR\x0finstallerDigest\x125\n" +
 	"\x16installer_verification\x18\r \x01(\tR\x15installerVerification\x126\n" +
 	"\x15installer_skip_reason\x18\x0e \x01(\tB\x02\x18\x01R\x13installerSkipReason\x128\n" +
-	"\x18installer_signature_skip\x18\x0f \x01(\bR\x16installerSignatureSkip\"\x8e\x01\n" +
+	"\x18installer_signature_skip\x18\x0f \x01(\bR\x16installerSignatureSkip\x12<\n" +
+	"\x1ainstaller_image_unverified\x18\x10 \x01(\bR\x18installerImageUnverified\"\x8e\x01\n" +
 	"\x15IchorInstallerOptions\x12\x16\n" +
 	"\x06digest\x18\x01 \x01(\tR\x06digest\x126\n" +
 	"\x15skip_signature_reason\x18\x02 \x01(\tB\x02\x18\x01R\x13skipSignatureReason\x12%\n" +

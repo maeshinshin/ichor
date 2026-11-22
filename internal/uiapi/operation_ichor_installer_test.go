@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -170,5 +171,36 @@ func TestIchorUpgradeReadsAnOlderClientsSkipReasonAsASkip(t *testing.T) {
 
 	if sig := getInstallation(t, k8s).Spec.InstallerSignature; sig == nil || sig.Mode != ichorv1alpha1.InstallerSignatureSkip || sig.Reason != "" {
 		t.Fatalf("spec.installerSignature = %+v", sig)
+	}
+}
+
+// The record that an unchecked image ran outlives the verified upgrade that rewrote installerImage and
+// cleared the skip: the response still says so.
+func TestGetIchorInstallationSaysAnUncheckedImageOnceRan(t *testing.T) {
+	inst := ichorInstallation(ichorNew, ichorOld)
+	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
+		Digest: "sha256:" + strings.Repeat("b", 64), Verification: ichorv1alpha1.InstallerImageVerified,
+	}
+	inst.Status.Conditions = []metav1.Condition{{
+		Type: ichorv1alpha1.ConditionInstallerImageUnverified, Status: metav1.ConditionTrue, Reason: "SignatureSkipped",
+		LastTransitionTime: metav1.Now(),
+	}}
+
+	srv, _ := opServer(t, inst)
+
+	res, err := srv.GetIchorInstallation(context.Background(), connect.NewRequest(&pb.GetIchorInstallationRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if m := res.Msg; !m.GetInstallerImageUnverified() || m.GetInstallerVerification() != "Verified" || m.GetInstallerSignatureSkip() {
+		t.Fatalf("got %v; want installer_image_unverified with a verified last run and no pending skip", m)
+	}
+
+	clean, _ := opServer(t, ichorInstallation(ichorNew, ichorOld))
+
+	res, err = clean.GetIchorInstallation(context.Background(), connect.NewRequest(&pb.GetIchorInstallationRequest{}))
+	if err != nil || res.Msg.GetInstallerImageUnverified() {
+		t.Fatalf("an installation with no such condition: err = %v, msg = %v", err, res.Msg)
 	}
 }

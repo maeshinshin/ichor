@@ -100,6 +100,9 @@ message GetIchorInstallationResponse {
   // installer_signature_skip is true while spec.installerSignature.mode is skip: the next Ichor upgrade
   // will not check the installer image's signature.
   bool installer_signature_skip = 15;
+  // installer_image_unverified is true once an installer image has run with its signature unchecked
+  // (the IchorInstallation's InstallerImageUnverified condition). A later verified run does not clear it.
+  bool installer_image_unverified = 16;
 }
 
 // IchorInstallerOptions are the installer image settings of an Ichor upgrade. They are written

@@ -25,6 +25,7 @@ import (
 	"golang.org/x/mod/semver"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -85,6 +86,7 @@ func (s *Server) GetIchorInstallation(
 		resp.InstallerDigest, resp.InstallerVerification = img.Digest, img.Verification
 	}
 
+	resp.InstallerImageUnverified = apimeta.IsStatusConditionTrue(inst.Status.Conditions, ichorv1alpha1.ConditionInstallerImageUnverified)
 	resp.InstallerSignatureSkip = inst.Spec.InstallerSignature != nil && inst.Spec.InstallerSignature.Mode == ichorv1alpha1.InstallerSignatureSkip
 
 	// What the controller's release check last found; the Upgrade flow does not use it.

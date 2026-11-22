@@ -649,6 +649,11 @@ type TalosOperationStatus struct {
 	// +optional
 	LastRetry *metav1.Time `json:"lastRetry,omitempty"`
 
+	// autoRetry is the automatic retry of a step that failed on a transient error: which step, how many
+	// times it was retried, and when the next retry runs (ADR 0174). Absent until a step is first retried.
+	// +optional
+	AutoRetry *TalosOperationAutoRetryStatus `json:"autoRetry,omitempty"`
+
 	// node is the node kind's state machine.
 	// +optional
 	Node *TalosOperationNodeStatus `json:"node,omitempty"`
@@ -677,6 +682,25 @@ type TalosOperationStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// TalosOperationAutoRetryStatus is the controller's automatic retry of one failed step. Written by the
+// controller only.
+type TalosOperationAutoRetryStatus struct {
+	// step is the machine whose step failed. A failure of another machine starts the count again.
+	// +optional
+	Step string `json:"step,omitempty"`
+
+	// attempts is how many times the controller has retried step by itself. A retry a person
+	// requests clears the whole record.
+	// +optional
+	Attempts int32 `json:"attempts,omitempty"`
+
+	// nextAt is when the next automatic retry runs. Absent when none is scheduled: the step was
+	// retried as often as the controller allows, or its failure is not one a retry can clear, and
+	// the operation waits for a person.
+	// +optional
+	NextAt *metav1.Time `json:"nextAt,omitempty"`
 }
 
 // TalosOperationKubernetesStatus is the stage a Kubernetes upgrade is in. status.machines

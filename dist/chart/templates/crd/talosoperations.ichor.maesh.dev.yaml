@@ -407,6 +407,29 @@ spec:
           status:
             description: status defines the observed state of TalosOperation
             properties:
+              autoRetry:
+                description: |-
+                  autoRetry is the automatic retry of a step that failed on a transient error: which step, how many
+                  times it was retried, and when the next retry runs (ADR 0174). Absent until a step is first retried.
+                properties:
+                  attempts:
+                    description: |-
+                      attempts is how many times the controller has retried step by itself. A retry a person
+                      requests clears the whole record.
+                    format: int32
+                    type: integer
+                  nextAt:
+                    description: |-
+                      nextAt is when the next automatic retry runs. Absent when none is scheduled: the step was
+                      retried as often as the controller allows, or its failure is not one a retry can clear, and
+                      the operation waits for a person.
+                    format: date-time
+                    type: string
+                  step:
+                    description: step is the machine whose step failed. A failure
+                      of another machine starts the count again.
+                    type: string
+                type: object
               caRotation:
                 description: |-
                   caRotation is the ca-rotation kind's state machine: which stage every node is being taken

@@ -65,6 +65,10 @@ Version v1alpha1: has a `status` subresource.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `status` | `object` | no | status defines the observed state of TalosOperation |
+| `status.autoRetry` | `object` | no | autoRetry is the automatic retry of a step that failed on a transient error: which step, how many times it was retried, and when the next retry runs (ADR 0174). Absent until a step is first retried. |
+| `status.autoRetry.attempts` | `integer` | no | attempts is how many times the controller has retried step by itself. A retry a person requests clears the whole record. |
+| `status.autoRetry.nextAt` | `string (date-time)` | no | nextAt is when the next automatic retry runs. Absent when none is scheduled: the step was retried as often as the controller allows, or its failure is not one a retry can clear, and the operation waits for a person. |
+| `status.autoRetry.step` | `string` | no | step is the machine whose step failed. A failure of another machine starts the count again. |
 | `status.caRotation` | `object` | no | caRotation is the ca-rotation kind's state machine: which stage every node is being taken to, and which CA is accepted and which issues in it. Public fingerprints only. |
 | `status.caRotation.apiServerInstances` | `map[string]string` | no | apiServerInstances is, for each control plane the current stage was applied to in a rotation that restarts kube-apiserver (the Kubernetes or the aggregator CA), the kube-apiserver container it ran in just before the apply. The stage is verified once that control plane runs another one and answers /readyz, so the operation is not Completed while a restart is still to come. Emptied when the stage changes. Not a secret. |
 | `status.caRotation.appliedAt` | `string (date-time)` | no | appliedAt is when the current stage was last applied to a machine; a kube-apiserver whose container did not change within a minute of it is taken as not restarted by this stage. |

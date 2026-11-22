@@ -87,7 +87,12 @@ type nodeRun struct {
 
 // nodeFailed is the pause-on-failure of a node action.
 func (r *TalosOperationReconciler) nodeFailed(ctx context.Context, op *ichorv1alpha1.TalosOperation, err error) (ctrl.Result, error) {
-	return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, err.Error())
+	step := ""
+	if op.Spec.Node != nil {
+		step = op.Spec.Node.MachineRef.Name
+	}
+
+	return r.pauseFailedStep(ctx, op, step, err, nodeStepRetryable(op), err.Error())
 }
 
 // advanceNode runs one step of a node-kind operation. The caller holds the cluster lock.

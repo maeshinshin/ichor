@@ -239,13 +239,13 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationPaused, pausedWhy(&op))
 	}
 
-	// A step already failed: stay paused and never retry it automatically; only an explicit
-	// retry request runs it again. Nothing here undoes a machine already marked
-	// Completed either -- "pause-on-failure (no automatic cluster-wide rollback)".
-	if op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
-		if retried, err := r.consumeRetry(ctx, &op); err != nil || !retried {
-			return ctrl.Result{}, err
-		}
+	// A step already failed: stay paused until a retry runs it again. A person's retry request does
+	// at once and starts the automatic count over; otherwise the controller retries a transient
+	// failure itself, after a backoff and a bounded number of times (ADR 0174). spec.paused was
+	// decided above, so a pause a person set is never lifted here. Nothing here undoes a machine
+	// already marked Completed either -- "pause-on-failure (no automatic cluster-wide rollback)".
+	if res, proceed, err := r.retryFailedStep(ctx, &op); !proceed {
+		return res, err
 	}
 
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, &op)
@@ -335,8 +335,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// automatic cluster-wide rollback.
 			r.markMachine(&op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 
-			return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
-				reasonOperationStepFailed, fmt.Sprintf("node %q: %v", m.Name, err))
+			return r.pauseFailedStep(ctx, &op, m.Name, err, true, fmt.Sprintf("node %q: %v", m.Name, err))
 		}
 
 		phase := ichorv1alpha1.TalosOperationMachinePhaseInProgress
@@ -356,6 +355,21 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+}
+
+// retryFailedStep decides whether a paused, failed operation runs its step again now: a person's retry
+// request does, otherwise the automatic retry once it is due. proceed is false when the operation stays paused.
+func (r *TalosOperationReconciler) retryFailedStep(ctx context.Context, op *ichorv1alpha1.TalosOperation) (res ctrl.Result, proceed bool, err error) {
+	if op.Status.Phase != ichorv1alpha1.TalosOperationPhasePaused || op.Status.FailureReason == "" {
+		return ctrl.Result{}, true, nil
+	}
+
+	retried, err := r.consumeRetry(ctx, op)
+	if err != nil || retried {
+		return ctrl.Result{}, retried, err
+	}
+
+	return r.autoRetryDue(ctx, op)
 }
 
 // renewEvery is the renewal cadence of the Advance loop's lock renewal.
@@ -508,6 +522,7 @@ func (r *TalosOperationReconciler) consumeRetry(ctx context.Context, op *ichorv1
 
 	now := metav1.Now()
 	op.Status.LastRetry = &now
+	op.Status.AutoRetry = nil
 
 	if err := r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, "retrying the failed step"); err != nil {
@@ -728,9 +743,13 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 
 	op.Status.Phase = phase
 
-	if phase == ichorv1alpha1.TalosOperationPhaseCompleted && op.Status.FinishedAt == nil {
-		now := metav1.Now()
-		op.Status.FinishedAt = &now
+	if phase == ichorv1alpha1.TalosOperationPhaseCompleted {
+		op.Status.AutoRetry = nil
+
+		if op.Status.FinishedAt == nil {
+			now := metav1.Now()
+			op.Status.FinishedAt = &now
+		}
 	}
 
 	// status.message is what an InProgress operation is doing now; a pause says why elsewhere, and a

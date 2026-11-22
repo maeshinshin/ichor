@@ -255,7 +255,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 	defer cancelUpgrade()
 
 	if err := talos.Upgrade(upgradeCtx, installerImage(cluster, a.secureBootInstaller(ctx, talos, cluster, m))); err != nil {
-		return false, fmt.Errorf("upgrade API call to %q failed: %w", m.Name, err)
+		return false, fmt.Errorf("upgrade API call to %q failed: %w", m.Name, &sendUnknownError{err})
 	}
 
 	if err := setMachineCondition(ctx, a.Client, a.Client, m, metav1.Condition{

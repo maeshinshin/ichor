@@ -1,9 +1,12 @@
 # Contributing to the docs
 
-The documentation site is built from the Markdown files in this directory, in
-place. There is nothing to register: write or edit a `.md` file under `docs/`,
-and it is a page of the site, in the right section of the sidebar, found by the
-search. The same files read fine on GitHub.
+The site is built from the Markdown files in this directory, in place. Write a
+`.md` file under `docs/` and it is a page, in the right sidebar section and in
+the search. The files read fine on GitHub too.
+
+![The docs pipeline. A Markdown page goes straight to make docs-site, which builds the Astro site, checks links and code fences and builds the Pagefind index into site/dist. A diagram is edited as NAME.light.drawio.svg, make docs-diagrams generates NAME.dark.drawio.svg, and both go into the build. The diagramlabels test checks the diagram labels. main publishes as /next/, release-X.Y as /vX.Y/ and tags as /vX.Y.Z/.](../images/docs-pipeline.light.drawio.svg)
+
+*From a file in `docs/` to the published site.*
 
 ## Preview
 
@@ -14,58 +17,46 @@ make docs-preview  # serve site/dist
 make docs-site-all # every version, as published, into site/dist-all
 ```
 
-This guide's commands are the one place that assumes the dev shell: run them
-inside `nix develop`, or with the tools from
-[The tools](build-from-source.md#the-tools) on your `PATH`.
-When you write commands in a page, write them as if the tools are on `PATH`;
-do not put `nix develop` or `nix develop -c` in a command block. `make docs-site` fails on a broken
-internal link (a missing file, a missing page or a missing `#heading`), so a
-Markdown-only change cannot publish one.
+Run these inside `nix develop`, or with the tools from [The
+tools](build-from-source.md#the-tools) on your `PATH`. Write commands in a page
+as if the tools are on `PATH`; never put `nix develop` in a command block.
+`make docs-site` fails on a broken internal link (missing file, page or
+`#heading`).
 
 ## Versions
 
-`main` is published as the development docs (`/next/`, "Unreleased (main)").
-Each minor release line has one copy, `/vX.Y/`, built from the branch
-`release-X.Y`, or from the newest tag `vX.Y.*` while that branch does not exist.
-A docs fix for a released line goes to `release-X.Y` (cherry-pick it from main,
-or open the PR against that branch); the site republishes on the push, so no
-patch tag is needed for docs. Each tag also has a frozen copy, `/vX.Y.Z/`, built
-from that tag (a tag whose docs do not build redirects to `/vX.Y/`), and `/latest/` and the site root lead to the
-newest line. The version menu in the header lists the lines and, under the minor being read, its patches, from `versions.json`, which the workflow writes.
+| Where | Published as |
+|---|---|
+| `main` | `/next/`, "Unreleased (main)" |
+| branch `release-X.Y`, or the newest tag `vX.Y.*` while the branch does not exist | `/vX.Y/` |
+| each tag | a frozen `/vX.Y.Z/` (a tag whose docs do not build redirects to `/vX.Y/`) |
+| newest line | `/latest/` and the site root |
 
-A page that tells the reader which release to install writes it as `{{version}}`
-(no leading `v`), which the build replaces with the patch release that copy
-documents (for `/next/`, the newest tag). Do not write a release number in prose.
-`README.md` is not built, so it has literals; `make release-prep VERSION=vX.Y.Z` sets them
-before the release tag is pushed.
+A docs fix for a released line goes to `release-X.Y` (cherry-pick from main, or
+open the PR against that branch); the site republishes on the push, so no patch
+tag is needed. The version menu comes from `versions.json`, which the workflow
+writes.
+
+Write a release to install as `{{version}}` (no leading `v`); the build
+replaces it with the patch release the copy documents (for `/next/`, the newest
+tag). Never write a release number in prose. `README.md` is not built, so it has
+literals; `make release-prep VERSION=vX.Y.Z` sets them before the tag is pushed.
 
 ## Adding a page
 
-Create `docs/<section>/<name>.md`, starting with a `# Title` heading. That is
-all that is needed:
+Create `docs/<section>/<name>.md` starting with a `# Title` heading. Nothing
+else is needed.
 
-- **The URL** is the path without `.md`: `docs/guides/rotate-keys.md` is
-  `/guides/rotate-keys/`. `README.md` or `index.md` in a directory is that
-  directory's own page, and `docs/index.md`
-  is the home page.
-- **The section** is the directory. `guides/` is Guides, `concepts/` is Concepts,
-  `design/` is Design, `reference/` is Reference. Any other directory becomes a section of its own, listed
-  after those. Each page or directory directly under a section is a row of the sidebar.
-  A directory, or a page with pages under it (such as `guides/getting-started/create-the-cluster/`),
-  is one row whose pages fold beneath it; the row is open when the page on screen is among them.
-  `adr/` holds the decision records, kept in the repository and not published on the site.
-- **A long page** is split into a short page and a directory of the same name:
-  `design/architecture.md` is the index and `design/architecture/` holds one page
-  per section. The index keeps the old path, so links to it still work, and is
-  listed first in its group. Each child's title is the heading it had, and the
-  children carry `sidebar_order` 1, 2, 3, ... because the previous and next
-  links follow the sidebar and title order is rarely reading order.
-- **The title** is the front matter `title`, else the first `# ` heading. The
-  site prints it as the page heading, so the Markdown's own `#` line is not
-  shown twice.
-- **The headings** `##` and `###` make the "On this page" list.
+| Thing | Rule |
+|---|---|
+| URL | the path without `.md`; `README.md` or `index.md` is the directory's own page; `docs/index.md` is the home page |
+| Section | the directory: `guides/`, `concepts/`, `design/`, `reference/`; any other directory is a section listed after those. `adr/` holds decision records and is not published |
+| Sidebar | each page or directory directly under a section is a row; a directory, or a page with pages under it, is one row that folds its pages |
+| Long page | a short page plus a directory of the same name (`design/architecture.md` and `design/architecture/`). The index keeps the old path and is listed first; children carry `sidebar_order` 1, 2, 3 ... because the previous and next links follow the sidebar |
+| Title | front matter `title`, else the first `# ` heading (printed once) |
+| On this page | the `##` and `###` headings |
 
-## Front matter (optional)
+### Front matter (optional)
 
 ```yaml title="docs/guides/rotate-keys.md" lineNumbers
 ---
@@ -75,32 +66,24 @@ sidebar_order: 1
 ---
 ```
 
-Without `sidebar_order`, pages in a section are listed alphabetically by
-title. Give a page a number to put it first (lower numbers come first; pages
-without one come after). GitHub shows front matter as a small table, so use it
-sparingly.
-
-Pages that share a `sidebar_group` fold behind one row, in `sidebar_order`.
-The row sits where its first page would. Pages without a group are listed as
-before, among the rows of their section.
+Without `sidebar_order`, pages are listed alphabetically by title; lower
+numbers come first and unnumbered pages after. Pages sharing a `sidebar_group`
+fold behind one row, in `sidebar_order`, where the first page would sit. GitHub
+shows front matter as a table, so use it sparingly.
 
 ## Links and images
 
-Link to other pages the way you would on GitHub, with relative paths:
-`[Adopt a cluster](adopt-a-cluster.md)`, `[the design](../design/architecture/overview.md#data-flow)`.
-They become site links. A relative link that leaves `docs/`
-(`../../internal/foo.go`, `../../test/harness/`) becomes a link to that file or
-directory on GitHub. A link to something that does not exist fails the build.
+Link with relative paths: `[Adopt a cluster](adopt-a-cluster.md)`,
+`[the design](../design/architecture/overview.md#data-flow)`. A relative link
+that leaves `docs/` (`../../internal/foo.go`) becomes a link to that file on
+GitHub. A link to something that does not exist fails the build.
 
 Images live in `docs/images/` and are referenced the same way,
-`![What it shows](../images/name.svg)`; the site serves the SVG and PNG files of
-`docs/` at their own path. A missing image fails the build too. Diagrams have
-their own section below.
+`![What it shows](../images/name.svg)`. A missing image fails the build.
 
 ## Callouts
 
-Use GitHub's alert syntax; GitHub renders it too, and the site shows it as an
-alert.
+GitHub's alert syntax; the site renders it as an alert.
 
 ```markdown
 > [!NOTE]
@@ -110,43 +93,31 @@ alert.
 > Something that can hurt.
 ```
 
-The kinds are `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION`.
-
-> [!TIP]
-> This box is the `TIP` kind.
+Kinds: `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`.
 
 ## Code
 
-Use fenced blocks with a language (` ```sh `, ` ```yaml `, ` ```go `). The site
-highlights them (light and dark) and adds a copy button; there is nothing to add
-by hand.
+Fenced blocks with a language; the site highlights them and adds a copy button.
+Every block must name its language, and `make docs-site` fails with the file and
+line of one that does not.
 
-A block of a file names it with `title`, and a long one can number its lines with
-`lineNumbers`. Both follow the language on the opening fence, in either order:
+| Language | For |
+|---|---|
+| `sh` | shell commands |
+| `console` | a session with `$ ` prompts and output |
+| `yaml`, `json`, `go` | source |
+| `text` | plain output, diagrams, file trees |
 
-````markdown
-```yaml title="docs/guides/rotate-keys.md" lineNumbers
-```
-````
-
-`title` takes a double-quoted value. `{…}` lists the lines to highlight, by number
-and range, with no spaces: `{3}`, or `{3,5-7}`. Lines are counted from 1, and a
-number past the last line fails the build:
+Options follow the language, in either order. `title` takes a double-quoted
+value, `lineNumbers` numbers the lines, and `{3}` or `{3,5-7}` highlights lines
+(counted from 1, no spaces; a number past the last line fails the build). Any
+other word is an error. GitHub shows the block without the options. The pages
+under `reference/` are labelled by `make docs-reference`.
 
 ````markdown
 ```yaml {3,5-7} title="main.go" lineNumbers
 ```
 ````
-
-Any other word after the language is an error, so a typo fails the build rather
-than dropping the option. GitHub shows the block without them, and without the
-highlight.
-
-Every block must name its language, and `make docs-site` fails with the file
-and line of one that does not. Use `sh` for shell commands, `console` for a
-session that shows `$ ` prompts with their output, `yaml`, `json` and `go` for
-source, and `text` for plain output, diagrams and file trees. The generated
-pages under `reference/` are labeled by `make docs-reference`.
 
 ## Tabs
 
@@ -175,25 +146,21 @@ between them.
 
 ## What every page gets
 
-Nothing here is written by hand. Each page has a "Copy page" menu (copy the
-Markdown, view it, copy the link, share on devices that can), every `##` and
-`###` heading has a link icon that copies the address of that section, and the
-Markdown of every page is served as `<page>.md` next to it, with `/llms.txt`
-(an index) and `/llms-full.txt` (all pages) for tools that read the docs. The
-copied Markdown has its relative links rewritten to full URLs, so it still
-works outside the site.
+Nothing here is written by hand: a "Copy page" menu, a link icon on every `##`
+and `###` heading, the Markdown of every page served as `<page>.md`, and
+`/llms.txt` (an index) and `/llms-full.txt` (all pages). Copied Markdown has its
+relative links rewritten to full URLs.
 
 ## Diagrams
 
-Diagrams are [draw.io](https://www.drawio.com/) files in `docs/images/`, always
-a pair:
+Every page carries at least one [draw.io](https://www.drawio.com/) diagram that
+shows its main idea (a flow, the parts and how they connect, or a sequence);
+a decorative one does not count. Diagrams live in `docs/images/` as a pair:
 
-- `NAME.light.drawio.svg` is the one you edit. It is an ordinary SVG, so GitHub
-  and the site show it as an image, and it carries the whole draw.io model, so
-  draw.io (the web app, the desktop app or the VS Code Draw.io extension) opens
-  it as a diagram.
-- `NAME.dark.drawio.svg` is the same diagram in the dark theme. It is exported
-  from the light file and never edited by hand.
+| File | Is |
+|---|---|
+| `NAME.light.drawio.svg` | the one you edit: an ordinary SVG that also carries the whole draw.io model, so draw.io (web, desktop, VS Code extension) opens it |
+| `NAME.dark.drawio.svg` | the dark theme, exported from the light file, never edited by hand |
 
 A page names the light file once, with an alt text that says what the diagram
 shows and a one-line caption under it:
@@ -204,54 +171,47 @@ shows and a one-line caption under it:
 *A one-line caption.*
 ```
 
-GitHub shows the light image. The site shows the dark one when the reader's
-theme is dark, and each image links to its SVG, which opens at full size (the
-page column is narrower than the diagram).
+GitHub shows the light image; the site shows the dark one in a dark theme, and
+each image links to its SVG at full size.
 
-To change a diagram, open `docs/images/NAME.light.drawio.svg` in draw.io, edit
-it and save it under the same name, then export the pair again:
+To change a diagram, edit and save the light file under the same name, then
+export the pair:
 
 ```sh
 make docs-diagrams                                              # every diagram
 make docs-diagrams SOURCE=docs/images/NAME.light.drawio.svg     # one
 ```
 
-`make docs-diagrams` runs the draw.io command line from the dev shell (under
-`xvfb-run`, as draw.io is an Electron app), once for each theme. A new diagram
-is drawn the same way and saved as `docs/images/NAME.drawio`;
+It runs the draw.io command line from the dev shell (under `xvfb-run`) once per
+theme. A new diagram is saved as `docs/images/NAME.drawio`;
 `make docs-diagrams SOURCE=docs/images/NAME.drawio` writes the pair.
 
-One model gives both files because every colour in it is a `light-dark()` pair,
-which draw.io writes into the shape's style (Edit Style, Ctrl-E in draw.io), for
-example `fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8)`.
-Copy a shape from an existing diagram to keep the look, which is one palette
-throughout: neutral grey for boxes and groups, indigo for Ichor's own parts and
-for what a person does, amber for what waits or is not authenticated, green for
-done and red for no way back. Boxes are rounded, connectors are orthogonal with
-labels on the line, text is 12 px or more, and a diagram is about 900 px wide.
-The export drops the PNG copies of the labels that draw.io adds for viewers
-without `foreignObject` (700 KB a diagram), as browsers and GitHub draw the live
-text.
+**Look.** One model gives both files because every colour is a `light-dark()`
+pair in the shape's style (Edit Style, Ctrl-E), for example
+`fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8)`.
+Copy a shape from an existing diagram. Neutral grey for boxes and groups,
+indigo for Ichor's own parts and for what a person does, amber for what waits
+or is not authenticated, green for done, red for no way back. Boxes are
+rounded, connectors orthogonal with labels on the line, text 12 px or more, the
+diagram about 900 px wide. The export drops the PNG copies of the labels that
+draw.io adds (700 KB a diagram).
 
-Labels are plain SVG text, not HTML, and four rules keep them so. The root
-cells and every label cell carry `html=0` (Edit Style shows it), and no cell
-has `html=1`. A line break is a real newline in the label (`&#xa;` in the XML),
-never `<br>` or `<div>`. A label holds one kind of text: a bold title and the
-text after it are two cells, because `fontStyle=1` makes a whole cell bold; the
-roles diagram has a bold "start" cell beside a plain cell. A plain label does
-not wrap by itself, so break it with newlines, and do not set `whiteSpace=wrap`:
-draw.io then writes the label as a `foreignObject`, even with `html=0`.
+**Labels are plain SVG text, not HTML** (ADR 0132: phones render them). The
+recorded cause is iOS Safari's text autosizing and WebKit's handling of
+`foreignObject` inside an `<img>`; no device test is on record. The draw.io
+command line cannot write labels as SVG text, so the model keeps the rule:
 
-The rule exists so that phones render the diagrams (ADR 0132). The cause
-recorded for it is iOS Safari's text autosizing and WebKit's handling of
-`foreignObject` inside an `<img>`. The draw.io command line has no option to
-write labels as SVG text, so the rule is kept in the model. No device test is on
-record. A cell copied in from another diagram can bring `html=1` along. To fix
-one, set `html=0` on that cell in Edit Style, save the light file and run
-`make docs-diagrams` again.
+- The root cells and every label cell carry `html=0`; no cell has `html=1`.
+- A line break is a real newline (`&#xa;` in the XML), never `<br>` or `<div>`.
+- A label holds one kind of text: a bold title and the text after it are two
+  cells, because `fontStyle=1` bolds a whole cell.
+- Do not set `whiteSpace=wrap`; draw.io then writes a `foreignObject`. Break a
+  plain label with newlines.
 
-The check is `go test ./internal/tools/diagramlabels/`, and `make test` runs it.
-It fails on any cell with `html=1`, any `<br>` or `<div>` in a label, and any
-`foreignObject` in an SVG under `docs/images`, and it names the file and the
-cell. A cell with no `html` key passes, because draw.io reads a missing key as
-plain text; `html=0` is still the convention.
+A cell copied from another diagram can bring `html=1` along: set `html=0` in
+Edit Style, save the light file and run `make docs-diagrams` again.
+
+`go test ./internal/tools/diagramlabels/` (also run by `make test`) fails on any
+cell with `html=1`, any `<br>` or `<div>` in a label and any `foreignObject` in
+an SVG under `docs/images`, and names the file and cell. A cell with no `html`
+key passes, because draw.io reads it as plain text.

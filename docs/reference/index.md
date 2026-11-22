@@ -6,15 +6,17 @@ sidebar_order: 60
 
 # Reference
 
-These pages are generated from the code and are never edited by hand. Run
-`make docs-reference` after changing a command, a flag or an API type; a test
-fails when the committed pages are stale.
+![How the reference is laid out. The command tree and the API types in the code are turned into pages by make docs-reference: reference/cli holds one page per command with every flag, reference/crds one page per custom resource with every field. The pages are never edited by hand.](../images/reference-layout.light.drawio.svg)
+
+*The reference is generated from the code.*
+
+Run `make docs-reference` after changing a command, a flag or an API type; a
+test fails when the committed pages are stale.
 
 ## CLI
 
-The `ichor` command and its subcommands, with every flag. Commands are verb first
-(`ichor get nodes`, `ichor reboot node NAME`); `ichor --help` groups them the same way as this table.
-Start at [ichor](cli/ichor.md).
+Commands are verb first (`ichor get nodes`, `ichor reboot node NAME`), grouped as
+in `ichor --help`. Start at [ichor](cli/ichor.md).
 
 | Group | Commands |
 |---|---|
@@ -29,10 +31,9 @@ Start at [ichor](cli/ichor.md).
 
 ## Custom resources
 
-All resources are in the API group `ichor.maesh.dev`, version `v1alpha1`. Each
-page lists every field with its type, whether it is required and its
-description; fields marked deprecated are kept so that the schema never loses
-a field an installed build had, and are unused.
+API group `ichor.maesh.dev`, version `v1alpha1`. Each page lists every field
+with its type, whether it is required and its description. Deprecated fields are
+unused and kept so the schema never loses a field an installed build had.
 
 | Resource | What it is |
 |---|---|
@@ -47,5 +48,5 @@ a field an installed build had, and are unused.
 | [IchorInstallation](crds/ichorinstallation.md) | Ichor's own version and runtime settings |
 | [IchorUser](crds/ichoruser.md) | An Ichor-owned user |
 
-For how these fit together see the [concepts](../concepts/clusters-and-machines.md)
-and the [architecture document](../design/architecture.md).
+How they fit together: [concepts](../concepts/clusters-and-machines.md) and the
+[architecture document](../design/architecture.md).

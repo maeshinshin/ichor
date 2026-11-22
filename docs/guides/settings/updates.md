@@ -14,9 +14,11 @@ moves Ichor.
 
 - **Check.** The controller lists the tags of `ghcr.io/maeshinshin/charts/ichor`
   on start and every six hours and keeps the newest final release in
-  `status.latestRelease`. Prereleases and non-semver tags are ignored. A dev
+  `status.latestRelease`. It lists the Talos installer
+  (`ghcr.io/siderolabs/installer-base`) and kubelet (`ghcr.io/siderolabs/kubelet`)
+  image tags the same way, for `status.upgradeTargets`. Prereleases and non-semver tags are ignored. A dev
   build is never told about a release.
-- **Sent.** One anonymous tag listing; nothing about the cluster.
+- **Sent.** Three anonymous tag listings (the chart and the two image repositories); nothing about the cluster.
 - **Off.** `ichor set settings updateCheck.enabled=false` (or chart
   `updateCheck.enabled: false`) stops the requests and removes the controller's
   egress rule for them (`ichor-controller-release-check`). `status.latestRelease`

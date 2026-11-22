@@ -29,6 +29,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -178,5 +179,71 @@ var _ = Describe("TalosClusterReconciler", func() {
 			Expect(isResetNode(marked)).To(BeTrue())
 			Expect(isResetNode(&corev1.Node{})).To(BeFalse())
 		})
+	})
+})
+
+var _ = Describe("TalosClusterReconciler kube-proxy consent sweep", func() {
+	const switched = "replaced"
+
+	// consentCluster is a cluster whose spec and consent annotation name mode and whose status
+	// says the switch finished (statusMode == mode) or has not run (statusMode empty).
+	consentCluster := func(mode, statusMode string) *ichorv1alpha1.TalosCluster {
+		cluster := newTestCluster("consent-sweep", "v1.14")
+		cluster.Spec.CNI.KubeProxy = mode
+		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation: mode}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		if statusMode != "" {
+			cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{KubeProxy: statusMode}
+			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+		}
+
+		return cluster
+	}
+
+	consentLeft := func(c *ichorv1alpha1.TalosCluster) bool {
+		var got ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(c), &got)).To(Succeed())
+
+		_, ok := got.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]
+
+		return ok
+	}
+
+	sweep := func(c *ichorv1alpha1.TalosCluster) {
+		GinkgoHelper()
+
+		_, err := reconcileCluster(&TalosClusterReconciler{Client: k8sClient}, c)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	It("removes a consent left behind once the switch has finished and no operation runs", func() {
+		cluster := consentCluster(switched, switched)
+
+		sweep(cluster)
+
+		Expect(consentLeft(cluster)).To(BeFalse())
+	})
+
+	It("keeps the consent while the switch is pending (Git first: the spec leads the status)", func() {
+		cluster := consentCluster(switched, "")
+
+		sweep(cluster)
+
+		Expect(consentLeft(cluster)).To(BeTrue())
+	})
+
+	It("keeps the consent while a kube-proxy switch operation has not finished, even after the status moved", func() {
+		cluster := consentCluster(switched, switched)
+		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindCNI)
+
+		sweep(cluster)
+		Expect(consentLeft(cluster)).To(BeTrue(), "the operation is Pending")
+
+		op.Status.Phase = ichorv1alpha1.TalosOperationPhaseCompleted
+		Expect(k8sClient.Status().Update(ctx, op)).To(Succeed())
+
+		sweep(cluster)
+		Expect(consentLeft(cluster)).To(BeFalse())
 	})
 })

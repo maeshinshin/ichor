@@ -180,7 +180,6 @@ rules:
   - ichor.maesh.dev
   resources:
   - ichorusers
-  - talosclusters
   - talosconfigpatches
   - talosetcdbackups
   - talosstorages
@@ -197,6 +196,15 @@ rules:
   - delete
   - get
   - list
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - get
+  - list
+  - patch
   - watch
 - apiGroups:
   - ichor.maesh.dev

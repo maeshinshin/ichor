@@ -80,7 +80,7 @@ type TalosClusterReconciler struct {
 	now       func() time.Time // tests; nil means time.Now
 }
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch;patch
 
 // Reconcile calls Discovery.DiscoverAll for cluster's declared range and
 // reschedules itself at discoveryRequeueInterval -- but only while
@@ -94,6 +94,10 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if err := adviseCARotation(ctx, r.Client, &cluster); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := sweepKubeProxyConsent(ctx, r.Client, &cluster); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -121,6 +125,36 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	return ctrl.Result{RequeueAfter: discoveryRequeueInterval}, nil
+}
+
+// sweepKubeProxyConsent removes the kube-proxy switch's consent annotation once nothing needs it:
+// no switch is pending (the annotation no longer leads status.cni.kubeProxy) and no cni switch
+// operation is unfinished. The server removes it after the operation exists; this is the net for
+// a removal that failed, and for a Git-first consent that outlived its switch. It writes
+// metadata only, never spec.
+func sweepKubeProxyConsent(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) error {
+	if _, ok := cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]; !ok ||
+		kubeProxySwitchPending(cluster) {
+		return nil
+	}
+
+	var ops ichorv1alpha1.TalosOperationList
+	if err := c.List(ctx, &ops, client.InNamespace(cluster.Namespace)); err != nil {
+		return err
+	}
+
+	if slices.ContainsFunc(ops.Items, func(op ichorv1alpha1.TalosOperation) bool {
+		return op.Spec.ClusterRef.Name == cluster.Name && op.Spec.Kind == ichorv1alpha1.TalosOperationKindCNI &&
+			(op.Spec.CNI == nil || op.Spec.CNI.Action != ichorv1alpha1.TalosOperationCNIActionUpgrade) &&
+			op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted
+	}) {
+		return nil
+	}
+
+	base := cluster.DeepCopy()
+	delete(cluster.Annotations, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation)
+
+	return client.IgnoreNotFound(c.Patch(ctx, cluster, client.MergeFrom(base)))
 }
 
 // freshResetNode reports whether Ichor reset a node less than discoveryFreshWindow ago (the marker
@@ -218,6 +252,7 @@ func (r *TalosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
 		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(operationClusters(ichorv1alpha1.TalosOperationKindCARotation))).
+		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(operationClusters(ichorv1alpha1.TalosOperationKindCNI))).
 		Watches(&ichorv1alpha1.MachineReclaim{}, handler.EnqueueRequestsFromMapFunc(reclaimDoneClusters)).
 		// A Node Ichor marked as reset (when it is marked, and when it stops being Ready) starts a pass
 		// at once instead of waiting for the requeue.

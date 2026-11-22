@@ -207,3 +207,17 @@ found nothing to wait for and completed in about a second.
 - The switch restarts neither the kubelet nor any control plane component, and no machine reboots. It changes Cilium's configuration and the kube-proxy DaemonSet. The plan the CLI and the UI print says so; an earlier text said the kubelet and control plane components restart on each machine, which was wrong for this operation.
 - A connection through a ClusterIP survives the switch, because the old side keeps serving until the new side is verified. A request opened at the moment kube-proxy returns on a node can still time out once; clients retry.
 - After `replaced`, the `ip kube-proxy` and `ip6 kube-proxy` nftables tables (or kube-proxy's iptables chains, in iptables mode) stay on every node until it reboots. They are frozen at the endpoints of the moment kube-proxy stopped and go stale as endpoints change. They are harmless while Cilium translates a Service address first, which it does for traffic from pods and from the node's own network namespace. Switching back to `enabled` makes kube-proxy rewrite its own tables. The `KUBE-` chains kubelet keeps in iptables (`KUBE-FIREWALL`, `KUBE-IPTABLES-HINT`, `KUBE-KUBELET-CANARY`) are not kube-proxy's and are there in both modes.
+
+## Amendment (2026-11-22): the controller sweeps a consent annotation that outlived its switch
+
+The server's removal after the operation exists can fail, and a Git-first consent stays on the cluster after its
+switch finished. Either left a standing permission that would admit a later hand edit of the mode. The TalosCluster
+reconciler now removes `ichor.maesh.dev/confirm-kube-proxy-switch` on its next pass when no switch is pending (the
+annotation does not lead `status.cni.kubeProxy`, the test of `kubeProxySwitchPending`) and no `cni` operation that is
+not a Cilium upgrade is unfinished (any phase but `Completed`). It also reconciles when such an operation changes.
+
+- This is a metadata write: the controller still never writes `spec`. It is the one place the controller writes the
+  annotation; the controller needs `patch` on `talosclusters` for it.
+- A pending switch keeps its consent, so a Git-first commit that carries the annotation ahead of the spec is not
+  swept before the operation runs. On an Argo CD-tracked cluster a finished switch's annotation is removed here and
+  Git adds it back only when the next switch is committed, which is what the admission rule asks of it.

@@ -710,10 +710,10 @@ type CertificateExpiry struct {
 // referencing self.metadata.annotations fails CRD creation with "undefined field
 // 'annotations'"). It is a ValidatingAdmissionPolicy instead
 // (config/admission/kubeproxy-switch-policy.yaml), which sees the whole object including
-// annotations. The controller is not a writer of this annotation and does not
-// act on it by itself: it only unblocks the API-level guard; running the switch in the one
-// safe order -- new side up on every node, verify, then old side down -- is the reconciler's
-// job and out of this package's scope.
+// annotations. The controller does not act on it to run a switch: it only unblocks
+// the API-level guard, and the one safe order -- new side up on every node, verify, then old
+// side down -- is the cni operation's job. The TalosCluster reconciler removes it once no switch
+// is pending or running (ADR 0066, amendment 2026-11-22).
 const TalosClusterConfirmKubeProxySwitchAnnotation = "ichor.maesh.dev/confirm-kube-proxy-switch"
 
 // +kubebuilder:object:root=true

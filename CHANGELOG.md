@@ -525,6 +525,11 @@ command does. Each item is described where it is listed below.
   which the `IchorReconcileErrorsPersisting` alert watches; the new counter
   `ichor_reconcile_expected_errors_total`, by `controller` and `reason`
   (`conflict` or `webhook_startup`), counts them instead.
+- **A kube-proxy switch consent left on the cluster is removed.** The controller now removes
+  `ichor.maesh.dev/confirm-kube-proxy-switch` on its next reconcile once no switch is pending or
+  running, so a failed removal after the operation was created, or a Git-first consent that
+  outlived its switch, no longer admits a later hand edit of `spec.cni.kubeProxy`. The controller
+  gains `patch` on `talosclusters`; it still never writes `spec`. See ADR 0066.
 
 - `spec.containerd.deviceOwnershipFromSecurityContext` turns on containerd's
   `device_ownership_from_security_context` on every node, so non-root pods such

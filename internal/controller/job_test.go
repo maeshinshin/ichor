@@ -17,9 +17,12 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // Every Job pod names its user and group and bounds its resources.
@@ -34,5 +37,27 @@ func TestNewJobPinsTheUserAndBoundsResources(t *testing.T) {
 	res := job.Spec.Template.Spec.Containers[0].Resources
 	if res.Limits.Memory().IsZero() || res.Limits.Cpu().IsZero() || res.Requests.Memory().IsZero() {
 		t.Fatalf("the container has no resource requests and limits: %+v", res)
+	}
+}
+
+// A pod is found by the prefixed label the Job controller sets; the unprefixed one is deprecated.
+func TestJobTerminationMessageSelectsByThePrefixedJobNameLabel(t *testing.T) {
+	pod := func(name string, labels map[string]string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name, Labels: labels},
+			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: name}},
+			}}},
+		}
+	}
+
+	c := fake.NewClientBuilder().WithObjects(
+		pod("prefixed", map[string]string{"batch.kubernetes.io/job-name": "j"}),
+		pod("unprefixed", map[string]string{"job-name": "j"}),
+	).Build()
+
+	got, err := jobTerminationMessage(context.Background(), c, "ns", "j")
+	if err != nil || got != "prefixed" {
+		t.Fatalf("jobTerminationMessage = %q, %v; want the pod with batch.kubernetes.io/job-name", got, err)
 	}
 }

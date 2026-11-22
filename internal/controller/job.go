@@ -35,8 +35,8 @@ import (
 const (
 	nameLabel = "app.kubernetes.io/name"
 
-	// jobNameLabel is the label the Job controller puts on a Job's pods.
-	jobNameLabel = "job-name"
+	// jobNameLabel is the label the Job controller puts on a Job's pods. The unprefixed "job-name" is deprecated since Kubernetes 1.27.
+	jobNameLabel = "batch.kubernetes.io/job-name"
 
 	// jobTTL keeps a finished Job (and its pod log) for a day: long enough to read why a run
 	// failed, short enough that Jobs do not pile up.

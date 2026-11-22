@@ -609,6 +609,8 @@ command does. Each item is described where it is listed below.
   holds other keys than the operation names, a `keyrotation.yaml` gone mid-rotation, a
   `TalosConfigPatch` that overrides the key documents and a bundle with nothing to finish from
   waited out the thirty-minute give-up window holding the lock; they now pause on a failed step.
+- **The installer and Cilium Job pods are found by the `batch.kubernetes.io/job-name` label.** The
+  controller selected them by `job-name`, which Kubernetes deprecated in 1.27.
 - **A node action whose reboot, shutdown, service restart or leadership hand-over
   call failed is sent again when the paused operation is retried.** The retry used to wait
   for an effect of a call that never reached the node, until the action timed out.

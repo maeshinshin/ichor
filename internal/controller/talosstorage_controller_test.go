@@ -353,9 +353,13 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 })
 
 // fakeSchematicFactory stands in for Image Factory: the ID is a function of the extensions, as there.
-type fakeSchematicFactory struct{ calls [][]string }
+type fakeSchematicFactory struct {
+	calls [][]string
+	urls  []string
+}
 
-func (f *fakeSchematicFactory) Register(_ context.Context, extensions []string) (string, error) {
+func (f *fakeSchematicFactory) Register(_ context.Context, factoryURL string, extensions []string) (string, error) {
+	f.urls = append(f.urls, factoryURL)
 	f.calls = append(f.calls, extensions)
 
 	return "schematic-" + strings.Join(extensions, "+"), nil
@@ -440,6 +444,7 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		Expect(got.Spec.Schematic).NotTo(BeNil())
 		Expect(got.Spec.Schematic.ID).To(Equal(wantID))
 		Expect(factory.calls).To(Equal([][]string{{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}}))
+		Expect(factory.urls).To(Equal([]string{ichorv1alpha1.DefaultImageFactoryURL}), "an unset spec.imageFactoryURL is the stock factory")
 
 		ops := storageOps(cluster.Name)
 		Expect(ops).To(HaveLen(1))
@@ -513,6 +518,17 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(pausedMessage(got)).To(ContainSubstring("waiting for approval"))
 		Expect(pausedMessage(got)).To(ContainSubstring("ichor resume operation " + op.Name))
+	})
+
+	It("registers the schematic at the cluster's own Image Factory", func() {
+		cluster := newTestCluster(newTestSecret(bundleRaw).Name, "v1.14")
+		cluster.Spec.ImageFactoryURL = "https://factory.example.test:8443"
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		bareNode(cluster.Name)
+
+		reconcileStorage(r, newRealStorage(cluster.Name))
+
+		Expect(factory.urls).To(Equal([]string{"https://factory.example.test:8443"}))
 	})
 
 	It("writes nothing over a schematic it cannot read, and says what to do", func() {

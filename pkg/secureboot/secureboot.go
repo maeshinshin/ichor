@@ -21,6 +21,7 @@ limitations under the License.
 package secureboot
 
 import (
+	"net/url"
 	"fmt"
 	"slices"
 	"strings"
@@ -40,25 +41,34 @@ const (
 	installerSecure  = "metal-installer-secureboot"
 )
 
-// InstallerImage is the Image Factory installer reference for schematic and Talos version.
+// InstallerImage is the installer reference at the stock Image Factory for schematic and Talos version.
 func InstallerImage(schematic, version string, secureBoot bool) string {
+	return installerImage(imageFactoryHost, schematic, version, secureBoot)
+}
+
+func installerImage(host, schematic, version string, secureBoot bool) string {
 	name := installer
 	if secureBoot {
 		name = installerSecure
 	}
 
-	return fmt.Sprintf("%s/%s/%s:%s", imageFactoryHost, name, schematic, version)
+	return fmt.Sprintf("%s/%s/%s:%s", host, name, schematic, version)
 }
 
 // ClusterInstallerImage is InstallerImage for cluster's schematic (spec.schematic, else the stock
-// installer's) and spec.talosVersion.
+// installer's), spec.talosVersion and Image Factory (spec.imageFactoryURL, else the stock one).
 func ClusterInstallerImage(cluster *ichorv1alpha1.TalosCluster, secureBoot bool) string {
 	schematic := upgrade.DefaultSchematic
 	if cluster.Spec.Schematic != nil && cluster.Spec.Schematic.ID != "" {
 		schematic = cluster.Spec.Schematic.ID
 	}
 
-	return InstallerImage(schematic, cluster.Spec.TalosVersion, secureBoot)
+	host := imageFactoryHost
+	if u, err := url.Parse(cluster.Spec.FactoryURL()); err == nil && u.Host != "" {
+		host = u.Host // the webhook refuses anything but an https URL with a host, so this is the host[:port]
+	}
+
+	return installerImage(host, schematic, cluster.Spec.TalosVersion, secureBoot)
 }
 
 // IsSecureBootInstaller reports whether image names a SecureBoot installer (the stock Image

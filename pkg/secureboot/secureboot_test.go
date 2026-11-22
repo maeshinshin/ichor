@@ -53,6 +53,27 @@ func TestInstallerImage(t *testing.T) {
 	}
 }
 
+// TestClusterInstallerImageNamesTheClustersFactory: spec.imageFactoryURL is the registry host of the installer
+// image, and an unset one is the stock Image Factory, as before.
+func TestClusterInstallerImageNamesTheClustersFactory(t *testing.T) {
+	t.Parallel()
+
+	c := &ichorv1alpha1.TalosCluster{}
+	c.Spec.TalosVersion = "v1.14.5"
+
+	if got, want := secureboot.ClusterInstallerImage(c, false),
+		"factory.talos.dev/metal-installer/"+schematic+":v1.14.5"; got != want {
+		t.Errorf("default = %q, want %q", got, want)
+	}
+
+	c.Spec.ImageFactoryURL = "https://factory.example.test:8443"
+
+	if got, want := secureboot.ClusterInstallerImage(c, true),
+		"factory.example.test:8443/metal-installer-secureboot/"+schematic+":v1.14.5"; got != want {
+		t.Errorf("self-hosted = %q, want %q", got, want)
+	}
+}
+
 func TestLockdownLevel(t *testing.T) {
 	t.Parallel()
 

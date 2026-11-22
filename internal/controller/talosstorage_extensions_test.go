@@ -17,12 +17,18 @@ limitations under the License.
 package controller
 
 import (
+	"fmt"
+	"os"
+	"slices"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
 // TestImageFactoryClientPostsTheSchematicOnceAndRemembersTheID pins the request Talos v1.14 "Boot Assets" shows
@@ -47,11 +53,11 @@ func TestImageFactoryClientPostsTheSchematicOnceAndRemembersTheID(t *testing.T) 
 	}))
 	defer srv.Close()
 
-	c := &ImageFactoryClient{URL: srv.URL}
+	c := &ImageFactoryClient{}
 	ext := []string{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}
 
 	for range 2 {
-		id, err := c.Register(t.Context(), ext)
+		id, err := c.Register(t.Context(), srv.URL, ext)
 		if err != nil || id != "abc123" {
 			t.Fatalf("Register = %q, %v", id, err)
 		}
@@ -70,8 +76,63 @@ func TestImageFactoryClientReportsARefusal(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := (&ImageFactoryClient{URL: srv.URL}).Register(t.Context(), []string{"siderolabs/nope"}); err == nil ||
+	if _, err := (&ImageFactoryClient{}).Register(t.Context(), srv.URL, []string{"siderolabs/nope"}); err == nil ||
 		!strings.Contains(err.Error(), "no such extension") {
 		t.Fatalf("err = %v, want the factory's answer", err)
+	}
+}
+
+// TestImageFactoryClientAsksTheFactoryItIsGiven: the schematic is registered at the URL passed in
+// (TalosCluster.spec.imageFactoryURL), and an ID remembered for one factory is not served for another.
+func TestImageFactoryClientAsksTheFactoryItIsGiven(t *testing.T) {
+	t.Parallel()
+
+	var hits [2]atomic.Int32
+
+	servers := [2]*httptest.Server{}
+	for i := range servers {
+		servers[i] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			hits[i].Add(1)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"id":"from-%d"}`, i)))
+		}))
+		defer servers[i].Close()
+	}
+
+	c := &ImageFactoryClient{}
+
+	for i, srv := range servers {
+		id, err := c.Register(t.Context(), srv.URL, []string{"siderolabs/iscsi-tools"})
+		if err != nil || id != fmt.Sprintf("from-%d", i) {
+			t.Fatalf("factory %d: Register = %q, %v", i, id, err)
+		}
+
+		if hits[i].Load() != 1 {
+			t.Errorf("factory %d was asked %d times, want 1", i, hits[i].Load())
+		}
+	}
+}
+
+// TestRealImageFactoryRegistersTheLonghornExtensions posts to the real Image Factory. It is skipped unless
+// ICHOR_REAL_FACTORY=1, so CI never calls the network.
+func TestRealImageFactoryRegistersTheLonghornExtensions(t *testing.T) {
+	if os.Getenv("ICHOR_REAL_FACTORY") != "1" {
+		t.Skip("set ICHOR_REAL_FACTORY=1 to post to https://factory.talos.dev")
+	}
+
+	preset, err := storage.NewPreset(storage.LonghornV1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := (&ImageFactoryClient{}).Register(t.Context(), ichorv1alpha1.DefaultImageFactoryURL,
+		slices.Sorted(slices.Values(preset.RequiredExtensions())))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("schematic ID: %s", id)
+
+	if len(id) != 64 {
+		t.Errorf("schematic ID %q is not 64 hex characters", id)
 	}
 }

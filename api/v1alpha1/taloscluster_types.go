@@ -344,6 +344,14 @@ type TalosClusterSpec struct {
 	// +optional
 	Schematic *TalosClusterSchematic `json:"schematic,omitempty"`
 
+	// imageFactoryURL is the base URL of the Image Factory this cluster's installer images and schematics come
+	// from: an https URL with a host and an optional port, and no path. Ichor registers schematics there
+	// (a storage preset's extensions) and names it in the installer images it renders
+	// (<host>/metal-installer/<schematic>:<version>). Unset means https://factory.talos.dev. Set it for a
+	// self-hosted or air-gapped Image Factory.
+	// +optional
+	ImageFactoryURL string `json:"imageFactoryURL,omitempty"`
+
 	// secretsRef names the Secret holding the cluster's Talos secrets bundle under the key "secrets.yaml", in
 	// the format `talosctl gen secrets` writes: the Talos API, Kubernetes, Kubernetes aggregator and etcd CA
 	// certificates and private keys, the Kubernetes service account key, the cluster ID and secret, the bootstrap

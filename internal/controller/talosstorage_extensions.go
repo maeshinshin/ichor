@@ -46,23 +46,17 @@ const (
 	reasonStorageSchematicNotMergeable = "SchematicNotMergeable"
 	reasonStorageSchematicUnavailable  = "SchematicUnavailable"
 
-	// imageFactoryURL is the Image Factory the cluster's installer images come from (pkg/secureboot names the same host).
-	// shortcut: the host is fixed. Ichor has no setting for a self-hosted Image Factory (ADR 0090 keeps only the
-	// installer-repository override and an installer image written by hand), so a cluster whose installer image comes
-	// from another factory gets a schematic registered at factory.talos.dev. Drop it when such a setting exists.
-	imageFactoryURL = "https://factory.talos.dev"
 )
 
-// SchematicRegistrar turns a set of official system extensions into an Image Factory schematic ID.
+// SchematicRegistrar turns a set of official system extensions into a schematic ID at the Image Factory
+// whose base URL is factoryURL (TalosCluster.spec.imageFactoryURL).
 type SchematicRegistrar interface {
-	Register(ctx context.Context, extensions []string) (string, error)
+	Register(ctx context.Context, factoryURL string, extensions []string) (string, error)
 }
 
 // ImageFactoryClient registers schematics at Image Factory (POST /schematics, Talos v1.14 "Boot Assets").
 // The ID is a function of the content, so a repeated registration returns the same ID; it is remembered per process.
 type ImageFactoryClient struct {
-	// URL is the factory's base URL; empty means imageFactoryURL.
-	URL string
 	// HTTP is the client; nil means one with a 30 second timeout.
 	HTTP *http.Client
 
@@ -71,8 +65,8 @@ type ImageFactoryClient struct {
 }
 
 // Register implements SchematicRegistrar.
-func (c *ImageFactoryClient) Register(ctx context.Context, extensions []string) (string, error) {
-	key := strings.Join(extensions, ",")
+func (c *ImageFactoryClient) Register(ctx context.Context, factoryURL string, extensions []string) (string, error) {
+	key := factoryURL + "|" + strings.Join(extensions, ",")
 
 	c.mu.Lock()
 	id, ok := c.seen[key]
@@ -90,12 +84,7 @@ func (c *ImageFactoryClient) Register(ctx context.Context, extensions []string) 
 		body.WriteString("      - " + e + "\n")
 	}
 
-	base := imageFactoryURL
-	if c.URL != "" {
-		base = c.URL
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(base, "/")+"/schematics", strings.NewReader(body.String()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(factoryURL, "/")+"/schematics", strings.NewReader(body.String()))
 	if err != nil {
 		return "", err
 	}
@@ -154,10 +143,10 @@ func (r *TalosStorageReconciler) ensureExtensions(
 
 	want := slices.Sorted(slices.Values(preset.RequiredExtensions()))
 
-	id, rerr := r.Factory.Register(ctx, want)
+	id, rerr := r.Factory.Register(ctx, cluster.Spec.FactoryURL(), want)
 	if rerr != nil {
-		return reasonStorageSchematicUnavailable, fmt.Sprintf("%s: %s. Image Factory could not be asked for a schematic with them: %v",
-			ts.Spec.DiskPreset, problems, rerr), nil
+		return reasonStorageSchematicUnavailable, fmt.Sprintf("%s: %s. Image Factory %s could not be asked for a schematic with them: %v",
+			ts.Spec.DiskPreset, problems, cluster.Spec.FactoryURL(), rerr), nil
 	}
 
 	switch cur := targetSchematic(&cluster); cur {

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"net/url"
 	"cmp"
 	"context"
 	"errors"
@@ -222,6 +223,10 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
+	if err := validateImageFactoryURL(obj); err != nil {
+		return nil, err
+	}
+
 	if err := validateCiliumValues(nil, obj); err != nil {
 		return nil, err
 	}
@@ -372,6 +377,24 @@ func validateEndpoint(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	return nil
 }
 
+// validateImageFactoryURL refuses a spec.imageFactoryURL that is not an https URL with a host (and optional port)
+// and nothing else: the host becomes the registry host of every installer image, so a path, query or credentials
+// would make a reference that no registry can resolve.
+func validateImageFactoryURL(c *ichorv1alpha1.TalosCluster) error {
+	raw := c.Spec.ImageFactoryURL
+	if raw == "" {
+		return nil
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("spec.imageFactoryURL %q must be an https URL with a host and an optional port, and no path, query or credentials", raw)
+	}
+
+	return nil
+}
+
 // validateNotRemoved refuses to drop spec.network or spec.cni once it is set. Their CEL transition rules
 // compare oldSelf with self, and CEL does not run when the field is absent, so a JSON patch that removes
 // the field would pass them. Setting a field that was unset stays allowed.
@@ -408,6 +431,10 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// controllers refuse to render it, so a spec edit could never take effect.
 	if (removedPreset(oldObj) || removedPreset(newObj)) && !apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
 		return nil, fmt.Errorf(presetRemovedMessage, cmp.Or(newObj.Spec.CNI.Preset, oldObj.Spec.CNI.Preset))
+	}
+
+	if err := validateImageFactoryURL(newObj); err != nil {
+		return nil, err
 	}
 
 	if err := validateEndpoint(oldObj, newObj); err != nil {

@@ -528,8 +528,10 @@ command does. Each item is described where it is listed below.
 - **A kube-proxy switch consent left on the cluster is removed.** The controller now removes
   `ichor.maesh.dev/confirm-kube-proxy-switch` on its next reconcile once no switch is pending or
   running, so a failed removal after the operation was created, or a Git-first consent that
-  outlived its switch, no longer admits a later hand edit of `spec.cni.kubeProxy`. The controller
-  gains `patch` on `talosclusters`; it still never writes `spec`. See ADR 0066.
+  outlived its switch, no longer admits a later hand edit of `spec.cni.kubeProxy`. The removal is made
+  as a ServiceAccount of its own, `ichor-consent-sweep`, which the controller impersonates and the
+  TalosCluster webhook limits to removing that one annotation; the controller's own role gains
+  nothing, and it still never writes `spec`. See ADR 0066.
 
 - `spec.containerd.deviceOwnershipFromSecurityContext` turns on containerd's
   `device_ownership_from_security_context` on every node, so non-root pods such

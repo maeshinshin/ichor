@@ -13,15 +13,18 @@ sidebar_order: 5
 4. The Talos version contract is pinned in the CR, so a library bump cannot
    silently change what gets applied.
 5. The controller never writes `spec`, so it never fights whatever tool the user
-   keeps the CRs in. (Two recorded exceptions keep this true, each a separate
-   ServiceAccount that the controller impersonates and the webhook limits, so the
-   audit log shows the writes as that user. Automatic patch upgrades, off by
+   keeps the CRs in. (Two recorded exceptions, and a narrow metadata writer, keep this true, each a
+   separate ServiceAccount that the controller impersonates and the webhook limits,
+   so the audit log shows the writes as that user. Automatic patch upgrades, off by
    default: `ichor-auto-patch` writes a newer patch of the running minor to the
    two version fields. A storage preset's extensions: `ichor-storage-extensions`,
    which holds `patch` on `talosclusters` only, writes `spec.schematic.id`, from
    unset or the stock schematic, to the ID of a schematic with the extensions the
    preset needs, and the upgrade that applies it is created paused until a person
-   resumes it; ADR 0173)
+   resumes it; ADR 0173. The kube-proxy consent sweep: `ichor-consent-sweep`, which
+   holds `patch` on `talosclusters` only, removes the
+   `ichor.maesh.dev/confirm-kube-proxy-switch` annotation once no switch needs it,
+   and the webhook refuses any other change by it; ADR 0066)
 6. Disruptive operations (upgrades, reboots, CA rotation, topology changes)
    take a per-cluster Lease. One at a time.
 7. Progress lives in status and resumes idempotently. (A live etcd restore

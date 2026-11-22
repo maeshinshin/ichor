@@ -213,7 +213,7 @@ var _ = Describe("TalosClusterReconciler kube-proxy consent sweep", func() {
 	sweep := func(c *ichorv1alpha1.TalosCluster) {
 		GinkgoHelper()
 
-		_, err := reconcileCluster(&TalosClusterReconciler{Client: k8sClient}, c)
+		_, err := reconcileCluster(&TalosClusterReconciler{Client: k8sClient, Actor: k8sClient}, c)
 		Expect(err).NotTo(HaveOccurred())
 	}
 

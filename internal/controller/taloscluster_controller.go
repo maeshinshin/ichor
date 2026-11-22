@@ -75,6 +75,11 @@ type TalosClusterReconciler struct {
 	// discovery address or CIDR is reachable on the first pass.
 	Egress *TalosEgress
 
+	// Actor removes the kube-proxy switch consent annotation as the ServiceAccount ichor-consent-sweep,
+	// the only TalosCluster write the controller makes (ADR 0066, amendment 2026-11-22); the webhook limits that
+	// identity to the removal. Nil means no sweep.
+	Actor client.Client
+
 	mu        sync.Mutex
 	firstSeen map[string]time.Time
 	now       func() time.Time // tests; nil means time.Now
@@ -97,7 +102,7 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	if err := sweepKubeProxyConsent(ctx, r.Client, &cluster); err != nil {
+	if err := sweepKubeProxyConsent(ctx, r.Client, r.Actor, &cluster); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -131,10 +136,10 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // no switch is pending (the annotation no longer leads status.cni.kubeProxy) and no cni switch
 // operation is unfinished. The server removes it after the operation exists; this is the net for
 // a removal that failed, and for a Git-first consent that outlived its switch. It writes
-// metadata only, never spec.
-func sweepKubeProxyConsent(ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster) error {
+// metadata only, as the ichor-consent-sweep identity: the controller's own role holds no write on talosclusters.
+func sweepKubeProxyConsent(ctx context.Context, c, actor client.Client, cluster *ichorv1alpha1.TalosCluster) error {
 	if _, ok := cluster.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation]; !ok ||
-		kubeProxySwitchPending(cluster) {
+		kubeProxySwitchPending(cluster) || actor == nil {
 		return nil
 	}
 
@@ -154,7 +159,7 @@ func sweepKubeProxyConsent(ctx context.Context, c client.Client, cluster *ichorv
 	base := cluster.DeepCopy()
 	delete(cluster.Annotations, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation)
 
-	return client.IgnoreNotFound(c.Patch(ctx, cluster, client.MergeFrom(base)))
+	return client.IgnoreNotFound(actor.Patch(ctx, cluster, client.MergeFrom(base)))
 }
 
 // freshResetNode reports whether Ichor reset a node less than discoveryFreshWindow ago (the marker

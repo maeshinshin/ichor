@@ -216,8 +216,12 @@ reconciler now removes `ichor.maesh.dev/confirm-kube-proxy-switch` on its next p
 annotation does not lead `status.cni.kubeProxy`, the test of `kubeProxySwitchPending`) and no `cni` operation that is
 not a Cilium upgrade is unfinished (any phase but `Completed`). It also reconciles when such an operation changes.
 
-- This is a metadata write: the controller still never writes `spec`. It is the one place the controller writes the
-  annotation; the controller needs `patch` on `talosclusters` for it.
+- This is a metadata write: the controller still never writes `spec`, and its own role gains nothing. The removal
+  is made as the ServiceAccount `ichor-consent-sweep`, which the controller impersonates by name (a Role naming only
+  that account) and which holds `patch` on `talosclusters` only, the pattern of ADR 0116 and ADR 0173. The
+  TalosCluster webhook refuses any write by that identity except removing the one annotation: the spec, labels,
+  finalizers and every other annotation must be unchanged. It is the third narrow writer, and the only one that
+  writes metadata.
 - A pending switch keeps its consent, so a Git-first commit that carries the annotation ahead of the spec is not
   swept before the operation runs. On an Argo CD-tracked cluster a finished switch's annotation is removed here and
   Git adds it back only when the next switch is committed, which is what the admission rule asks of it.

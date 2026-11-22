@@ -461,8 +461,14 @@ func main() {
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Namespace: ns,
 		Disabled: noCiliumPolicies || !talosEgressManage, Settle: 3 * time.Second,
 	}), "Failed to add the ichor-ui egress policy")
+	// The kube-proxy consent sweep removes one annotation as the ServiceAccount ichor-consent-sweep, which the
+	// controller may impersonate (and only that one).
+	sweepActorCfg := rest.CopyConfig(mgr.GetConfig())
+	sweepActorCfg.Impersonate = rest.ImpersonationConfig{UserName: "system:serviceaccount:" + ns + ":" + ichorv1alpha1.ConsentSweepServiceAccount}
+	sweepActor, err := client.New(sweepActorCfg, client.Options{Scheme: mgr.GetScheme()})
+	must(err, "Failed to create the consent sweep client")
 	must((&controller.TalosClusterReconciler{
-		Client: mgr.GetClient(),
+		Client: mgr.GetClient(), Actor: sweepActor,
 		Egress: egress,
 		Discovery: &controller.DiscoveryReconciler{
 			Client: mgr.GetClient(),

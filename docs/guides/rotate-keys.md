@@ -50,8 +50,12 @@ in the cluster menu. You need the `start` verb on `talosoperations/key-rotation`
   kube-apiserver, and every Node must be Ready. The cluster needs
   `versionContract` v1.14 or later.
 - A step that cannot be verified pauses the operation (`Blocked` on the
-  `KeyRotation` condition) and continues when the cause is gone. Nothing is
-  rolled back: every stage keeps both keys working.
+  `KeyRotation` condition) and continues when the cause is gone.
+- A cause no waiting clears (a `versionContract` below v1.14, no secretbox secret
+  in the bundle, a `keyrotation.yaml` holding other keys, a `TalosConfigPatch`
+  that overrides the key documents) pauses it at once as a failed step and frees
+  the cluster lock. Fix the cause, then `ichor resume operation NAME`.
+- Nothing is rolled back: every stage keeps both keys working.
 - The machine controller does not reconcile control planes, and other disruptive
   operations are refused, while it runs. The new keys are kept in the bundle
   Secret (`keyrotation.yaml`) before any node uses them.

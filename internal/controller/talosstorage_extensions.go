@@ -47,6 +47,9 @@ const (
 	reasonStorageSchematicUnavailable  = "SchematicUnavailable"
 
 	// imageFactoryURL is the Image Factory the cluster's installer images come from (pkg/secureboot names the same host).
+	// shortcut: the host is fixed. Ichor has no setting for a self-hosted Image Factory (ADR 0090 keeps only the
+	// installer-repository override and an installer image written by hand), so a cluster whose installer image comes
+	// from another factory gets a schematic registered at factory.talos.dev. Drop it when such a setting exists.
 	imageFactoryURL = "https://factory.talos.dev"
 )
 

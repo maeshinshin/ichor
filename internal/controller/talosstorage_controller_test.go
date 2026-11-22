@@ -361,19 +361,34 @@ func (f *fakeSchematicFactory) Register(_ context.Context, extensions []string) 
 	return "schematic-" + strings.Join(extensions, "+"), nil
 }
 
+// countingClient counts the patches made through it: an identical merge patch leaves the object's
+// resourceVersion alone, so only a count shows a redundant write.
+type countingClient struct {
+	client.Client
+	patches int
+}
+
+func (c *countingClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	c.patches++
+
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
+
 var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)", func() {
 	const wantID = "schematic-siderolabs/iscsi-tools+siderolabs/util-linux-tools"
 
 	var (
 		bundleRaw = newTestBundle("v1.14")
 		factory   *fakeSchematicFactory
+		actor     *countingClient
 		r         *TalosStorageReconciler
 	)
 
 	BeforeEach(func() {
 		factory = &fakeSchematicFactory{}
+		actor = &countingClient{Client: k8sClient}
 		r = &TalosStorageReconciler{
-			Client: k8sClient, APIReader: fakeSettingReader{}, Actor: k8sClient, Factory: factory,
+			Client: k8sClient, APIReader: fakeSettingReader{}, Actor: actor, Factory: factory,
 		}
 	})
 
@@ -436,6 +451,7 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 
 		Expect(storageOps(cluster.Name)).To(HaveLen(1), "a second pass creates no second operation")
 		Expect(fetchCluster(cluster).ResourceVersion).To(Equal(got.ResourceVersion), "a second pass writes the cluster no more")
+		Expect(actor.patches).To(Equal(1), "the schematic is patched once, not on every pass")
 	})
 
 	It("is not Ready while the nodes lack the extensions, and names them and the operation", func() {

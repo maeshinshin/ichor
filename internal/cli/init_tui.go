@@ -32,6 +32,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/term"
 )
 
 // errPromptCancelled is what Esc, Ctrl-C and a closed stdin end the prompts with. Nothing has been
@@ -396,6 +397,14 @@ func askPrompts(qs []promptQuestion, seed map[string]string, in io.Reader, out i
 	if _, isFile := in.(*os.File); !isFile {
 		eof = &eofCancel{Reader: in}
 		rd = eof
+	}
+
+	// bubbletea raws the input terminal and, because of that, draws with bare line feeds. When the
+	// output is a different terminal it still translates them (ONLCR), so take that off for the run.
+	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) { //nolint:gosec // a file descriptor fits an int
+		if old, err := term.MakeRaw(int(f.Fd())); err == nil { //nolint:gosec // as above
+			defer func() { _ = term.Restore(int(f.Fd()), old) }() //nolint:gosec // as above
+		}
 	}
 
 	p := tea.NewProgram(newPromptModel(qs, seed), tea.WithInput(rd), tea.WithOutput(out))

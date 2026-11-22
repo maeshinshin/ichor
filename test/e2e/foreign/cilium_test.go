@@ -49,6 +49,19 @@ spec:
     - port: 80
       targetPort: 8080
 ---
+# Headless: its DNS name answers with the Ready server pod's IP only, which the client's pod-IP leg probes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fa-srv-pods
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: fa-srv
+  ports:
+    - port: 8080
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -79,36 +92,7 @@ spec:
           image: busybox:1.37
           command: ["sh", "-c", "mkdir -p /www; echo ok > /www/index.html; exec httpd -f -p 8080 -h /www"]
 `
-	trafficClient = `apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: fa-client
-  namespace: default
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: fa-client
-  namespace: default
-rules:
-  - apiGroups: [""]
-    resources: ["endpoints"]
-    resourceNames: ["fa-srv"]
-    verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: fa-client
-  namespace: default
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: fa-client
-subjects:
-  - {kind: ServiceAccount, name: fa-client, namespace: default}
----
-apiVersion: apps/v1
+	trafficClient = `apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fa-client
@@ -133,7 +117,6 @@ spec:
                   - {key: kubernetes.io/hostname, operator: In, values: ["%s"]}
       tolerations:
         - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
-      serviceAccountName: fa-client
       containers:
         - name: client
           image: busybox:1.37
@@ -144,12 +127,9 @@ spec:
             - -c
             - |
               ok=0; fail=0; pok=0; pfail=0; pskip=0; rt=0; n=0; cur=""
-              tok=/var/run/secrets/kubernetes.io/serviceaccount/token
-              api="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT/api/v1/namespaces/default/endpoints/fa-srv"
-              # The server's Ready address from its Endpoints (notReadyAddresses is cut off first), or nothing.
+              # The server's Ready address: the headless Service answers with Ready pods only, or nothing.
               ready() {
-                wget -q -O - --no-check-certificate --header "Authorization: Bearer $(cat $tok)" "$api" 2>/dev/null |
-                  sed 's/"notReadyAddresses".*//' | grep -o '"ip":"[^"]*"' | head -n 1 | cut -d'"' -f4
+                nslookup fa-srv-pods.default.svc.cluster.local 2>/dev/null | awk '/^Address/ && $2 !~ /:53$/ {print $2; exit}'
               }
               while true; do
                 if out=$(wget -q -T 2 -O /dev/null "http://$SVC_IP" 2>&1); then
@@ -544,16 +524,16 @@ func secretData(c *foreign.Cluster, nsName, name string) map[string]string {
 
 // TestA2Adopt: `helm install cilium` in kube-system with user values is taken over; the values are
 // lifted, the foreign record is backed up byte-for-byte and its Secrets (not the release) removed.
-// Run `foreign up --cni cilium-helm --cilium-set operator.replicas=1,debug.enabled=true` first.
+// The cluster is built with --cilium-set operator.replicas=1,debug.enabled=true.
 func TestA2Adopt(t *testing.T) { takeoverHelmRecord(t, foreign.CNICiliumHelm) }
 
 // TestA3Adopt: the same expectations for a Cilium installed with `cilium install` (the Cilium CLI writes the Helm
 // release).
-// Run `foreign up --cni cilium-cli --cilium-set operator.replicas=1,debug.enabled=true` first.
+// The cluster is built with --cilium-set operator.replicas=1,debug.enabled=true.
 func TestA3Adopt(t *testing.T) { takeoverHelmRecord(t, foreign.CNICiliumCLI) }
 
 func takeoverHelmRecord(t *testing.T, cni string) {
-	c := build(t, foreign.Options{Workers: 1, CNI: cni})
+	c := build(t, foreign.Options{Workers: 1, CNI: cni, CiliumSets: []string{"operator.replicas=1", "debug.enabled=true"}})
 	logState(t, c, "before")
 	recs := map[string]string{} // record name -> base64 of data.release
 	names, _ := inner(c, "-n", nsKubeSystem, "get", "secrets", "-l", "owner=helm,name=cilium", "-o",
@@ -659,7 +639,7 @@ func refusedWritesNothing(t *testing.T, c *foreign.Cluster, hashes map[string]st
 // Run `foreign up --workers 0 --cni cilium-helm --cilium-set
 // ipam.mode=cluster-pool,tunnelProtocol=vxlan,tunnelPort=4789` first.
 func TestA7Refused(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
+	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm, CiliumSets: []string{"ipam.mode=cluster-pool"}})
 	hashes, records := cniPaths(t, c), helmRecords(c)
 	if mode, _ := inner(c, "-n", nsKubeSystem, "get", "cm", "cilium-config", "-o",
 		"jsonpath={.data.ipam}"); mode != "cluster-pool" {

@@ -28,6 +28,8 @@ import (
 	"syscall"
 
 	"connectrpc.com/connect"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
@@ -68,6 +70,8 @@ func Is(err error) bool {
 	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF),
 		errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ECONNRESET),
 		errors.Is(err, context.DeadlineExceeded),
+		// A Talos node that does not answer: a gRPC status error, which does not unwrap to context.DeadlineExceeded.
+		status.Code(err) == codes.Unavailable, status.Code(err) == codes.DeadlineExceeded,
 		errors.As(err, &ne) && ne.Timeout(),
 		apierrors.IsServerTimeout(err), apierrors.IsTimeout(err), apierrors.IsServiceUnavailable(err), apierrors.IsTooManyRequests(err):
 		return true

@@ -20,8 +20,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -227,5 +229,44 @@ func TestUpgradeIchorRequiresAVersion(t *testing.T) {
 
 	if !strings.Contains(upgradeTalosCmd.Long, "Without VERSION it uses the recommended version") {
 		t.Errorf("the help of `ichor upgrade talos` lost its recommended-version sentence: %q", upgradeTalosCmd.Long)
+	}
+}
+
+// A verified upgrade after an unchecked one clears the skip and rewrites installerImage; the
+// InstallerImageUnverified condition is what still says an unchecked image once ran, and
+// `ichor version` shows it in every format.
+func TestVersionSaysAnUncheckedImageOnceRanAfterAVerifiedUpgrade(t *testing.T) {
+	scheme, err := cliScheme()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first := metav1.NewTime(time.Date(2026, 11, 3, 4, 5, 6, 0, time.UTC))
+	inst := &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: noticeNewer},
+		Status: ichorv1alpha1.IchorInstallationStatus{
+			InstalledVersion: noticeNewer,
+			InstallerImage: &ichorv1alpha1.IchorInstallerImageStatus{
+				Digest: "sha256:" + strings.Repeat("b", 64), Verification: ichorv1alpha1.InstallerImageVerified,
+			},
+			Conditions: []metav1.Condition{{
+				Type: ichorv1alpha1.ConditionInstallerImageUnverified, Status: metav1.ConditionTrue, Reason: "SignatureSkipped",
+				LastTransitionTime: first,
+			}},
+		},
+	}
+
+	info, _ := collectVersion(context.Background(), fake.NewClientBuilder().WithScheme(scheme).WithObjects(inst).Build(), testCLIVersion)
+
+	out := renderVersion(t, info, outputHuman)
+	for _, want := range []string{"signature verified", "an image whose signature was NOT checked has run here, first on 2026-11-03"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("ichor version does not say %q:\n%s", want, out)
+		}
+	}
+
+	if got := renderVersion(t, info, outputJSON); !strings.Contains(got, `"uncheckedImageRanSince": "2026-11-03T04:05:06Z"`) {
+		t.Errorf("json output:\n%s", got)
 	}
 }

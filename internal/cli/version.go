@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	sigsyaml "sigs.k8s.io/yaml"
@@ -88,6 +90,9 @@ type versionServer struct {
 	LatestRelease string `json:"latestRelease,omitempty"`
 	// InstallerImage is the installer image the last Ichor upgrade ran and whether its signature was checked.
 	InstallerImage *versionInstaller `json:"installerImage,omitempty"`
+	// UncheckedImageRanSince is when an installer image first ran with its signature unchecked (RFC 3339), from the
+	// IchorInstallation's InstallerImageUnverified condition. A later verified upgrade does not clear it.
+	UncheckedImageRanSince string `json:"uncheckedImageRanSince,omitempty"`
 }
 
 // versionInstaller is IchorInstallation.status.installerImage, plus whether the next upgrade will skip the check.
@@ -132,6 +137,11 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 		info.Server.InstallerImage = &versionInstaller{SkipNext: true}
 	}
 
+	if c := apimeta.FindStatusCondition(inst.Status.Conditions, ichorv1alpha1.ConditionInstallerImageUnverified); c != nil &&
+		c.Status == metav1.ConditionTrue {
+		info.Server.UncheckedImageRanSince = c.LastTransitionTime.UTC().Format(time.RFC3339)
+	}
+
 	return info, ""
 }
 
@@ -157,6 +167,10 @@ func writeVersionHuman(w io.Writer, info versionInfo) error {
 			} else {
 				rows = append(rows, kv{"installer image", installerImageText(img)})
 			}
+		}
+
+		if since := s.UncheckedImageRanSince; since != "" {
+			rows = append(rows, kv{"unverified image", "an image whose signature was NOT checked has run here, first on " + since[:len("2006-01-02")]})
 		}
 	}
 

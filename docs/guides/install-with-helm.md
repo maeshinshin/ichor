@@ -21,3 +21,7 @@ Until `ichor adopt` runs there is no `TalosCluster`: the controller reads no cre
 7. [ichor-ui is HTTPS only](install-with-helm/ichor-ui-https.md): the certificate, and moving an existing release.
 8. [A cluster with no CNI](install-with-helm/no-cni.md): bootstrapping Cilium before the chart.
 9. [Upgrade and uninstall](install-with-helm/upgrade.md): `helm upgrade`, and what `helm uninstall` keeps.
+
+## The installer image on an upgrade
+
+`ichor upgrade ichor` runs its Job only from a verified image or an explicit skip; an unverified one pauses with `InstallerImageUnverified`. See [the installer image](install-with-helm/installer-image.md).

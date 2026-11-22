@@ -9,7 +9,7 @@ configured, see [Reclaim a machine](reclaim-a-machine.md).
 
 *A machine is released only after a zero-drift check, so its first apply changes nothing. There is no rollback of an adoption.*
 
-## Which command
+## What you have in front of you
 
 | Your machine or cluster | Command | Reset? |
 |---|---|---|
@@ -31,6 +31,10 @@ that does carry the CAs cannot be represented (typically one removed without a
 wipe), it blocks the machine and offers the wipe. `ichor reclaim node` refuses a
 machine that is still an approved Ichor machine (use `ichor delete node`) and
 accepts an orphan of a managed cluster.
+
+## Add a machine that is already in the cluster
+
+`ichor adopt --add-machine` brings in a machine that already carries the cluster's configuration, without a reset. See [its page](adopt-a-cluster/add-a-machine.md).
 
 ## The pages
 

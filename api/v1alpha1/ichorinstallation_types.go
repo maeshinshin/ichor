@@ -244,7 +244,8 @@ type IchorInstallationStatus struct {
 	InstalledVersion string `json:"installedVersion,omitempty"`
 
 	// conditions represent the current state of the IchorInstallation resource. UpToDate is
-	// True when installedVersion equals spec.version. An ExternalSuggested condition
+	// True when installedVersion equals spec.version. InstallerImageUnverified is True once an
+	// installer image ran with its signature unchecked, and stays until a person removes it. An ExternalSuggested condition
 	// from an older build is removed.
 	// +listType=map
 	// +listMapKey=type

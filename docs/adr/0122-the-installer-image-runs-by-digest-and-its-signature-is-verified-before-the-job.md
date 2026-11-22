@@ -133,3 +133,15 @@ Section 3 says that a registry which redirects blobs to a host that is not allow
 - A signature that cannot be read because the registry could not be read (the referrers listing or the bundle; the error wraps `imagesig.ErrRegistry`) pauses with `InstallerImageUnresolved`, not `InstallerImageUnverified`. Nothing was read to its end, so the image is neither verified nor shown to be unsigned. The digest is already known, so the route is the skip alone: `ichor upgrade ichor --skip-signature-check`. The pin adds nothing here, because the signature is read from the same registry as the tag.
 
 `InstallerImageUnverified` keeps its meaning in section 5: a signature that was read and does not verify, or no signature. Both routes record the skip as section 4 and the amendment of 2026-11-16 describe. The guide, [The installer image on an upgrade](../guides/install-with-helm/installer-image.md), gives the same routes.
+
+## Amendment, 2026-11-22: a sticky InstallerImageUnverified condition records that an unchecked image ran
+
+The open question of the 2026-11-16 amendment is decided: option (a), a condition, with no new CRD field.
+
+- **Object and type.** The IchorInstallation `ichor` carries the condition `InstallerImageUnverified` (`ConditionInstallerImageUnverified`) in `status.conditions`, where `AutoPatchHalted` and `SettingsApplied` already live. It is True when set, as `AutoPatchHalted` is, because the state it reports is the abnormal one; it is absent otherwise.
+- **Who sets it.** `recordInstallerImage`, the one function both skipping paths call (the Ichor upgrade's installer Job and the Cilium Helm Job), sets it in the same status patch that writes `status.installerImage` with `verification: Skipped`. Its reason is `SignatureSkipped` and its message names the repository, digest and version of the latest unchecked run; `lastTransitionTime` is the first unchecked run, because `SetStatusCondition` keeps it while the status stays True.
+- **Who clears it.** Nothing in Ichor does. A verified run rewrites `status.installerImage` and leaves the condition; an upgrade without `--skip-signature-check` clears `spec.installerSignature` and leaves it. A person clears it by removing it from `status.conditions` (an update of `ichorinstallations/status`).
+- **Where it shows.** `ichor version` prints an `unverified image` row with the date of the first unchecked run (and `uncheckedImageRanSince` in JSON and YAML); `GetIchorInstallation` sends `installer_image_unverified`, which the UI shows as the top bar's "Installer not verified" badge and the Overview's attention item, whatever the last run's verification was.
+- **Limit.** The condition list is written by merge patches that replace the whole list, so a writer holding a stale copy can drop the condition until the next skipped run sets it again. An optimistic lock on that patch would close it; it is not built (shortcut in `recordInstallerImage`).
+
+The `ichor init --skip-signature-check` warning, written to stderr, is unchanged: the condition is what outlives it.

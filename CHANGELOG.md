@@ -758,6 +758,13 @@ command does. Each item is described where it is listed below.
   Job's last log line, while the operation's message carried the termination message. The
   condition now prefers the termination message, falls back to the last log line, then to the
   Job's own reason.
+- **The IchorInstallation records, for good, that an unchecked installer image ran.** The new
+  condition `InstallerImageUnverified` is set when an installer image runs with its signature
+  skipped (the Ichor upgrade's Job or the Cilium Helm Job). A later verified upgrade, or one that
+  clears `spec.installerSignature`, does not remove it; a person removes it from
+  `status.conditions`. `ichor version` prints an `unverified image` row (and
+  `uncheckedImageRanSince` in JSON and YAML), and the UI's version badge and Overview keep
+  saying so. No CRD field is added. See ADR 0122.
 
 ### Storage
 

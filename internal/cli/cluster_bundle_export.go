@@ -48,7 +48,9 @@ cluster) needs this one.
 
 After the file is written it is read back; only if it holds the live bundle does the command mark the
 TalosCluster as exported, which clears its BundleBackupStale condition. The bundle is never printed.
-It refuses while a CA rotation is still under way, because the bundle is about to change.`,
+It refuses while a CA rotation is still under way, because the bundle is about to change.
+
+` + bundleSecretRoleNote,
 	Example: `  ichor export bundle prod
   ichor export bundle prod --bundle-passphrase-file /run/secrets/bundle-pass`,
 	Args: cobra.ExactArgs(1),

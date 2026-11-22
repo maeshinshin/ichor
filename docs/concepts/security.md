@@ -41,7 +41,17 @@ Roles are plain Kubernetes RBAC. Three ClusterRoles, `ichor-viewer`,
 `ichor:operator` and `ichor:admin`. None of them holds `secrets`, `impersonate`
 or `cluster-admin`.
 
-![The three roles as nested sets: viewer inside operator inside admin, with the subresource verbs each one adds (approve and download for the operator; start, override, reclaim, update and download for the admin). Beside them, the path of a hand-written resource: authentication, RBAC, the admission webhooks, then storage and reconciliation. No role holds secrets, impersonate or cluster-admin.](../images/roles.light.drawio.svg)
+One more Role is bound to nobody by default: `ichor-bundle-secret-role`, in the
+namespace Ichor runs in. It grants `get` on the Secrets named in the chart value
+`rbac.bundleSecret.names` (a cluster's `secretsRef`, `<cluster>-secrets` by
+default) and on nothing else; with no names the Role is not installed. The four
+commands that read the secrets bundle (`ichor create credentials`, `ichor export
+bundle`, the credential hand-off of `ichor rotate ca`, and `ichor adopt
+--add-machine`) need it, bound with a RoleBinding in that namespace. The Secret
+holds every CA key of the cluster, so bind it only to people you would give
+`os:admin`.
+
+![The three roles as nested sets: viewer inside operator inside admin, with the subresource verbs each one adds (approve and download for the operator; start, override, reclaim, update and download for the admin). Beside them, the path of a hand-written resource: authentication, RBAC, the admission webhooks, then storage and reconciliation. No role of the three holds secrets, impersonate or cluster-admin.](../images/roles.light.drawio.svg)
 
 *Each role includes the one inside it, and a hand-written resource gets the same checks as one made in the UI.*
 

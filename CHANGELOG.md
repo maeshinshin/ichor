@@ -167,6 +167,7 @@ command does. Each item is described where it is listed below.
   release archive, verifies the signed checksums file and the archive against it
   (no way to skip), and renames the binary over the running one; `ichor upgrade cli VERSION` picks
   that release, `--check` changes nothing. The update notice now names it (ADR 0171).
+- **A documented role grants exactly the secrets bundle Secret.** `ichor create credentials`, `ichor export bundle`, the credential hand-off of `ichor rotate ca` and `ichor adopt --add-machine` read that Secret, and no role held `secrets`, so they needed cluster-admin. The chart's `rbac.bundleSecret.names` installs `ichor-bundle-secret-role`, `get` on the named Secrets in Ichor's namespace and nothing else; `docs/concepts/security.md` and the four commands' help say to bind it.
 - **A second `ichor init` says the cluster is already initialised.** It used to
   fail with the raw Kubernetes "already exists" error on the secrets bundle Secret;
   it now names the cluster as initialised and the Secret that exists, and both ways

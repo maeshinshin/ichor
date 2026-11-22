@@ -27,7 +27,9 @@ cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig
 written next to your current kubeconfig and talosconfig with the suffix .ichor-new
 (never over them), unless --kubeconfig-out and --talosconfig-out say otherwise.
 
-By default the CAs are read from the cluster's secrets bundle Secret. While a CA rotation is under way
+By default the CAs are read from the cluster's secrets bundle Secret. Reading the secrets bundle Secret needs get on that one Secret in --ichor-namespace. Bind the
+Role ichor-bundle-secret-role (installed when the chart's rbac.bundleSecret.names lists the Secret) to
+yourself with a RoleBinding in that namespace; it grants get on the named Secrets and nothing else. While a CA rotation is under way
 the files trust the old and the new CAs and are signed by the new one, which every node accepts from
 the moment the rotation waits for credentials: they keep working after the old CA is dropped.
 

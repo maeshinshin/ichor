@@ -20,6 +20,10 @@ After the file is written it is read back; only if it holds the live bundle does
 TalosCluster as exported, which clears its BundleBackupStale condition. The bundle is never printed.
 It refuses while a CA rotation is still under way, because the bundle is about to change.
 
+Reading the secrets bundle Secret needs get on that one Secret in --ichor-namespace. Bind the
+Role ichor-bundle-secret-role (installed when the chart's rbac.bundleSecret.names lists the Secret) to
+yourself with a RoleBinding in that namespace; it grants get on the named Secrets and nothing else.
+
 ```sh
 ichor export bundle NAME [flags]
 ```

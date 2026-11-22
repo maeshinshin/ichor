@@ -145,7 +145,9 @@ adoption or its TalosMachine was deleted. adopt reads it, plans it in the same t
 classes, creates a held TalosMachine and releases the hold after the zero-drift check.
 A node of another Talos cluster is refused; "ichor reclaim node" resets it. The
 secrets bundle is read from the cluster's own Secret unless you pass one of the flags
-above, and --talosconfig may come from "ichor create credentials".
+above, and --talosconfig may come from "ichor create credentials". Reading the Secret needs get on it
+in --ichor-namespace: bind the Role ichor-bundle-secret-role (chart value rbac.bundleSecret.names) with a
+RoleBinding in that namespace; it grants get on the named Secrets and nothing else.
 
 adopt only reads the Talos nodes (using --talosconfig); it never applies
 configuration to them. Afterwards it advises a CA rotation, since adopted

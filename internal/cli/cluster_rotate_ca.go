@@ -118,6 +118,8 @@ runs in the controller. The files' contents are never printed. If this command i
 'ichor create credentials NAME --bundle FILE --kube-server URL --talos-endpoints ADDRESS' makes credentials
 from a current bundle file; the bundle holds the CAs, and the flags supply the addresses it does not hold.
 
+The hand-off reads the cluster's secrets bundle Secret. ` + bundleSecretRoleNote + `
+
 Before it starts, every node must answer, run the configuration Ichor renders for it, and every
 Kubernetes Node must be Ready; otherwise the operation pauses without changing anything. While it
 runs, the TalosMachine controller does not reconcile the cluster's nodes and other disruptive

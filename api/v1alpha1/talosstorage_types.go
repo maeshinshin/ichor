@@ -25,7 +25,7 @@ import (
 // TalosStorageSpec defines the desired state of TalosStorage. It stays thin on purpose (design
 // section "Storage"): which nodes, which disk preset, how disks are handed to the storage
 // system, and evacuation settings. The storage system's own configuration (Longhorn's Helm
-// values, replica counts, and so on) lives in Argo CD, not here -- Ichor only owns layer 1
+// values, replica counts, and so on) lives with whatever installs it, not here -- Ichor only owns layer 1
 // (Talos-side preparation) and layer 4 (node-operation coordination, a separate work unit).
 // +kubebuilder:validation:XValidation:rule="self.diskPreset != 'longhorn-v1' || (has(self.diskSelector) && size(self.diskSelector) > 0)",message="diskSelector is required for longhorn-v1"
 // +kubebuilder:validation:XValidation:rule="self.diskPreset != 'rook-v1' || !has(self.diskSelector)",message="rook-v1 writes no disk config, so a diskSelector would do nothing: remove spec.diskSelector. To move a TalosStorage from longhorn-v1 to rook-v1, change diskPreset and remove diskSelector in one update"
@@ -66,8 +66,8 @@ type TalosStorageSpec struct {
 // TalosStorageStatus defines the observed state of TalosStorage.
 type TalosStorageStatus struct {
 	// conditions represent the current state of the TalosStorage resource, kstatus-compatible.
-	// Ready reports whether the Talos side (layer 1) is prepared, so Argo CD's sync wave can hold
-	// the storage system's Application until this is true (design section "Storage").
+	// Ready reports whether the Talos side (layer 1) is prepared, so whatever installs the storage system can hold
+	// it until this is true (design section "Storage").
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

@@ -43,7 +43,7 @@ Version v1alpha1: has a `status` subresource.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `status` | `object` | no | status defines the observed state of TalosStorage |
-| `status.conditions` | `[]object` | no | conditions represent the current state of the TalosStorage resource, kstatus-compatible. Ready reports whether the Talos side (layer 1) is prepared, so Argo CD's sync wave can hold the storage system's Application until this is true (design section "Storage"). |
+| `status.conditions` | `[]object` | no | conditions represent the current state of the TalosStorage resource, kstatus-compatible. Ready reports whether the Talos side (layer 1) is prepared, so whatever installs the storage system can hold it until this is true (design section "Storage"). |
 | `status.conditions[].lastTransitionTime` | `string (date-time)` | yes | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed. If that is not known, then using the time when the API field changed is acceptable. |
 | `status.conditions[].message` | `string` | yes | message is a human readable message indicating details about the transition. This may be an empty string. |
 | `status.conditions[].observedGeneration` | `integer` | no | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance. |

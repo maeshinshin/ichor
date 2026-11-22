@@ -86,12 +86,12 @@ type TalosClusterCNICilium struct {
 	Values *apiextensionsv1.JSON `json:"values,omitempty"`
 }
 
-// TalosClusterCNICustomSource is an Argo CD Application source for a user-supplied CNI: a Helm
+// TalosClusterCNICustomSource is the source of a user-supplied CNI: a Helm
 // chart or a directory of plain manifests in a Git repository. Exactly one of chart or path is
-// set, matching Argo CD's own ApplicationSource union.
+// set. It is deprecated and unused.
 // +kubebuilder:validation:XValidation:rule="(has(self.chart) ? 1 : 0) + (has(self.path) ? 1 : 0) == 1",message="exactly one of chart or path must be set"
 type TalosClusterCNICustomSource struct {
-	// repoURL is the Git or Helm repository Argo CD syncs from.
+	// repoURL is the Git or Helm repository the CNI is fetched from.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	RepoURL string `json:"repoURL"`
@@ -104,7 +104,7 @@ type TalosClusterCNICustomSource struct {
 	// +optional
 	Chart string `json:"chart,omitempty"`
 
-	// targetRevision is the Git ref or chart version Argo CD syncs.
+	// targetRevision is the Git ref or chart version to fetch.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	TargetRevision string `json:"targetRevision"`
@@ -114,7 +114,7 @@ type TalosClusterCNICustomSource struct {
 // kept so the CRD never drops a field. It declares a user-supplied CNI's chart/manifest source.
 // Its documents field, a second copy of the Talos document union, was retired in ADR 0152.
 type TalosClusterCNICustom struct {
-	// source points Argo CD at the chart or manifests for this CNI.
+	// source points at the chart or manifests for this CNI.
 	// +required
 	Source TalosClusterCNICustomSource `json:"source"`
 }
@@ -143,8 +143,8 @@ type TalosClusterCNI struct {
 	Preset string `json:"preset,omitempty"`
 
 	// kubeProxy is enabled (Talos's own default) or replaced by the CNI. Replacing it splits the
-	// setting across two owners -- Talos (cluster.proxy.disabled, written by Ichor) and the CNI
-	// (written by Argo CD) -- so a consistency check reads the CNI's live configuration and
+	// setting across two places -- Talos (cluster.proxy.disabled) and the Cilium release
+	// (kubeProxyReplacement), both written by Ichor -- so a consistency check reads the CNI's live configuration and
 	// reports a mismatch as a health failure.
 	// +kubebuilder:validation:Enum=enabled;replaced
 	// +kubebuilder:default=enabled

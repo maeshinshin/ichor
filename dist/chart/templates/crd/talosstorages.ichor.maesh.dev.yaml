@@ -163,8 +163,8 @@ spec:
               conditions:
                 description: |-
                   conditions represent the current state of the TalosStorage resource, kstatus-compatible.
-                  Ready reports whether the Talos side (layer 1) is prepared, so Argo CD's sync wave can hold
-                  the storage system's Application until this is true (design section "Storage").
+                  Ready reports whether the Talos side (layer 1) is prepared, so whatever installs the storage system can hold
+                  it until this is true (design section "Storage").
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

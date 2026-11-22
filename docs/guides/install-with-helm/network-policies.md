@@ -4,15 +4,16 @@ sidebar_order: 3
 
 # Network policies
 
-On a Cilium cluster, `ichor-system` is default-deny in both directions with one allow per flow. The chart renders the policies (`networkPolicy.cilium.enabled`); `ichor init` and the installer Job apply the same set elsewhere. No fixed rule allows anything outside the cluster: the controller names what Ichor reaches, in three policies of its own.
+On a Cilium cluster, `ichor-system` is default-deny in both directions with one allow per flow. The chart renders the policies (`networkPolicy.cilium.enabled`); `ichor init` and the installer Job apply the same set elsewhere. No fixed rule allows anything outside the cluster: the controller names what Ichor reaches, in policies of its own.
 
-![ichor-system is default-deny. The controller and ichor-ui reach Talos nodes, the registries and the OIDC issuer through three controller-kept policies; a scraper you name may reach the metrics port 8443.](../../images/ih-network-policies.light.drawio.svg)
+![ichor-system is default-deny. The controller and ichor-ui reach Talos nodes, the registries and the OIDC issuer through controller-kept policies; a scraper you name may reach the metrics port 8443.](../../images/ih-network-policies.light.drawio.svg)
 
 *Default-deny plus one allow per flow.*
 
 | Policy | Allows | Taken from |
 |---|---|---|
-| `ichor-controller-talos-egress` | controller and ichor-ui to Talos nodes and cluster endpoints; controller to S3 stores and to the Image Factory of a cluster with a `TalosStorage` (`spec.imageFactoryURL`, default `https://factory.talos.dev`) | endpoints and addresses of `TalosCluster`, `TalosMachine`, `MachineReclaim`, `TalosEtcdBackup` |
+| `ichor-controller-talos-egress` | controller and ichor-ui to Talos nodes and cluster endpoints; controller to S3 stores | endpoints and addresses of `TalosCluster`, `TalosMachine`, `MachineReclaim`, `TalosEtcdBackup` |
+| `ichor-controller-talos-egress-image-factory` | the controller only (`control-plane=controller-manager`), never ichor-ui, to the Image Factory of a cluster with a `TalosStorage` (`spec.imageFactoryURL`, default `https://factory.talos.dev`) | `spec.imageFactoryURL` of each such `TalosCluster`; absent when none has a `TalosStorage` |
 | `ichor-controller-release-check` | controller to the release check's chart and image registries | the controller's configured repositories; absent while `updateCheck` is off |
 | `ichor-ui-oidc-egress` | ichor-ui to its external OIDC issuer | `ICHOR_OIDC_ISSUER` or `--oidc-issuer` of the ichor-ui Deployment (a change takes about a minute); absent without one |
 

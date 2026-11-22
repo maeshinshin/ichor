@@ -44,7 +44,7 @@ import (
 
 // TalosStorage status condition types and reasons.
 const (
-	// conditionStorageReady is the condition Argo CD's health check reads: True once every
+	// conditionStorageReady is the condition that gates installing the storage system: True once every
 	// approved machine this TalosStorage governs has converged on a render that includes it and
 	// carries the Talos system extensions the preset needs.
 	conditionStorageReady = "Ready"
@@ -375,7 +375,7 @@ func (r *TalosStorageReconciler) extensionsCondition(
 }
 
 // systemCondition reads the storage system's own setting through the preset's consistency check.
-// An absent storage system is Unknown/NotInstalled, not an error: installing it is Argo CD's job
+// An absent storage system is Unknown/NotInstalled, not an error: installing it is not Ichor's job
 // (layer 2), and this condition does not gate Ready.
 func (r *TalosStorageReconciler) systemCondition(
 	ctx context.Context, ts *ichorv1alpha1.TalosStorage,

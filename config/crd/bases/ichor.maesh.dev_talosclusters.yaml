@@ -200,8 +200,8 @@ spec:
                       the chart/manifest source for a user-supplied CNI.
                     properties:
                       source:
-                        description: source points Argo CD at the chart or manifests
-                          for this CNI.
+                        description: source points at the chart or manifests for this
+                          CNI.
                         properties:
                           chart:
                             description: chart is a Helm chart name within repoURL;
@@ -212,13 +212,13 @@ spec:
                               plain manifests; set instead of chart.
                             type: string
                           repoURL:
-                            description: repoURL is the Git or Helm repository Argo
-                              CD syncs from.
+                            description: repoURL is the Git or Helm repository the
+                              CNI is fetched from.
                             minLength: 1
                             type: string
                           targetRevision:
                             description: targetRevision is the Git ref or chart version
-                              Argo CD syncs.
+                              to fetch.
                             minLength: 1
                             type: string
                         required:
@@ -236,8 +236,8 @@ spec:
                     default: enabled
                     description: |-
                       kubeProxy is enabled (Talos's own default) or replaced by the CNI. Replacing it splits the
-                      setting across two owners -- Talos (cluster.proxy.disabled, written by Ichor) and the CNI
-                      (written by Argo CD) -- so a consistency check reads the CNI's live configuration and
+                      setting across two places -- Talos (cluster.proxy.disabled) and the Cilium release
+                      (kubeProxyReplacement), both written by Ichor -- so a consistency check reads the CNI's live configuration and
                       reports a mismatch as a health failure.
                     enum:
                     - enabled

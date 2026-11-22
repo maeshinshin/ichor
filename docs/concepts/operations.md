@@ -119,6 +119,6 @@ A kind that can take a cluster down needs its own verb, `start` on a
 subresource such as `talosoperations/ca-rotation`, held only by `ichor-admin`
 ([Security model](security.md)).
 
-Related: [`ichor get operations`](../reference/cli/ichor_get_operations.md),
+Related: [Node actions](../guides/node-actions.md), [Shutdown and power](../guides/shutdown-and-power.md), [`ichor get operations`](../reference/cli/ichor_get_operations.md),
 [`ichor upgrade`](../reference/cli/ichor_upgrade.md),
 [`ichor reboot node`](../reference/cli/ichor_reboot_node.md).

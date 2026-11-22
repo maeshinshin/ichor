@@ -37,6 +37,7 @@ Ichor-ui cannot run without a login.
 
 ## Where to go next
 
+- [The web UI](../the-web-ui.md) for a tour of the pages.
 - [Settings](../settings.md), [Hardening](../hardening.md) and
   [Users and login](../users-and-login.md) for what to configure first.
 - [Install Ichor with Helm](../install-with-helm.md) and

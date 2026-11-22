@@ -59,7 +59,9 @@ storage, monitoring, GitOps tools and air-gapped installs. Changes:
   machine](guides/reclaim-a-machine.md).
 - [Users and login](guides/users-and-login.md), [Settings](guides/settings.md),
   [Hardening](guides/hardening.md).
-- [Rotating keys](guides/rotate-keys.md).
+- [Rotating keys](guides/rotate-keys.md), [Replace a control plane](guides/replace-a-control-plane.md).
+- [Node actions](guides/node-actions.md), [Shutdown and power](guides/shutdown-and-power.md), [The web UI](guides/the-web-ui.md).
+- [Troubleshooting](guides/troubleshooting.md), [Metrics and monitoring access](guides/metrics-and-monitoring-access.md).
 - Storage: [Longhorn](guides/longhorn.md) or [Rook/Ceph](guides/rook-ceph.md).
 - Concepts: [Certificate names](concepts/certificate-names.md), [Sign-in and
   sessions](concepts/sign-in-and-sessions.md).

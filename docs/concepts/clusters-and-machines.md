@@ -86,4 +86,6 @@ stored, so it watches the stage.
   consent; refused if it would break its own cluster's etcd quorum. In the
   cluster it is a [`MachineReclaim`](../reference/crds/machinereclaim.md).
 
+Replacing a control plane: [Replace a control plane](../guides/replace-a-control-plane.md).
+
 Next: [Operations](operations.md).

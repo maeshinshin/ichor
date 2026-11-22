@@ -23,8 +23,10 @@ layers.
 - Kubernetes 1.34 or later. Longhorn's installation requirements (docs 1.14.0)
   say "Kubernetes >= v1.34".
 - A spare disk on each storage node, such as `/dev/vdb`.
-- Longhorn installed in the `longhorn-system` namespace. Ichor's evacuation hook
-  reads Longhorn's objects there and nowhere else.
+- Longhorn installed in the `longhorn-system` namespace, and nowhere else. The
+  namespace is fixed in the controller and no `TalosStorage` field or flag
+  changes it. With Longhorn elsewhere, a node no replica names is treated as
+  having nothing to evacuate, so a drain does not wait for its replicas.
 
 ## Prepare the nodes
 
@@ -57,7 +59,7 @@ layers.
 3. Roll the config out:
 
    ```sh
-   ichor rollout config
+   ichor rollout config --cluster my-cluster
    ```
 
 | Result | Condition |
@@ -129,6 +131,7 @@ count.
 ## Drains
 
 - Ichor evicts pods through the Eviction API, so PodDisruptionBudgets apply.
-- A pod with no controller is refused: "cannot delete Pods that declare no
-  controller".
+- A pod with no controller is refused. The drain's error reads "cannot delete
+  Pods that declare no controller (use --force to override)", and Ichor does not
+  force.
 - Run workloads under a Deployment or StatefulSet.

@@ -21,8 +21,8 @@ limitations under the License.
 package secureboot
 
 import (
-	"net/url"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 

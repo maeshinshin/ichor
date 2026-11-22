@@ -768,7 +768,11 @@ command does. Each item is described where it is listed below.
   `Ready` is False with reason `ExtensionsMissing`, naming the extensions and the
   operation. A cluster whose `spec.schematic.id` is a custom schematic is left
   alone: `Ready` is False with reason `SchematicNotMergeable` and says what to build
-  into it. The controller needs to reach `factory.talos.dev` on port 443 (ADR 0173).
+  into it. The controller needs to reach the Image Factory over https (ADR 0173).
+- **`TalosCluster.spec.imageFactoryURL` names a self-hosted or air-gapped Image Factory.** Unset
+  keeps `https://factory.talos.dev`. It is the factory a storage preset's schematic is registered at, and
+  the host of the installer image Ichor renders for the Talos upgrade, `ichor init` and the install
+  default of an approval. The webhook accepts an https URL with a host and optional port, and no path.
 - **`TalosStorage` takes a second disk preset, `rook-v1`, for Rook/Ceph.** A node
   that `rook-v1` governs gets no Talos volume, no kubelet mount and no node label.
   Talos writes no disk configuration for it, and the disk is left for Rook to take

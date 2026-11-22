@@ -18,11 +18,11 @@ package controller
 
 import (
 	"fmt"
-	"os"
-	"slices"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -54,7 +54,7 @@ func TestImageFactoryClientPostsTheSchematicOnceAndRemembersTheID(t *testing.T) 
 	defer srv.Close()
 
 	c := &ImageFactoryClient{}
-	ext := []string{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}
+	ext := []string{iscsiToolsExt, "siderolabs/util-linux-tools"}
 
 	for range 2 {
 		id, err := c.Register(t.Context(), srv.URL, ext)
@@ -93,7 +93,7 @@ func TestImageFactoryClientAsksTheFactoryItIsGiven(t *testing.T) {
 	for i := range servers {
 		servers[i] = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			hits[i].Add(1)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"id":"from-%d"}`, i)))
+			_, _ = fmt.Fprintf(w, `{"id":"from-%d"}`, i)
 		}))
 		defer servers[i].Close()
 	}
@@ -101,7 +101,7 @@ func TestImageFactoryClientAsksTheFactoryItIsGiven(t *testing.T) {
 	c := &ImageFactoryClient{}
 
 	for i, srv := range servers {
-		id, err := c.Register(t.Context(), srv.URL, []string{"siderolabs/iscsi-tools"})
+		id, err := c.Register(t.Context(), srv.URL, []string{iscsiToolsExt})
 		if err != nil || id != fmt.Sprintf("from-%d", i) {
 			t.Fatalf("factory %d: Register = %q, %v", i, id, err)
 		}

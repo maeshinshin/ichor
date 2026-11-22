@@ -45,7 +45,6 @@ const (
 	reasonStorageExtensionsMissing     = "ExtensionsMissing"
 	reasonStorageSchematicNotMergeable = "SchematicNotMergeable"
 	reasonStorageSchematicUnavailable  = "SchematicUnavailable"
-
 )
 
 // SchematicRegistrar turns a set of official system extensions into a schematic ID at the Image Factory

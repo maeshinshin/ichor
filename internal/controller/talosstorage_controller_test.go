@@ -44,6 +44,7 @@ const (
 
 	storageTestEndpoint = "10.0.0.10:50000"
 
+	iscsiToolsExt     = "siderolabs/iscsi-tools"
 	iscsiToolsVersion = "v0.2.0"
 	utilLinuxVersion  = "2.41"
 )
@@ -443,7 +444,7 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		got := fetchCluster(cluster)
 		Expect(got.Spec.Schematic).NotTo(BeNil())
 		Expect(got.Spec.Schematic.ID).To(Equal(wantID))
-		Expect(factory.calls).To(Equal([][]string{{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}}))
+		Expect(factory.calls).To(Equal([][]string{{iscsiToolsExt, "siderolabs/util-linux-tools"}}))
 		Expect(factory.urls).To(Equal([]string{ichorv1alpha1.DefaultImageFactoryURL}), "an unset spec.imageFactoryURL is the stock factory")
 
 		ops := storageOps(cluster.Name)
@@ -476,7 +477,7 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		ready := apimeta.FindStatusCondition(got.Status.Conditions, conditionStorageReady)
 		Expect(ready.Status).To(Equal(metav1.ConditionFalse), "message: %s", ready.Message)
 		Expect(ready.Reason).To(Equal(reasonStorageExtensionsMissing))
-		Expect(ready.Message).To(ContainSubstring("siderolabs/iscsi-tools"))
+		Expect(ready.Message).To(ContainSubstring(iscsiToolsExt))
 		Expect(ready.Message).To(ContainSubstring("siderolabs/util-linux-tools"))
 		Expect(ready.Message).To(ContainSubstring(storageOps(cluster.Name)[0].Name))
 		Expect(ready.Message).To(ContainSubstring("waiting for approval"))
@@ -550,7 +551,7 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		ready := apimeta.FindStatusCondition(reconcileStorage(r, s).Status.Conditions, conditionStorageReady)
 		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
 		Expect(ready.Reason).To(Equal(reasonStorageSchematicNotMergeable))
-		Expect(ready.Message).To(ContainSubstring("siderolabs/iscsi-tools"))
+		Expect(ready.Message).To(ContainSubstring(iscsiToolsExt))
 		Expect(fetchCluster(cluster).Spec.Schematic.ID).To(Equal("custom-id"))
 		Expect(storageOps(cluster.Name)).To(BeEmpty())
 	})

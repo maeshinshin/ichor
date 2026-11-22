@@ -17,11 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"net/url"
 	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"slices"
 	"strings"

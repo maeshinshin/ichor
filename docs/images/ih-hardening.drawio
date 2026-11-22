@@ -1,0 +1,16 @@
+<mxfile host="Electron">
+  <diagram id="d" name="d">
+    <mxGraphModel grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="0" page="0" pageScale="1" pageWidth="900" pageHeight="170" math="0" shadow="0">
+      <root>
+        <mxCell id="0" style="html=0;" />
+        <mxCell id="1" parent="0" style="html=0;" />
+        <mxCell id="bg" parent="1" style="rounded=1;arcSize=3;fillColor=light-dark(#FFFFFF,#0A0A0A);strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;html=0;" value="" vertex="1"><mxGeometry x="10" y="10" width="880" height="150" as="geometry" /></mxCell>
+        <mxCell id="ns" parent="1" style="rounded=1;arcSize=3;fillColor=none;strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;dashed=1;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;html=0;" value="ichor-system" vertex="1"><mxGeometry x="24" y="24" width="852" height="120" as="geometry" /></mxCell>
+        <mxCell id="a" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Pod Security&#10;enforce: restricted" vertex="1"><mxGeometry x="45" y="62" width="180" height="66" as="geometry" /></mxCell>
+        <mxCell id="b" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="PriorityClass&#10;ichor-critical 1000000" vertex="1"><mxGeometry x="250" y="62" width="180" height="66" as="geometry" /></mxCell>
+        <mxCell id="c" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Replicas&#10;chart: 2 and budgets" vertex="1"><mxGeometry x="455" y="62" width="180" height="66" as="geometry" /></mxCell>
+        <mxCell id="d" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Network policies&#10;default-deny" vertex="1"><mxGeometry x="660" y="62" width="180" height="66" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

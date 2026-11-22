@@ -264,3 +264,7 @@ The UI has the same switch under the cluster's details; in a manifest it is
 - It needs `spec.versionContract` v1.14 or later. The default is `false`.
 
 See [ADR 0172](../adr/0172-containerd-device-ownership-is-a-typed-cluster-setting-rendered-as-a-cri-customization.md).
+
+## Related
+
+For Longhorn instead, see [Longhorn](longhorn.md).

@@ -2,7 +2,7 @@
 .claude/settings.local.json
 result
 
-bin/*
+/bin
 
 # Test binary, built with `go test -c`
 *.test

@@ -33,7 +33,7 @@ func TestDownDemoPrefixIgnoresScale(t *testing.T) {
 		return out
 	}
 	vms := append(lab("lh", "cp", "w", "w2", "w3"), lab("big", "cp", "cp2", "cp3", "w", "w2")...)
-	keep := []string{"lh2-cp", "lh-cp-x", "lhx-w", "xlh-cp", "ichor-e2e-talos-v1-9-abcd1234-base"}
+	keep := []string{"lh2-cp", "lh-cp-x", "lhx-w", "xlh-cp", "e2e-talos-v1-9-abcd1234-base"}
 	store := map[string][]string{"vm": append(slices.Clone(vms), keep...), "dv": {}}
 
 	for _, v := range vms {

@@ -457,9 +457,9 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 # $2 - package url which can be installed
 # $3 - specific version of package
 define go-install-tool
-@# readlink fails when the tool is not installed yet, which the install below handles. go version reports the Go a
+@# realpath (not readlink) so a bin/ that is a symlink to another checkout counts as installed; it fails when the tool is not installed yet, which the install below handles. go version reports the Go a
 @# binary was built with; a rebuild replaces the plugin-enabled golangci-lint, which its target then rebuilds.
-@[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] && [ "$$(go version "$(1)-$(3)" 2>/dev/null | awk '{print $$NF}')" = "$$(go env GOVERSION)" ] || { \
+@[ -f "$(1)-$(3)" ] && [ "$$(realpath -- "$(1)" 2>/dev/null)" = "$$(realpath -- "$(1)-$(3)")" ] && [ "$$(go version "$(1)-$(3)" 2>/dev/null | awk '{print $$NF}')" = "$$(go env GOVERSION)" ] || { \
 set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\

@@ -7,90 +7,47 @@ sidebar_order: 45
 
 # Certificate names
 
-A cluster serves two certificates that clients check, and they do not carry the
-same names. This page says what each one holds by default, so you can answer
-"can I point this client at that address?" without reading any code. You do
-not configure anything to get the defaults.
+`talosctl` and `kubectl` check different certificates, and the two carry
+different names. The defaults need no configuration.
 
-## Two certificates, two lists
+![Two certificates. The Talos API certificate on every node lists the node's own addresses, 127.0.0.1, the hostname and machine.certSANs. The Kubernetes API certificate on each control plane lists the endpoint, the control plane's addresses, the service IP and kubernetes.default names. Names from --cert-san go into both.](../images/certificate-names.light.drawio.svg)
+
+*What each certificate holds, and where your own names go.*
+
+## What each certificate holds
 
 | | Talos API | Kubernetes API |
 |---|---|---|
-| Used by | `talosctl` | `kubectl` |
-| Served by | `apid` on every node, port 50000 | `kube-apiserver` on every control plane, port 6443 |
-| Present on | control planes and workers | control planes only |
-
-The two lists are different. A name that works for `kubectl` does not
-necessarily work for `talosctl`, and the reverse.
-
-## What the Talos API certificate holds
-
-Each node's Talos API certificate holds:
-
-- the node's own addresses: every address the node holds at link scope or wider,
-  except loopback, link-local and multicast addresses;
-- `127.0.0.1`;
-- the node's hostname and its fully qualified name;
-- `machine.certSANs` from the node's configuration: the names you add with
-  `--cert-san` (see below), and the address `ichor init` wrote for the first
-  node. That address is in every node's configuration, so it is in the list
-  even on a node that does not hold it.
-
-It does not hold the cluster endpoint, the service IP or the in-cluster names.
-
-## What the Kubernetes API certificate holds
-
-Each control plane's kube-apiserver certificate holds:
-
-- the cluster endpoint's host: the address or DNS name in `--endpoint-address`,
-  such as the VIP. This is why `kubectl` works through the endpoint;
-- the control plane's own addresses, except those in the pod and service ranges;
-- the service IP: the first address of the service range, `10.96.0.1` with the
-  default `10.96.0.0/12`;
-- `kubernetes`, `kubernetes.default`, `kubernetes.default.svc` and
-  `kubernetes.default.svc.cluster.local` (`cluster.local` is the default DNS
-  domain);
-- `localhost` and `127.0.0.1`;
-- the control plane's hostname and fully qualified name;
-- the names you add with `--cert-san`.
-
-Its certificate is reissued whenever its node's addresses change, so a control
-plane that gets a new address picks it up without any action from you.
+| Client | `talosctl` | `kubectl` |
+| Served by | `apid`, port 50000, every node | `kube-apiserver`, port 6443, control planes |
+| Addresses | the node's own, except loopback, link-local and multicast | the control plane's own, except pod and service ranges; reissued when they change |
+| Endpoint | no | yes (the host of `--endpoint-address`) |
+| Fixed names | `127.0.0.1`, hostname, FQDN | `localhost`, `127.0.0.1`, hostname, FQDN, the service IP (`10.96.0.1` by default), `kubernetes`, `kubernetes.default`, `kubernetes.default.svc`, `kubernetes.default.svc.cluster.local` |
+| Your names | `machine.certSANs`, which also holds the address `ichor init` wrote for the first node | `--cert-san` names |
 
 ## Can I use this address?
 
 | Client and address | Answer | Why |
 |---|---|---|
-| `kubectl` to the endpoint (VIP, load balancer or DNS name) | yes | the endpoint is in every control plane's Kubernetes API certificate |
-| `kubectl` to one control plane's own address, bypassing the VIP | yes | that control plane's certificate lists its own addresses. This is what to use during an outage |
-| `kubectl` to another control plane's address | yes | each control plane's certificate lists its own addresses |
-| `talosctl` to a node's own address | yes | every node's Talos API certificate lists its own addresses |
-| `talosctl` to the VIP or the endpoint | not reliably | the endpoint is not in the Talos API certificate. A VIP is listed only in the certificate of the node that holds it, and it moves on failover. Point `talosctl` at node addresses |
-| any other name (a DNS name, a load balancer's name) | only if you add it | use `--cert-san` at `init`, or the names in the next section |
+| `kubectl` to the endpoint (VIP, load balancer, DNS name) | yes | the endpoint is in every control plane's certificate |
+| `kubectl` to a control plane's own address | yes | use this during an outage |
+| `talosctl` to a node's own address | yes | every node lists its own addresses |
+| `talosctl` to the VIP or the endpoint | not reliably | the endpoint is not in the Talos API certificate, and a VIP is listed only on the node that holds it. Use node addresses |
+| any other name | only if you add it | `--cert-san` |
 
 ## Adding names
 
-Pass `--cert-san` to `ichor init`, once for each name or IP address, or set
-`cluster.certSANs` in the `-f` file. Up to 64 names, each up to 253 characters.
+Pass `--cert-san` to `ichor init` once per name or IP address, or set
+`cluster.certSANs` in the `-f` file. Up to 64 names, 253 characters each. Each
+name goes into both certificates. The value is stored as `spec.certSANs` on the
+`TalosCluster`.
 
 ```text
 ichor init --cluster home --endpoint-type vip --endpoint-address 192.168.0.210 \
   --cert-san ichor.lan --cert-san 192.168.0.250 ...
 ```
 
-Each name goes into both certificates. A name you add is therefore accepted by
-`talosctl` and by `kubectl`, and a name you do not add is accepted by neither
-unless it is a node address, the endpoint or one of the names listed above.
-
-The value is stored as `spec.certSANs` on the `TalosCluster`, the one place
-these names are set.
-
-## Changing the names later costs a reboot
-
-`spec.certSANs` is part of every node's machine configuration. Changing it on
-an existing cluster reissues the certificates on every node, and every node
-reboots to apply it. The kube-apiserver on each control plane restarts as well.
-Adding a name is the same change as removing one.
-
-Set the names at `init` when you can. Editing `spec.certSANs` later works, but
-plan a reboot of the whole cluster for it.
+> [!WARNING]
+> `spec.certSANs` is part of every node's machine configuration. Adding or
+> removing a name reissues the certificates, reboots every node and restarts
+> each kube-apiserver. Set the names at `init`.

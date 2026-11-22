@@ -1,0 +1,67 @@
+<mxfile host="Electron">
+  <diagram id="Typed configuration" name="Typed configuration">
+    <mxGraphModel grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="0" page="0" pageScale="1" pageWidth="900" pageHeight="400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" style="html=0;" />
+        <mxCell id="1" parent="0" style="html=0;" />
+        <mxCell id="pn" parent="1" style="rounded=1;arcSize=3;fillColor=light-dark(#FFFFFF,#0A0A0A);strokeColor=light-dark(#E5E5E5,#262626);strokeWidth=1;html=0;" value="" vertex="1">
+          <mxGeometry x="10" y="10" width="880" height="380" as="geometry" />
+        </mxCell>
+        <mxCell id="l1" parent="1" style="text;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;fontStyle=1;align=left;verticalAlign=middle;html=0;" value="At build time: make generate writes the schema and the types" vertex="1">
+          <mxGeometry x="24" y="22" width="500" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="l2" parent="1" style="text;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;fontStyle=1;align=left;verticalAlign=middle;html=0;" value="At render time: the controller turns the patch into Talos documents" vertex="1">
+          <mxGeometry x="24" y="204" width="500" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="m" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Talos machinery&#xa;the only place the&#xa;field catalogue lives" vertex="1">
+          <mxGeometry x="20" y="54" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="g" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="mirrorgen&#xa;mirror types, converters,&#xa;round-trip test per kind" vertex="1">
+          <mxGeometry x="230" y="54" width="170" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="i" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="ichorgen + place.go&#xa;one row per document kind&#xa;writes pkg/ichorconfig" vertex="1">
+          <mxGeometry x="450" y="54" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="c" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="CRD schema of&#xa;TalosConfigPatch&#xa;spec.config" vertex="1">
+          <mxGeometry x="700" y="54" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="TalosConfigPatch&#xa;spec.config: typed,&#xa;sparse, no raw YAML" vertex="1">
+          <mxGeometry x="20" y="240" width="170" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="r" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;fontColor=light-dark(#1E1B4B,#E0E7FF);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Render&#xa;the ichor tag names the&#xa;documents and paths&#xa;of each setting" vertex="1">
+          <mxGeometry x="240" y="240" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFFFF,#1A1A1A);strokeColor=light-dark(#A3A3A3,#525252);strokeWidth=1.5;fontColor=light-dark(#171717,#FAFAFA);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Talos documents&#xa;v1alpha1 or one&#xa;document per kind" vertex="1">
+          <mxGeometry x="490" y="240" width="190" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="n" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#F0FDF4,#0E2A1B);strokeColor=light-dark(#16A34A,#4ADE80);strokeWidth=1.5;fontColor=light-dark(#14532D,#BBF7D0);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Node" vertex="1">
+          <mxGeometry x="730" y="240" width="150" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="x" parent="1" style="rounded=1;arcSize=12;fillColor=light-dark(#FFFBEB,#2B2008);strokeColor=light-dark(#D97706,#FBBF24);strokeWidth=1.5;fontColor=light-dark(#78350F,#FDE68A);fontFamily=Helvetica;fontSize=13;align=center;verticalAlign=middle;html=0;" value="Talos 1.14 or later for the Kubernetes documents; guards run first" vertex="1">
+          <mxGeometry x="240" y="345" width="440" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" edge="1" parent="1" source="m" target="g" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="g" target="i" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="i" target="c" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="p" target="r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="r" target="d" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="d" target="n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;html=0;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="g" target="r" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=light-dark(#6366F1,#818CF8);strokeWidth=1.5;endArrow=classic;endFill=1;endSize=5;startArrow=none;startFill=1;startSize=5;fontColor=light-dark(#404040,#D4D4D4);fontFamily=Helvetica;fontSize=12;labelBackgroundColor=light-dark(#FFFFFF,#0A0A0A);exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;html=0;dashed=1;dashPattern=5 4;" value="types">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

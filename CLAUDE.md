@@ -23,11 +23,17 @@ Rules that are easy to get wrong:
 - Machine config is typed only (`TalosConfigPatch.spec.config` with the
   Talos machinery types). No raw-YAML escape hatch.
 - UI: preactcn only. No React, no `preact/compat`.
-- The controller is the only writer to Talos nodes and never mutates `spec`, apart
-  from three CLI commands that cannot wait for it: `init`, `restore cluster` and
-  `reclaim node --talosconfig`. Nothing else, and nothing in the UI, writes to a
-  node; a fourth writer is a design change, not a shortcut. UI and CLI otherwise
-  change the world by writing CRs.
+- The controller is the only writer to Talos nodes, apart from three CLI commands
+  that cannot wait for it: `init`, `restore cluster` and `reclaim node --talosconfig`.
+  Nothing else, and nothing in the UI, writes to a node; a fourth writer is a design
+  change, not a shortcut. UI and CLI otherwise change the world by writing CRs.
+- The controller never mutates `spec`. There are two recorded exceptions, each a
+  separate ServiceAccount the controller impersonates, with a webhook limit on what
+  it may write: `ichor-auto-patch` (a newer patch of the running minor in
+  `spec.talosVersion` and `spec.kubernetesVersion`, ADR 0116) and
+  `ichor-storage-extensions` (`spec.schematic.id`, from unset or the stock schematic,
+  to a schematic with the extensions a storage preset needs; `patch` on `talosclusters`
+  only, ADR 0173). A third is a design change, not a shortcut.
 - Ichor owns Cilium (its only CNI) as a Helm release. It does not install or
   operate Argo CD, Kokumi, Flux or any GitOps tooling, nor storage or
   monitoring.

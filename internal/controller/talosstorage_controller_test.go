@@ -222,7 +222,7 @@ var _ = Describe("TalosStorage layer 1 and status", func() {
 			Expect(ready.Reason).To(Equal(reasonStoragePrepared))
 		})
 
-		It("reports governed nodes whose Node lacks the preset's extension labels, without gating Ready", func() {
+		It("reports governed nodes whose Node lacks the preset's extension labels", func() {
 			secret := newTestSecret(bundleRaw)
 			cluster := newTestCluster(secret.Name, "v1.14")
 			labels := map[string]string{storageNodeKey: storageNodeValue}

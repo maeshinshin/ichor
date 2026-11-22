@@ -748,6 +748,19 @@ command does. Each item is described where it is listed below.
 
 ### Storage
 
+- **A `longhorn-v1` `TalosStorage` adds the extensions it needs and is not `Ready`
+  until the nodes have them.** `TalosStorage` used to report `Ready=True` while
+  `ExtensionsPresent` was False, so a preset that could not work looked healthy to a
+  health check. It now registers a schematic with `iscsi-tools` and `util-linux-tools`
+  at Image Factory, writes its ID to `spec.schematic.id` through the new
+  ServiceAccount `ichor-storage-extensions` (which holds `patch` on `talosclusters`
+  only; the controller still writes no spec itself), and creates a Talos upgrade
+  operation that is paused: nothing reboots until you resume it (`ichor resume
+  operation <name>`, or Resume in the UI). Until the nodes carry the extensions,
+  `Ready` is False with reason `ExtensionsMissing`, naming the extensions and the
+  operation. A cluster whose `spec.schematic.id` is a custom schematic is left
+  alone: `Ready` is False with reason `SchematicNotMergeable` and says what to build
+  into it. The controller needs to reach `factory.talos.dev` on port 443 (ADR 0173).
 - **`TalosStorage` takes a second disk preset, `rook-v1`, for Rook/Ceph.** A node
   that `rook-v1` governs gets no Talos volume, no kubelet mount and no node label.
   Talos writes no disk configuration for it, and the disk is left for Rook to take

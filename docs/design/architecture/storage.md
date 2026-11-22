@@ -23,11 +23,20 @@ which renders no Talos volume and leaves the disk to Rook (ADR 0167; the
 [Rook/Ceph guide](../../guides/rook-ceph.md) has the Talos side). `longhorn-v2`
 and `filesystem` follow. `diskSelector` is required by `longhorn-v1` and refused
 by `rook-v1`.
-Missing extensions are reported by the informational `ExtensionsPresent`
-condition on `TalosStorage`, read from the Nodes' `extensions.talos.dev/*`
-labels; it never gates `Ready`. Adding one is an installer-image
-change: a new schematic, which the Talos upgrade treats as an upgrade even when
-the version does not move.
+Missing extensions are reported by the `ExtensionsPresent` condition on
+`TalosStorage`, read from the Nodes' `extensions.talos.dev/*` labels. A node that
+lacks one holds `Ready` at False, reason `ExtensionsMissing`, naming the extensions
+and the upgrade. Adding one is an installer-image change, and
+`machine.install.extensions` does nothing since Talos 1.10, so it takes a new
+schematic and an upgrade that reboots every node, which the Talos upgrade treats as
+an upgrade even when the version does not move. Ichor does the first part (ADR 0173):
+it registers a schematic with the preset's extensions at Image Factory (the controller
+needs to reach `factory.talos.dev` on 443), writes its ID to `spec.schematic.id`
+through the ServiceAccount `ichor-storage-extensions`, and creates a Talos upgrade
+operation that is paused. Nothing reboots until a person resumes it
+(`ichor resume operation <name>`, or Resume in the UI). It does this only over an
+unset or stock schematic: a schematic Ichor cannot read is never changed, and
+`Ready` says which extensions to build into it (reason `SchematicNotMergeable`).
 
 Disks are registered with the storage system through its own node label and
 annotation mechanism, not by writing its CRs. A consistency check confirms the

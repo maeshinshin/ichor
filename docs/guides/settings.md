@@ -31,6 +31,17 @@ webhooks and ichor-ui read them live, with no rollout.
   once an installer image ran with its signature unchecked
   (`spec.installerSignature.mode: skip`), and stays until a person removes it.
 
+## Settings of one cluster
+
+These live on the [`TalosCluster`](../reference/crds/taloscluster.md), not the
+`IchorInstallation`. Each is unset by default and changes nothing until set.
+
+| Field | Does | Set with |
+|---|---|---|
+| `spec.imageFactoryURL` | Base URL (https, host and optional port, no path) of the Image Factory that supplies the cluster's installer images and schematics, including a storage preset's extensions. Unset: `https://factory.talos.dev`. Set it for a self-hosted or air-gapped factory | `kubectl edit`, `ichor edit` |
+| `spec.containerd.deviceOwnershipFromSecurityContext` | Container devices are owned by the pod's `runAsUser` and `fsGroup`, so non-root workloads (KubeVirt VMs, CDI importers) can open a `volumeMode: Block` volume. Restarts containerd on every node, no reboot; running pods keep their ownership until recreated. Needs `versionContract` v1.14 | `ichor set containerd-device-ownership true\|false` |
+| `spec.registries` | Registry mirrors (`host`, `endpoints`, optional `authSecretRef`, `overridePath`, `skipFallback`), pushed to every node | `ichor init --registry-mirror HOST=URL` (anonymous mirrors), or edit the field |
+
 ## The pages
 
 - [Changing settings](settings/changing.md): UI, CLI, who may change what,

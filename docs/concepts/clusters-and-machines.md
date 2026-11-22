@@ -16,6 +16,13 @@ sidebar_order: 10
 The controller renders each machine's effective configuration, applies it and
 reports drift. Design: [architecture](../design/architecture.md), "Nodes".
 
+| To | Use |
+|---|---|
+| See the rendered configuration, each value tagged with the layer that set it (secrets masked) | `ichor describe config` |
+| List, show or delete patches | `ichor get patches`, `ichor describe patch NAME`, `ichor delete patch NAME` |
+| See a patch's impact (reboot, install-time-only fields) before writing it | `ichor preview -f FILE` |
+| Set the Kubernetes Node name, or labels on the Node | `TalosMachine` `spec.hostname` (an RFC 1123 name; default: derived by Talos), `spec.nodeLabels` (on the Node, not on the resource) |
+
 ![The life of a machine. A node in maintenance mode is discovered and becomes a pending TalosMachine; a person approves it, or rejects it (a rejected machine is not discovered again as pending, but a person can still approve it). The controller then configures it, and it becomes Ready. A Ready machine whose disk is wiped is provisioned again by itself; removing it drains the node, leaves etcd, always wipes it (STATE and EPHEMERAL, or more when asked) and deletes its Kubernetes Node, and a node that reboots after the wipe reappears as pending. A node that another cluster configured is reset by a reclaim, typed with its UUID, and then is discovered again.](../images/machine-lifecycle.light.drawio.svg)
 
 *A machine moves forward by discovery, a person's approval and the controller's work; the person's steps are in blue.*

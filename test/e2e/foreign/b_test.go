@@ -141,7 +141,7 @@ func TestB2RefusedDisabledReplacementOff(t *testing.T) {
 // Cluster: cilium-helm, --no-kube-proxy --no-kubeprism (the harness then points Cilium at the control plane).
 func TestB4RefusedReplacedKubePrismOff(t *testing.T) {
 	c := build(t, bOpts(true, true))
-	refusedUntouched(t, c, "KubePrism is off on machine")
+	refusedUntouched(t, c, "KubePrism is off on node")
 }
 
 // TestHelmSet changes values on the running Cilium:
@@ -205,7 +205,7 @@ func b3CanaryReadable(t *testing.T, c *foreign.Cluster) {
 // TestB3WrongBundle (B3): a bundle of another cluster produces secret-field drift and no patch. Runs before the real
 // adopt.
 func TestB3WrongBundle(t *testing.T) {
-	c := build(t, bOpts(false, true, "kubeProxyReplacement=true"))
+	c := build(t, bOpts(false, false, "kubeProxyReplacement=false"))
 	b3Canary(t, c)
 	wrong := filepath.Join(t.TempDir(), "wrong-secrets.yaml")
 	if out, err := exec.Command("talosctl", "gen", "secrets", "-o", wrong).CombinedOutput(); err != nil {

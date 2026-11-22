@@ -7,12 +7,14 @@ const (
 	verbList    = "list"
 	verbWatch   = "watch"
 	verbDelete  = "delete"
+	verbPatch   = "patch"
 )
 
 const autoPatchConfigDir = "../../config/rbac/ichor-auto-patch/"
 
 // TestAutoPatchIdentity pins: the controller never writes a TalosCluster spec, so its own ClusterRole
-// holds no update or patch on talosclusters; it may only impersonate the ServiceAccount ichor-auto-patch, by
+// holds no update on talosclusters, and patch only for the kube-proxy consent sweep (ADR 0066, amendment
+// 2026-11-22: it removes one annotation and nothing else); it may only impersonate the ServiceAccount ichor-auto-patch, by
 // name; and that ServiceAccount holds get and update on talosclusters and create on talosoperations, nothing
 // more. The chart and config/rbac say the same.
 func TestAutoPatchIdentity(t *testing.T) {
@@ -33,8 +35,8 @@ func TestAutoPatchIdentity(t *testing.T) {
 		managers++
 
 		for tr := range rbacTriples(allRules(d)) {
-			reads := tr.verb == verbGetController || tr.verb == verbList || tr.verb == verbWatch
-			if tr.group == ichorGroup && tr.resource == resClusters && !reads {
+			allowed := tr.verb == verbGetController || tr.verb == verbList || tr.verb == verbWatch || tr.verb == verbPatch
+			if tr.group == ichorGroup && tr.resource == resClusters && !allowed {
 				t.Errorf("%s grants %s: the controller never writes a TalosCluster", nameOf(d), tr)
 			}
 

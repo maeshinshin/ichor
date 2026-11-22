@@ -59,7 +59,8 @@ storage, monitoring, GitOps tools and air-gapped installs. Changes:
   machine](guides/reclaim-a-machine.md).
 - [Users and login](guides/users-and-login.md), [Settings](guides/settings.md),
   [Hardening](guides/hardening.md).
-- [Rotating keys](guides/rotate-keys.md), [Longhorn](guides/longhorn.md), [Rook/Ceph](guides/rook-ceph.md).
+- [Rotating keys](guides/rotate-keys.md).
+- Storage: [Longhorn](guides/longhorn.md) or [Rook/Ceph](guides/rook-ceph.md).
 - Concepts: [Certificate names](concepts/certificate-names.md), [Sign-in and
   sessions](concepts/sign-in-and-sessions.md).
 - [Reference](reference/index.md): every command and every custom resource field.

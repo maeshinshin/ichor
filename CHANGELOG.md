@@ -1511,7 +1511,7 @@ paths and nothing could be adopted.
 ### Adopt
 
 - Adopt takes the node's hostname into the `TalosMachine`.
-- Adopt captures the node's legacy `machine.network.interfaces`, its
+- Adopt captures the node's v1alpha1 `machine.network.interfaces`, its
   `ResolverConfig` and its own `machine.certSANs` into the machine's
   `TalosConfigPatch`. The node's own configuration is not changed and no node
   needs a reboot.
@@ -1539,9 +1539,9 @@ paths and nothing could be adopted.
 
 ### Not covered
 
-- Adopt does not convert a node's legacy network configuration to the
-  multi-document form; the node keeps the legacy form until you change it.
-- WireGuard devices in a legacy network configuration are refused.
+- Adopt does not convert a node's v1alpha1 network configuration to the
+  multi-document form; the node keeps the v1alpha1 form until you change it.
+- WireGuard devices in a v1alpha1 network configuration are refused.
 - On the v1.14 contract, kube-apiserver SANs that differ between control planes
   still block adoption.
 - A cluster whose control planes disagree about the default node labels is not

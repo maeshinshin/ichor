@@ -294,6 +294,14 @@ cephFileSystems:
 write only the daemons you change. These numbers are a starting point for a
 small cluster, not a sizing recommendation.
 
+Do not run Rook on a schedulable control plane with only a few GiB of memory
+(3 GiB, say). The control plane's own pods (kube-apiserver, etcd, Cilium) already
+use most of it, and the kubelet evicts pods when less than 100 MiB is available.
+A control plane that runs short of memory fails its kube-apiserver liveness
+probe and restarts it, and a kube-apiserver static pod has been seen evicted
+during a Rook install on one. Taint such a control plane `NoSchedule`, or give
+it more memory, before you install the chart.
+
 ### Upgrade the cluster chart
 
 The Rook operator edits the `CephCluster` and the other custom resources after

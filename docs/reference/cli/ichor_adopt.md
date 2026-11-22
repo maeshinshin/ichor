@@ -107,6 +107,7 @@ ichor adopt [flags]
       --cni-unmanaged                     adopt the cluster with its CNI left exactly as it is: Ichor will not install, upgrade or configure it
       --context string                    context of the talosconfig to use (default: the file's selected context)
   -h, --help                              help for adopt
+      --installer-digest string           pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; for a cluster whose controller cannot reach the registry (a demo behind a mirror)
       --kube-api-server-url string        https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)
       --kube-api-tls-server-name string   tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
   -n, --namespace string                  namespace the TalosCluster and its TalosMachines live in (default "ichor-system")
@@ -116,6 +117,7 @@ ichor adopt [flags]
       --recover-secrets                   rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600
       --require-ichor                     fail when Ichor is not installed (for example with Helm) instead of installing it
       --secrets-bundle string             path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)
+      --skip-signature-check              run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images); not one-shot: recorded as IchorInstallation spec.installerSignature.mode skip, it stays until an upgrade without the flag
       --tunnel string                     tunnel protocol (vxlan or geneve) of the Cilium adopt installs on a cluster with no CNI; immutable afterwards
       --ui-tls-cert string                PEM certificate file for ichor-ui's TLS; adopt stores it with --ui-tls-key as a Secret
       --ui-tls-key string                 with --ui-tls-cert: PEM private key file (never printed)

@@ -24,6 +24,8 @@ limitations under the License.
 // Needs ICHOR_E2E_KUBE_CONTEXT, ICHOR_E2E_F_ICHOR_BIN (the installembed ichor that
 // `make demo-images` builds, bin/img/ichor/ichor) and the images pushed to the registry
 // `foreign registry` forwards (default localhost:5014). ICHOR_E2E_F_KEEP=1 skips teardown.
+// ICHOR_E2E_F_INSTALLER_DIGEST (sha256:..., the installer line of the demo build's DIGEST_FILE) makes every adopt
+// pin the installer image and skip its signature check: a demo build's tag is not on ghcr.io.
 package foreign
 
 import (
@@ -257,6 +259,11 @@ func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trig
 	args := append([]string{"-n", ns, cmdExec, pod, "--", cmdEnv, envHome, bin, "adopt",
 		"--cluster", c.Opts.Prefix, "-n", crNS, "--talosconfig", "/tmp/talosconfig", flagKubeconfig, "/tmp/kubeconfig",
 		"--node", c.CPs[0]}, flags...)
+	// A demo build's installer tag is not on ghcr.io: pin its digest (from DIGEST_FILE) and skip the signature check
+	// so the controller pulls it through the nodes' registry mirror instead of resolving the tag.
+	if d := os.Getenv("ICHOR_E2E_F_INSTALLER_DIGEST"); d != "" {
+		args = append(args, "--installer-digest", d, "--skip-signature-check")
+	}
 	// kube.Command refuses a "--cluster" argument anywhere; here it belongs to the command run
 	// inside the pod, so the context is pinned by hand to the same ICHOR_E2E_KUBE_CONTEXT.
 	ctx, cancel := context.WithTimeout(context.Background(),

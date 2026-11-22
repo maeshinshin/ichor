@@ -53,6 +53,8 @@ var (
 	adoptContract        string
 	adoptAcceptChanges   bool
 	adoptAcceptDiff      bool
+	adoptInstallerDigest string
+	adoptSkipSignature   bool
 	adoptWaitTimeout     time.Duration
 	adoptAddMachines     []string
 	adoptUIURL           string
@@ -220,6 +222,10 @@ clusters keep the old CAs, but never starts one.`,
 			return fmt.Errorf("adopt: %w", err)
 		}
 
+		if adoptInstallerDigest != "" && !installerDigestPattern.MatchString(adoptInstallerDigest) {
+			return fmt.Errorf("adopt: --installer-digest %q is not sha256: followed by 64 lowercase hex characters", adoptInstallerDigest)
+		}
+
 		deps := adoptDeps{
 			K8s:        k8sClient,
 			Bundle:     bundle,
@@ -275,7 +281,8 @@ clusters keep the old CAs, but never starts one.`,
 
 				return tc.Identity(ctx)
 			},
-			Ichor: &adoptWriteIchor{Manifest: installmanifest.Manifest, NetworkPolicies: installmanifest.NetworkPolicies},
+			Ichor: &adoptWriteIchor{Manifest: installmanifest.Manifest, NetworkPolicies: installmanifest.NetworkPolicies,
+				Pin: installerPin{Digest: adoptInstallerDigest, SkipSignature: adoptSkipSignature}},
 		}
 
 		if len(adoptAddMachines) > 0 {
@@ -337,6 +344,11 @@ func init() {
 	adoptCmd.Flags().BoolVar(&adoptAcceptDiff, "accept-cilium-diff", false,
 		"accept the differences between the live Cilium objects and the pinned chart")
 
+	adoptCmd.Flags().StringVar(&adoptInstallerDigest, "installer-digest", "",
+		"pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; "+
+			"for a cluster whose controller cannot reach the registry (a demo behind a mirror)")
+	adoptCmd.Flags().BoolVar(&adoptSkipSignature, "skip-signature-check", false, skipSignatureUsage)
+
 	adoptCmd.Flags().StringArrayVar(&adoptAddMachines, "add-machine", nil,
 		"address of a node that already runs a configuration signed by this cluster's CAs but has no TalosMachine; "+
 			"adds it to the existing cluster instead of adopting the cluster (repeatable)")
@@ -355,7 +367,7 @@ const (
 )
 
 var addMachineExcluded = []string{
-	adoptFlagNode, "cni-unmanaged", "tunnel", "cilium-values", "accept-cilium-changes", "accept-cilium-diff", "require-ichor", adoptFlagVersionContract,
+	adoptFlagNode, "cni-unmanaged", "tunnel", "cilium-values", "accept-cilium-changes", "accept-cilium-diff", "installer-digest", "skip-signature-check", "require-ichor", adoptFlagVersionContract,
 	"ui-url", "admin-user", "ui-tls-secret", "ui-tls-cert", "ui-tls-key", "kube-api-server-url", "kube-api-tls-server-name",
 }
 

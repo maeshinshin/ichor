@@ -26,22 +26,20 @@ import (
 )
 
 // TestB7ClassC (B7): 3 control planes and a worker whose machine config carries a user inline manifest of a
-// non-Cilium app.
-// Cluster: `foreign up --cps 3 --workers 1 --user-manifest`. Every machine is class C, so adopt writes nothing and
-// applies nothing.
+// non-Cilium app, written as a KubeInlineManifestConfig document. The document is representable, so adopt captures
+// it into each machine's patch; the plan writes nothing.
 func TestB7ClassC(t *testing.T) {
 	c := build(t, foreign.Options{ControlPlanes: 3, Workers: 1, UserManifest: true})
 	before := cniPaths(t, c)
-	for _, extra := range []string{flagPlan, flagYes} {
-		out, err := adoptArgs(t, c, append(recoverFlags(c), "--cni-unmanaged", extra)...)
-		if err == nil {
-			t.Errorf("adopt %s succeeded on a cluster with a user inline manifest", extra)
-		}
-		for _, want := range []string{"KubeInlineManifestConfig.manifest", "nothing was written"} {
-			if !strings.Contains(out, want) {
-				t.Errorf("adopt %s output lacks %q", extra, want)
-			}
-		}
+	out, err := adoptArgs(t, c, append(recoverFlags(c), "--cni-unmanaged", flagPlan, "-o", "yaml")...)
+	if err != nil {
+		t.Fatalf("adopt %s: %v", flagPlan, err)
+	}
+	if n := strings.Count(out, "patch ready"); n != 4 {
+		t.Errorf("adopt %s: %d machines have a patch ready, want 4", flagPlan, n)
+	}
+	if !strings.Contains(out, "userapp") {
+		t.Errorf("adopt %s output does not carry the user inline manifest %q", flagPlan, "userapp")
 	}
 	sameHashes(t, before, cniPaths(t, c))
 	nothingWritten(t, c)

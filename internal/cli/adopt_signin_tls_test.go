@@ -10,6 +10,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 const testKubeAPIURL = "https://k8s.example.com:6443"
@@ -110,5 +112,30 @@ func TestAdoptSignIn_FlagsThatWouldChangeNothingAreRefused(t *testing.T) {
 				t.Fatalf("runAdopt = %v, want a refusal containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestAdoptRecordsTheInstallerPin: --installer-digest and --skip-signature-check reach the IchorInstallation adopt
+// creates, as they do for init, so a demo build whose tag the controller cannot resolve still gets its Cilium Job.
+func TestAdoptRecordsTheInstallerPin(t *testing.T) {
+	setVersion(t, "v0.0.1-gabcdef1")
+
+	digest := "sha256:" + strings.Repeat("a", 64)
+	f := signInFlow(t)
+	f.deps.UIURL = testUIURL
+	f.deps.Ichor.Pin = installerPin{Digest: digest, SkipSignature: true}
+
+	if err := f.runSignIn(); err != nil {
+		t.Fatalf("runAdopt: %v\n%s", err, f.env.stderr.String())
+	}
+
+	var inst ichorv1alpha1.IchorInstallation
+	if err := f.env.k8s.Get(context.Background(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		t.Fatal(err)
+	}
+
+	if inst.Spec.InstallerDigest != digest || inst.Spec.InstallerSignature == nil ||
+		inst.Spec.InstallerSignature.Mode != ichorv1alpha1.InstallerSignatureSkip {
+		t.Errorf("IchorInstallation spec = %+v, want digest %s and signature skip", inst.Spec, digest)
 	}
 }

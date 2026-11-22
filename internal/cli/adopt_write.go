@@ -135,6 +135,8 @@ type adoptWriteMachine struct {
 
 // adoptWriteIchor is Ichor's install step, the one `ichor init` runs.
 type adoptWriteIchor struct {
+	// Pin is the installer image pin the IchorInstallation records (--installer-digest, --skip-signature-check).
+	Pin installerPin
 	// Namespace is where Manifest deploys the controller; empty is ichorControllerNamespace.
 	Namespace       string
 	Manifest        []byte
@@ -273,7 +275,7 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := createIchorInstallation(ctx, w.c, w.in.Stderr, cmp.Or(w.in.WebhookWait, defaultAdoptWebhookWait), installerPin{}); err != nil {
+	if _, err := createIchorInstallation(ctx, w.c, w.in.Stderr, cmp.Or(w.in.WebhookWait, defaultAdoptWebhookWait), ichor.Pin); err != nil {
 		return err
 	}
 

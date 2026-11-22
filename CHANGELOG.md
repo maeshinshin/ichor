@@ -169,7 +169,11 @@ command does. Each item is described where it is listed below.
   that release, `--check` changes nothing. The update notice now names it (ADR 0171).
 - **A second `ichor init` says the cluster is already initialised.** It used to
   fail with the raw Kubernetes "already exists" error on the secrets bundle Secret;
-  it now names the cluster as initialised and the Secret that exists.
+  it now names the cluster as initialised and the Secret that exists, and both ways
+  on: `ichor create credentials` to reach the cluster, and `ichor adopt` to bring it
+  under Ichor's management. When a kubeconfig on this machine reaches the cluster,
+  it refuses before it writes to a node, so a run without the local bundle file
+  does not apply a configuration to a node that is already part of the cluster.
 - **`gatewayAPI.enabled` refuses a Gateway API older than Cilium needs.** The
   check was that the `gateways` CRD existed, so any release and any partial set
   passed and Cilium failed later. It now reads the CRD's `bundle-version` and

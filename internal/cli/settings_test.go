@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 )
 
 func TestSettingsUpdateRequest(t *testing.T) {
@@ -134,18 +135,18 @@ func TestSettingsCommandsTakeTheAPIFlags(t *testing.T) {
 }
 
 func TestSettingsUpdateRequestReset(t *testing.T) {
-	req, err := settingsUpdateRequest(nil, []string{"users.tokenTTL"})
+	req, err := settingsUpdateRequest(nil, []string{settings.KeyTokenTTL})
 	if err != nil || len(req.GetUnset()) != 1 || req.GetUnset()[0] != "users.tokenTTL" || req.GetChanges().TokenTtl != nil {
 		t.Fatalf("%v %v", req, err)
 	}
 
-	for _, bad := range [][]string{{"nope"}, {"autoPatch.acknowledgeHalt"}} {
+	for _, bad := range [][]string{{"unknown.key"}, {settings.KeyAutoPatchAckHalt}} {
 		if _, err := settingsUpdateRequest(nil, bad); err == nil {
 			t.Errorf("--reset %v should fail", bad)
 		}
 	}
 
-	if _, err := settingsUpdateRequest([]string{"users.tokenTTL=15m"}, []string{"users.tokenTTL"}); err == nil {
+	if _, err := settingsUpdateRequest([]string{settings.KeyTokenTTL+"=15m"}, []string{settings.KeyTokenTTL}); err == nil {
 		t.Error("set and reset of one key should fail")
 	}
 }

@@ -168,7 +168,7 @@ func TestUpdateSettingsUnsetClearsTheField(t *testing.T) {
 		t.Fatalf("the field must be cleared, not rewritten: %+v", got.Spec.Defaults)
 	}
 
-	if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Unset: []string{"nope"}})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Unset: []string{"unknown.key"}})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("an unknown key must be refused: %v", err)
 	}
 }

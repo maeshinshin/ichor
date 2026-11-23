@@ -19,7 +19,7 @@ import (
 type Changes struct {
 	// Unset lists the keys (the Key constants) to clear from the spec, so the deployment's flag or chart value applies
 	// again. A key is either set or unset in one change, never both.
-	Unset []string
+	Unset           []string
 	TokenTTL        *time.Duration
 	RefreshLifetime *time.Duration
 	// DriftPolicy is warnOnly or autoCorrect.

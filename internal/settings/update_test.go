@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-		metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -50,7 +50,7 @@ func TestParseAssignments(t *testing.T) {
 
 func TestUnsetFollowsTheDeploymentDefault(t *testing.T) {
 	in := &ichorv1alpha1.IchorInstallation{}
-	ttl, drift, window := 30*time.Minute, DriftAutoCorrect, "02:00-05:00"
+	ttl, drift, window := 30*time.Minute, DriftAutoCorrect, "01:00-03:00"
 	(Changes{TokenTTL: &ttl, DriftPolicy: &drift, AutoPatchWindow: &window}).Apply(in)
 
 	if e := Resolve(in, fb, false); e.TokenTTL.V != ttl || e.TokenTTL.Source != ichorv1alpha1.IchorSourceSpec {
@@ -95,7 +95,7 @@ func TestUnsetKeepsOtherFieldsAndValidates(t *testing.T) {
 
 	ttl := time.Hour
 	for _, bad := range []Changes{
-		{Unset: []string{"nope"}},
+		{Unset: []string{"unknown.key"}},
 		{Unset: []string{KeyAutoPatchAckHalt}},
 		{Unset: []string{KeyTokenTTL}, TokenTTL: &ttl},
 	} {

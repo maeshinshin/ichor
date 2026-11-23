@@ -92,7 +92,7 @@ func Upgrade(namespace, node, image string, talosconfig []byte) (string, error) 
 
 // Kubeconfig downloads the admin kubeconfig from node's authenticated API, unmerged.
 func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
-	out, err := runAuth(namespace, node, talosconfig, time.Minute, "kubeconfig", "-", "--merge=false", "--endpoints", node)
+	out, err := runAuth(namespace, node, talosconfig, time.Minute, "kubeconfig", "-", "--merge=false")
 	return []byte(out), err
 }
 
@@ -153,10 +153,12 @@ func MetadataID(obj map[string]any) any {
 	return metadata["id"]
 }
 
-// runAuth is run for an authenticated call: talosconfig is mounted and --talosconfig and --nodes node
-// are appended to args.
+// runAuth is run for an authenticated call: talosconfig is mounted and --talosconfig, --nodes node and
+// --endpoints node are appended to args. The endpoint is the node itself, not the talosconfig's (a control plane
+// that may be down or reset), so a probe of a healthy node cannot fail through it.
 func runAuth(namespace, node string, talosconfig []byte, timeout time.Duration, args ...string) (string, error) {
-	return run(namespace, append(args, talosconfigFlag, talosconfigMount, nodesFlag, node),
+	return run(namespace, append(args, talosconfigFlag, talosconfigMount, nodesFlag, node,
+		"--endpoints", node),
 		map[string]string{talosconfigKey: string(talosconfig)}, timeout)
 }
 
@@ -294,5 +296,5 @@ func deleteSecret(namespace, name string) {
 // leave, so a node of a cluster the caller owns comes back in maintenance mode.
 func Reset(namespace, node string, talosconfig []byte) (string, error) {
 	return runAuth(namespace, node, talosconfig, 2*time.Minute, "reset", "--graceful=false", "--reboot", "--wait=false",
-		"--system-labels-to-wipe", "STATE", "--system-labels-to-wipe", "EPHEMERAL", "--endpoints", node)
+		"--system-labels-to-wipe", "STATE", "--system-labels-to-wipe", "EPHEMERAL")
 }

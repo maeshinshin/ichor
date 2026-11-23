@@ -43,8 +43,8 @@ Connect API (ADR 0049); it is one of the CLI operations that predate the cluster
    is skipped, reported on stderr, and never sent. Falling back to an older snapshot loses data, so the
    confirmation names the snapshot actually chosen and its time. `--snapshot <name>` is exclusive: broken means
    an error, never a substitute. A bundle that is not the cluster's fails age's authentication on every object,
-   and the final error says nothing was sent. The plaintext is kept in memory, not on disk (it holds every
-   Secret); `shortcut:` the snapshot stays in memory, which a multi-GB etcd outgrows; switch to a protected spool file then.
+   and the final error says nothing was sent. The plaintext is never written to disk (it holds every
+   Secret); see the 2026-11-24 amendment for how it reaches the node.
 5. **Confirmation.** The shared `confirm` and the global `--yes`; the prompt states the node, the snapshot and its
    time, that state reverts, and that it cannot be undone. Declining contacts nothing.
 
@@ -71,3 +71,7 @@ does have a cluster, must take the lock.
 ## Amendment (2026-11-16): the command is `ichor restore cluster`
 
 This ADR was written for `ichor restore --recover-cluster`. The verb-first command surface made it the subcommand `ichor restore cluster`, with the same flags (`--node-endpoint`, `--s3-*`, `--snapshot`, `--secrets-bundle`) and the same behaviour, and made the live restore `ichor restore etcd`. Read every `--recover-cluster` above as `ichor restore cluster`, and `ichor restore --live` as `ichor restore etcd`; the decision is unchanged.
+
+## Amendment (2026-11-24): the snapshot is streamed, never held whole
+
+The command held the decrypted snapshot in memory (`etcdbackup.FetchVerified`, a `bytes.Buffer`), which a multi-GB etcd outgrows. Each candidate is now checked by `etcdbackup.VerifyObject`: download, decrypt and checksum as it streams, keeping only the size. The chosen snapshot is downloaded and decrypted a second time and streamed straight into `EtcdRecover` (`etcdbackup.Reader`), the same recipe the controller's live restore uses (ADR 0089). Memory stays at a few copy buffers whatever the size, and the plaintext still never touches a disk, so no spool file exists to clean up. The cost is one more download of the chosen snapshot. Nothing is sent unless the check passed; an object replaced between the two reads is not re-checked, as in the live restore. `FetchVerified` is removed; the references to it above and in ADR 0089 now read `VerifyObject` and `Reader`.

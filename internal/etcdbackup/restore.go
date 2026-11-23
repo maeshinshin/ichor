@@ -49,20 +49,8 @@ func (t transient) Unwrap() error { return t.error }
 
 func (transient) Is(target error) bool { return target == ErrTransient }
 
-// FetchVerified is the restore recipe: Get, Decrypt, check the etcd checksum trailer. The
-// plaintext is held in memory rather than on disk, since it contains every Secret in the cluster.
-func FetchVerified(ctx context.Context, store Store, key string, passphrase Key) (*bytes.Buffer, error) {
-	var buf bytes.Buffer
-
-	if _, err := stream(ctx, store, key, passphrase, &buf); err != nil {
-		return nil, err
-	}
-
-	return &buf, nil
-}
-
-// VerifyObject runs the same recipe as FetchVerified without keeping the plaintext: nothing of it is held
-// beyond one copy buffer, so a snapshot of any size can be checked. It returns the plaintext size.
+// VerifyObject is the restore recipe: Get, Decrypt, check the etcd checksum trailer. Nothing of the
+// plaintext is held beyond one copy buffer, so a snapshot of any size can be checked. It returns the plaintext size.
 func VerifyObject(ctx context.Context, store Store, key string, passphrase Key) (int64, error) {
 	return stream(ctx, store, key, passphrase)
 }

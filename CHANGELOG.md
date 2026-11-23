@@ -915,6 +915,10 @@ command does. Each item is described where it is listed below.
 
 ### Etcd backups and restore
 
+- `ichor restore cluster` streams the snapshot to the node. It no longer holds a decrypted snapshot
+  in memory, so a multi-GB etcd restores in a few megabytes: each candidate is checked as it streams,
+  and the chosen one is downloaded again and passed straight to the node.
+
 - Retention never deletes the snapshot a run just uploaded. It ranks snapshots
   by the object store's modified time and uses the time in the name only to
   break ties. Before, it ranked by the name, so a clock that stepped backwards,

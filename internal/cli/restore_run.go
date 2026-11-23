@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -108,7 +107,7 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 			return "", err
 		}
 
-		return fmt.Sprintf("%s (taken %s, %s, verified)", snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), byteSize(int64(snap.data.Len()))), nil
+		return fmt.Sprintf("%s (taken %s, %s, verified)", snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), byteSize(snap.size)), nil
 	}); err != nil {
 		return err
 	}
@@ -118,7 +117,7 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 			"Recover etcd on %s from snapshot %s (%s, %d bytes, verified)?\n"+
 				"The cluster's state reverts to that time. The node's etcd data directory must be empty. "+
 				"This cannot be undone. [y/N]: ",
-			opts.NodeEndpoint, snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), snap.data.Len()),
+			opts.NodeEndpoint, snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), snap.size),
 			"aborted before contacting the node; nothing was changed"); err != nil {
 			return err
 		}
@@ -222,11 +221,20 @@ func recoverOnNode(ctx context.Context, p *progress, opts restoreOptions, deps r
 	}
 
 	if err := p.Run("Upload snapshot", func(*step) (string, error) {
-		if err := c.EtcdRecover(ctx, bytes.NewReader(snap.data.Bytes())); err != nil {
+		// Checked end to end by pickSnapshot, so this second download is streamed straight to the node:
+		// the plaintext (every Secret) is never held in memory and never written to disk.
+		rd, err := etcdbackup.Reader(ctx, in.store, snap.key, in.passphrase)
+		if err != nil {
+			return "", fmt.Errorf("restore: reading the snapshot again to upload it: %w", in.scrub(err))
+		}
+
+		defer func() { _ = rd.Close() }()
+
+		if err := c.EtcdRecover(ctx, rd); err != nil {
 			return "", fmt.Errorf("restore: uploading the snapshot to %q: %w", opts.NodeEndpoint, in.scrub(err))
 		}
 
-		return byteSize(int64(snap.data.Len())), nil
+		return byteSize(snap.size), nil
 	}); err != nil {
 		return err
 	}
@@ -243,7 +251,8 @@ func recoverOnNode(ctx context.Context, p *progress, opts restoreOptions, deps r
 type verifiedSnapshot struct {
 	name string
 	time time.Time
-	data *bytes.Buffer // decrypted and integrity-checked: exactly what EtcdSnapshot streamed
+	key  string
+	size int64 // plaintext bytes, as the integrity check counted them
 }
 
 // pickSnapshot downloads, decrypts and verifies snapshots newest first and
@@ -274,7 +283,7 @@ func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptio
 	var problems []string
 
 	for _, o := range objs {
-		buf, err := etcdbackup.FetchVerified(ctx, store, o.Key, passphrase)
+		size, err := etcdbackup.VerifyObject(ctx, store, o.Key, passphrase)
 		if err != nil {
 			err = scrub(err)
 			problems = append(problems, fmt.Sprintf("  %s: %v", o.Name, err))
@@ -283,7 +292,7 @@ func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptio
 			continue
 		}
 
-		return &verifiedSnapshot{name: o.Name, time: o.Time, data: buf}, nil
+		return &verifiedSnapshot{name: o.Name, time: o.Time, key: o.Key, size: size}, nil
 	}
 
 	return nil, fmt.Errorf("restore: no usable snapshot (nothing was sent to any node):\n%s", strings.Join(problems, "\n"))

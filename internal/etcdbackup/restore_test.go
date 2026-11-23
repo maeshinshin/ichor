@@ -169,18 +169,13 @@ func sealed(t *testing.T, plain []byte, pass Key) []byte {
 	return buf.Bytes()
 }
 
-func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
+func TestVerifyObjectAndReader(t *testing.T) {
 	ctx := context.Background()
 	plain := makeSnapshot("etcd")
 	bad := append([]byte(nil), plain...)
 	bad[1] ^= 0xff
 
 	st := memStore{"good": sealed(t, plain, Key{Current: "pw"}), "bad": sealed(t, bad, Key{Current: "pw"})}
-
-	buf, err := FetchVerified(ctx, st, "good", Key{Current: "pw"})
-	if err != nil || !bytes.Equal(buf.Bytes(), plain) {
-		t.Fatalf("FetchVerified: %v", err)
-	}
 
 	if n, err := VerifyObject(ctx, st, "good", Key{Current: "pw"}); err != nil || n != int64(len(plain)) {
 		t.Fatalf("VerifyObject: %d, %v", n, err)
@@ -190,7 +185,7 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 		t.Fatal("a corrupt snapshot passed")
 	}
 
-	if _, err := FetchVerified(ctx, st, "good", Key{Current: wrongPass}); err == nil {
+	if _, err := VerifyObject(ctx, st, "good", Key{Current: wrongPass}); err == nil {
 		t.Fatal("a snapshot opened with the wrong key")
 	}
 

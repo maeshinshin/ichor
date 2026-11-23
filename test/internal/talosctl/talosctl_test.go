@@ -17,7 +17,10 @@ limitations under the License.
 //nolint:goconst // table-driven argument lists
 package talosctl
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCheckTargets(t *testing.T) {
 	bad := [][]string{
@@ -34,5 +37,17 @@ func TestCheckTargets(t *testing.T) {
 	}
 	if err := checkTargets([]string{"get", "disks", "--nodes", "10.244.1.7"}); err != nil {
 		t.Errorf("explicit non-protected node refused: %v", err)
+	}
+}
+
+func TestDecodeAllSkipsVersionWarning(t *testing.T) {
+	raw := "WARNING: server version v1.14.4 is older than client version v1.14.5\n" +
+		`{"metadata":{"id":"machinestatus"},"spec":{"stage":"maintenance"}}` + "\n"
+	objs, err := DecodeAll(raw)
+	if err != nil || len(objs) != 1 || SpecField(objs[0], "stage") != "maintenance" {
+		t.Fatalf("objs=%v err=%v, want one maintenance object", objs, err)
+	}
+	if got := dropWarnings(raw); strings.Contains(got, "WARNING") {
+		t.Errorf("dropWarnings kept the warning: %q", got)
 	}
 }

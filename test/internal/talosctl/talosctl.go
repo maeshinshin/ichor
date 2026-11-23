@@ -114,10 +114,23 @@ func EtcdMembers(namespace, node string, talosconfig []byte) (string, error) {
 	return runAuth(namespace, node, talosconfig, time.Minute, "etcd", "members")
 }
 
+// dropWarnings removes the lines talosctl prefixes with WARNING (a client/server version
+// mismatch, for one). kubectl logs merges the pod's stderr into stdout, so a warning would
+// otherwise be read as the answer.
+func dropWarnings(out string) string {
+	var b strings.Builder
+	for l := range strings.SplitAfterSeq(out, "\n") {
+		if !strings.HasPrefix(l, "WARNING") {
+			b.WriteString(l)
+		}
+	}
+	return b.String()
+}
+
 // DecodeAll decodes the concatenated JSON objects talosctl prints for multi-instance
 // resources (it is not a JSON array) into a slice of maps.
 func DecodeAll(raw string) ([]map[string]any, error) {
-	dec := json.NewDecoder(strings.NewReader(raw))
+	dec := json.NewDecoder(strings.NewReader(dropWarnings(raw)))
 	var out []map[string]any
 	for {
 		var obj map[string]any
@@ -202,7 +215,7 @@ func run(namespace string, args []string, secretData map[string]string, timeout 
 	if phase != "Succeeded" {
 		return logs, fmt.Errorf("talosctl %v failed (pod phase %s): %s", args, phase, logs)
 	}
-	return logs, nil
+	return dropWarnings(logs), nil
 }
 
 // protectedNodes are the production home-lab control planes; no e2e path may address them.

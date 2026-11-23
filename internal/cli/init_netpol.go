@@ -60,24 +60,24 @@ func applyNetworkPolicies(
 	}
 
 	if bytes.Contains(manifest, []byte(installmanifest.PlaceholderSentinel)) {
-		return fmt.Errorf("init: this ichor binary has no network policies embedded (built without -tags installembed)")
+		return fmt.Errorf("this ichor binary has no network policies embedded (built without -tags installembed)")
 	}
 
 	objs, err := installer.Decode(manifest)
 	if err != nil {
-		return fmt.Errorf("init: decoding Ichor's network policies: %w", err)
+		return fmt.Errorf("decoding Ichor's network policies: %w", err)
 	}
 
 	err = pollDiag(ctx, wait, interval, progress, "Cilium to be Ready", newWaitDiag(c, progress), func(ctx context.Context) error {
 		return ciliumReady(ctx, c)
 	}, func(error) bool { return true }, "Cilium to be Ready did not finish within "+wait.String())
 	if err != nil {
-		return fmt.Errorf("init: Cilium is not Ready, so Ichor's network policies were not applied: %w", err)
+		return fmt.Errorf("the Cilium install is not Ready, so Ichor's network policies were not applied: %w", err)
 	}
 
 	for _, obj := range objs {
 		if err := createWithRetry(ctx, c, obj, progress); err != nil {
-			return fmt.Errorf("init: applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)
+			return fmt.Errorf("applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)
 		}
 	}
 

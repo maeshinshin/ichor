@@ -328,6 +328,26 @@ func TestCreateIchorInstallation_HonoursTheCallersWait(t *testing.T) {
 	}
 }
 
+// The shared install path serves both `ichor init` and `ichor adopt`: the error it returns carries no
+// command name, so adopt's user never reads "init:"; init adds its own prefix where it calls the path.
+func TestCreateIchorInstallation_ErrorNamesNoCommand(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+	realWebhookWait(t)
+
+	_, err := createIchorInstallation(context.Background(), failingCreates(t, 0, nil, new(int)), io.Discard, 50*time.Millisecond, installerPin{})
+	if err == nil {
+		t.Fatal("createIchorInstallation succeeded on a controller that is not ready")
+	}
+
+	if strings.HasPrefix(err.Error(), "init:") {
+		t.Errorf("error %q starts with %q, but adopt shares this path", err, "init:")
+	}
+
+	if !strings.Contains(err.Error(), "did not finish within 50ms") {
+		t.Errorf("error %q does not say the wait timed out", err)
+	}
+}
+
 // testCiliumSecretsManifest is testIchorManifest plus the pair Ichor installs into cilium-secrets, the
 // Cilium chart's own namespace, and a Role in a namespace that never exists.
 const testCiliumSecretsManifest = testIchorManifest + `---

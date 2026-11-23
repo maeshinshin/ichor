@@ -141,7 +141,7 @@ func TestApplyNetworkPolicies_NothingIsCreatedWhileCiliumIsNotReady(t *testing.T
 	var out bytes.Buffer
 
 	err := applyNetworkPolicies(ctx, c, []byte(testPolicies), cniCilium, 50*time.Millisecond, 5*time.Millisecond, &out)
-	if err == nil || !strings.Contains(err.Error(), "Cilium is not Ready") {
+	if err == nil || !strings.Contains(err.Error(), "Cilium install is not Ready") {
 		t.Fatalf("err = %v, want the Cilium not Ready error", err)
 	}
 

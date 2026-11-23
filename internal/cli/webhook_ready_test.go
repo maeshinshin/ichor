@@ -137,7 +137,7 @@ func TestWaitForWebhookServer_TimesOutWithAnActionableMessage(t *testing.T) {
 				t.Fatal("waitForWebhookServer succeeded on a controller that is not ready")
 			}
 
-			for _, want := range []string{controllerDeploymentName, ichorControllerNamespace, "not Ready after 50ms", "kubectl -n ichor-system get pods"} {
+			for _, want := range []string{controllerDeploymentName, ichorControllerNamespace, "did not finish within 50ms", "kubectl -n ichor-system get pods"} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q does not mention %q", err, want)
 				}

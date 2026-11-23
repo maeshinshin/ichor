@@ -74,7 +74,7 @@ func webhookServerNotReady(ctx context.Context, c client.Reader) error {
 func waitForWebhookServer(ctx context.Context, c client.Reader, timeout, interval time.Duration, progress io.Writer) error {
 	err := pollDiag(ctx, timeout, interval, progress, "the controller to serve Ichor's webhooks", newWaitDiag(c, progress),
 		func(ctx context.Context) error { return webhookServerNotReady(ctx, c) }, func(error) bool { return true },
-		fmt.Sprintf("the controller Deployment %s in %s is not Ready after %s", controllerDeploymentName, ichorControllerNamespace, timeout))
+		fmt.Sprintf("waiting for the controller Deployment %s in %s to be Ready did not finish within %s", controllerDeploymentName, ichorControllerNamespace, timeout))
 	if err == nil || ctx.Err() != nil || errors.Is(err, errNoPodNetwork) {
 		return err
 	}

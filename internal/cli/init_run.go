@@ -470,7 +470,7 @@ func initInstall(
 		s.Update("applying Ichor's install manifest")
 
 		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium, opts.uiSettings()); err != nil {
-			return "", err
+			return "", fmt.Errorf("init: %w", err)
 		}
 
 		if opts.GatewayAPI {
@@ -503,7 +503,7 @@ func initInstall(
 
 		var err error
 		if created, err = createIchorInstallation(ctx, k8sClient, s.Rewrite(initDetail), deps.WebhookWait, opts.installerPin()); err != nil {
-			return "", err
+			return "", fmt.Errorf("init: %w", err)
 		}
 
 		if !created {
@@ -556,6 +556,10 @@ func initInstall(
 
 			err := applyNetworkPolicies(ctx, k8sClient, deps.NetworkPolicies, opts.CNIPreset,
 				cmp.Or(deps.CiliumWait, defaultCiliumWait), deps.BootstrapInterval, s.Rewrite(initDetail))
+
+			if err != nil {
+				err = fmt.Errorf("init: %w", err)
+			}
 
 			return s.Detail(), err
 		})

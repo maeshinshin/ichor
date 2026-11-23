@@ -67,11 +67,11 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 
 	objs, err := installer.Decode(manifest)
 	if err != nil {
-		return fmt.Errorf("init: decoding Ichor's own install manifest: %w", err)
+		return fmt.Errorf("decoding Ichor's own install manifest: %w", err)
 	}
 
 	if objs, err = installer.CustomizeObjects(objs, ui); err != nil {
-		return fmt.Errorf("init: preparing Ichor's own install manifest: %w", err)
+		return fmt.Errorf("preparing Ichor's own install manifest: %w", err)
 	}
 
 	for _, obj := range objs {
@@ -87,7 +87,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 			ns.SetName(installer.CiliumSecretsNamespace)
 
 			if err := createWithRetry(ctx, k8sClient, ns, warn); err != nil {
-				return fmt.Errorf("init: creating Namespace %q for Ichor's own %s %q: %w", ns.GetName(), obj.GetKind(), obj.GetName(), err)
+				return fmt.Errorf("creating Namespace %q for Ichor's own %s %q: %w", ns.GetName(), obj.GetKind(), obj.GetName(), err)
 			}
 		}
 
@@ -100,7 +100,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 		}
 
 		if err != nil {
-			return fmt.Errorf("init: applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)
+			return fmt.Errorf("applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)
 		}
 	}
 
@@ -297,7 +297,7 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 	// The controller's Seed creates the singleton as soon as it serves, without the installer pin, so it
 	// can win this create; the object it made is pinned below rather than failing the install.
 	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return false, fmt.Errorf("init: creating the IchorInstallation: %w", err)
+		return false, fmt.Errorf("creating the IchorInstallation: %w", err)
 	}
 
 	if err := pinInstallation(ctx, k8sClient, pin, warn); err != nil {
@@ -317,7 +317,7 @@ func pinInstallation(ctx context.Context, c client.Client, pin installerPin, pro
 	if err := retryInit(ctx, progress, func() error {
 		return c.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)
 	}); err != nil {
-		return fmt.Errorf("init: reading the IchorInstallation: %w", err)
+		return fmt.Errorf("reading the IchorInstallation: %w", err)
 	}
 
 	changed, err := fillInstallerPin(&inst, pin)
@@ -331,7 +331,7 @@ func pinInstallation(ctx context.Context, c client.Client, pin installerPin, pro
 
 		return err
 	}, progress); err != nil {
-		return fmt.Errorf("init: updating the IchorInstallation: %w", err)
+		return fmt.Errorf("updating the IchorInstallation: %w", err)
 	}
 
 	return nil
@@ -342,12 +342,12 @@ func pinInstallation(ctx context.Context, c client.Client, pin installerPin, pro
 // init's, and a digest or signature mode the object already holds that differs from the pin.
 func fillInstallerPin(inst *ichorv1alpha1.IchorInstallation, pin installerPin) (bool, error) {
 	if inst.Spec.Version != version.Version {
-		return false, fmt.Errorf("init: the IchorInstallation records Ichor %s, this init is %s: "+
+		return false, fmt.Errorf("the IchorInstallation records Ichor %s, this init is %s: "+
 			"move an installed Ichor to another version with `ichor upgrade`", inst.Spec.Version, version.Version)
 	}
 
 	if inst.HelmManaged() {
-		return false, fmt.Errorf("init: the IchorInstallation says Helm deploys this Ichor (%s)", ichorv1alpha1.IchorHelmManagedMessage)
+		return false, fmt.Errorf("the IchorInstallation says Helm deploys this Ichor (%s)", ichorv1alpha1.IchorHelmManagedMessage)
 	}
 
 	changed := false
@@ -359,7 +359,7 @@ func fillInstallerPin(inst *ichorv1alpha1.IchorInstallation, pin installerPin) (
 			changed = true
 		case pin.Digest:
 		default:
-			return false, fmt.Errorf("init: the IchorInstallation pins installerDigest %s, not %s: "+
+			return false, fmt.Errorf("the IchorInstallation pins installerDigest %s, not %s: "+
 				"change the pin with `ichor upgrade`", inst.Spec.InstallerDigest, pin.Digest)
 		}
 	}
@@ -370,7 +370,7 @@ func fillInstallerPin(inst *ichorv1alpha1.IchorInstallation, pin installerPin) (
 			inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 			changed = true
 		case sig.Mode != ichorv1alpha1.InstallerSignatureSkip:
-			return false, fmt.Errorf("init: the IchorInstallation's installerSignature.mode is %q, init was asked to skip the check: "+
+			return false, fmt.Errorf("the IchorInstallation's installerSignature.mode is %q, init was asked to skip the check: "+
 				"change it with `ichor upgrade`", sig.Mode)
 		}
 	}

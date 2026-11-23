@@ -19,7 +19,9 @@ limitations under the License.
 package foreign
 
 // D4 and D6 on a D1 cluster: `foreign up` (flannel, the default Kubernetes), then TestD1FlannelAdoptedUnmanaged,
-// then these, each against the kept cluster (ICHOR_E2E_F_ATTACH=1, ICHOR_E2E_F_KEEP=1).
+// then these, each against the kept cluster (ICHOR_E2E_F_ATTACH=1, ICHOR_E2E_F_KEEP=1). TestD4Talos upgrades to
+// release.Pinned.Talos, so bring the lab up one patch below it: `foreign up --talos v1.14.4`, and run every D case
+// with ICHOR_E2E_F_TALOS=v1.14.4 so the options match the lab.
 
 import (
 	"encoding/json"
@@ -109,6 +111,25 @@ func requireAdopted(t *testing.T, c *foreign.Cluster) {
 		t.Fatalf("the cluster is not adopted (run TestD1FlannelAdoptedUnmanaged first, with ICHOR_E2E_F_ATTACH=1 "+
 			"ICHOR_E2E_F_KEEP=1): %v\n%s", err, out)
 	}
+	// adopt's last phase releases every machine's hold (adopt_run.go finishAdopt), so a held machine means it is not done.
+	if out, err := inner(c, "-n", crNS, "get", "talosclusters.ichor.maesh.dev", c.Opts.Prefix); err != nil {
+		t.Fatalf("the CRDs exist but TalosCluster %s does not: the adopt did not finish: %v\n%s", c.Opts.Prefix, err, out)
+	}
+	if held, _ := inner(c, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o",
+		"jsonpath={.items[*].metadata.annotations.ichor\\.maesh\\.dev/hold-apply}"); strings.TrimSpace(held) != "" {
+		t.Fatalf("the adopt did not finish: a TalosMachine is still held: %q", held)
+	}
+}
+
+// serverTag is the Tag of the node in `talosctl version` output: the last one, after the client's.
+func serverTag(v string) string {
+	tag := ""
+	for l := range strings.SplitSeq(v, "\n") {
+		if f := strings.Fields(l); len(f) == 2 && f[0] == "Tag:" {
+			tag = f[1]
+		}
+	}
+	return tag
 }
 
 // TestD4Talos: a Talos patch upgrade through `ichor upgrade talos`. The lab starts one patch below the release set and
@@ -120,6 +141,11 @@ func TestD4Talos(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, TalosVersion: fmt.Sprintf("%s.%d", from[:i], patch-1)})
 	requireAdopted(t, c)
 	to := env("ICHOR_E2E_F_UPGRADE_TO", release.Pinned.Talos)
+	// Under ATTACH the lab keeps the version `foreign up --talos` gave it, whatever Options says here.
+	if v, _ := talosctl.Version(ns, c.Nodes()[0], ftc(t, c)); serverTag(v) == to {
+		t.Fatalf("the lab already runs %s and Ichor refuses a downgrade: bring it up one patch below, "+
+			"`go run ./test/harness/foreign up --talos <previous patch>`, and run with ICHOR_E2E_F_TALOS=<same>", to)
+	}
 	start := time.Now()
 	if out, err := ichorCLI(t, c, "upgrade", "talos", to, flagYes); err != nil {
 		t.Fatalf("upgrade talos: %v\n%s", err, out)
@@ -129,7 +155,7 @@ func TestD4Talos(t *testing.T) {
 	for _, ip := range c.Nodes() {
 		v, err := talosctl.Version(ns, ip, ftc(t, c))
 		t.Logf("talosctl version %s: %v\n%s", ip, err, v)
-		if !strings.Contains(v, "Tag:"+" "+to) && !strings.Contains(v, to) {
+		if serverTag(v) != to { // not Contains: the client block of the output names the release set too
 			t.Errorf("node %s does not report %s", ip, to)
 		}
 	}

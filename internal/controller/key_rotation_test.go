@@ -1004,7 +1004,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		Entry("a control plane does not run the configuration Ichor renders for it", func() (*keyRotFixture, []string) {
 			f := newKeyRotFixture(fastBundle())
 			node := f.world.nodes[f.controlPlanes()[0].Name]
-			node.cfg = append(node.cfg, []byte("# edited by hand\n")...)
+			node.cfg = bytes.Replace(node.cfg, []byte("debug: false"), []byte("debug: true"), 1)
 
 			return f, bothTargets
 		}, "converge"),

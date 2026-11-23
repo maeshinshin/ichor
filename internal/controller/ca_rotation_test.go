@@ -935,7 +935,9 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		f := newCARotFixture()
 
 		node := f.world.nodes[f.machines[0].Name]
-		node.cfg = append(node.cfg, []byte("# edited by hand\n")...)
+		edited := bytes.Replace(node.cfg, []byte("debug: false"), []byte("debug: true"), 1)
+		Expect(edited).NotTo(Equal(node.cfg))
+		node.cfg = edited
 
 		op := f.newOp()
 		op = f.step(op)
@@ -943,6 +945,18 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("converge"))
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey))
+	})
+
+	It("starts when a machine holds the rendered settings in other bytes, as an adopted node does", func() {
+		f := newCARotFixture()
+
+		node := f.world.nodes[f.machines[0].Name]
+		node.cfg = append([]byte("# adopted\n"), node.cfg...)
+
+		op := f.step(f.newOp())
+
+		Expect(rotationStage(op)).NotTo(BeEmpty())
+		Expect(f.secretData()).To(HaveKey(secretsbundle.RotationKey))
 	})
 
 	DescribeTable("refuses at once, naming the rollout, while a machine waits for one",

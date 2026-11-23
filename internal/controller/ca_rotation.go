@@ -416,6 +416,23 @@ func pendingRollout(m *ichorv1alpha1.TalosMachine) string {
 		"before rotating", m.Name, m.Spec.ClusterRef.Name)
 }
 
+// runsRendered fails unless current is the configuration Ichor renders for m, in the same bytes or in another
+// form of the same settings (an adopted node keeps the form it was adopted in until something applies it: the
+// machine controller calls that converged and never rewrites it, so a byte compare would wait for ever).
+func runsRendered(m *ichorv1alpha1.TalosMachine, current, rendered []byte, hash string) error {
+	paths, err := changedPaths(current, rendered, hash)
+	if err != nil {
+		return fmt.Errorf("comparing %q's configuration with the rendered one: %w", m.Name, err)
+	}
+
+	if len(paths) > 0 {
+		return fmt.Errorf("%q does not run the configuration Ichor renders for it (fields: %s); converge it before rotating",
+			m.Name, summarizePaths(paths, rebootPathsInMessage))
+	}
+
+	return nil
+}
+
 // nodesReady fails unless every Kubernetes Node is Ready, asked through the first control plane's
 // admin kubeconfig.
 func (c *caRun) nodesReady(ctx context.Context, first *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) error {
@@ -469,7 +486,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 			return c.fail(ctx, "not starting the rotation: "+msg)
 		}
 
-		_, hash, err := c.plainRender(ctx, m, c.bundle, patches.Items, nil)
+		rendered, hash, err := c.plainRender(ctx, m, c.bundle, patches.Items, nil)
 		if err != nil {
 			return c.retry(ctx, fmt.Sprintf("rendering %q's configuration failed: %v", m.Name, err))
 		}
@@ -484,11 +501,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 				return fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 			}
 
-			if render.Hash(current) != hash {
-				return fmt.Errorf("%q does not run the configuration Ichor renders for it; converge it before rotating", m.Name)
-			}
-
-			return nil
+			return runsRendered(m, current, rendered, hash)
 		})
 		if err != nil {
 			return c.retry(ctx, "not starting the rotation: "+err.Error())

@@ -506,7 +506,7 @@ func (c *keyRun) preflightMachine(
 		return res, true, err
 	}
 
-	_, plain, err := c.render(ctx, m, c.bundle, patches, nil)
+	rendered, plain, err := c.render(ctx, m, c.bundle, patches, nil)
 	if err != nil {
 		res, err := c.retry(ctx, fmt.Sprintf("rendering %q's configuration failed: %v", m.Name, err))
 
@@ -537,8 +537,8 @@ func (c *keyRun) preflightMachine(
 			return fmt.Errorf("reading %q's configuration: %w", m.Name, err)
 		}
 
-		if render.Hash(current) != plain {
-			return fmt.Errorf("%q does not run the configuration Ichor renders for it; converge it before rotating", m.Name)
+		if err := runsRendered(m, current, rendered, plain); err != nil {
+			return err
 		}
 
 		if err := talos.APIServerReady(ctx); err != nil {

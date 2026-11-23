@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func TestApplyIchorManifest_RefusesPlaceholder(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	err := applyIchorManifest(context.Background(), k8sClient, []byte(installmanifest.PlaceholderSentinel+"\n# nothing else"), &warn, false)
+	err := applyIchorManifest(context.Background(), k8sClient, []byte(installmanifest.PlaceholderSentinel+"\n# nothing else"), &warn, false, installer.UISettings{})
 	if err == nil {
 		t.Fatal("expected an error for the placeholder manifest, got nil")
 	}
@@ -65,7 +66,7 @@ func TestApplyIchorManifest_AppliesEveryDocument(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false, installer.UISettings{}); err != nil {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
@@ -88,11 +89,11 @@ func TestApplyIchorManifest_AlreadyExistsIsNotAnError(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false, installer.UISettings{}); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false, installer.UISettings{}); err != nil {
 		t.Fatalf("second apply: %v", err)
 	}
 }
@@ -209,7 +210,7 @@ func TestApplyIchorManifest_RetriesEtcdTimeout(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), failingCreates(t, 2, etcd, &calls), []byte(testIchorManifest), &warn, false); err != nil {
+	if err := applyIchorManifest(context.Background(), failingCreates(t, 2, etcd, &calls), []byte(testIchorManifest), &warn, false, installer.UISettings{}); err != nil {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
@@ -226,7 +227,7 @@ func TestApplyIchorManifest_ForbiddenFailsAtOnce(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), failingCreates(t, 100, forbidden, &calls), []byte(testIchorManifest), &warn, false); err == nil {
+	if err := applyIchorManifest(context.Background(), failingCreates(t, 100, forbidden, &calls), []byte(testIchorManifest), &warn, false, installer.UISettings{}); err == nil {
 		t.Fatal("want the Forbidden error, got nil")
 	}
 
@@ -389,7 +390,7 @@ func namespaceGatedClient(t *testing.T) client.Client {
 func TestApplyIchorManifest_CreatesCiliumSecretsForCilium(t *testing.T) {
 	c := namespaceGatedClient(t)
 
-	if err := applyIchorManifest(context.Background(), c, []byte(testCiliumSecretsManifest), &bytes.Buffer{}, true); err != nil {
+	if err := applyIchorManifest(context.Background(), c, []byte(testCiliumSecretsManifest), &bytes.Buffer{}, true, installer.UISettings{}); err != nil {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
@@ -415,7 +416,7 @@ func TestApplyIchorManifest_SkipsCiliumSecretsWithoutCilium(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), c, []byte(testCiliumSecretsManifest), &warn, false); err != nil {
+	if err := applyIchorManifest(context.Background(), c, []byte(testCiliumSecretsManifest), &warn, false, installer.UISettings{}); err != nil {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
@@ -432,7 +433,7 @@ func TestApplyIchorManifest_SkipsCiliumSecretsWithoutCilium(t *testing.T) {
 func TestApplyIchorManifest_MissingNamespaceElsewhereStillFails(t *testing.T) {
 	manifest := strings.ReplaceAll(testCiliumSecretsManifest, "namespace: cilium-secrets", "namespace: elsewhere")
 
-	err := applyIchorManifest(context.Background(), namespaceGatedClient(t), []byte(manifest), &bytes.Buffer{}, true)
+	err := applyIchorManifest(context.Background(), namespaceGatedClient(t), []byte(manifest), &bytes.Buffer{}, true, installer.UISettings{})
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("got %v, want the not found error", err)
 	}
@@ -598,4 +599,20 @@ func withSignature(s ichorv1alpha1.IchorInstallationSpec, mode string) ichorv1al
 	s.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: mode}
 
 	return s
+}
+
+// TestApplyIchorManifest_InstallsIchorUIWithSignInOn: init's manifest apply creates ichor-ui with the sign-in
+// flags, so the pod is never without one.
+func TestApplyIchorManifest_InstallsIchorUIWithSignInOn(t *testing.T) {
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	opts := initOptions{UIURL: defaultUIURL}
+
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(signInManifest), &bytes.Buffer{}, false, opts.uiSettings()); err != nil {
+		t.Fatalf("applyIchorManifest: %v", err)
+	}
+
+	args := uiDeploymentArgs(t, k8sClient)
+	if !slices.Contains(args, "--users-enabled=true") || !slices.Contains(args, "--external-url="+defaultUIURL) {
+		t.Errorf("ichor-ui was created with args %v, want sign-in on at %s", args, defaultUIURL)
+	}
 }

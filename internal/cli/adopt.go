@@ -107,9 +107,9 @@ adopt runs in four phases, and nothing is applied to a node in any of them:
   4. Release: lifts the hold one node at a time, control planes first, each
      waiting for Ready, so the first render is applied with zero drift.
 
-Then, in the Ichor adopt installs, it turns Ichor's own sign-in on, as ichor init
-does: it creates the first administrator (its generated password is printed once,
-at the end), switches ichor-ui to sign-in, and sets spec.authentication.ichor on
+Then, in the Ichor adopt installs, it sets Ichor's own sign-in up, as ichor init
+does: ichor-ui is installed with sign-in on, and adopt creates the first administrator
+(its generated password is printed once, at the end) and sets spec.authentication.ichor on
 the TalosCluster. That last step marks every control plane APIServerRestartRequired:
 kube-apiserver restarts on each control plane, one at a time, only when you run
 "ichor rollout config". The consent prompt names it. Sign-in cannot be turned off.

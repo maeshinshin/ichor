@@ -29,7 +29,7 @@ namespace ichor-system · discovering from 10.0.0.11
 ✓ Read cluster — Talos v1.14.5 · Kubernetes v1.36.6 · 2 read · no TalosCluster yet
   no CNI found: Cilium will be installed by adopt (Cilium 1.20.4, tunnel the default, kube-proxy enabled) as Ichor's own Helm release, then Ichor is installed, then the cluster is adopted with the managed cilium preset
 ✓ Inspect CNI — CNI: none (no CNI installed, every node NotReady)
-! after the nodes are released adopt will turn Ichor's sign-in on: create the first administrator "admin" and switch ichor-ui to sign-in at https://localhost:8443, and set spec.authentication.ichor on the TalosCluster, which marks every control plane APIServerRestartRequired: kube-apiserver restarts on each control plane, one at a time, when you run `ichor rollout config` (until then it runs as it is; with a single control plane the Kubernetes API is unavailable while it restarts)
+! after the nodes are released adopt will set Ichor's sign-in up: create the first administrator "admin" (ichor-ui signs in at https://localhost:8443), and set spec.authentication.ichor on the TalosCluster, which marks every control plane APIServerRestartRequired: kube-apiserver restarts on each control plane, one at a time, when you run `ichor rollout config` (until then it runs as it is; with a single control plane the Kubernetes API is unavailable while it restarts)
   node "uuid-10.0.0.10": role controlplane, install disk not stated in the node's configuration
   node "uuid-10.0.0.11": role worker, install disk not stated in the node's configuration
   node "uuid-10.0.0.10": already matches a fresh render, nothing to do
@@ -60,7 +60,7 @@ The reminder to back up a recovered secrets bundle is also a `!` line.
 | 1 | Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held), the patches and, if Ichor is not running, its install manifest. With no CNI, Cilium is installed first. A held machine has the annotation `ichor.maesh.dev/hold-apply`; the controller reports its drift (condition `AdoptionHeld`) and applies nothing. |
 | 2 | Takes over Cilium and waits for the `CNIHandover` condition. Skipped with `--cni-unmanaged`. |
 | 3 | Releases the holds machine by machine, control planes first, each only after a live zero-drift check. The controller applies the first render. |
-| 4 | Turns sign-in on once every hold is released (see [Sign-in](sign-in.md)): the first administrator, the switch of ichor-ui, then `spec.authentication.ichor`. |
+| 4 | Finishes sign-in once every hold is released (see [Sign-in](sign-in.md)): the first administrator, then `spec.authentication.ichor`. ichor-ui is installed with sign-in on in phase 1. |
 
 Only approved machines are read; a pending one is skipped with a message.
 Approve it and run adopt again. If adopt stops half-way, run it again: the

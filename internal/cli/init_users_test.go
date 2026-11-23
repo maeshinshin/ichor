@@ -32,6 +32,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -475,3 +476,38 @@ func assertControllerIssuerFlags(t *testing.T, k client.Client, uiArgs []string)
 		t.Errorf("controller args = %v", margs)
 	}
 }
+
+// TestRunInit_IchorUIIsCreatedWithSignInOn: init's install step creates the ichor-ui Deployment with the
+// sign-in flags, so its pod never starts without one.
+func TestRunInit_IchorUIIsCreatedWithSignInOn(t *testing.T) {
+	withTempHome(t)
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+
+	var atCreate []string
+
+	deps, _, _ := newFakeInitDeps(t, interceptor.NewClient(k, interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.CreateOption) error {
+			// The install manifest is created as unstructured objects.
+			if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == kindDeployment && u.GetName() == testPrefixedUIDeployment {
+				cs, _, _ := unstructured.NestedSlice(u.Object, "spec", "template", "spec", "containers")
+				atCreate, _, _ = unstructured.NestedStringSlice(cs[0].(map[string]any), "args")
+			}
+
+			return c.Create(ctx, obj, o...)
+		},
+	}))
+	deps.IchorManifest = []byte(signInManifest)
+	deps.Stdout, deps.Stderr = &bytes.Buffer{}, &bytes.Buffer{}
+
+	if err := runInit(context.Background(), initOptsWithFlags(t), deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	if !slices.Contains(atCreate, "--users-enabled=true") || !slices.Contains(atCreate, "--external-url="+defaultUIURL) {
+		t.Errorf("ichor-ui was created with args %v, want sign-in on at %s", atCreate, defaultUIURL)
+	}
+}
+
+// kindDeployment is the Kind the tests look for in created objects.
+const kindDeployment = "Deployment"

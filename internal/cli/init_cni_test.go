@@ -107,7 +107,7 @@ func ciliumOperatorReplicas(t *testing.T, manifest string) int {
 			continue
 		}
 
-		if obj.Kind == "Deployment" && obj.Metadata.Name == "cilium-operator" {
+		if obj.Kind == kindDeployment && obj.Metadata.Name == "cilium-operator" {
 			return obj.Spec.Replicas
 		}
 	}

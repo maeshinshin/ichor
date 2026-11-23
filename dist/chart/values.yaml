@@ -221,8 +221,8 @@ ichorUI:
   ##
   port: 8443
 
-  ## ichor-ui does not start without a sign-in, so with ichorUI.enabled the render fails unless
-  ## ichorUI.users.enabled or ichorUI.oidc.enabled is true. (The value ichorUI.allowUnauthenticated
+  ## Sign-in cannot be turned off: ichor-ui does not start without one, so with ichorUI.enabled the render fails
+  ## unless ichorUI.users.enabled or ichorUI.oidc.enabled is true (`ichor init` and `ichor adopt` install with users on). (The value ichorUI.allowUnauthenticated
   ## that left it open is removed, and setting it to true fails the render.)
   ##
   ## OIDC login with Kubernetes impersonation. Off by default: turn on this or users below. On: every request needs an ID token from this

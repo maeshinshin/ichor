@@ -26,16 +26,19 @@ import (
 	"github.com/maeshinshin/ichor/internal/installer"
 )
 
-// Sign-in is on by default in adopt as it is in init, and it is set up by init's own functions
-// (initUsers, setClusterAuthentication), after the zero-drift plan and the release of the holds:
-// the authenticator goes in once the nodes run the configuration adopt left them with.
+// Sign-in is on from the install in adopt as it is in init: ichor-ui is installed with it (applyIchorManifest).
+// What is left is set up by init's own functions (initUsers, setClusterAuthentication), after the zero-drift
+// plan and the release of the holds: the first administrator, and the authenticator once the nodes run the
+// configuration adopt left them with.
 
 // signInPlan is what adopt does to turn Ichor's sign-in on, settled before consent.
 type signInPlan struct {
 	opts initOptions // UIURL, AdminUser, VersionContract
 
-	// users: ichor-ui is not at sign-in yet, so the first administrator is created and ichor-ui switched.
+	// users: the first administrator is created. ichor-ui installed by adopt already runs with sign-in.
 	users bool
+	// switchUI: an ichor-ui that was installed before and has no sign-in is switched to it.
+	switchUI bool
 	// authenticator: spec.authentication.ichor is not set on the TalosCluster yet.
 	authenticator bool
 }
@@ -45,7 +48,12 @@ func (p *signInPlan) describe() string {
 	var parts []string
 
 	if p.users {
-		parts = append(parts, fmt.Sprintf("create the first administrator %q and switch ichor-ui to sign-in at %s", p.opts.AdminUser, p.opts.UIURL))
+		what := fmt.Sprintf("create the first administrator %q (ichor-ui signs in at %s)", p.opts.AdminUser, p.opts.UIURL)
+		if p.switchUI {
+			what = fmt.Sprintf("create the first administrator %q and switch ichor-ui to sign-in at %s", p.opts.AdminUser, p.opts.UIURL)
+		}
+
+		parts = append(parts, what)
 	}
 
 	if p.authenticator {
@@ -54,7 +62,7 @@ func (p *signInPlan) describe() string {
 			"(until then it runs as it is; with a single control plane the Kubernetes API is unavailable while it restarts)")
 	}
 
-	return "turn Ichor's sign-in on: " + strings.Join(parts, ", and ")
+	return "set Ichor's sign-in up: " + strings.Join(parts, ", and ")
 }
 
 // planSignIn settles, before anything is written, whether adopt turns sign-in on. It validates the
@@ -98,6 +106,7 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		}
 
 		plan.users = !installer.ReadUISettings(ui, nil).UsersOn()
+		plan.switchUI = plan.users
 	}
 
 	// The TLS and kubeconfig flags are applied by the users step; with users already on there is no such step,
@@ -118,7 +127,8 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 	return nil
 }
 
-// turnSignInOn is the step after the release of the holds: the users step, then the authenticator.
+// turnSignInOn is the step after the release of the holds: the first administrator (and, for an Ichor installed
+// before, the switch of its ichor-ui), then the authenticator.
 // The generated password is kept in st.adminPassword as soon as it exists, so a failure further on
 // still shows it.
 func (st *adoptState) turnSignInOn(ctx context.Context, deps adoptDeps, clusterName, namespace string) error {
@@ -156,8 +166,8 @@ func (st *adoptState) finishSignIn(ctx context.Context, deps adoptDeps, clusterN
 	}
 
 	if !complete {
-		deps.say(adoptWarn, "sign-in is not turned on yet: run `ichor adopt` again once the Cilium takeover is done; "+
-			"until then ichor-ui does not start, since it needs a sign-in")
+		deps.say(adoptWarn, "the first administrator is not created yet: run `ichor adopt` again once the Cilium takeover is done; "+
+			"until then nobody can sign in to ichor-ui, which runs with sign-in from its install")
 
 		return nil
 	}

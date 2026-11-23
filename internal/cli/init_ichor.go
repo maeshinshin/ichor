@@ -53,13 +53,14 @@ import (
 //
 // cilium says Cilium is (or is about to be) this cluster's CNI: init then creates the cilium-secrets
 // namespace the manifest's Role and RoleBinding live in; otherwise those two are skipped.
-// ichor-ui starts read-only and initUsers turns the sign-in on before any write can reach it.
+// ui is the sign-in the manifest installs ichor-ui with, so it starts with sign-in on and never runs without
+// one; initUsers then creates the first administrator.
 //
 // It refuses outright if manifest is the placeholder
 // (internal/installmanifest's doc comment): that means this binary was
 // built with plain `go build`, not `make build-ichor-embed`, and has
 // nothing real to apply.
-func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer, cilium bool) error {
+func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer, cilium bool, ui installer.UISettings) error {
 	if err := checkInstallManifest(manifest); err != nil {
 		return err
 	}
@@ -69,8 +70,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 		return fmt.Errorf("init: decoding Ichor's own install manifest: %w", err)
 	}
 
-	// ichor-ui does not start until initUsers turns its sign-in on.
-	if objs, err = installer.CustomizeObjects(objs, installer.UISettings{}); err != nil {
+	if objs, err = installer.CustomizeObjects(objs, ui); err != nil {
 		return fmt.Errorf("init: preparing Ichor's own install manifest: %w", err)
 	}
 

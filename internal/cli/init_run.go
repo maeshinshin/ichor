@@ -469,7 +469,7 @@ func initInstall(
 	err = steps.Run("Install Ichor", func(s *step) (string, error) {
 		s.Update("applying Ichor's install manifest")
 
-		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium); err != nil {
+		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium, opts.uiSettings()); err != nil {
 			return "", err
 		}
 

@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -174,7 +175,7 @@ func TestAdoptSignIn_ConsentNamesTheAPIServerRestartBeforeAnythingIsWritten(t *t
 		}
 	}
 
-	for _, want := range []string{"turn Ichor's sign-in on", "APIServerRestartRequired", "kube-apiserver restarts on each control plane", "ichor rollout config"} {
+	for _, want := range []string{"set Ichor's sign-in up", "APIServerRestartRequired", "kube-apiserver restarts on each control plane", "ichor rollout config"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("the prompt lacks %q:\n%s", want, prompt)
 		}
@@ -332,5 +333,38 @@ func seedOIDCTrust(t *testing.T, k client.Client) {
 	}
 	if err := k.Create(context.Background(), cm); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestAdoptSignIn_IchorUIIsCreatedWithSignInOn: the ichor-ui Deployment adopt installs has sign-in on when it
+// is created, not after the last step, so the pod never runs without one (and never crash-loops on it).
+func TestAdoptSignIn_IchorUIIsCreatedWithSignInOn(t *testing.T) {
+	f := signInFlow(t)
+
+	var atCreate []string
+
+	f.deps.K8s = interceptor.NewClient(f.env.k8s.(client.WithWatch), interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.CreateOption) error {
+			// The install manifest is created as unstructured objects.
+			if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == kindDeployment && u.GetName() == testPrefixedUIDeployment {
+				cs, _, _ := unstructured.NestedSlice(u.Object, "spec", "template", "spec", "containers")
+				args, _, _ := unstructured.NestedStringSlice(cs[0].(map[string]any), "args")
+				atCreate = args
+			}
+
+			return c.Create(ctx, obj, o...)
+		},
+	})
+
+	if err := f.runSignIn(); err != nil {
+		t.Fatalf("runAdopt: %v\n%s", err, f.env.stderr.String())
+	}
+
+	if !slices.Contains(atCreate, "--users-enabled=true") || !slices.Contains(atCreate, "--external-url="+defaultUIURL) {
+		t.Errorf("ichor-ui was created with args %v, want sign-in on at %s", atCreate, defaultUIURL)
+	}
+
+	if strings.Contains(f.env.stderr.String(), "switch ichor-ui") {
+		t.Errorf("adopt says it switches an ichor-ui it installed with sign-in:\n%s", f.env.stderr.String())
 	}
 }

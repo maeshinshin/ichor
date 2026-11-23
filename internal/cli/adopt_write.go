@@ -141,6 +141,8 @@ type adoptWriteIchor struct {
 	Namespace       string
 	Manifest        []byte
 	NetworkPolicies []byte
+	// UI is the sign-in ichor-ui is installed with, so it never starts without one.
+	UI installer.UISettings
 
 	// DetectedCNI and PolicyCRDPresent are the two inputs of the network-policy gate
 	// (installer.IncludeCiliumPolicies). The gate alone decides;
@@ -271,7 +273,7 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return nil
 	}
 
-	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr, ichor.DetectedCNI == cniCilium); err != nil {
+	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr, ichor.DetectedCNI == cniCilium, ichor.UI); err != nil {
 		return err
 	}
 

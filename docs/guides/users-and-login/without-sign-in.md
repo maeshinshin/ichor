@@ -8,8 +8,9 @@ sidebar_order: 2
 
 *There is no way to run ichor-ui open; every refusal names the fix.*
 
-ichor-ui does not start without a sign-in (Ichor users or an external OIDC
-provider, `ichorUI.oidc`), and a caller it cannot identify is served nothing,
+Sign-in cannot be turned off. ichor-ui does not start without one (Ichor users or an external OIDC
+provider, `ichorUI.oidc`), `ichor init` and `ichor adopt` install it with Ichor users on from the first
+moment, so its pod never waits for a later step, and a caller it cannot identify is served nothing,
 reads included. Reachable without a login: the sign-in page, `/auth/config`
 and the issuer's own endpoints.
 
@@ -24,7 +25,7 @@ Where each is refused:
 | Where | What happens |
 |---|---|
 | `ichor init`, `ichor adopt` | Refuse `--allow-unauthenticated` (and `ui.allowUnauthenticated: true` in an init file); sign-in is on in every cluster they set up |
-| `ichor-ui` | Stops at startup on `--allow-unauthenticated` or `ICHOR_ALLOW_UNAUTHENTICATED=true` |
+| `ichor-ui` | Stops at startup on `--allow-unauthenticated` or `ICHOR_ALLOW_UNAUTHENTICATED=true`, and with neither `--users-enabled` nor `--oidc-issuer` |
 | `helm install`, `helm upgrade` | Fail when `ichorUI.allowUnauthenticated` is true. `--reuse-values` carries the old value: add `--set ichorUI.allowUnauthenticated=null` or drop `--reuse-values`. Then enable `ichorUI.users` or `ichorUI.oidc` |
 | The chart | Refuses `ichorUI.enabled` with neither `ichorUI.users.enabled` (with `externalURL`) nor `ichorUI.oidc.enabled`. `ichorUI.enabled=false` installs Ichor without ichor-ui |
 
@@ -32,7 +33,7 @@ Where each is refused:
 
 `ichor upgrade ichor` turns Ichor's own sign-in on first, as `ichor init` does:
 
-- It asks (`--yes` skips), creates the first administrator, switches ichor-ui, sets `spec.authentication.ichor` on each `TalosCluster` that can carry it (Talos v1.14 or later) and prints the password once, at the end.
+- It asks (`--yes` skips), creates the first administrator (a generated password, shown once), switches ichor-ui, sets `spec.authentication.ichor` on each `TalosCluster` that can carry it (Talos v1.14 or later) and prints the password once, at the end.
 - It takes `--ui-url`, `--admin-user` and the TLS and kubeconfig flags of `ichor init`.
 - The installer Job refuses an ichor-ui with no sign-in and says to use this command, so any other upgrade (a hand-written `TalosOperation`, the controller's patch upgrades) changes nothing. An install with the removed flag has it dropped, with a `NOTICE`.
 

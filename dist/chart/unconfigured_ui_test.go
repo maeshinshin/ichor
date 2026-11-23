@@ -21,7 +21,10 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 			return
 		}
 
-		wants := []string{"ichorUI.enabled needs a sign-in", usersOn, "ichorUI.oidc.enabled=true", "--bootstrap", uiOffSet}
+		wants := []string{
+			"ichorUI.enabled needs a sign-in", "Sign-in cannot be turned off", usersOn,
+			"ichorUI.oidc.enabled=true", "--bootstrap", uiOffSet,
+		}
 		for _, want := range wants {
 			if !strings.Contains(string(out), want) {
 				t.Errorf("%s: the refusal does not say %q: %s", name, want, out)

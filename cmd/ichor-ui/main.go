@@ -293,11 +293,13 @@ var errOpenModeRemoved = errors.New("ichor-ui: --allow-unauthenticated (or ICHOR
 	"ichor-ui no longer serves changes without a sign-in. Remove it and turn sign-in on: Ichor users " +
 	"(chart ichorUI.users.enabled with ichorUI.users.externalURL, or `ichor adopt` / `ichor init`) or OIDC (chart ichorUI.oidc)")
 
-// errNoSignIn is what ichor-ui says when it is started with neither Ichor users nor OIDC. It does not
-// serve read-only calls instead: nothing is served to a caller it cannot identify.
-var errNoSignIn = errors.New("ichor-ui: no sign-in is configured, and ichor-ui does not start without one. " +
-	"Turn on Ichor users (--users-enabled with --external-url; chart ichorUI.users.enabled with ichorUI.users.externalURL) " +
-	"or OIDC (--oidc-issuer and --oidc-client-id; chart ichorUI.oidc). `ichor init`, `ichor adopt` and `ichor upgrade ichor` set Ichor users up")
+// errNoSignIn is what ichor-ui says when it is started with neither Ichor users nor OIDC. Sign-in cannot be
+// turned off: `ichor init`, `ichor adopt` and the chart install ichor-ui with it, so this is a defensive exit
+// for a Deployment edited by hand. It does not serve read-only calls instead: nothing is served to a caller it
+// cannot identify.
+var errNoSignIn = errors.New("ichor-ui: no sign-in is configured, and ichor-ui does not start without one: sign-in cannot be turned off. " +
+	"Add --users-enabled with --external-url (chart ichorUI.users.enabled with ichorUI.users.externalURL) " +
+	"or --oidc-issuer and --oidc-client-id (chart ichorUI.oidc) to the Deployment. `ichor upgrade ichor` sets Ichor users up on an install that has none")
 
 // envTrue reports whether the environment variable is "true".
 func envTrue(name string) bool { return os.Getenv(name) == "true" }

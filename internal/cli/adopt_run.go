@@ -1412,6 +1412,11 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 
 		ichor.DetectedCNI = detected
 		ichor.PolicyCRDPresent = ciliumPolicyCRDPresent(ctx, deps.Target)
+
+		if st.signIn != nil {
+			ichor.UI = st.signIn.opts.uiSettings()
+		}
+
 		in.Ichor = &ichor
 	}
 

@@ -23,6 +23,16 @@ v0.3.0 is the last release with changes of this size. No further large change is
 What in this release can refuse something that used to work, or change what a
 command does. Each item is described where it is listed below.
 
+- **Sign-in cannot be turned off, and `ichor init` and `ichor adopt` install
+  ichor-ui with it.** ichor-ui no longer waits in CrashLoopBackOff for the last
+  step of an adopt. An install made by the installer whose ichor-ui has no sign-in
+  gets Ichor users at `ichor upgrade ichor`: it asks, creates the first
+  administrator `admin` (or `--admin-user`) with a generated password shown once
+  at the end that must be changed at the first sign-in, and switches ichor-ui; an
+  existing administrator is never reset. A Helm install is not touched: set
+  `ichorUI.users` or `ichorUI.oidc` before `helm upgrade`. An external OIDC
+  provider alone stays a sign-in.
+
 - **A Helm values file with no sign-in stops rendering: add `--set
   ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443`
   (or `ichorUI.oidc`, or `ichorUI.enabled=false`).** The chart refuses to render an

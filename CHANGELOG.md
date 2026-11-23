@@ -833,7 +833,10 @@ command does. Each item is described where it is listed below.
   The `/readyz` check after a configuration rollout, a CA rotation or a key rotation always
   dialled port 6443, so a cluster with `cluster.controlPlane.localAPIServerPort` set paused at
   `APIServerNotReady`. It now dials the port the node's configuration gives, and 6443 when unset.
-  Known gap: the opt-in firewall still opens only 6443 for the Kubernetes API.
+- **The opt-in firewall opens the kube-apiserver port the cluster really uses.** With
+  `cluster.controlPlane.localAPIServerPort` (or `KubeAPIServerConfig` `apiPort`) set in a patch, the
+  firewall rule for the Kubernetes API still opened only 6443, so it blocked kube-apiserver on every
+  control plane. The rule now follows the port of the merged configuration.
 
 ### Storage
 

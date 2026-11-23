@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
@@ -125,7 +126,9 @@ func TestC8C9C10(t *testing.T) {
 	// C8: a signed-in user without the reclaim verb (a viewer) is denied; the admin below is allowed.
 	viewer, vpass := r.bootstrapUser(t, "viewer")
 	out, err := r.uiAs(t, viewer, vpass, "create", "-address", r.foreignW, "-talosconfig", tcPath, "-cluster", ichorName)
-	if err == nil || !strings.Contains(out, "reclaim") {
+	// internal/uiapi/reclaim_service.go reclaimGate: permission_denied, RBAC does not grant you the "reclaim" verb.
+	if err == nil || !strings.Contains(out, "permission_denied") ||
+		!strings.Contains(out, `does not grant you the "reclaim" verb`) {
 		t.Errorf("C8: a caller without the reclaim verb was not denied: %v / %s", err, out)
 	}
 	if got := r.ikJSON(t, "-n", crNS, "get", "machinereclaims.ichor.maesh.dev", "-o",
@@ -199,10 +202,12 @@ func TestC8C9C10(t *testing.T) {
 
 	// C10: status.audit and the Events carry user, UUID, foreign cluster and outcome.
 	t.Logf("status.audit: %s", jsonField(t, mr, "status.audit"))
-	for _, w := range []string{r.uiUser, uuid} {
-		if !strings.Contains(jsonField(t, mr, "status.audit"), w) && !strings.Contains(events, w) {
-			t.Errorf("C10: neither status.audit nor Events carry %q", w)
-		}
+	// reclaimUser: the signed-in identity, "ichor:" + the user name.
+	if got, want := jsonField(t, mr, "status.audit.requestedBy"), ichorauth.UserPrefix+r.uiUser; got != want {
+		t.Errorf("C10: status.audit.requestedBy = %q, want %q", got, want)
+	}
+	if !strings.Contains(jsonField(t, mr, "status.audit"), uuid) && !strings.Contains(events, uuid) {
+		t.Errorf("C10: neither status.audit nor Events carry %q", uuid)
 	}
 	for _, reason := range []string{"ReclaimRequested", "ReclaimInspected", "ReclaimConfirmed", "ReclaimReset",
 		"ReclaimCompleted", "CredentialDeleted"} {

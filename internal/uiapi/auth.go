@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -377,10 +378,41 @@ const impersonationRuleWait = 5 * time.Second
 // fails as an internal error. It asks with a SelfSubjectAccessReview (any authenticated caller may), waits up
 // to wait, and then says the account is still being set up.
 func newImpersonator(cfg *rest.Config, opts client.Options, wait time.Duration) func(Identity) (client.Client, error) {
+	self, err := client.New(cfg, opts)
+
+	return impersonatorVia(cfg, opts, wait, self, err, time.Now)
+}
+
+// impersonationRuleTTL is how long a found rule is trusted: the bound on noticing that the controller removed it.
+const impersonationRuleTTL = time.Minute
+
+// impersonatorVia is newImpersonator with the ServiceAccount's own client (and the error from making it) given.
+// A rule that was found is remembered per user for impersonationRuleTTL; a missing one never is, so a new user's
+// rule is seen the moment it lands.
+func impersonatorVia(cfg *rest.Config, opts client.Options, wait time.Duration, self client.Client, selfErr error, now func() time.Time) func(Identity) (client.Client, error) {
+	var (
+		mu    sync.Mutex
+		found = map[string]time.Time{}
+	)
+
 	return func(id Identity) (client.Client, error) {
 		if id.Source == SourceIchor {
-			if err := waitForImpersonationRule(cfg, opts, id.User, wait); err != nil {
-				return nil, err
+			mu.Lock()
+			at, ok := found[id.User]
+			mu.Unlock()
+
+			if !ok || now().Sub(at) >= impersonationRuleTTL {
+				if selfErr != nil {
+					return nil, selfErr
+				}
+
+				if err := waitForImpersonationRule(self, id.User, wait); err != nil {
+					return nil, err
+				}
+
+				mu.Lock()
+				found[id.User] = now()
+				mu.Unlock()
 			}
 		}
 
@@ -391,13 +423,7 @@ func newImpersonator(cfg *rest.Config, opts client.Options, wait time.Duration) 
 	}
 }
 
-func waitForImpersonationRule(cfg *rest.Config, opts client.Options, user string, wait time.Duration) error {
-	self, err := client.New(cfg, opts)
-	if err != nil {
-		return err
-	}
-
-	// shortcut: polls every 250 ms and asks once per call, uncached; drop it for a cache if the SSAR load shows up.
+func waitForImpersonationRule(self client.Client, user string, wait time.Duration) error {
 	deadline := time.Now().Add(wait)
 
 	for {

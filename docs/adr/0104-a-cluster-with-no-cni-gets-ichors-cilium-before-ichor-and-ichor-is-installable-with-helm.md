@@ -91,7 +91,7 @@ Three waits in `adopt` and `init` can currently go on until a 30-minute default 
 
 - has a hard timeout per wait: webhooks 15 minutes in `adopt` (30 in `init`, unchanged, because a first install pulls images over a slow link), Cilium Ready 10, hand-over 10; the flag `--wait-timeout` on `adopt` sets the webhook wait. On timeout the command exits non-zero and says what is left, never "waiting" forever;
 - every 30 seconds while waiting lists the pods in `ichor-system` and, for each one that is Pending, prints its scheduler condition message (for example "0/3 nodes are available: 3 node(s) had untolerated taint {node.kubernetes.io/not-ready}"), and for a pod in `ImagePullBackOff` or `CrashLoopBackOff` the waiting reason;
-- **fails early** when every Ichor pod has been unschedulable for two minutes and every node is NotReady with the network-plugin message: "Ichor's pods cannot start because this cluster has no pod network (its nodes are NotReady: cni plugin not initialized). Install a CNI, or let `ichor adopt` install Cilium (a cluster with no CNI)". After decision 1 adopt cannot reach this state (it installs Cilium first and its inspection refuses to proceed on the other mixed states), so this guards `ichor init` against a broken Cilium, an adopt rerun against a cluster whose Cilium was removed, and the Helm path.
+- **fails early** when every Ichor pod has been unschedulable or stuck in ContainerCreating for two minutes and every node is NotReady with the network-plugin message: "Ichor's pods cannot start because this cluster has no pod network (its nodes are NotReady: cni plugin not initialized). Install a CNI, or let `ichor adopt` install Cilium (a cluster with no CNI)". After decision 1 adopt cannot reach this state (it installs Cilium first and its inspection refuses to proceed on the other mixed states), so this guards `ichor init` against a broken Cilium, an adopt rerun against a cluster whose Cilium was removed, and the Helm path.
 
 ### 4. Installing Ichor with Helm
 
@@ -183,3 +183,7 @@ Amendment 2026-10-29 (ADR 0105): a Helm install does get an `IchorInstallation`:
 ## Amendment (2026-11-04): release artifacts and the version stamp
 
 `appVersion` carries the leading v (`v0.1.0`) because the chart's default image tag is `.Chart.AppVersion` and images are tagged with the git tag; `version` stays without the v. `make release VERSION=vX.Y.Z` is the local equivalent of the release workflow's build job and writes the CLI, the install manifest and the chart to `bin/release/`. The goreleaser build uses `-tags installembed` with the install manifest generated in a `before` hook for the tag being released, and stamps `{{ .Tag }}` (not `{{ .Version }}`) so the version keeps its v and passes `semver.IsValid`.
+
+## Amendment (2026-11-23): a pod stuck in ContainerCreating counts as unschedulable
+
+The early failure of decision 3 (line 94) waited only for pods the scheduler could not place. When the nodes lose their pod network after Ichor's pods were placed, the pods sit in `ContainerCreating` and the wait ran to its full timeout. A pending pod with a container waiting in `ContainerCreating` now counts like an unschedulable one; the other conditions are unchanged (every node NotReady with the network-plugin message, no Cilium agent pod, two minutes).

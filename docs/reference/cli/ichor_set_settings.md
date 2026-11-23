@@ -20,10 +20,13 @@ Change one or more settings; only the keys you name are written.
   autoPatch.window=02:00-05:00   daily UTC window an automatic upgrade may start in (empty: any time)
   autoPatch.acknowledgeHalt=NAMESPACE/NAME   resume after an automatic operation halted auto-patching
 
+--reset KEY clears the key from the IchorInstallation, so the flag or chart value of the deployment applies again
+(and follows later changes to it). KEY is any of the keys above except autoPatch.acknowledgeHalt.
+
 reclaim.enabled is removed: who may reset and add a node is decided by RBAC alone.
 
 ```sh
-ichor set settings KEY=VALUE... [flags]
+ichor set settings [KEY=VALUE...] [--reset KEY]... [flags]
 ```
 
 ### Examples
@@ -31,6 +34,7 @@ ichor set settings KEY=VALUE... [flags]
 ```sh
   ichor set settings updateCheck.enabled=false
   ichor set settings autoPatch.enabled=true autoPatch.window=02:00-05:00
+  ichor set settings --reset users.tokenTTL --reset defaults.driftPolicy
 ```
 
 ### Options
@@ -42,6 +46,7 @@ ichor set settings KEY=VALUE... [flags]
       --local                    do not use ichor-ui; compute from the Kubernetes API directly
   -n, --namespace string         namespace of the Ichor resources the command names (default "ichor-system")
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
+      --reset KEY                clear KEY so the deployment value applies again (repeatable)
       --tls-server-name string   name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)
 ```
 

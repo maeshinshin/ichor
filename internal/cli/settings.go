@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -52,7 +53,7 @@ sets it, "deployment" when the flag or chart value applies. The default is a tab
 }
 
 var setSettingsCmd = &cobra.Command{
-	Use:   "settings KEY=VALUE...",
+	Use:   "settings [KEY=VALUE...] [--reset KEY]...",
 	Short: "Change settings (see --help for the keys)",
 	Long: `Change one or more settings; only the keys you name are written.
 
@@ -65,12 +66,24 @@ var setSettingsCmd = &cobra.Command{
   ` + settings.KeyAutoPatchWindow + `=02:00-05:00   daily UTC window an automatic upgrade may start in (empty: any time)
   ` + settings.KeyAutoPatchAckHalt + `=NAMESPACE/NAME   resume after an automatic operation halted auto-patching
 
+--reset KEY clears the key from the IchorInstallation, so the flag or chart value of the deployment applies again
+(and follows later changes to it). KEY is any of the keys above except ` + settings.KeyAutoPatchAckHalt + `.
+
 reclaim.enabled is removed: who may reset and add a node is decided by RBAC alone.`,
 	Example: `  ichor set settings updateCheck.enabled=false
-  ichor set settings autoPatch.enabled=true autoPatch.window=02:00-05:00`,
-	Args: cobra.MinimumNArgs(1),
+  ichor set settings autoPatch.enabled=true autoPatch.window=02:00-05:00
+  ichor set settings --reset users.tokenTTL --reset defaults.driftPolicy`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		if r, _ := cmd.Flags().GetStringSlice("reset"); len(args) == 0 && len(r) == 0 {
+			return errors.New("name a KEY=VALUE to set or a --reset KEY")
+		}
+
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req, err := settingsUpdateRequest(args)
+		reset, _ := cmd.Flags().GetStringSlice("reset")
+
+		req, err := settingsUpdateRequest(args, reset)
 		if err != nil {
 			return err
 		}
@@ -89,15 +102,21 @@ reclaim.enabled is removed: who may reset and add a node is decided by RBAC alon
 func init() {
 	addAPIFlags(getSettingsCmd)
 	addAPIFlags(setSettingsCmd)
+	setSettingsCmd.Flags().StringSlice("reset", nil, "clear `KEY` so the deployment value applies again (repeatable)")
 	getCmd.AddCommand(getSettingsCmd)
 	setCmd.AddCommand(setSettingsCmd)
 }
 
 // settingsUpdateRequest validates KEY=VALUE arguments the way the server will, so a typo fails before any
 // connection is made.
-func settingsUpdateRequest(args []string) (*pb.UpdateSettingsRequest, error) {
+func settingsUpdateRequest(args, reset []string) (*pb.UpdateSettingsRequest, error) {
 	c, err := settings.ParseAssignments(args)
 	if err != nil {
+		return nil, err
+	}
+
+	c.Unset = reset
+	if err := c.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -121,7 +140,7 @@ func settingsUpdateRequest(args []string) (*pb.UpdateSettingsRequest, error) {
 		f.RefreshLifetime = &v
 	}
 
-	return &pb.UpdateSettingsRequest{Changes: f}, nil
+	return &pb.UpdateSettingsRequest{Changes: f, Unset: reset}, nil
 }
 
 func writeSettings(cmd *cobra.Command, r *pb.GetSettingsResponse) error {

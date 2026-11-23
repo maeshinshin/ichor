@@ -29,6 +29,7 @@ import {
   formOf,
   lockedReason,
   normalizeDuration,
+  resettable,
   REFRESH_LIFETIME_PRESETS,
   sourceOf,
   TOKEN_TTL_PRESETS,
@@ -111,10 +112,10 @@ function Fact({ label, value }: { label: string; value: string }) {
 // useSave sends one UpdateSettings call and reports the answer; the card shows its own error.
 function useSave(onSaved: (r: GetSettingsResponse) => void) {
   const { busy, error, run } = useAction()
-  async function save(changes: Fields & { updateCheckEnabled?: boolean }): Promise<boolean> {
+  async function save(changes: Fields & { updateCheckEnabled?: boolean }, unset: string[] = []): Promise<boolean> {
     let ok = false
     await run(async () => {
-      const out = await settingsClient.updateSettings({ changes })
+      const out = await settingsClient.updateSettings({ changes, unset })
       if (out.settings) onSaved(out.settings)
       notifyWrite('settings.saved')
       ok = true
@@ -122,6 +123,17 @@ function useSave(onSaved: (r: GetSettingsResponse) => void) {
     return ok
   }
   return { busy, error, save }
+}
+
+// ResetButton sends the keys the spec sets back to the deployment value; it is absent when none is set.
+function ResetButton({ res, keys, busy, save }: { res: GetSettingsResponse; keys: string[]; busy: boolean; save: (c: Fields, unset: string[]) => Promise<boolean> }) {
+  const set = resettable(res, keys)
+  if (set.length === 0) return null
+  return (
+    <Button variant="outline" disabled={lockedReason(res) !== null || busy} onClick={() => save({}, set)}>
+      {t('settings.reset')}
+    </Button>
+  )
 }
 
 function UsersCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
@@ -166,6 +178,7 @@ function UsersCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: Ge
       <Button disabled={locked || busy || problem !== null || Object.keys(changes).length === 0} onClick={() => save(changes)}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
+      <ResetButton res={res} keys={['users.tokenTTL', 'users.refreshLifetime']} busy={busy} save={save} />
     </SectionCard>
   )
 }
@@ -241,6 +254,7 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
       <Button disabled={locked || busy || Object.keys(changes).length === 0} onClick={() => save(changes)}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
+      <ResetButton res={res} keys={['defaults.driftPolicy']} busy={busy} save={save} />
     </SectionCard>
   )
 }
@@ -281,6 +295,7 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
       <Button disabled={locked || busy || choice === start} onClick={() => save({ updateCheckEnabled: choice === 'on' })}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
+      <ResetButton res={res} keys={['updateCheck.enabled']} busy={busy} save={save} />
     </SectionCard>
   )
 }
@@ -354,6 +369,7 @@ function AutoPatchCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r
       <Button disabled={locked || busy || problem !== null || Object.keys(changes).length === 0} onClick={() => save(changes)}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
+      <ResetButton res={res} keys={['autoPatch.enabled', 'autoPatch.components', 'autoPatch.window']} busy={busy} save={save} />
     </SectionCard>
   )
 }

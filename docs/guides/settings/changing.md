@@ -12,7 +12,8 @@ Either way, a change is a write to the `IchorInstallation` named `ichor`.
 
 Open "Settings" in the sidebar. Cards: Deployment (target and running version,
 installer or Helm, read-only), Sign-in and Defaults. Each value shows "Set here"
-or "Deployment default". The page is read-only, with an explanation, when your
+or "Deployment default". A card that sets a value has a "Use the deployment value"
+button, which clears it. The page is read-only, with an explanation, when your
 role cannot change settings or the deployment manages them ([Read-only
 mode](#read-only-mode)).
 
@@ -41,7 +42,15 @@ autoPatch.components   -            -
 autoPatch.window       -            -
 ```
 
-`ichor set settings` writes only the keys you name and prints the table again:
+`ichor set settings` writes only the keys you name and prints the table again.
+`--reset KEY` (repeatable) clears a key instead, so the deployment value
+applies again and follows later changes to the flag or chart value:
+
+```sh
+ichor set settings --reset users.tokenTTL --reset defaults.driftPolicy
+```
+
+The keys:
 
 ```text
   users.tokenTTL=15m           token lifetime, 1m to 1h

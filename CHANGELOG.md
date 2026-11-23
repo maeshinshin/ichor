@@ -174,6 +174,11 @@ command does. Each item is described where it is listed below.
   effect. An upgrade that stopped with that message can be run again (Operations).
 
 ### CLI
+- **A setting can be reset to the deployment value.** `ichor set settings --reset KEY` (repeatable) clears the key
+  from the `IchorInstallation`, so the flag or chart value applies again and follows later Helm changes. Until now a
+  setting changed in the UI or CLI could not be unset. The Settings page has a "Use the deployment value" button on
+  each card that sets a value. `UpdateSettingsRequest` gains `unset`; a request that only resets keys no longer
+  fails on a missing `changes`.
 - **`ichor upgrade cli` replaces the `ichor` binary with a release.** It downloads the
   release archive, verifies the signed checksums file and the archive against it
   (no way to skip), and renames the binary over the running one; `ichor upgrade cli VERSION` picks

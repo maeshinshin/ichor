@@ -173,6 +173,10 @@ func (s *Server) GetSettings(
 func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 	var c settings.Changes
 
+	if f == nil { // a request that only resets keys carries no changes
+		f = &pb.SettingsFields{}
+	}
+
 	if f.ReclaimEnabled != nil {
 		return c, errors.New("reclaim.enabled is removed: RBAC alone decides who may reset and add a node")
 	}
@@ -219,6 +223,8 @@ func (s *Server) UpdateSettings(
 	if err != nil {
 		return nil, invalidArg(err)
 	}
+
+	changes.Unset = req.Msg.GetUnset()
 
 	// Clearing an automatic patch halt is an action, not a setting: a read-only deployment still allows it.
 	if s.settingsReadOnly() && !changes.OnlyAcknowledge() {

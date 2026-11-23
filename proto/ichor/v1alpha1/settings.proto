@@ -90,6 +90,9 @@ message UpdateSettingsRequest {
   SettingsFields changes = 1;
   // confirm_reclaim is removed: ignored.
   bool confirm_reclaim = 2;
+  // unset names settings (the keys of `ichor set settings`) to clear from the spec, so the deployment value
+  // applies again. A key is either set in changes or unset here.
+  repeated string unset = 3;
 }
 
 message UpdateSettingsResponse {

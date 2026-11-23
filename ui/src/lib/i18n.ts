@@ -1034,6 +1034,7 @@ export const en = {
   'settings.loading': 'Loading settings…',
   'settings.saved': 'Settings saved',
   'settings.save': 'Save',
+  'settings.reset': 'Use the deployment value',
   'settings.saving': 'Saving…',
   'settings.sourceSpec': 'Set here',
   'settings.sourceDeployment': 'Deployment default',

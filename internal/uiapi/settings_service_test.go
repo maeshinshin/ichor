@@ -145,3 +145,30 @@ func TestUpdateSettingsRefusals(t *testing.T) {
 }
 
 const subSettings = ichorv1alpha1.IchorSubresourceSettings
+
+func TestUpdateSettingsUnsetClearsTheField(t *testing.T) {
+	s, k8s := settingsServer(t, false, subSettings)
+	ctx := ContextWithIdentity(context.Background(), Identity{User: userAlice})
+	policy := "autoCorrect"
+
+	if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Changes: &pb.SettingsFields{DriftPolicy: &policy}})); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Unset: []string{settings.KeyDriftPolicy}})); err != nil {
+		t.Fatal(err)
+	}
+
+	var got ichorv1alpha1.IchorInstallation
+	if err := k8s.Get(context.Background(), settingsKey(), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Spec.Defaults != nil {
+		t.Fatalf("the field must be cleared, not rewritten: %+v", got.Spec.Defaults)
+	}
+
+	if _, err := s.UpdateSettings(ctx, connect.NewRequest(&pb.UpdateSettingsRequest{Unset: []string{"nope"}})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("an unknown key must be refused: %v", err)
+	}
+}

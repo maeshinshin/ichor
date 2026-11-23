@@ -10,6 +10,7 @@ import {
   durationOptions,
   formOf,
   lockedReason,
+  resettable,
   normalizeDuration,
   parseDuration,
   sourceOf,
@@ -115,4 +116,12 @@ test('autoPatchChanges sends only what differs; every component is the empty lis
   assert.deepEqual(autoPatchChanges(start, { ...start, components: ['talos'] }), { autoPatchComponents: 'talos' })
   assert.deepEqual(autoPatchChanges({ ...start, components: ['talos'] }, start), { autoPatchComponents: '' })
   assert.deepEqual(autoPatchChanges(start, { ...start, window: '02:00-05:00' }), { autoPatchWindow: '02:00-05:00' })
+})
+
+test('resettable lists only the keys the spec sets', () => {
+  assert.deepEqual(resettable({ spec: { tokenTtl: '15m', autoPatchEnabled: false } }, ['users.tokenTTL', 'users.refreshLifetime', 'autoPatch.enabled']), [
+    'users.tokenTTL',
+    'autoPatch.enabled',
+  ])
+  assert.deepEqual(resettable({}, ['users.tokenTTL']), [])
 })

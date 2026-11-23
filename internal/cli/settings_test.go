@@ -11,12 +11,12 @@ import (
 )
 
 func TestSettingsUpdateRequest(t *testing.T) {
-	_, err := settingsUpdateRequest([]string{"reclaim.enabled=true"})
+	_, err := settingsUpdateRequest([]string{"reclaim.enabled=true"}, nil)
 	if err == nil || !strings.Contains(err.Error(), "RBAC") {
 		t.Fatalf("reclaim.enabled must be refused with a pointer: %v", err)
 	}
 
-	req, err := settingsUpdateRequest([]string{"users.tokenTTL=15m"})
+	req, err := settingsUpdateRequest([]string{"users.tokenTTL=15m"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestSettingsUpdateRequest(t *testing.T) {
 	}
 
 	for _, bad := range []string{"users.tokenTTL=2h", "nope=1", "defaults.driftPolicy=enforce"} {
-		if _, err := settingsUpdateRequest([]string{bad}); err == nil {
+		if _, err := settingsUpdateRequest([]string{bad}, nil); err == nil {
 			t.Errorf("%q should fail", bad)
 		}
 	}
@@ -130,5 +130,22 @@ func TestSettingsCommandsTakeTheAPIFlags(t *testing.T) {
 				t.Errorf("ichor %v lacks --%s", path, name)
 			}
 		}
+	}
+}
+
+func TestSettingsUpdateRequestReset(t *testing.T) {
+	req, err := settingsUpdateRequest(nil, []string{"users.tokenTTL"})
+	if err != nil || len(req.GetUnset()) != 1 || req.GetUnset()[0] != "users.tokenTTL" || req.GetChanges().TokenTtl != nil {
+		t.Fatalf("%v %v", req, err)
+	}
+
+	for _, bad := range [][]string{{"nope"}, {"autoPatch.acknowledgeHalt"}} {
+		if _, err := settingsUpdateRequest(nil, bad); err == nil {
+			t.Errorf("--reset %v should fail", bad)
+		}
+	}
+
+	if _, err := settingsUpdateRequest([]string{"users.tokenTTL=15m"}, []string{"users.tokenTTL"}); err == nil {
+		t.Error("set and reset of one key should fail")
 	}
 }

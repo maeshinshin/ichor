@@ -161,3 +161,20 @@ export function autoPatchChanges(before: AutoPatchForm, after: AutoPatchForm): F
   if (before.window !== after.window) out.autoPatchWindow = after.window
   return out
 }
+
+// The keys `ichor set settings` spells, and the spec field each is read from.
+const KEY_FIELD: Record<string, keyof Fields | 'updateCheckEnabled'> = {
+  'users.tokenTTL': 'tokenTtl',
+  'users.refreshLifetime': 'refreshLifetime',
+  'defaults.driftPolicy': 'driftPolicy',
+  'updateCheck.enabled': 'updateCheckEnabled',
+  'autoPatch.enabled': 'autoPatchEnabled',
+  'autoPatch.components': 'autoPatchComponents',
+  'autoPatch.window': 'autoPatchWindow',
+}
+
+// resettable are those of keys the spec sets, which a reset sends back to the deployment value.
+export function resettable(s: { spec?: object }, keys: string[]): string[] {
+  const spec = (s.spec ?? {}) as Record<string, unknown>
+  return keys.filter((k) => spec[KEY_FIELD[k]] !== undefined)
+}

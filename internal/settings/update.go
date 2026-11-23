@@ -3,6 +3,7 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,9 +15,11 @@ import (
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
-// Changes are the settings to change; nil means unchanged. shortcut: no way to unset a field
-// again (back to the deployment value) yet.
+// Changes are the settings to change; nil means unchanged.
 type Changes struct {
+	// Unset lists the keys (the Key constants) to clear from the spec, so the deployment's flag or chart value applies
+	// again. A key is either set or unset in one change, never both.
+	Unset []string
 	TokenTTL        *time.Duration
 	RefreshLifetime *time.Duration
 	// DriftPolicy is warnOnly or autoCorrect.
@@ -34,7 +37,7 @@ type Changes struct {
 
 // Empty reports that nothing is to change.
 func (c Changes) Empty() bool {
-	return c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil && c.UpdateCheck == nil &&
+	return len(c.Unset) == 0 && c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil && c.UpdateCheck == nil &&
 		c.AutoPatchEnabled == nil && c.AutoPatchComponents == nil && c.AutoPatchWindow == nil && c.AutoPatchAcknowledge == nil
 }
 
@@ -75,12 +78,30 @@ func (c Changes) Validate() error {
 		}
 	}
 
+	for _, k := range c.Unset {
+		if !slices.Contains(UnsettableKeys, k) {
+			errs = append(errs, fmt.Errorf("cannot reset %q (resettable: %s)", k, strings.Join(UnsettableKeys, ", ")))
+		} else if c.sets(k) {
+			errs = append(errs, fmt.Errorf("%s: set and reset in one change", k))
+		}
+	}
+
 	return errors.Join(errs...)
+}
+
+// sets reports whether the change also sets key k.
+func (c Changes) sets(k string) bool {
+	return map[string]bool{
+		KeyTokenTTL: c.TokenTTL != nil, KeyRefreshLifetime: c.RefreshLifetime != nil, KeyDriftPolicy: c.DriftPolicy != nil,
+		KeyUpdateCheck: c.UpdateCheck != nil, KeyAutoPatchEnabled: c.AutoPatchEnabled != nil,
+		KeyAutoPatchComponents: c.AutoPatchComponents != nil, KeyAutoPatchWindow: c.AutoPatchWindow != nil,
+	}[k]
 }
 
 // Apply writes the changes into inst's spec. Only the changed fields are touched. The caller validates.
 func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	s := &inst.Spec
+	defer c.unset(s)
 
 	if c.TokenTTL != nil || c.RefreshLifetime != nil {
 		if s.Users == nil {
@@ -127,6 +148,49 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	}
 }
 
+// unset clears the Unset keys, and a group left with no field, so the spec holds nothing but what is set.
+func (c Changes) unset(s *ichorv1alpha1.IchorInstallationSpec) {
+	for _, k := range c.Unset {
+		switch k {
+		case KeyTokenTTL, KeyRefreshLifetime:
+			if s.Users == nil {
+				continue
+			}
+
+			if k == KeyTokenTTL {
+				s.Users.TokenTTL = nil
+			} else {
+				s.Users.RefreshLifetime = nil
+			}
+
+			if *s.Users == (ichorv1alpha1.IchorUserSettings{}) {
+				s.Users = nil
+			}
+		case KeyDriftPolicy:
+			s.Defaults = nil
+		case KeyUpdateCheck:
+			s.UpdateCheck = nil
+		case KeyAutoPatchEnabled, KeyAutoPatchComponents, KeyAutoPatchWindow:
+			if s.AutoPatch == nil {
+				continue
+			}
+
+			switch k {
+			case KeyAutoPatchEnabled:
+				s.AutoPatch.Enabled = nil
+			case KeyAutoPatchComponents:
+				s.AutoPatch.Components = nil
+			default:
+				s.AutoPatch.Window = ""
+			}
+
+			if reflect.DeepEqual(*s.AutoPatch, ichorv1alpha1.IchorAutoPatchSettings{}) {
+				s.AutoPatch = nil
+			}
+		}
+	}
+}
+
 // Keys of ParseAssignments, as `ichor set settings` spells them.
 const (
 	// KeyReclaim is the removed switch: ParseAssignments refuses it.
@@ -143,6 +207,11 @@ const (
 	KeyAutoPatchWindow     = "autoPatch.window"
 	KeyAutoPatchAckHalt    = "autoPatch.acknowledgeHalt"
 )
+
+// UnsettableKeys are the keys a change can reset to the deployment value; the halt acknowledgement is an action, not a value.
+var UnsettableKeys = []string{
+	KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy, KeyUpdateCheck, KeyAutoPatchEnabled, KeyAutoPatchComponents, KeyAutoPatchWindow,
+}
 
 // ParseAssignments turns KEY=VALUE arguments into Changes.
 func ParseAssignments(args []string) (Changes, error) {

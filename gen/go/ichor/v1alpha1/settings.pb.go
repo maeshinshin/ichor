@@ -470,8 +470,11 @@ type UpdateSettingsRequest struct {
 	Changes *SettingsFields        `protobuf:"bytes,1,opt,name=changes,proto3" json:"changes,omitempty"`
 	// confirm_reclaim is removed: ignored.
 	ConfirmReclaim bool `protobuf:"varint,2,opt,name=confirm_reclaim,json=confirmReclaim,proto3" json:"confirm_reclaim,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// unset names settings (the keys of `ichor set settings`) to clear from the spec, so the deployment value
+	// applies again. A key is either set in changes or unset here.
+	Unset         []string `protobuf:"bytes,3,rep,name=unset,proto3" json:"unset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateSettingsRequest) Reset() {
@@ -516,6 +519,13 @@ func (x *UpdateSettingsRequest) GetConfirmReclaim() bool {
 		return x.ConfirmReclaim
 	}
 	return false
+}
+
+func (x *UpdateSettingsRequest) GetUnset() []string {
+	if x != nil {
+		return x.Unset
+	}
+	return nil
 }
 
 type UpdateSettingsResponse struct {
@@ -612,10 +622,11 @@ const file_ichor_v1alpha1_settings_proto_rawDesc = "" +
 	"\x10can_edit_reclaim\x18\b \x01(\bR\x0ecanEditReclaim\x12*\n" +
 	"\x11can_edit_settings\x18\t \x01(\bR\x0fcanEditSettings\x12=\n" +
 	"\x1bauto_patch_halted_operation\x18\n" +
-	" \x01(\tR\x18autoPatchHaltedOperation\"z\n" +
+	" \x01(\tR\x18autoPatchHaltedOperation\"\x90\x01\n" +
 	"\x15UpdateSettingsRequest\x128\n" +
 	"\achanges\x18\x01 \x01(\v2\x1e.ichor.v1alpha1.SettingsFieldsR\achanges\x12'\n" +
-	"\x0fconfirm_reclaim\x18\x02 \x01(\bR\x0econfirmReclaim\"Y\n" +
+	"\x0fconfirm_reclaim\x18\x02 \x01(\bR\x0econfirmReclaim\x12\x14\n" +
+	"\x05unset\x18\x03 \x03(\tR\x05unset\"Y\n" +
 	"\x16UpdateSettingsResponse\x12?\n" +
 	"\bsettings\x18\x01 \x01(\v2#.ichor.v1alpha1.GetSettingsResponseR\bsettings2\xca\x01\n" +
 	"\x0fSettingsService\x12V\n" +

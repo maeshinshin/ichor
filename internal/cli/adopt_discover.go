@@ -29,6 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 )
@@ -68,6 +70,10 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 		return nil, nil, errors.New("adopt: no way to read the nodes' hardware identity was given")
 	}
 
+	if err := refuseBlockingCilium(ctx, deps); err != nil {
+		return nil, nil, err
+	}
+
 	seed, err := deps.DialTalos(ctx, deps.Seed)
 	if err != nil {
 		return nil, nil, fmt.Errorf("adopt: dialing %q: %w", deps.Seed, err)
@@ -100,11 +106,11 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 			return nil, nil, fmt.Errorf("adopt: cluster member %q reports no address", mem.Hostname)
 		}
 
-		addr := memberAddress(mem, deps.Seed, nodes)
+		addr, from := memberAddress(mem, deps.Seed, nodes)
 
 		id, err := deps.ReadIdentity(ctx, addr)
 		if err != nil {
-			return nil, nil, fmt.Errorf("adopt: reading the hardware identity of %q: %w", addr, err)
+			return nil, nil, fmt.Errorf("adopt: reading the hardware identity of %q (%s): %w", addr, from, err)
 		}
 
 		if id.UUID == "" {
@@ -129,9 +135,10 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 // memberAddress picks the address adopt dials and records for a member. A node lists every address it holds, a Cilium
 // cluster-pool cilium_host address among them (10.0.0.0/8 sorts first), so the seed adopt reached the cluster through
 // wins, then the Kubernetes Node's own InternalIP, which kubelet reports and no CNI adds to.
-func memberAddress(mem ClusterMember, seed string, nodes []corev1.Node) string {
+// The second result says which of the three it came from, for the error of a member that cannot be reached.
+func memberAddress(mem ClusterMember, seed string, nodes []corev1.Node) (addr, from string) {
 	if slices.Contains(mem.Addresses, seed) {
-		return seed
+		return seed, "the seed address"
 	}
 
 	for i := range nodes {
@@ -141,12 +148,54 @@ func memberAddress(mem ClusterMember, seed string, nodes []corev1.Node) string {
 
 		for _, a := range nodes[i].Status.Addresses {
 			if a.Type == corev1.NodeInternalIP && slices.Contains(mem.Addresses, a.Address) {
-				return a.Address
+				return a.Address, "the Node's InternalIP"
 			}
 		}
 	}
 
-	return mem.Addresses[0]
+	return mem.Addresses[0], "the first address the member lists"
+}
+
+// refuseBlockingCilium refuses a Cilium that cannot be taken over (ipam.mode cluster-pool, a changed tunnel protocol)
+// before any member is dialled: the answer is in the Kubernetes API, and a member's Talos address may not be
+// reachable on such a cluster (a cluster-pool Cilium puts cilium_host addresses on the nodes).
+func refuseBlockingCilium(ctx context.Context, deps adoptDeps) error {
+	if deps.Target == nil || deps.Preflight == nil || deps.CNIUnmanaged {
+		return nil
+	}
+
+	facts, err := gatherK8sFacts(ctx, deps.Target)
+	if err != nil {
+		return fmt.Errorf("adopt: inspecting the CNI: %w", err)
+	}
+
+	// The Talos-side CNI selection is unknown before a node is read; it only matters when no CNI runs.
+	if rep := detectCNI(facts, CNIFacts{}); rep.Kind != detectedCilium || rep.Mixed() || rep.Provenance == provenanceIchor {
+		return nil
+	}
+
+	// Blocking conflicts do not depend on the kube-proxy mode, which is read from a node later.
+	rep, err := deps.Preflight(ctx, cilium.PreflightInput{
+		IchorNamespace: ichorControllerNamespace, UserValues: deps.CiliumValues, Tunnel: deps.Tunnel,
+		KubeProxy: cni.KubeProxyEnabled, ConflictsOnly: true,
+	})
+	if err != nil {
+		return fmt.Errorf("adopt: Cilium takeover checks: %w", err)
+	}
+
+	var blocking []cilium.Conflict
+
+	for _, c := range rep.Conflicts {
+		if c.Level == cilium.Blocking {
+			blocking = append(blocking, c)
+		}
+	}
+
+	if err := cilium.AcceptConflicts(blocking, false); err != nil {
+		return fmt.Errorf("adopt: Cilium takeover checks failed, nothing was written: %w", err)
+	}
+
+	return nil
 }
 
 // checkMembership refuses an adoption whose discovered membership and the workload cluster's

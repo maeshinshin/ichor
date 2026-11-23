@@ -49,6 +49,9 @@ type PreflightInput struct {
 	// KubeProxy and Tunnel are what the owned-key comparison expects.
 	KubeProxy cni.KubeProxyMode
 	Tunnel    string
+	// ConflictsOnly stops after the owned-key conflicts: they read only the Kubernetes API, so a caller can refuse
+	// a Blocking one before it asks any node anything.
+	ConflictsOnly bool
 	// KubePrism reports nil when KubePrism answers on every node and otherwise an error that names
 	// each node where it does not. It is the caller's, because the probe goes to each node (the
 	// Talos API). nil is refused: Preflight will not take an unprobed KubePrism for a healthy one.
@@ -99,6 +102,16 @@ func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error)
 		return nil, err
 	}
 
+	if live != nil {
+		if rep.Conflicts, err = OwnedKeyConflicts(live, in.KubeProxy, in.Tunnel); err != nil {
+			return nil, err
+		}
+	}
+
+	if in.ConflictsOnly {
+		return rep, nil
+	}
+
 	image, err := agentImage(ctx, in.Kube)
 	if err != nil {
 		return nil, err
@@ -113,12 +126,6 @@ func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error)
 	rep.KubePrismErr = errors.New("cilium: KubePrism was not probed, so it is not known to answer on every node")
 	if in.KubePrism != nil {
 		rep.KubePrismErr = in.KubePrism(ctx)
-	}
-
-	if live != nil {
-		if rep.Conflicts, err = OwnedKeyConflicts(live, in.KubeProxy, in.Tunnel); err != nil {
-			return nil, err
-		}
 	}
 
 	if rep.Differences, err = DiffLive(ctx, in.Effective, in.Get); err != nil {

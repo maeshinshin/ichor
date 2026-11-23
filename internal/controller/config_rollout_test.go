@@ -277,6 +277,20 @@ var _ = Describe("configRolloutAdvancer", func() {
 		Expect(apimeta.IsStatusConditionTrue(fetchMachine(m).Status.Conditions, conditionConfigRollout)).To(BeFalse())
 	})
 
+	It("finishes when the node rebooted onto the rendered settings held in other bytes", func() {
+		f, m := newRolloutNode("node-cr-bytes", true)
+
+		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
+		adv := newRolloutAdvancer(fake)
+
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeFalse())
+
+		fake.bootID = testBootIDAfter
+		fake.current = append([]byte("# adopted\n"), f.after(m)...)
+
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeTrue())
+	})
+
 	It("fails when the node rebooted but does not run the rendered configuration", func() {
 		f, m := newRolloutNode("node-cr-bad", true)
 

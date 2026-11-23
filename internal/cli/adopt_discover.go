@@ -174,9 +174,10 @@ func refuseBlockingCilium(ctx context.Context, deps adoptDeps) error {
 		return nil
 	}
 
-	// Blocking conflicts do not depend on the kube-proxy mode, which is read from a node later.
+	// The tunnel is the one mapRunningCilium puts in spec.cni.tunnel (liveTunnel); --tunnel is refused for a foreign
+	// Cilium. Blocking conflicts do not depend on the kube-proxy mode, which is read from a node later.
 	rep, err := deps.Preflight(ctx, cilium.PreflightInput{
-		IchorNamespace: ichorControllerNamespace, UserValues: deps.CiliumValues, Tunnel: deps.Tunnel,
+		IchorNamespace: ichorControllerNamespace, UserValues: deps.CiliumValues, Tunnel: liveTunnel(facts.CiliumConfig),
 		KubeProxy: cni.KubeProxyEnabled, ConflictsOnly: true,
 	})
 	if err != nil {

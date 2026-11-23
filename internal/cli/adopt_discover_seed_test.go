@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
@@ -92,5 +94,99 @@ func TestDiscoverMachinesRefusesClusterPoolBeforeDialingMembers(t *testing.T) {
 
 	if identityReads != 0 {
 		t.Errorf("adopt read %d members' hardware identity before refusing", identityReads)
+	}
+}
+
+// ownedKeyPreflight answers like cilium.Preflight does for a Cilium whose live values are live: the owned-key
+// conflicts for the tunnel and kube-proxy mode it is given.
+func ownedKeyPreflight(t *testing.T, live map[string]any) ciliumPreflight {
+	t.Helper()
+
+	return func(_ context.Context, in cilium.PreflightInput) (*cilium.PreflightReport, error) {
+		c, err := cilium.OwnedKeyConflicts(live, in.KubeProxy, in.Tunnel)
+
+		return &cilium.PreflightReport{Conflicts: c}, err
+	}
+}
+
+func foreignCiliumTarget(t *testing.T, data map[string]string) client.Client {
+	t.Helper()
+
+	cm := ciliumCM("false")
+	cm.Data = data
+
+	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), cm).Build()
+}
+
+// A foreign Cilium on geneve is taken over with spec.cni.tunnel=geneve, so the early check must not compare it
+// with the default tunnel when --tunnel is absent.
+func TestRefuseBlockingCiliumAcceptsLiveGeneveWithoutTunnelFlag(t *testing.T) {
+	data := map[string]string{"kube-proxy-replacement": "false", ciliumTunnelKey: ciliumTunnelGeneve}
+	deps := adoptDeps{
+		Target:    foreignCiliumTarget(t, data),
+		Preflight: ownedKeyPreflight(t, map[string]any{"tunnelProtocol": "geneve", "ipam": map[string]any{"mode": "kubernetes"}}),
+	}
+
+	if err := refuseBlockingCilium(context.Background(), deps); err != nil {
+		t.Fatalf("early check refused a live geneve Cilium: %v", err)
+	}
+
+	st := &adoptState{
+		cluster: &ichorv1alpha1.TalosCluster{}, kubeProxy: kubeProxyEnabled, rep: &cniReport{Kind: detectedCilium},
+	}
+	if err := st.mapRunningCilium(factsFor(t, testDS("cilium", ciliumImage), &corev1.ConfigMap{
+		Namespace: k8sFactsSystemNamespace, Name: "cilium-config", Data: data})); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := st.cluster.Spec.CNI.Tunnel; got != ciliumTunnelGeneve {
+		t.Errorf("plan sets spec.cni.tunnel=%q; want geneve", got)
+	}
+}
+
+// The early check and the plan's preflight answer one question, whether the live Cilium can be taken over:
+// they must refuse exactly the same configs.
+func TestRefuseBlockingCiliumAgreesWithPlanPreflight(t *testing.T) {
+	k8sIPAM := map[string]any{"mode": "kubernetes"}
+	tests := []struct {
+		name string
+		cm   map[string]string
+		live map[string]any
+	}{
+		{"vxlan", map[string]string{ciliumTunnelKey: "vxlan"}, map[string]any{"tunnelProtocol": "vxlan", "ipam": k8sIPAM}},
+		{"geneve", map[string]string{ciliumTunnelKey: "geneve"}, map[string]any{"tunnelProtocol": "geneve", "ipam": k8sIPAM}},
+		{"native routing", map[string]string{"routing-mode": "native"}, map[string]any{"routingMode": "native", "ipam": k8sIPAM}},
+		{"cluster-pool", map[string]string{ciliumTunnelKey: "vxlan"},
+			map[string]any{"tunnelProtocol": "vxlan", "ipam": map[string]any{"mode": "cluster-pool"}}},
+		{"geneve cluster-pool", map[string]string{ciliumTunnelKey: "geneve"},
+			map[string]any{"tunnelProtocol": "geneve", "ipam": map[string]any{"mode": "cluster-pool"}}},
+	}
+
+	for _, tt := range tests {
+		for _, kp := range []string{kubeProxyEnabled, kubeProxyReplaced} {
+			t.Run(tt.name+"/"+kp, func(t *testing.T) {
+				tt.cm["kube-proxy-replacement"] = "false"
+				pre := ownedKeyPreflight(t, tt.live)
+
+				early := refuseBlockingCilium(context.Background(), adoptDeps{Target: foreignCiliumTarget(t, tt.cm), Preflight: pre}) != nil
+
+				facts := factsFor(t, testDS("cilium", ciliumImage), &corev1.ConfigMap{
+					Namespace: k8sFactsSystemNamespace, Name: "cilium-config", Data: tt.cm})
+				st := &adoptState{cluster: &ichorv1alpha1.TalosCluster{}, kubeProxy: kp, rep: &cniReport{Kind: detectedCilium}}
+
+				if err := st.mapRunningCilium(facts); err != nil {
+					t.Fatal(err)
+				}
+
+				rep, err := st.preflight(context.Background(), adoptDeps{Preflight: pre}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if plan := rep.Err(true, false) != nil; early != plan {
+					t.Errorf("early check refuses = %v, plan preflight refuses = %v", early, plan)
+				}
+			})
+		}
 	}
 }

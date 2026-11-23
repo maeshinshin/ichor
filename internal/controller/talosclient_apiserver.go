@@ -23,20 +23,20 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 
+	talosconfig "github.com/siderolabs/talos/pkg/machinery/config/config"
+	"github.com/siderolabs/talos/pkg/machinery/constants"
+	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
 	k8sres "github.com/siderolabs/talos/pkg/machinery/resources/k8s"
 )
 
 const (
-	// apiServerPort is the port every Talos control plane's kube-apiserver listens on (the legacy
-	// cluster.apiServer.localPort / KubeAPIServerConfig default). shortcut: a custom local port is
-	// not read back; the probe would fail closed and pause the operation.
-	apiServerPort = "6443"
-
 	// apiServerCertName is a name every Talos kube-apiserver serving certificate carries, so the
 	// probe verifies against the cluster's Kubernetes CA whatever address it dials.
 	apiServerCertName = "kubernetes"
@@ -80,15 +80,35 @@ func containerID(podStatus map[string]any, name string) string {
 	return ""
 }
 
-// APIServerReady GETs https://<node>:6443/readyz. /readyz is readable anonymously (the
-// system:public-info-viewer role), so no credentials are sent.
+// APIServerReady GETs https://<node>:<port>/readyz, the port being the one the node's active
+// configuration gives kube-apiserver. /readyz is readable anonymously (the system:public-info-viewer
+// role), so no credentials are sent.
 func (t *machineryTalosClient) APIServerReady(ctx context.Context) error {
-	host := t.endpoint
+	md := resource.NewMetadata(configres.NamespaceName, configres.MachineConfigType, configres.ActiveID, resource.VersionUndefined)
+
+	res, err := safe.StateGet[*configres.MachineConfig](ctx, t.c.COSI, md)
+	if err != nil {
+		return fmt.Errorf("reading current machine configuration: %w", err)
+	}
+
+	return probeAPIServer(ctx, t.endpoint, res.Provider(), t.kubernetesCA, apiServerCertName)
+}
+
+// probeAPIServer probes /readyz on endpoint's host at the port cfg gives kube-apiserver:
+// cluster.apiServer.port (KubeAPIServerConfig) or cluster.controlPlane.localAPIServerPort, else
+// Talos's default 6443 (constants.DefaultControlPlanePort, which APIPort returns when unset).
+func probeAPIServer(ctx context.Context, endpoint string, cfg talosconfig.Config, caPEM []byte, serverName string) error {
+	port := strconv.Itoa(constants.DefaultControlPlanePort)
+	if api := cfg.K8sAPIServerConfig(); api != nil {
+		port = strconv.Itoa(api.APIPort())
+	}
+
+	host := endpoint
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
 
-	return probeReadyz(ctx, "https://"+net.JoinHostPort(host, apiServerPort)+"/readyz", t.kubernetesCA, apiServerCertName)
+	return probeReadyz(ctx, "https://"+net.JoinHostPort(host, port)+"/readyz", caPEM, serverName)
 }
 
 // probeReadyz returns nil only when url answers 200, verifying its certificate against caPEM as

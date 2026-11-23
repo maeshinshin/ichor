@@ -821,6 +821,11 @@ command does. Each item is described where it is listed below.
   and the rotation's pre-flight compared bytes, so it waited 30 minutes for a node that needed
   nothing. It now compares settings, as the machine controller does, and a node whose
   settings really differ pauses the rotation at once, naming the fields.
+- **A custom `localAPIServerPort` no longer stalls every kube-apiserver restart.**
+  The `/readyz` check after a configuration rollout, a CA rotation or a key rotation always
+  dialled port 6443, so a cluster with `cluster.controlPlane.localAPIServerPort` set paused at
+  `APIServerNotReady`. It now dials the port the node's configuration gives, and 6443 when unset.
+  Known gap: the opt-in firewall still opens only 6443 for the Kubernetes API.
 
 ### Storage
 

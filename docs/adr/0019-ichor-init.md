@@ -1,6 +1,6 @@
 # 0019. `ichor init`: scope, the namespace decision, and the gaps it leaves open
 
-Status: Accepted; superseded in part by ADR 0099 · Date: 2026-10-25 · Design section: Bootstrap (`ichor init`)
+Status: Accepted, amended; superseded in part by ADR 0099 · Date: 2026-10-25 · Design section: Bootstrap (`ichor init`)
 
 Decided: `ichor init`: VIP recommended not required, Ichor applied through the API server not inlined, topology presets carry count/schedulable
 
@@ -75,10 +75,12 @@ install manifest is applied separately, after step 4, by
 - CRDs need a moment to become Established before resources that depend
   on them can be created (kustomize's own ordering already puts the
   Namespace and CRDs first in `dist/install.yaml`, but "created" and
-  "Established" are not the same moment). `createWithRetry` bounds this
-  at 10 attempts, 500ms apart.
-  (`shortcut:` a fixed budget, not a watch on the CRD's `Established`
-  condition; upgrade if a slower cluster ever needs longer than 5s here.)
+  "Established" are not the same moment). Amended: `createWithRetry` and its 10 attempts of 500ms are gone.
+  Every init apply step runs through `retryInit` (`internal/cli/init_ichor.go`), which retries for
+  `initRetryWindow` (3 minutes) with backoff, and retries on `initRetryable` errors: a NoMatch error (the CRD is not
+  Established yet), a transient API error, and an admission-webhook failure.
+  (`shortcut:` a fixed time window, not a watch on the CRD's `Established` condition; upgrade if a slower cluster
+  ever needs longer than 3 minutes here.)
 
 **Argo CD itself is never installed by `init`, at all**, with or without
 `--argocd`. Fetching and applying a third-party install manifest during

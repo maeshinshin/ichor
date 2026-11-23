@@ -319,7 +319,7 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 		return nil, nil
 	}
 
-	// shortcut: two concurrent deletes of different control planes in the
+	// Note: two concurrent deletes of different control planes in the
 	// same cluster can both List before either delete commits, so both see
 	// the pre-deletion count and both get admitted, together breaking
 	// quorum. This is not a lock problem: admission is never serialized

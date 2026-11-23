@@ -1053,6 +1053,7 @@ command does. Each item is described where it is listed below.
 - **A user created a moment ago no longer gets an internal error from the UI.** ichor-ui waits up to
   five seconds for the controller to let it act as the new user, then answers "your account is still
   being set up; retry in a few seconds" instead of `unavailable` with a reference.
+- **The combobox popup is placed after its trigger for screen readers.** With the input in the popup, an `aria-owns` span after the trigger names the portal; the page behind an open list was already hidden from assistive technology.
 
 ### Typed configuration
 

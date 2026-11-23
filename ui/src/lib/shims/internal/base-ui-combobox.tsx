@@ -18,9 +18,8 @@ import { usePosition, resolveAnchor, type Align, type Anchor, type Side } from "
 //   `modal`, `actionsRef`, `onItemHighlighted`, `loopFocus`, `keepHighlight`, `highlightItemOnHover`, Combobox.InputGroup, Row, Status,
 //   Label, Icon, Arrow or Backdrop; `className` and `style` are not functions of the state; no `nativeButton` (button parts are native
 //   buttons), `keepMounted` or portal `container`; no `index` on items; no browser-autofill matching or typeahead on the closed trigger.
-// shortcut: no FloatingFocusManager: no aria-hidden on the page behind the open popup, focus guards only for the input in the popup (no
-//   `aria-owns` span or portal id: screen readers do not get the popup placed after the trigger), and the popup's exit animation is
-//   found from its CSS animation (as the Radix shims do), not from transitions (`data-starting-style`, `data-ending-style`).
+// shortcut: the popup's exit animation is found from its CSS animation (as the Radix shims do), not from transitions
+//   (`data-starting-style`, `data-ending-style`).
 
 type State = Record<string, unknown>
 type Part<E extends "div" | "span" | "button" | "input", S extends State, Own = {}> = Omit<UseRenderComponentProps<E, S>, "ref" | "className" | "id" | keyof Own> & {
@@ -911,15 +910,20 @@ function focusGuards(ctx: RootContext) {
 
 const ComboboxPortal = forwardRef<PortalProps>(({ render, children, ...rest }, ref) => {
   const ctx = useCombobox("Portal")
+  const portalId = useId()
   if (!ctx.mounted) return null
   const portal = (
-    <Portal.Root>{useRender({ defaultTagName: "div", render, props: mergeProps({ "data-base-ui-portal": "", children }, { ...rest, ref }) })}</Portal.Root>
+    <Portal.Root>
+      {useRender({ defaultTagName: "div", render, props: mergeProps({ "data-base-ui-portal": "", id: portalId, children }, { ...rest, ref }) })}
+    </Portal.Root>
   )
   if (!ctx.inputInPopup || !ctx.open) return portal
   const { guard, enter } = focusGuards(ctx)
   return (
     <>
       {guard("outside", () => enter(false))}
+      {/* The portal sits at the end of the page: this tells assistive technology the popup follows the trigger */}
+      <span aria-owns={portalId} style={guardStyle} />
       {portal}
       {guard("outside", () => enter(true))}
     </>

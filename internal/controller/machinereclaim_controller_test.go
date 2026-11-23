@@ -52,6 +52,8 @@ const (
 	testTrue     = "true"
 )
 
+const testForeignEndpoint = "10.244.2.146:6443"
+
 const reclaimMarker = "TALOSCONFIG-MARKER-9f3c1d7e"
 
 // fakeReclaimNode answers from a script. Its errors quote the marker, as a transport error could.
@@ -356,7 +358,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 	Context("a foreign endpoint only the node's configuration names", func() {
 		BeforeEach(func() {
 			node.in.ClusterReachable = false
-			node.in.ProbeTargets = []string{"10.244.2.146:6443"}
+			node.in.ProbeTargets = []string{testForeignEndpoint}
 			r.EgressWindow, r.EgressInterval = 300*time.Millisecond, 20*time.Millisecond
 		})
 
@@ -368,7 +370,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 			mr := get(key)
 			Expect(mr.Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimAwaitingConfirmation))
-			Expect(mr.Status.Inspection.ProbeTargets).To(Equal([]string{"10.244.2.146:6443"}))
+			Expect(mr.Status.Inspection.ProbeTargets).To(Equal([]string{testForeignEndpoint}))
 			Expect(mr.Status.Inspection.ClusterReachable).To(BeTrue())
 			Expect(mr.Status.Inspection.Refusals).To(BeEmpty())
 			Expect(node.inspects.Load()).To(BeNumerically(">=", 3))
@@ -380,7 +382,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 			reconcileOK(key)
 
 			in := get(key).Status.Inspection
-			Expect(in.ProbeTargets).To(Equal([]string{"10.244.2.146:6443"}))
+			Expect(in.ProbeTargets).To(Equal([]string{testForeignEndpoint}))
 			Expect(in.Refusals).To(ConsistOf(ContainSubstring("is not reachable from the node")))
 		})
 	})

@@ -423,7 +423,7 @@ func TestTalosEgressOpensTheForeignProbeTargetsOfALiveReclaim(t *testing.T) {
 	mr.Spec.Address = "192.0.2.10"
 	mr.Status.Phase = ichorv1alpha1.MachineReclaimAwaitingConfirmation
 	mr.Status.Inspection = &ichorv1alpha1.MachineReclaimInspection{
-		ProbeTargets: []string{"10.244.2.146:6443", "10.244.2.147:2380"},
+		ProbeTargets: []string{testForeignEndpoint, "10.244.2.147:2380"},
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mr, staticControllerPolicy(trustNamespace, "other")).Build()

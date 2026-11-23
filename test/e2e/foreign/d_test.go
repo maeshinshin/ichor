@@ -23,13 +23,16 @@ package foreign
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/test/internal/foreign"
 	"github.com/maeshinshin/ichor/test/internal/kube"
 	"github.com/maeshinshin/ichor/test/internal/talosctl"
@@ -108,11 +111,15 @@ func requireAdopted(t *testing.T, c *foreign.Cluster) {
 	}
 }
 
-// TestD4Talos: a Talos patch upgrade (ICHOR_E2E_F_UPGRADE_TO, default v1.14.4) through `ichor upgrade talos`.
+// TestD4Talos: a Talos patch upgrade through `ichor upgrade talos`. The lab starts one patch below the release set and
+// upgrades to it (ICHOR_E2E_F_UPGRADE_TO overrides the target); Ichor refuses a downgrade.
 func TestD4Talos(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 1})
+	from := release.Pinned.Talos
+	i := strings.LastIndex(from, ".")
+	patch, _ := strconv.Atoi(from[i+1:])
+	c := build(t, foreign.Options{Workers: 1, TalosVersion: fmt.Sprintf("%s.%d", from[:i], patch-1)})
 	requireAdopted(t, c)
-	to := env("ICHOR_E2E_F_UPGRADE_TO", "v1.14.4")
+	to := env("ICHOR_E2E_F_UPGRADE_TO", release.Pinned.Talos)
 	start := time.Now()
 	if out, err := ichorCLI(t, c, "upgrade", "talos", to, flagYes); err != nil {
 		t.Fatalf("upgrade talos: %v\n%s", err, out)
@@ -230,7 +237,7 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 	// UI API through the `ichor ui` port-forward. ichor-ui requires sign-in, so make an admin the way the first admin
 	// of an install is made (`create user --bootstrap`, straight through the Kubernetes API) and let cniui sign in.
 	mk := exec.Command(ichorBin(t), "create", "user", "d6", "--role", "admin", //nolint:gosec // test harness
-		"--generate", "--bootstrap", flagKubeconfig, c.LocalKube, "-n", crNS)
+		"--generate", "--bootstrap", flagKubeconfig, c.LocalKube) // takes no -n: it writes ichor-system
 	uout, uerr := mk.CombinedOutput()
 	pw := ""
 	for l := range strings.SplitSeq(string(uout), "\n") {

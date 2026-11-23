@@ -31,9 +31,13 @@ import (
 
 const ichorInstallation = "ichorinstallations.ichor.maesh.dev"
 
-// installationField reads one jsonpath of the singleton IchorInstallation.
+// installationField reads one jsonpath of the singleton IchorInstallation, "" while it is absent: the controller's
+// Seed (IchorInstallationReconciler.Seed, polled every 5s from cmd/main.go) creates it after the install's --wait.
 func installationField(c *foreign.Cluster, path string) string {
-	out, _ := inner(c, "get", ichorInstallation, "ichor", "-o", "jsonpath="+path)
+	out, err := inner(c, "get", ichorInstallation, "ichor", "-o", "jsonpath="+path)
+	if err != nil { // inner returns kubectl's error text as the output; a missing object reads as empty
+		return ""
+	}
 	return strings.TrimSpace(out)
 }
 

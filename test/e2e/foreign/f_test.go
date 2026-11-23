@@ -56,7 +56,8 @@ func packagedChart(t *testing.T) string {
 func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
 	t.Helper()
 	args := []string{"install", helmRelease, packagedChart(t), flagKubeconfig, c.LocalKube, "-n", crNS,
-		"--create-namespace"}
+		"--create-namespace",
+		"--set=ichorUI.enabled=false"} // the chart refuses ichor-ui without a sign-in; these cases do not use it
 	if wait {
 		args = append(args, "--wait", "--timeout", "6m")
 	}

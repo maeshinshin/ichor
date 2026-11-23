@@ -98,9 +98,20 @@ func flannelRunning(t *testing.T, kc string) {
 	}
 }
 
+// requireAdopted fails a D4 case run on a bare `foreign up` cluster: the CLI needs the Ichor CRDs, which TestD1
+// installs by adopting.
+func requireAdopted(t *testing.T, c *foreign.Cluster) {
+	t.Helper()
+	if out, err := inner(c, "get", "crd", "talosclusters.ichor.maesh.dev"); err != nil {
+		t.Fatalf("the cluster is not adopted (run TestD1FlannelAdoptedUnmanaged first, with ICHOR_E2E_F_ATTACH=1 "+
+			"ICHOR_E2E_F_KEEP=1): %v\n%s", err, out)
+	}
+}
+
 // TestD4Talos: a Talos patch upgrade (ICHOR_E2E_F_UPGRADE_TO, default v1.14.4) through `ichor upgrade talos`.
 func TestD4Talos(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
+	requireAdopted(t, c)
 	to := env("ICHOR_E2E_F_UPGRADE_TO", "v1.14.4")
 	start := time.Now()
 	if out, err := ichorCLI(t, c, "upgrade", "talos", to, flagYes); err != nil {
@@ -124,6 +135,7 @@ func TestD4Talos(t *testing.T) {
 // foreign default v1.34.12.
 func TestD4K8s(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, K8sVersion: foreignK8sUpgradeStart})
+	requireAdopted(t, c)
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	start := time.Now()
 	if out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, flagYes); err != nil {
@@ -145,6 +157,7 @@ func TestD4K8s(t *testing.T) {
 // TestD4RotateCA: `ichor rotate ca` (without --follow: the call returns after the credential hand-off).
 func TestD4RotateCA(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
+	requireAdopted(t, c)
 	start := time.Now()
 	out, err := ichorCLI(t, c, "rotate", "ca", c.Opts.Prefix, flagYes)
 	t.Logf("rotate ca returned after %s", time.Since(start).Round(time.Second))
@@ -181,6 +194,7 @@ func rotatedKube(t *testing.T, c *foreign.Cluster) string {
 // afterwards.
 func TestD4RotateCAWait(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
+	requireAdopted(t, c)
 	kc := rotatedKube(t, c)
 	waitOps(t, kc, "ca-rotation", 9*time.Minute)
 	noHandover(t, c, kc)

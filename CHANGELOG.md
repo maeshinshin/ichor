@@ -1050,6 +1050,9 @@ command does. Each item is described where it is listed below.
   it under `claims_supported`. A refresh keeps `auth_time` and re-issues `iat`. A token
   issued before this release has no `auth_time`, so a forced change refuses it until
   the person signs in again.
+- **A user created a moment ago no longer gets an internal error from the UI.** ichor-ui waits up to
+  five seconds for the controller to let it act as the new user, then answers "your account is still
+  being set up; retry in a few seconds" instead of `unavailable` with a reference.
 
 ### Typed configuration
 

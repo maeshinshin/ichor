@@ -27,6 +27,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/coreos/go-oidc/v3/oidc"
+	authv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -364,11 +365,58 @@ func (i authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc)
 // decides what the user may do. opts should carry the base client's
 // RESTMapper to avoid a discovery round trip per request.
 func NewImpersonator(cfg *rest.Config, opts client.Options) func(Identity) (client.Client, error) {
+	return newImpersonator(cfg, opts, impersonationRuleWait)
+}
+
+// impersonationRuleWait is how long a call waits for the controller to add a new IchorUser to
+// ichor-ui-impersonate (it watches IchorUsers, so normally well under a second).
+const impersonationRuleWait = 5 * time.Second
+
+// newImpersonator also makes sure the ServiceAccount may impersonate an Ichor user before acting as it. A user
+// can sign in the moment its IchorUser exists, ahead of the controller's rule; without the check that call
+// fails as an internal error. It asks with a SelfSubjectAccessReview (any authenticated caller may), waits up
+// to wait, and then says the account is still being set up.
+func newImpersonator(cfg *rest.Config, opts client.Options, wait time.Duration) func(Identity) (client.Client, error) {
 	return func(id Identity) (client.Client, error) {
+		if id.Source == SourceIchor {
+			if err := waitForImpersonationRule(cfg, opts, id.User, wait); err != nil {
+				return nil, err
+			}
+		}
+
 		c := rest.CopyConfig(cfg)
 		c.Impersonate = rest.ImpersonationConfig{UserName: id.User, Groups: id.Groups}
 
 		return client.New(c, opts)
+	}
+}
+
+func waitForImpersonationRule(cfg *rest.Config, opts client.Options, user string, wait time.Duration) error {
+	self, err := client.New(cfg, opts)
+	if err != nil {
+		return err
+	}
+
+	// shortcut: polls every 250 ms and asks once per call, uncached; drop it for a cache if the SSAR load shows up.
+	deadline := time.Now().Add(wait)
+
+	for {
+		review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authv1.ResourceAttributes{Verb: "impersonate", Resource: "users", Name: user},
+		}}
+		if err := self.Create(context.Background(), review); err != nil {
+			return err
+		}
+
+		if review.Status.Allowed {
+			return nil
+		}
+
+		if !time.Now().Before(deadline) {
+			return connect.NewError(connect.CodeUnavailable, errors.New("your account is still being set up; retry in a few seconds"))
+		}
+
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 

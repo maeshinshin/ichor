@@ -48,9 +48,10 @@ const (
 	reclaimDefaultTTL      = 15 * time.Minute
 	reclaimRetention       = 7 * 24 * time.Hour
 	reclaimMaintenanceWait = 10 * time.Minute
-	// reclaimEgressSettle is how long the controller waits for the egress policy to open the foreign
-	// endpoint it just recorded, before it looks at the node again.
-	reclaimEgressSettle       = 5 * time.Second
+	// reclaimEgressWindow bounds how long a newly recorded foreign endpoint may stay unreachable while the
+	// agents apply the egress rule for it; a cluster still unreachable after it is judged dead and refused.
+	reclaimEgressWindow       = 30 * time.Second
+	reclaimEgressInterval     = 3 * time.Second
 	reclaimWaitWindow         = 20 * time.Second
 	reclaimWaitInterval       = 5 * time.Second
 	reclaimRequeueWhileWaitng = 10 * time.Second
@@ -76,9 +77,12 @@ type MachineReclaimReconciler struct {
 	Probe func(ctx context.Context, address string) (string, error)
 
 	// Now, WaitWindow, WaitInterval and MaintenanceWait default to the constants above.
-	Now             func() time.Time
-	WaitWindow      time.Duration
-	WaitInterval    time.Duration
+	Now          func() time.Time
+	WaitWindow   time.Duration
+	WaitInterval time.Duration
+	// EgressWindow and EgressInterval default to reclaimEgressWindow and reclaimEgressInterval.
+	EgressWindow    time.Duration
+	EgressInterval  time.Duration
 	MaintenanceWait time.Duration
 	// ReconcileTimeout bounds one reconcile (default reclaimReconcileTimeout), so a node call that
 	// hangs cannot hold a worker for minutes while other requests wait.
@@ -200,8 +204,8 @@ func (r *MachineReclaimReconciler) attend(ctx context.Context, mr *ichorv1alpha1
 	}
 
 	// The foreign endpoint and etcd peers are known only from the node's configuration, so the first look
-	// cannot have had them allowed. Record them, give the egress policy time to open exactly those, and
-	// look again; the second look judges reachability.
+	// cannot have had them allowed. Record them for the egress policy, then look again until they answer or
+	// the window ends.
 	if !in.ClusterReachable && len(in.ProbeTargets) > 0 &&
 		(mr.Status.Inspection == nil || !slices.Equal(mr.Status.Inspection.ProbeTargets, in.ProbeTargets)) {
 		mr.Status.Inspection = &ichorv1alpha1.MachineReclaimInspection{ProbeTargets: in.ProbeTargets}
@@ -210,7 +214,18 @@ func (r *MachineReclaimReconciler) attend(ctx context.Context, mr *ichorv1alpha1
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{RequeueAfter: reclaimEgressSettle}, nil
+		deadline := time.Now().Add(cmp.Or(r.EgressWindow, reclaimEgressWindow))
+		for !in.ClusterReachable && time.Now().Before(deadline) {
+			select {
+			case <-ctx.Done():
+				return ctrl.Result{}, ctx.Err()
+			case <-time.After(cmp.Or(r.EgressInterval, reclaimEgressInterval)):
+			}
+
+			if in, err = node.Inspect(ctx); err != nil {
+				return r.fail(ctx, mr, safeError(mr.Spec.Address, "inspecting", err))
+			}
+		}
 	}
 
 	plan := reclaim.Assess(in, known, opt)

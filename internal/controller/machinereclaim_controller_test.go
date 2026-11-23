@@ -61,6 +61,9 @@ type fakeReclaimNode struct {
 	resetErr   error
 	resets     atomic.Int32
 	panics     bool
+	// reachableFrom, when set, makes the cluster reachable from that inspection on (1-based).
+	reachableFrom int32
+	inspects      atomic.Int32
 }
 
 func (n *fakeReclaimNode) Inspect(context.Context) (reclaim.Inspection, error) {
@@ -68,7 +71,12 @@ func (n *fakeReclaimNode) Inspect(context.Context) (reclaim.Inspection, error) {
 		panic("boom " + reclaimMarker)
 	}
 
-	return n.in, n.inspectErr
+	in := n.in
+	if n.reachableFrom > 0 {
+		in.ClusterReachable = n.inspects.Add(1) >= n.reachableFrom
+	}
+
+	return in, n.inspectErr
 }
 
 func (n *fakeReclaimNode) Reset(context.Context, bool) error {
@@ -343,6 +351,38 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(node.resets.Load()).To(BeZero())
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 		Expect(secretExists()).To(BeFalse())
+	})
+
+	Context("a foreign endpoint only the node's configuration names", func() {
+		BeforeEach(func() {
+			node.in.ClusterReachable = false
+			node.in.ProbeTargets = []string{"10.244.2.146:6443"}
+			r.EgressWindow, r.EgressInterval = 300*time.Millisecond, 20*time.Millisecond
+		})
+
+		It("records the targets and proceeds once the opened endpoint answers", func() {
+			node.reachableFrom = 3 // the first look is blocked; the egress rule arrives before the window ends
+			key := create()
+
+			reconcileOK(key)
+
+			mr := get(key)
+			Expect(mr.Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimAwaitingConfirmation))
+			Expect(mr.Status.Inspection.ProbeTargets).To(Equal([]string{"10.244.2.146:6443"}))
+			Expect(mr.Status.Inspection.ClusterReachable).To(BeTrue())
+			Expect(mr.Status.Inspection.Refusals).To(BeEmpty())
+			Expect(node.inspects.Load()).To(BeNumerically(">=", 3))
+		})
+
+		It("refuses with the existing message when the endpoint stays unreachable past the window", func() {
+			key := create()
+
+			reconcileOK(key)
+
+			in := get(key).Status.Inspection
+			Expect(in.ProbeTargets).To(Equal([]string{"10.244.2.146:6443"}))
+			Expect(in.Refusals).To(ConsistOf(ContainSubstring("is not reachable from the node")))
+		})
 	})
 
 	It("does not reset a machine the plan refuses, even when confirmed", func() {

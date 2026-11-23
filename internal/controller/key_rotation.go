@@ -547,6 +547,12 @@ func (c *keyRun) preflightMachine(
 
 		return nil
 	})
+	if errors.Is(err, errNotRendered) {
+		res, err := c.fail(ctx, "not starting the rotation: "+err.Error())
+
+		return res, true, err
+	}
+
 	if err != nil {
 		res, err := c.retry(ctx, "not starting the rotation: "+err.Error())
 

@@ -943,8 +943,30 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		op = f.step(op)
 
 		Expect(rotationStage(op)).To(BeEmpty())
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("converge"))
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(ContainSubstring("converge"))
+		Expect(op.Status.FailureReason).To(ContainSubstring("fields:"))
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey))
+	})
+
+	It("agrees with the machine controller: a node it would not call converged pauses the rotation at once, naming the field", func() {
+		f := newCARotFixture()
+
+		m := f.machines[0]
+		node := f.world.nodes[m.Name]
+		rendered, hash, err := render.Render(f.cluster, m, f.old, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		node.cfg = bytes.Replace(node.cfg, []byte("debug: false"), []byte("debug: true"), 1)
+
+		paths, err := changedPaths(node.cfg, rendered, hash)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(paths).NotTo(BeEmpty())
+
+		op := f.step(f.newOp())
+
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(ContainSubstring(paths[0]))
 	})
 
 	It("starts when a machine holds the rendered settings in other bytes, as an adopted node does", func() {

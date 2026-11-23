@@ -416,6 +416,10 @@ func pendingRollout(m *ichorv1alpha1.TalosMachine) string {
 		"before rotating", m.Name, m.Spec.ClusterRef.Name)
 }
 
+// errNotRendered marks a node whose settings differ from the render. Waiting does not change that (the machine
+// controller applies a safe change at once and reports the rest), so a rotation pauses on it instead of retrying.
+var errNotRendered = errors.New("configuration differs from the rendered one")
+
 // runsRendered fails unless current is the configuration Ichor renders for m, in the same bytes or in another
 // form of the same settings (an adopted node keeps the form it was adopted in until something applies it: the
 // machine controller calls that converged and never rewrites it, so a byte compare would wait for ever).
@@ -426,8 +430,8 @@ func runsRendered(m *ichorv1alpha1.TalosMachine, current, rendered []byte, hash 
 	}
 
 	if len(paths) > 0 {
-		return fmt.Errorf("%q does not run the configuration Ichor renders for it (fields: %s); converge it before rotating",
-			m.Name, summarizePaths(paths, rebootPathsInMessage))
+		return fmt.Errorf("%w: %q does not run the configuration Ichor renders for it (fields: %s); converge it before rotating",
+			errNotRendered, m.Name, summarizePaths(paths, rebootPathsInMessage))
 	}
 
 	return nil
@@ -503,6 +507,10 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 
 			return runsRendered(m, current, rendered, hash)
 		})
+		if errors.Is(err, errNotRendered) {
+			return c.fail(ctx, "not starting the rotation: "+err.Error())
+		}
+
 		if err != nil {
 			return c.retry(ctx, "not starting the rotation: "+err.Error())
 		}

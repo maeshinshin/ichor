@@ -810,7 +810,8 @@ command does. Each item is described where it is listed below.
 - **CA and key rotation start on a node that holds the rendered settings in other bytes.**
   A node `ichor adopt` left in its own form of the same settings is Ready and never rewritten,
   and the rotation's pre-flight compared bytes, so it waited 30 minutes for a node that needed
-  nothing. It now compares settings, and names the differing fields when they do differ.
+  nothing. It now compares settings, as the machine controller does, and a node whose
+  settings really differ pauses the rotation at once, naming the fields.
 
 ### Storage
 

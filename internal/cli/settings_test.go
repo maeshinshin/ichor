@@ -146,7 +146,7 @@ func TestSettingsUpdateRequestReset(t *testing.T) {
 		}
 	}
 
-	if _, err := settingsUpdateRequest([]string{settings.KeyTokenTTL+"=15m"}, []string{settings.KeyTokenTTL}); err == nil {
+	if _, err := settingsUpdateRequest([]string{settings.KeyTokenTTL + "=15m"}, []string{settings.KeyTokenTTL}); err == nil {
 		t.Error("set and reset of one key should fail")
 	}
 }

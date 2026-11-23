@@ -96,6 +96,9 @@ var unresolved = map[site]origin{
 	// askAll's client is c, err := s.cl(ctx) (diagnostics_service.go:269): the signed-in user's.
 	{"diagnostics_service.go", "*Server.askAll", "c"}: signedInUser,
 
+	// waitForImpersonationRule's client is client.New(cfg), the ServiceAccount's own (NewImpersonator's cfg).
+	{authFile, "waitForImpersonationRule", "self"}: serviceAccount,
+
 	// cmd/ichor-ui/main.go:214 sets IssuerBackend.Writer to c = client.New(restCfg), the ServiceAccount's
 	// own client, and nothing else in non-test code sets it.
 	{"issuer_backend.go", "*IssuerBackend.rehash", "b.Writer"}:          serviceAccount,

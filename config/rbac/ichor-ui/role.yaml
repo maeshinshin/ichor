@@ -52,6 +52,7 @@ rules:
 - apiGroups:
   - authorization.k8s.io
   resources:
+  - selfsubjectaccessreviews
   - subjectaccessreviews
   verbs:
   - create

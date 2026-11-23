@@ -141,6 +141,8 @@ package uiapi
 
 // /metrics is served only to a caller that proves a Kubernetes token and may `get` the
 // non-resource URL /metrics: the same TokenReview and SubjectAccessReview the controller's secure metrics
-// endpoint makes. create only, on those two review kinds.
+// endpoint makes. create only, on those two review kinds. A SelfSubjectAccessReview as the ServiceAccount itself
+// lets NewImpersonator ask whether it may act as a new Ichor user yet (every authenticated caller may; the role
+// says so rather than lean on system:basic-user).
 // +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
-// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews;selfsubjectaccessreviews,verbs=create

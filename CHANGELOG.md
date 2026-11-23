@@ -803,6 +803,10 @@ command does. Each item is described where it is listed below.
   `status.conditions`. `ichor version` prints an `unverified image` row (and
   `uncheckedImageRanSince` in JSON and YAML), and the UI's version badge and Overview keep
   saying so. No CRD field is added. See ADR 0122.
+- **CA and key rotation refuse at once while a machine waits for `ichor rollout config`.**
+  A machine that is `RebootRequired` or `APIServerRestartRequired` (for example after
+  `ichor adopt` turns sign-in on) used to hold the rotation blocked for 30 minutes. The
+  rotation now pauses immediately and names `ichor rollout config --cluster NAME --follow`.
 
 ### Storage
 

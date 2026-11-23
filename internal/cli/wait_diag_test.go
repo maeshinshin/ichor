@@ -153,3 +153,33 @@ func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// A pod scheduled before the nodes lost their network sits in ContainerCreating, not Unschedulable, and
+// must count toward the early failure just like an unschedulable one (E6: Cilium removed right after the
+// Cilium step, while Ichor's pods were being created).
+func TestWaitDiagFailsEarlyOnPodsStuckInContainerCreating(t *testing.T) {
+	p := &corev1.Pod{Status: corev1.PodStatus{
+		Phase:      corev1.PodPending,
+		Conditions: []corev1.PodCondition{{Type: corev1.PodScheduled, Status: corev1.ConditionTrue}},
+		ContainerStatuses: []corev1.ContainerStatus{
+			{Name: "manager", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}}},
+		},
+	}}
+	p.Namespace, p.Name = ichorControllerNamespace, "ichor-creating"
+
+	c := fake.NewClientBuilder().WithObjects(p,
+		nodeWithReady(corev1.ConditionFalse, "container runtime network not ready: cni plugin not initialized")).Build()
+
+	now := time.Unix(0, 0)
+	d := newWaitDiag(c, &bytes.Buffer{})
+	d.now = func() time.Time { return now }
+
+	if err := d.tick(context.Background()); err != nil {
+		t.Fatalf("failed at once: %v", err)
+	}
+
+	now = now.Add(waitDiagGiveUp + time.Second)
+	if err := d.tick(context.Background()); !errors.Is(err, errNoPodNetwork) {
+		t.Fatalf("got %v, want errNoPodNetwork", err)
+	}
+}

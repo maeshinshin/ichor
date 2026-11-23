@@ -92,8 +92,25 @@ func (d *waitDiag) summary(ctx context.Context) string {
 	return strings.Join(reasons, "; ")
 }
 
+// creating reports whether p was scheduled but cannot start a container yet. With every node's network
+// plugin not ready that is the same dead end as an unschedulable pod (the nodes lost their network after
+// the pod was placed).
+func creating(p *corev1.Pod) bool {
+	if p.Status.Phase != corev1.PodPending {
+		return false
+	}
+
+	for _, cs := range p.Status.ContainerStatuses {
+		if w := cs.State.Waiting; w != nil && w.Reason == "ContainerCreating" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // podReasons returns one line per pod that is Pending or waiting in a failure state, and whether
-// every pod is Pending because the scheduler found no node.
+// every pod is Pending because the scheduler found no node or stuck in ContainerCreating.
 func podReasons(pods []corev1.Pod) (lines []string, allUnschedulable bool) {
 	allUnschedulable = len(pods) > 0
 
@@ -121,7 +138,7 @@ func podReasons(pods []corev1.Pod) (lines []string, allUnschedulable bool) {
 			}
 		}
 
-		if !unschedulable {
+		if !unschedulable && !creating(p) {
 			allUnschedulable = false
 		}
 	}

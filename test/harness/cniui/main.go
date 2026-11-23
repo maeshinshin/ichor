@@ -50,7 +50,7 @@ import (
 )
 
 func main() {
-	url := flag.String("url", "https://127.0.0.1:8443", "ichor-ui base URL")
+	base := flag.String("url", "https://127.0.0.1:8443", "ichor-ui base URL")
 	cluster := flag.String("cluster", "", "TalosCluster name (namespace ichor-system)")
 	user := flag.String("user", "", "Ichor user to sign in as")
 	password := flag.String("password", "", "its password (a must-change one is changed to a fixed new one first)")
@@ -59,7 +59,7 @@ func main() {
 	tlsCfg := &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test harness only
 	hc := &http.Client{Timeout: time.Minute, Transport: &http.Transport{TLSClientConfig: tlsCfg}}
 	if *user != "" {
-		tok, err := signIn(context.Background(), hc, *url, *user, *password)
+		tok, err := signIn(context.Background(), hc, *base, *user, *password)
 		if err != nil {
 			fmt.Printf("sign-in: ERROR %s\n", err)
 			os.Exit(1)
@@ -68,8 +68,8 @@ func main() {
 	}
 	ref := &pb.ObjectRef{Namespace: "ichor-system", Name: *cluster}
 	ctx := context.Background()
-	cl := ichorv1alpha1connect.NewClusterServiceClient(hc, *url)
-	cni := ichorv1alpha1connect.NewCniServiceClient(hc, *url)
+	cl := ichorv1alpha1connect.NewClusterServiceClient(hc, *base)
+	cni := ichorv1alpha1connect.NewCniServiceClient(hc, *base)
 
 	show := func(name string, m proto.Message, err error) {
 		if err != nil {

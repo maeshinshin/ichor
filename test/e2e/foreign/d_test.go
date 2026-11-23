@@ -229,8 +229,9 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 
 	// UI API through the `ichor ui` port-forward. ichor-ui requires sign-in, so make an admin the way the first admin
 	// of an install is made (`create user --bootstrap`, straight through the Kubernetes API) and let cniui sign in.
-	uout, uerr := exec.Command(ichorBin(t), "create", "user", "d6", "--role", "admin", "--generate", "--bootstrap", //nolint:gosec // test harness
-		flagKubeconfig, c.LocalKube, "-n", crNS).CombinedOutput()
+	mk := exec.Command(ichorBin(t), "create", "user", "d6", "--role", "admin", //nolint:gosec // test harness
+		"--generate", "--bootstrap", flagKubeconfig, c.LocalKube, "-n", crNS)
+	uout, uerr := mk.CombinedOutput()
 	pw := ""
 	for l := range strings.SplitSeq(string(uout), "\n") {
 		if strings.HasPrefix(l, "Password for d6 ") {

@@ -37,6 +37,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -217,9 +218,15 @@ func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) 
 	a = append(a, "-n", crNS, flagKubeconfig, "/tmp/kubeconfig", "--local")
 	out, err := exec.Command("kubectl", append([]string{flagContext, os.Getenv(kube.ContextEnv)},
 		a...)...).CombinedOutput()
-	t.Logf("ichor %s:\n%s", strings.Join(args, " "), out)
+	t.Logf("ichor %s:\n%s", strings.Join(args, " "), redactPassword(string(out)))
 	return string(out), err
 }
+
+// passwordLine matches the line `ichor adopt` and `ichor create user --generate` print a generated password on.
+var passwordLine = regexp.MustCompile(`(Password for \S+ \([^)]*\): ).*`)
+
+// redactPassword hides a generated password; every place that logs CLI output goes through it.
+func redactPassword(s string) string { return passwordLine.ReplaceAllString(s, "${1}<redacted>") }
 
 // adopt runs `ichor adopt` inside the tools pod (the workstation cannot reach pod IPs) and
 // returns its combined output and exit error.
@@ -287,11 +294,11 @@ func adoptRun(t *testing.T, c *foreign.Cluster, bin string, flags []string, trig
 	sc := bufio.NewScanner(pipe)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {
-		line := sc.Text()
+		line := redactPassword(sc.Text())
 		mu.Lock()
 		out.WriteString(line + "\n")
 		mu.Unlock()
-		t.Logf("%s [%s]", line, time.Now().Format("15:04:05")) // the output carries no keys (adopt prints nothing secret)
+		t.Logf("%s [%s]", line, time.Now().Format("15:04:05"))
 		if !ran && trigger != "" && strings.Contains(line, trigger) {
 			ran = true
 			go func() {

@@ -191,6 +191,12 @@ func TestD4K8s(t *testing.T) {
 func TestD4RotateCA(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	requireAdopted(t, c)
+	// adopt turned sign-in on: every control plane is APIServerRestartRequired until `ichor rollout config` (the
+	// documented step), and rotate ca refuses while one waits.
+	if out, err := ichorCLI(t, c, "rollout", "config", flagYes); err != nil {
+		t.Fatalf("rollout config: %v\n%s", err, out)
+	}
+	waitOps(t, c.LocalKube, "config", 12*time.Minute)
 	start := time.Now()
 	out, err := ichorCLI(t, c, "rotate", "ca", c.Opts.Prefix, flagYes)
 	t.Logf("rotate ca returned after %s", time.Since(start).Round(time.Second))
@@ -210,7 +216,7 @@ func rotatedKube(t *testing.T, c *foreign.Cluster) string {
 	}
 	dst := filepath.Join(c.Dir, "kubeconfig.rotated")
 	if _, err := utils.Run(kube.Command("-n", ns, "cp", pod+":/tmp/kubeconfig.ichor-new", dst)); err != nil {
-		t.Fatalf("copying the rotated kubeconfig: %v", err)
+		t.Fatalf("run TestD4RotateCA first (it did not finish): copying the rotated kubeconfig: %v", err)
 	}
 	raw, err := os.ReadFile(dst)
 	if err != nil {
@@ -252,8 +258,9 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 	}
 	// CLI.
 	out, err := ichorCLI(t, c, "get", "cluster", c.Opts.Prefix)
-	if err != nil || !strings.Contains(out, "cni: unmanaged (flannel, not managed by Ichor)") {
-		t.Errorf("get cluster lacks `cni: unmanaged (flannel, not managed by Ichor)` (err=%v)", err)
+	// The row is "CNI  unmanaged (flannel), not managed by Ichor" (internal/cli/cluster_human.go renderClusterStatus).
+	if err != nil || !strings.Contains(out, "unmanaged (flannel), not managed by Ichor") {
+		t.Errorf("get cluster lacks `unmanaged (flannel), not managed by Ichor` (err=%v)", err)
 	}
 	out, err = ichorCLI(t, c, "get", "cni-values")
 	if err == nil || !strings.Contains(out, unmanagedText) {
@@ -267,12 +274,13 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 	uout, uerr := mk.CombinedOutput()
 	pw := ""
 	for l := range strings.SplitSeq(string(uout), "\n") {
-		if strings.HasPrefix(l, "Password for d6 ") {
-			pw = l[strings.LastIndex(l, ": ")+2:]
+		// The line may carry a "! " prefix: internal/cli/user.go prints it as a warning.
+		if _, after, ok := strings.Cut(l, "first sign-in): "); ok && strings.Contains(l, "Password for d6 ") {
+			pw = strings.TrimSpace(after)
 		}
 	}
 	if uerr != nil || pw == "" {
-		t.Fatalf("create user d6 --bootstrap: %v\n%s", uerr, uout) // the output holds the password only on success
+		t.Fatalf("create user d6 --bootstrap: %v\n%s", uerr, redactPassword(string(uout)))
 	}
 	port := env("ICHOR_E2E_F_UI_PORT", "5144")
 	ui := exec.Command(ichorBin(t), "ui", "--open-browser=false", "--local-port", port, //nolint:gosec // test harness

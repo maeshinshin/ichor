@@ -118,7 +118,7 @@ func notUpYet(err error) bool {
 }
 
 // pollWhile runs attempt every interval (first call at once) for up to timeout, retrying
-// while retryable(err) holds and printing "init: waiting for <what>: <err>" before each
+// while retryable(err) holds and printing "waiting for <what>: <err>" before each
 // retry. A nil or non-retryable error returns at once; when the wait runs out it returns the
 // last attempt's error rather than the poll's bare deadline error. Zero timeout or interval
 // take the defaults.
@@ -149,7 +149,7 @@ func pollWhile(
 			return true, nil
 		}
 
-		_, _ = fmt.Fprintf(progress, "init: waiting for %s: %v\n", what, last)
+		_, _ = fmt.Fprintf(progress, "waiting for %s: %v\n", what, last)
 
 		return false, nil
 	})

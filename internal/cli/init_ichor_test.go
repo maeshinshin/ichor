@@ -214,7 +214,7 @@ func TestApplyIchorManifest_RetriesEtcdTimeout(t *testing.T) {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
-	if got := strings.Count(warn.String(), "init: retrying"); got != 2 {
+	if got := strings.Count(warn.String(), "retrying in"); got != 2 {
 		t.Fatalf("want 2 retrying lines, got %d:\n%s", got, warn.String())
 	}
 }
@@ -345,6 +345,40 @@ func TestCreateIchorInstallation_ErrorNamesNoCommand(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "did not finish within 50ms") {
 		t.Errorf("error %q does not say the wait timed out", err)
+	}
+}
+
+// What the shared path prints is read by adopt's user as well: none of it starts with "init:".
+func TestSharedInstallPath_StderrNamesNoCommand(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	var out bytes.Buffer
+
+	k8s := newIchorInstallationFake(t)
+	if err := applyIchorManifest(context.Background(), k8s, []byte(testIchorManifest), &out, false, installer.UISettings{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := createIchorInstallation(context.Background(), k8s, &out, time.Second, installerPin{SkipSignature: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := applyNetworkPolicies(context.Background(), k8s, nil, "flannel", time.Millisecond, time.Millisecond, &out); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := retryInit(context.Background(), &out, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+
+	if out.Len() == 0 {
+		t.Fatal("the shared path printed nothing, so the test checks nothing")
+	}
+
+	for line := range strings.SplitSeq(out.String(), "\n") {
+		if strings.HasPrefix(line, "init:") {
+			t.Errorf("line %q starts with %q, but adopt shares this path", line, "init:")
+		}
 	}
 }
 

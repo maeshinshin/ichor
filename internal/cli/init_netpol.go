@@ -54,7 +54,7 @@ func applyNetworkPolicies(
 	}
 
 	if cniPreset != cniCilium {
-		_, _ = fmt.Fprintf(progress, "init: not applying Ichor's network policies: --cni %s does not enforce CiliumNetworkPolicies\n", cniPreset)
+		_, _ = fmt.Fprintf(progress, "not applying Ichor's network policies: --cni %s does not enforce CiliumNetworkPolicies\n", cniPreset)
 
 		return nil
 	}
@@ -81,7 +81,7 @@ func applyNetworkPolicies(
 		}
 	}
 
-	_, _ = fmt.Fprintf(progress, "init: applied Ichor's network policies (%d objects)\n", len(objs))
+	_, _ = fmt.Fprintf(progress, "applied Ichor's network policies (%d objects)\n", len(objs))
 
 	return nil
 }

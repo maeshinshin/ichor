@@ -93,7 +93,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 
 		err := createWithRetry(ctx, k8sClient, obj, warn)
 		if apierrors.IsNotFound(err) && inSecrets && !cilium {
-			_, _ = fmt.Fprintf(warn, "init: skipping %s %s: namespace %s does not exist, Cilium does not run here\n",
+			_, _ = fmt.Fprintf(warn, "skipping %s %s: namespace %s does not exist, Cilium does not run here\n",
 				obj.GetKind(), obj.GetName(), installer.CiliumSecretsNamespace)
 
 			continue
@@ -104,7 +104,7 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 		}
 	}
 
-	_, _ = fmt.Fprintf(warn, "init: applied Ichor's own install manifest (%d objects)\n", len(objs))
+	_, _ = fmt.Fprintf(warn, "applied Ichor's own install manifest (%d objects)\n", len(objs))
 
 	return nil
 }
@@ -171,7 +171,7 @@ func retryInit(ctx context.Context, progress io.Writer, fn func() error) error {
 			return err
 		}
 
-		_, _ = fmt.Fprintf(progress, "init: retrying in %s: %v\n", delay, err)
+		_, _ = fmt.Fprintf(progress, "retrying in %s: %v\n", delay, err)
 
 		if err := sleepCtx(ctx, delay); err != nil {
 			return err
@@ -263,7 +263,7 @@ func validateInitInstaller(opts initOptions) error {
 // hand-over to wait for.
 func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer, wait time.Duration, pin installerPin) (bool, error) {
 	if !semver.IsValid(version.Version) {
-		_, _ = fmt.Fprintf(warn, "init: not creating IchorInstallation: this ichor binary is %q, not a released version\n", version.Version)
+		_, _ = fmt.Fprintf(warn, "not creating IchorInstallation: this ichor binary is %q, not a released version\n", version.Version)
 
 		return false, nil
 	}
@@ -277,7 +277,7 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 	if pin.SkipSignature {
 		spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 
-		_, _ = fmt.Fprintln(warn, "init: Warning: the signature of the installer image is NOT checked "+
+		_, _ = fmt.Fprintln(warn, "Warning: the signature of the installer image is NOT checked "+
 			"(spec.installerSignature.mode skip); the next `ichor upgrade ichor` without --skip-signature-check checks it again")
 	}
 

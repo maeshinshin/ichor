@@ -71,9 +71,7 @@ with unknown fields rejected; `uiapi.PatchToWire` is the one conversion.
 the latest token, the Go twin of `ui/src/lib/resumableStream.ts`; the same
 caveat about a few repeated or missed lines applies (ADR 0018). The API has
 no "snapshot" mode, so without `--follow` the command stops after
-`--idle-timeout` (3s) without a new line. `shortcut:` the idle timer
-stands in for a `follow` field on `StreamNodeLogsRequest`, which needs a `proto/`
-change; add the field when the API next changes.
+`--idle-timeout` (3s) without a new line (replaced, see the amendment below).
 
 ## Not done
 
@@ -88,3 +86,7 @@ change; add the field when the API next changes.
 The CLI finds the ichor-ui Service by `app.kubernetes.io/component=ui` in the Ichor namespace, not by name. Kustomize `namePrefix` makes the init-installed Service `ichor-ichor-ui-service`, the chart names it `ichor-ui-service`, and both now set the label. Names are left as they are because `internal/installer` classifies UI objects by the `ichor-ichor-ui` prefix.
 
 - `apply` always print the impact (reboot, install-time-only, unsupported, or "no reboot needed") on stderr before writing, as the help says; the written object stays alone on stdout.
+
+## Amendment: `--follow` is a request field
+
+`StreamNodeLogsRequest` has `optional bool follow`, so `logs node` sets it from `--follow`. Without `--follow` the server returns the tail and ends the stream. The idle timer stays as an opt-in fallback: `--idle-timeout` (default off) ends a snapshot after that long without a line, for an ichor-ui older than the CLI, which ignores `follow` and streams on.

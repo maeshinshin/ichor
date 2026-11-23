@@ -174,11 +174,19 @@ command does. Each item is described where it is listed below.
   effect. An upgrade that stopped with that message can be run again (Operations).
 
 ### CLI
+
 - **A setting can be reset to the deployment value.** `ichor set settings --reset KEY` (repeatable) clears the key
   from the `IchorInstallation`, so the flag or chart value applies again and follows later Helm changes. Until now a
   setting changed in the UI or CLI could not be unset. The Settings page has a "Use the deployment value" button on
   each card that sets a value. `UpdateSettingsRequest` gains `unset`; a request that only resets keys no longer
   fails on a missing `changes`.
+- `ichor logs node` asks the server for a snapshot or a stream with the request's
+  `follow` field. `--idle-timeout` is off by default; pass it to end a snapshot after that long
+  without a line, which an ichor-ui older than this CLI needs because it ignores `follow`.
+- `ichor init` and `ichor adopt` wait for the controller in the namespace it runs
+  in, and adopt reads registry `authSecretRef` Secrets and the secrets bundle from
+  there, so a Helm install outside `ichor-system` no longer waits out the timeout
+  with "the Deployment does not exist yet" or reads the wrong namespace.
 - **`ichor upgrade cli` replaces the `ichor` binary with a release.** It downloads the
   release archive, verifies the signed checksums file and the archive against it
   (no way to skip), and renames the binary over the running one; `ichor upgrade cli VERSION` picks

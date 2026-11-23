@@ -20,7 +20,7 @@ ichor logs node cp-1 cp-2 cp-3 --service etcd
 |---|---|
 | `--service NAME` | A Talos service (`kubelet`, `etcd`, ...). Empty means the kernel log. |
 | `--follow` | Keep streaming. After a dropped connection it resumes from the last resume token; a few lines around the cut may repeat or be missed. |
-| `--idle-timeout` | Without `--follow`, stop after this long with no new line (default 3s). |
+| `--idle-timeout D` | Without `--follow`, also stop after this long with no new line. Off by default; for an ichor-ui older than the CLI. |
 | `-o json` | One JSON object per line. With several nodes, plain output is prefixed with the node name. |
 
 One request names at most 32 nodes.

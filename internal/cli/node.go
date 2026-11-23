@@ -53,7 +53,9 @@ var logsNodeCmd = &cobra.Command{
 	Short: "Print a node's kernel or service log (needs ichor-ui); --follow keeps streaming",
 	Long: `logs node prints the kernel log (or, with --service, a Talos service's log) of one
 or more nodes, merged onto one stream. Without --follow it prints what the node
-has and exits once nothing new arrives for --idle-timeout. With --follow it keeps
+has and exits at the end of it; --idle-timeout also ends it after that long without a
+new line, for an ichor-ui older than this CLI, which ignores the request's follow field and
+streams on. With --follow it keeps
 streaming until Ctrl-C and, if the connection drops or ichor-ui drains, reconnects
 and resumes from the last resume token (a few lines around the cut may repeat or
 be missed: Talos offers no per-line identity). Output is plain
@@ -87,7 +89,7 @@ JSON object per line instead.`,
 func runNodeLogs(
 	ctx context.Context, dial func(context.Context) (*apiClients, error), out, errw io.Writer, names []string, opts nodeLogsOptions,
 ) error {
-	req := &pb.StreamNodeLogsRequest{Service: opts.Service, ResumeToken: opts.ResumeToken}
+	req := &pb.StreamNodeLogsRequest{Service: opts.Service, ResumeToken: opts.ResumeToken, Follow: &opts.Follow}
 	for _, n := range names {
 		req.Machines = append(req.Machines, objectRef(apiOpts.Namespace, n))
 	}
@@ -206,5 +208,5 @@ func init() {
 	f.StringVar(&nodeLogsOpts.Service, "service", "", "Talos service whose log to read (kubelet, etcd, ...); empty means the kernel log")
 	f.BoolVarP(&nodeLogsOpts.Follow, "follow", "f", false, "keep streaming, reconnecting with the resume token if the connection drops")
 	f.StringVar(&nodeLogsOpts.ResumeToken, "resume-token", "", "resume token from an earlier run (opaque)")
-	f.DurationVar(&nodeLogsOpts.Idle, "idle-timeout", 3*time.Second, "without --follow, stop after this long without a new line")
+	f.DurationVar(&nodeLogsOpts.Idle, "idle-timeout", 0, "without --follow, also stop after this long without a new line (for an ichor-ui older than this CLI); 0 is off")
 }

@@ -11,7 +11,9 @@ Print a node's kernel or service log (needs ichor-ui); --follow keeps streaming
 
 logs node prints the kernel log (or, with --service, a Talos service's log) of one
 or more nodes, merged onto one stream. Without --follow it prints what the node
-has and exits once nothing new arrives for --idle-timeout. With --follow it keeps
+has and exits at the end of it; --idle-timeout also ends it after that long without a
+new line, for an ichor-ui older than this CLI, which ignores the request's follow field and
+streams on. With --follow it keeps
 streaming until Ctrl-C and, if the connection drops or ichor-ui drains, reconnects
 and resumes from the last resume token (a few lines around the cut may repeat or
 be missed: Talos offers no per-line identity). Output is plain
@@ -37,7 +39,7 @@ ichor logs node NAME... [flags]
   -f, --follow                   keep streaming, reconnecting with the resume token if the connection drops
   -h, --help                     help for node
       --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
-      --idle-timeout duration    without --follow, stop after this long without a new line (default 3s)
+      --idle-timeout duration    without --follow, also stop after this long without a new line (for an ichor-ui older than this CLI); 0 is off
       --local                    do not use ichor-ui; compute from the Kubernetes API directly
   -n, --namespace string         namespace of the Ichor resources the command names (default "ichor-system")
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local

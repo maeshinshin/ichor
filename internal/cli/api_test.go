@@ -458,12 +458,16 @@ type logsHandler struct {
 
 	calls  atomic.Int32
 	tokens chan string
+	last   atomic.Pointer[pb.StreamNodeLogsRequest] // the latest request, for the follow flag
+
+	ignoreFollow bool // an older server: the follow field is unknown, so the stream stays open
 }
 
 func (h *logsHandler) StreamNodeLogs(
 	ctx context.Context, req *connect.Request[pb.StreamNodeLogsRequest], stream *connect.ServerStream[pb.StreamNodeLogsResponse],
 ) error {
 	h.tokens <- req.Msg.GetResumeToken()
+	h.last.Store(req.Msg)
 
 	ref := req.Msg.GetMachines()[0]
 
@@ -475,6 +479,11 @@ func (h *logsHandler) StreamNodeLogs(
 	}
 
 	_ = stream.Send(&pb.StreamNodeLogsResponse{Machine: ref, Message: "three", ResumeToken: "t3"})
+
+	if !h.ignoreFollow && req.Msg.Follow != nil && !req.Msg.GetFollow() { // a snapshot ends with the history, as the server does
+		return nil
+	}
+
 	<-ctx.Done()
 
 	return nil
@@ -532,16 +541,20 @@ func TestNodeLogsFollowResumesAfterDrain(t *testing.T) {
 	if got := out.String(); got != "one\ntwo\nthree\n" {
 		t.Fatalf("unexpected output %q", got)
 	}
+
+	if last := h.last.Load(); last == nil || last.Follow == nil || !last.GetFollow() {
+		t.Fatalf("--follow: the request's follow = %v, want an explicit true", last.GetFollow())
+	}
 }
 
-func TestNodeLogsWithoutFollowStopsWhenIdle(t *testing.T) {
+func TestNodeLogsWithoutFollowAsksForASnapshot(t *testing.T) {
 	setAPITestFlags(t, true)
 
 	outputFormat = outputYAML
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiBackendObjects()...).Build()
 	h := &logsHandler{tokens: make(chan string, 8)}
-	h.calls.Store(1) // skip the Unavailable branch: send one line, then block
+	h.calls.Store(1) // skip the Unavailable branch: send one line
 
 	var forwards atomic.Int32
 
@@ -549,10 +562,17 @@ func TestNodeLogsWithoutFollowStopsWhenIdle(t *testing.T) {
 
 	var out syncBuffer
 
-	err := runNodeLogs(context.Background(), func(ctx context.Context) (*apiClients, error) { return connectAPI(ctx, apiOpts, deps, true) },
-		&out, &bytes.Buffer{}, []string{testMachineName}, nodeLogsOptions{Idle: 200 * time.Millisecond})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := runNodeLogs(ctx, func(ctx context.Context) (*apiClients, error) { return connectAPI(ctx, apiOpts, deps, true) },
+		&out, &bytes.Buffer{}, []string{testMachineName}, nodeLogsOptions{})
 	if err != nil || out.String() != "three\n" {
 		t.Fatalf("err=%v out=%q", err, out.String())
+	}
+
+	if last := h.last.Load(); last == nil || last.Follow == nil || last.GetFollow() {
+		t.Fatalf("no --follow: the request's follow = %v, want an explicit false", last.GetFollow())
 	}
 }
 
@@ -672,5 +692,32 @@ func TestPatchApplyWithAForbiddenReadCreates(t *testing.T) {
 
 	if err := runPatchApply(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, &p); connect.CodeOf(err) != connect.CodeAlreadyExists {
 		t.Fatalf("an existing patch is refused as already existing: %v", err)
+	}
+}
+
+// An ichor-ui older than this CLI ignores the request's follow field and streams on; --idle-timeout
+// still ends a snapshot.
+func TestNodeLogsIdleTimeoutEndsAStreamTheServerKeepsOpen(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	outputFormat = outputYAML
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiBackendObjects()...).Build()
+	h := &logsHandler{tokens: make(chan string, 8), ignoreFollow: true}
+	h.calls.Store(1)
+
+	var forwards atomic.Int32
+
+	deps := backendFor(t, k8s, &forwards, func(mux *http.ServeMux) { mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(h)) })
+
+	var out syncBuffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := runNodeLogs(ctx, func(ctx context.Context) (*apiClients, error) { return connectAPI(ctx, apiOpts, deps, true) },
+		&out, &bytes.Buffer{}, []string{testMachineName}, nodeLogsOptions{Idle: 200 * time.Millisecond})
+	if err != nil || out.String() != "three\n" || ctx.Err() != nil {
+		t.Fatalf("err=%v out=%q ctx=%v: the idle timer did not end the stream", err, out.String(), ctx.Err())
 	}
 }

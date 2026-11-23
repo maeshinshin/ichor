@@ -75,6 +75,12 @@ func leaks(text string, secrets []string) []string {
 // ensureForeign makes sure the worker is configured by the foreign cluster, undoing an earlier reclaim.
 func (r *rig) ensureForeign(t *testing.T) {
 	t.Helper()
+	// The worker is reached through the talosconfig's endpoint, the foreign control plane, so with that gone (C3Force
+	// resets it) the probe below fails on a healthy worker and the reset would use the wrong PKI (x509 unknown authority).
+	if _, err := talosctl.GetAuthenticated(ns, r.f.CPs[0], "machinestatus", ftc(t, r.f)); err != nil {
+		t.Fatalf("lab precondition: the foreign control plane %s does not answer (TestC3Force destroys it); "+
+			"bring the lab up again before this case: %v", r.f.CPs[0], err)
+	}
 	if _, err := talosctl.GetAuthenticated(ns, r.foreignW, "machinestatus", ftc(t, r.f)); err == nil {
 		return
 	}

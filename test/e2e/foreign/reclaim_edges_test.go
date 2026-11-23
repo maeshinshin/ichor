@@ -110,7 +110,7 @@ func TestC2ControlPlanes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("C2: graceful reclaim of one of three control planes failed: %v", err)
 	}
-	if !strings.Contains(out, "graceful: true") || !strings.Contains(out, "is in maintenance mode with UUID "+uuid) {
+	if !strings.Contains(out, "accepted, graceful") || !strings.Contains(out, "answers with UUID "+uuid) {
 		t.Errorf("C2: not graceful or not in maintenance")
 	}
 	members, err = talosctl.EtcdMembers(ns, keeper, tc)
@@ -130,7 +130,7 @@ func TestC2ControlPlanes(t *testing.T) {
 	// A 2-member cluster: removing one leaves 1 of 2, no quorum.
 	uuid2 := uuidOf(t, other, tc)
 	out, err = r.reclaim(t, other, "--confirm", uuid2)
-	if err == nil || !strings.Contains(out, "Refused") {
+	if err == nil || !strings.Contains(out, "refused: cluster") {
 		t.Errorf("C2: a control plane of a 2-member cluster was not refused: %v", err)
 	}
 	if got := uuidOf(t, other, tc); got != uuid2 {
@@ -139,7 +139,8 @@ func TestC2ControlPlanes(t *testing.T) {
 }
 
 // TestC3Force: the only control plane of a foreign cluster is reclaimed with --force, the cluster name typed a
-// second time and --force-ungraceful. This destroys the foreign cluster; run it last.
+// second time and --force-ungraceful. This destroys the foreign cluster: run it last, and
+// bring the lab up again (`foreign up`) before any case that needs the foreign worker (ensureForeign cannot repair it).
 func TestC3Force(t *testing.T) {
 	r := newRig(t, foreign.Options{Workers: 1, DataDisk: true})
 	cp := r.f.CPs[0]
@@ -155,7 +156,7 @@ func TestC3Force(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forced reclaim failed: %v", err)
 	}
-	if !strings.Contains(out, "is in maintenance mode with UUID "+uuid) {
+	if !strings.Contains(out, "accepted, not graceful") || !strings.Contains(out, "answers with UUID "+uuid) {
 		t.Errorf("no maintenance confirmation")
 	}
 }

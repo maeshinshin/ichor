@@ -312,7 +312,7 @@ func TestC1C5C7(t *testing.T) {
 		t.Fatalf("reclaim failed: %v", err)
 	}
 	t.Logf("reclaim returned after %s", time.Since(start).Round(time.Second))
-	if !strings.Contains(out, "is in maintenance mode with UUID "+uuid) {
+	if !strings.Contains(out, "answers with UUID "+uuid) { // the "Maintenance mode" step of internal/cli
 		t.Errorf("no maintenance confirmation with the same UUID")
 	}
 	// C7: the pod network keeps the address across the reboot, so there is no hint to see here.

@@ -57,7 +57,11 @@ const NewPassword = "uisignin-changed-Password-0123456789"
 func SignIn(ctx context.Context, hc *http.Client, base, user, password string) (string, error) {
 	tok, err := idToken(ctx, hc, base, user, password)
 	if err != nil {
-		return "", err
+		// An earlier run already changed the must-change password to NewPassword.
+		var err2 error
+		if tok, err2 = idToken(ctx, hc, base, user, NewPassword); err2 != nil {
+			return "", err
+		}
 	}
 	users := ichorv1alpha1connect.NewUserServiceClient(&http.Client{Timeout: time.Minute,
 		Transport: Bearer{Base: hc.Transport, Token: tok}}, base)

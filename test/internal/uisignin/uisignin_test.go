@@ -63,7 +63,7 @@ func fakeIssuer(mustChange bool) *httptest.Server {
 	mux.HandleFunc("/oidc/login", func(w http.ResponseWriter, r *http.Request) {
 		var b map[string]string
 		_ = json.NewDecoder(r.Body).Decode(&b)
-		if b["ticket"] != "t1" || b["username"] != "u" {
+		if b["ticket"] != "t1" || b["username"] != "u" || (changed && b["password"] != NewPassword) {
 			http.Error(w, "bad login", http.StatusUnauthorized)
 			return
 		}
@@ -108,5 +108,18 @@ func TestSignInRejected(t *testing.T) {
 	_, err := SignIn(context.Background(), srv.Client(), srv.URL, "other", "secret")
 	if err == nil || !strings.Contains(err.Error(), "login") {
 		t.Fatalf("err = %v, want a login error", err)
+	}
+}
+
+// A must-change password is changed by the first sign-in, so the next run with the same original password signs in
+// with the new one (reclaimui runs once per call).
+func TestSignInAfterPasswordChange(t *testing.T) {
+	srv := fakeIssuer(true)
+	defer srv.Close()
+	for i := range 2 {
+		got, err := SignIn(context.Background(), srv.Client(), srv.URL, "u", "secret")
+		if err != nil || got != "tok-pw-"+NewPassword {
+			t.Fatalf("sign-in %d = %q, %v", i+1, got, err)
+		}
 	}
 }

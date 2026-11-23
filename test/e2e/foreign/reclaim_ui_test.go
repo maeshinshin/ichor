@@ -122,9 +122,9 @@ func TestC8C9C10(t *testing.T) {
 	uuid := uuidOf(t, r.foreignW, tc)
 	tcPath, secrets := r.markedTalosconfig(t, "c9")
 
-	// C8: without the reclaimer binding the webhook denies (ichor-ui acts as its ServiceAccount here: users are off).
-	_, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found")
-	_, out, err := r.newReclaim(t, tcPath, r.foreignW)
+	// C8: a signed-in user without the reclaim verb (a viewer) is denied; the admin below is allowed.
+	viewer, vpass := r.bootstrapUser(t, "viewer")
+	out, err := r.uiAs(t, viewer, vpass, "create", "-address", r.foreignW, "-talosconfig", tcPath, "-cluster", ichorName)
 	if err == nil || !strings.Contains(out, "reclaim") {
 		t.Errorf("C8: a caller without the reclaim verb was not denied: %v / %s", err, out)
 	}
@@ -133,13 +133,7 @@ func TestC8C9C10(t *testing.T) {
 		t.Logf("MachineReclaims after the denial: %s", got)
 	}
 
-	if _, err := r.ik("-n", crNS, "create", "rolebinding", "reclaim-lane2", "--clusterrole=ichor-machine-reclaimer",
-		"--serviceaccount=ichor-system:ichor-ichor-ui"); err != nil {
-		t.Fatalf("binding the reclaimer role: %v", err)
-	}
-	t.Cleanup(func() { _, _ = r.ikDelete("-n", crNS, "delete", "rolebinding", "reclaim-lane2", "--ignore-not-found") })
-
-	name, _, err := r.newReclaim(t, tcPath, r.foreignW)
+	name, err := r.newReclaim(t, tcPath, r.foreignW)
 	if err != nil {
 		t.Fatalf("C8: create with the binding: %v", err)
 	}
@@ -205,7 +199,7 @@ func TestC8C9C10(t *testing.T) {
 
 	// C10: status.audit and the Events carry user, UUID, foreign cluster and outcome.
 	t.Logf("status.audit: %s", jsonField(t, mr, "status.audit"))
-	for _, w := range []string{uiSA, uuid} {
+	for _, w := range []string{r.uiUser, uuid} {
 		if !strings.Contains(jsonField(t, mr, "status.audit"), w) && !strings.Contains(events, w) {
 			t.Errorf("C10: neither status.audit nor Events carry %q", w)
 		}

@@ -52,7 +52,6 @@ const (
 	ichorName  = "ichor-e2e-r"
 	podKC      = "/tmp/home/.ichor/clusters/ichor-e2e-r/kubeconfig"
 	uiNodePort = "30080"
-	uiSA       = "system:serviceaccount:ichor-system:ichor-ichor-ui"
 )
 
 type rig struct {
@@ -99,27 +98,28 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 		t.Fatalf("the Ichor cluster's talosconfig (generate it from its secrets bundle): %v", err)
 	}
 	r.stage(t)
-	r.bootstrapAdmin(t)
+	r.uiUser, r.uiPass = r.bootstrapUser(t, "admin")
 	return r
 }
 
-// bootstrapAdmin makes an admin the way the first admin of an install is made (`create user --bootstrap`, straight
+// bootstrapUser makes a user the way the first admin of an install is made (`create user --bootstrap`, straight
 // through the Kubernetes API), as D6 does, and keeps its generated password out of every log.
-func (r *rig) bootstrapAdmin(t *testing.T) {
+func (r *rig) bootstrapUser(t *testing.T, role string) (name, pass string) {
 	t.Helper()
-	r.uiUser = fmt.Sprintf("c%d", time.Now().Unix())
-	mk := exec.Command(ichorBin(t), "create", "user", r.uiUser, "--role", "admin", //nolint:gosec // test harness
+	name = fmt.Sprintf("c%s%d", role[:1], time.Now().UnixNano())
+	mk := exec.Command(ichorBin(t), "create", "user", name, "--role", role, //nolint:gosec // test harness
 		"--generate", "--bootstrap", flagKubeconfig, r.ichorKC) // takes no -n: it writes ichor-system
 	out, err := mk.CombinedOutput()
 	for l := range strings.SplitSeq(string(out), "\n") {
 		// The line may carry a "! " prefix: internal/cli/user.go prints it as a warning.
-		if _, after, ok := strings.Cut(l, "first sign-in): "); ok && strings.Contains(l, "Password for "+r.uiUser+" ") {
-			r.uiPass = strings.TrimSpace(after)
+		if _, after, ok := strings.Cut(l, "first sign-in): "); ok && strings.Contains(l, "Password for "+name+" ") {
+			pass = strings.TrimSpace(after)
 		}
 	}
-	if err != nil || r.uiPass == "" {
-		t.Fatalf("create user %s --bootstrap: %v\n%s", r.uiUser, err, redactPassword(string(out)))
+	if err != nil || pass == "" {
+		t.Fatalf("create user %s --bootstrap: %v\n%s", name, err, redactPassword(string(out)))
 	}
+	return name, pass
 }
 
 // stage copies the two talosconfigs and the helper binaries into the Ichor tools pod.
@@ -172,8 +172,13 @@ func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error
 
 func (r *rig) ui(t *testing.T, op string, extra ...string) (string, error) {
 	t.Helper()
+	return r.uiAs(t, r.uiUser, r.uiPass, op, extra...)
+}
+
+func (r *rig) uiAs(t *testing.T, user, pass, op string, extra ...string) (string, error) {
+	t.Helper()
 	return r.pod(t, append([]string{"/tmp/reclaimui", op, "-url", "https://" + r.ichorCP + ":" + uiNodePort,
-		"-user", r.uiUser, "-password", r.uiPass}, extra...)...)
+		"-user", user, "-password", pass}, extra...)...)
 }
 
 func (r *rig) ik(args ...string) (string, error) {
@@ -303,18 +308,18 @@ func (r *rig) waitPhase(t *testing.T, name string, d time.Duration, phases ...st
 var reclaimName = regexp.MustCompile(`"name":\s*"(reclaim-[a-z0-9]+)"`)
 
 // newReclaim creates a request through ichor-ui and returns its name.
-func (r *rig) newReclaim(t *testing.T, tcPath, addr string, extra ...string) (string, string, error) {
+func (r *rig) newReclaim(t *testing.T, tcPath, addr string, extra ...string) (string, error) {
 	t.Helper()
 	out, err := r.ui(t, "create", append([]string{"-address", addr, "-talosconfig", tcPath, "-cluster", ichorName},
 		extra...)...)
 	if err != nil {
-		return "", out, err
+		return "", err
 	}
 	m := reclaimName.FindStringSubmatch(out)
 	if m == nil {
 		t.Fatalf("no reclaim name in %s", out)
 	}
-	return m[1], out, nil
+	return m[1], nil
 }
 
 // TestC1C5C7: a worker of another cluster is reclaimed by the CLI into the Ichor cluster (C1), its user and

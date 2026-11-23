@@ -61,6 +61,8 @@ type rig struct {
 	ichorCP  string // pod IP of its control plane
 	ichorTC  []byte
 	foreignW string
+	uiUser   string // an admin of the Ichor cluster, bootstrapped for reclaimui (ichor-ui requires sign-in)
+	uiPass   string
 }
 
 func newRig(t *testing.T, opts foreign.Options) *rig {
@@ -97,7 +99,27 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 		t.Fatalf("the Ichor cluster's talosconfig (generate it from its secrets bundle): %v", err)
 	}
 	r.stage(t)
+	r.bootstrapAdmin(t)
 	return r
+}
+
+// bootstrapAdmin makes an admin the way the first admin of an install is made (`create user --bootstrap`, straight
+// through the Kubernetes API), as D6 does, and keeps its generated password out of every log.
+func (r *rig) bootstrapAdmin(t *testing.T) {
+	t.Helper()
+	r.uiUser = fmt.Sprintf("c%d", time.Now().Unix())
+	mk := exec.Command(ichorBin(t), "create", "user", r.uiUser, "--role", "admin", //nolint:gosec // test harness
+		"--generate", "--bootstrap", flagKubeconfig, r.ichorKC) // takes no -n: it writes ichor-system
+	out, err := mk.CombinedOutput()
+	for l := range strings.SplitSeq(string(out), "\n") {
+		// The line may carry a "! " prefix: internal/cli/user.go prints it as a warning.
+		if _, after, ok := strings.Cut(l, "first sign-in): "); ok && strings.Contains(l, "Password for "+r.uiUser+" ") {
+			r.uiPass = strings.TrimSpace(after)
+		}
+	}
+	if err != nil || r.uiPass == "" {
+		t.Fatalf("create user %s --bootstrap: %v\n%s", r.uiUser, err, redactPassword(string(out)))
+	}
 }
 
 // stage copies the two talosconfigs and the helper binaries into the Ichor tools pod.
@@ -123,12 +145,16 @@ func (r *rig) stage(t *testing.T) {
 	}
 }
 
-// pod runs a command in the Ichor tools pod and logs its output (no secret is ever in it).
+// pod runs a command in the Ichor tools pod and logs its output (the reclaimui password is redacted).
 func (r *rig) pod(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	a := append([]string{flagContext, os.Getenv(kube.ContextEnv), "-n", ns, cmdExec, ichorTools, "--"}, args...)
 	out, err := exec.Command("kubectl", a...).CombinedOutput()
-	t.Logf("$ %s\n%s", strings.Join(args, " "), out)
+	shown := slices.Clone(args)
+	if i := slices.Index(shown, "-password"); i >= 0 && i+1 < len(shown) {
+		shown[i+1] = "<redacted>"
+	}
+	t.Logf("$ %s\n%s", strings.Join(shown, " "), redactPassword(string(out)))
 	return string(out), err
 }
 
@@ -146,7 +172,8 @@ func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error
 
 func (r *rig) ui(t *testing.T, op string, extra ...string) (string, error) {
 	t.Helper()
-	return r.pod(t, append([]string{"/tmp/reclaimui", op, "-url", "https://" + r.ichorCP + ":" + uiNodePort}, extra...)...)
+	return r.pod(t, append([]string{"/tmp/reclaimui", op, "-url", "https://" + r.ichorCP + ":" + uiNodePort,
+		"-user", r.uiUser, "-password", r.uiPass}, extra...)...)
 }
 
 func (r *rig) ik(args ...string) (string, error) {

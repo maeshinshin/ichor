@@ -18,7 +18,7 @@ limitations under the License.
 // reclaim-create for the UI path. It runs inside the cluster network (ichor-ui's certificate is self-signed, so
 // verification is skipped) and prints the response as JSON. It never prints the talosconfig it sends.
 //
-//	reclaimui -url https://HOST:8443 can [-cluster NAME]
+//	reclaimui -url https://HOST:8443 [-user NAME -password PW] can [-cluster NAME]
 //	reclaimui -url ... create -address IP -talosconfig FILE [-cluster NAME] [-force] [-force-ungraceful]
 //	reclaimui -url ... get|confirm|list ...
 package main
@@ -38,6 +38,7 @@ import (
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/test/internal/uisignin"
 )
 
 func main() {
@@ -50,7 +51,8 @@ func main() {
 func run() error {
 	fs := flag.NewFlagSet("reclaimui", flag.ExitOnError)
 	url := fs.String("url", "https://ichor-ichor-ui-service.ichor-system.svc:8443", "ichor-ui base URL")
-	token := fs.String("token", "", "bearer token, when users are on")
+	user := fs.String("user", "", "Ichor user to sign in as")
+	password := fs.String("password", "", "its password (a must-change one is changed to a fixed new one first)")
 	address := fs.String("address", "", "create: node address")
 	tc := fs.String("talosconfig", "", "create: talosconfig file")
 	tcContext := fs.String("context", "", "create: talosconfig context")
@@ -73,19 +75,16 @@ func run() error {
 	// The in-cluster test endpoint is self-signed.
 	tlsCfg := &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test harness only
 	hc := &http.Client{Timeout: time.Minute, Transport: &http.Transport{TLSClientConfig: tlsCfg}}
-	opts := []connect.ClientOption{}
-	if *token != "" {
-		bearer := connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
-			return func(ctx context.Context, r connect.AnyRequest) (connect.AnyResponse, error) {
-				r.Header().Set("Authorization", "Bearer "+*token)
-				return next(ctx, r)
-			}
-		})
-		opts = append(opts, connect.WithInterceptors(bearer))
+	ctx := context.Background()
+	if *user != "" {
+		tok, err := uisignin.SignIn(ctx, hc, *url, *user, *password)
+		if err != nil {
+			return fmt.Errorf("sign-in: %w", err)
+		}
+		hc.Transport = uisignin.Bearer{Base: hc.Transport, Token: tok}
 	}
 
-	c := ichorv1alpha1connect.NewReclaimServiceClient(hc, *url, opts...)
-	ctx := context.Background()
+	c := ichorv1alpha1connect.NewReclaimServiceClient(hc, *url)
 	ref := func(n string) *pb.ObjectRef { return &pb.ObjectRef{Namespace: "ichor-system", Name: n} }
 
 	var clusterRef *pb.ObjectRef

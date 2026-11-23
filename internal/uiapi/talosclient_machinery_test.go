@@ -42,6 +42,8 @@ func TestInstallableDisks(t *testing.T) {
 	}
 }
 
+const testSvc = "a-service"
+
 func TestParseLogTime(t *testing.T) {
 	want := time.Date(2026, 11, 24, 10, 11, 12, 123456789, time.UTC)
 
@@ -50,13 +52,13 @@ func TestParseLogTime(t *testing.T) {
 		want          time.Time
 	}{
 		"kernel line keeps its own RFC3339Nano time": {"", "kern:    info: [2026-11-24T10:11:12.123456789Z]: eth0 up", want},
-		"service JSON ts string":                     {"etcd", `{"level":"info","ts":"2026-11-24T10:11:12.123456789Z","msg":"x"}`, want},
-		"service JSON time string":                   {"apid", `{"time":"2026-11-24T10:11:12.123456789Z","msg":"x"}`, want},
-		"service JSON epoch milliseconds":            {"kubelet", `{"ts":1795515072123.456,"msg":"x"}`, time.Unix(1795515072, 123456000).UTC()},
-		"service plain line has no time":             {"etcd", "just some text", time.Time{}},
-		"service JSON without time has none":         {"etcd", `{"msg":"x"}`, time.Time{}},
+		"service JSON ts string":                     {testSvc, `{"level":"info","ts":"2026-11-24T10:11:12.123456789Z","msg":"x"}`, want},
+		"service JSON time string":                   {testSvc, `{"time":"2026-11-24T10:11:12.123456789Z","msg":"x"}`, want},
+		"service JSON epoch milliseconds":            {testSvc, `{"ts":1795515072123.456,"msg":"x"}`, time.Unix(1795515072, 123456000).UTC()},
+		"service plain line has no time":             {testSvc, "just some text", time.Time{}},
+		"service JSON without time has none":         {testSvc, `{"msg":"x"}`, time.Time{}},
 		"kernel line without a bracketed time":       {"", "kern:    info: eth0 up", time.Time{}},
-		"service text that only looks like a kernel": {"etcd", "kern:    info: [2026-11-24T10:11:12Z]: x", time.Time{}},
+		"service text that only looks like a kernel": {testSvc, "kern:    info: [2026-11-24T10:11:12Z]: x", time.Time{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got := parseLogTime(tc.service, tc.line)

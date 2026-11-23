@@ -117,6 +117,9 @@ type egressTargets struct {
 	cidrs []string    // machine, discovery and reclaim addresses: "10.0.0.1/32", "10.1.0.0/24"
 	names []string    // host names of machines and cluster endpoints
 	s3    []urlTarget // https/http endpoints of S3 stores
+	// probe holds the exact host and port a live MachineReclaim's reachability check dials: the foreign
+	// cluster's endpoint and etcd peers, which only the node's own configuration names.
+	probe []urlTarget
 	// factory holds the Image Factories of clusters with a TalosStorage. Only the controller dials them, so they
 	// get a policy of their own that does not select ichor-ui.
 	factory []urlTarget
@@ -204,11 +207,29 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 		return egressTargets{}, fmt.Errorf("listing MachineReclaims: %w", err)
 	}
 
+	var probe []urlTarget
+
 	for i := range reclaims.Items {
-		set.host(reclaims.Items[i].Spec.Address)
+		mr := &reclaims.Items[i]
+		set.host(mr.Spec.Address)
+
+		switch mr.Status.Phase {
+		case ichorv1alpha1.MachineReclaimDone, ichorv1alpha1.MachineReclaimFailed, ichorv1alpha1.MachineReclaimExpired:
+			continue
+		}
+
+		if mr.Status.Inspection == nil {
+			continue
+		}
+
+		for _, hp := range mr.Status.Inspection.ProbeTargets {
+			if st, ok := parseURLTarget("tcp://" + hp); ok && !slices.Contains(probe, st) {
+				probe = append(probe, st)
+			}
+		}
 	}
 
-	t := egressTargets{cidrs: slices.Sorted(maps.Keys(set.cidrs)), names: slices.Sorted(maps.Keys(set.names))}
+	t := egressTargets{cidrs: slices.Sorted(maps.Keys(set.cidrs)), names: slices.Sorted(maps.Keys(set.names)), probe: probe}
 
 	var backups ichorv1alpha1.TalosEtcdBackupList
 	if err := c.List(ctx, &backups); err != nil {
@@ -243,7 +264,7 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 		}
 	}
 
-	for _, list := range [][]urlTarget{t.s3, t.factory} {
+	for _, list := range [][]urlTarget{t.s3, t.factory, t.probe} {
 		slices.SortFunc(list, func(a, b urlTarget) int {
 			return cmp.Or(cmp.Compare(a.host, b.host), cmp.Compare(a.port, b.port))
 		})
@@ -359,7 +380,7 @@ func buildEgress(t egressTargets) []any {
 		})
 	}
 
-	for _, s := range t.s3 {
+	for _, s := range slices.Concat(t.s3, t.probe) {
 		rules = append(rules, s.rule())
 	}
 

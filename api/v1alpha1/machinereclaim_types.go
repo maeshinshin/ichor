@@ -153,6 +153,10 @@ type MachineReclaimInspection struct {
 	// refusals are why the reset cannot be sent; empty means it can, once confirmed.
 	Refusals []string `json:"refusals,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
+	// probeTargets are the host:port pairs the controller dials to judge whether the foreign cluster
+	// is reachable: its cluster endpoint and its etcd peers, as the node's own configuration names
+	// them. The controller's network policy allows exactly these while the request is live.
+	ProbeTargets []string `json:"probeTargets,omitempty"`
 }
 
 // MachineReclaimAudit records who did what; it outlives the Events.

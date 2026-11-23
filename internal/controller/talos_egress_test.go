@@ -407,3 +407,59 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		Expect(calls).To(BeZero())
 	})
 })
+
+// A graceful reclaim from a cluster Ichor has no object for dials that cluster's endpoint and etcd
+// peers, which only the node's own configuration names. The policy must allow exactly those, each on its
+// own port as a /32, while the reclaim is live, and drop them when it ends.
+func TestTalosEgressOpensTheForeignProbeTargetsOfALiveReclaim(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	mr := &ichorv1alpha1.MachineReclaim{Name: "r", Namespace: trustNamespace}
+	mr.Spec.Address = "192.0.2.10"
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimAwaitingConfirmation
+	mr.Status.Inspection = &ichorv1alpha1.MachineReclaimInspection{
+		ProbeTargets: []string{"10.244.2.146:6443", "10.244.2.147:2380"},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mr, staticControllerPolicy(trustNamespace, "ichor")).Build()
+	e := &TalosEgress{Client: c, Namespace: trustNamespace}
+
+	read := func() string {
+		if _, err := e.Sync(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+
+		u := cnpGVK()
+		if err := c.Get(t.Context(), types.NamespacedName{Namespace: trustNamespace, Name: DefaultTalosEgressPolicyName}, u); err != nil {
+			t.Fatal(err)
+		}
+
+		raw, _ := json.Marshal(u.Object[keySpec])
+
+		return string(raw)
+	}
+
+	live := read()
+	for _, want := range []string{
+		`"toCIDRSet":[{"cidr":"10.244.2.146/32"}],"toPorts":[{"ports":[{"port":"6443","protocol":"TCP"}]}]`,
+		`"toCIDRSet":[{"cidr":"10.244.2.147/32"}],"toPorts":[{"ports":[{"port":"2380","protocol":"TCP"}]}]`,
+	} {
+		if !strings.Contains(live, want) {
+			t.Errorf("the policy of a live reclaim lacks %s: %s", want, live)
+		}
+	}
+
+	mr.Status.Phase = ichorv1alpha1.MachineReclaimDone
+	if err := c.Update(t.Context(), mr); err != nil {
+		t.Fatal(err)
+	}
+
+	if done := read(); strings.Contains(done, "10.244.2.146") || strings.Contains(done, "10.244.2.147") {
+		t.Errorf("a finished reclaim must not keep its probe targets open: %s", done)
+	}
+}

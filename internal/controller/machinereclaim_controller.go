@@ -45,9 +45,12 @@ import (
 const (
 	reclaimKind = "MachineReclaim"
 
-	reclaimDefaultTTL         = 15 * time.Minute
-	reclaimRetention          = 7 * 24 * time.Hour
-	reclaimMaintenanceWait    = 10 * time.Minute
+	reclaimDefaultTTL      = 15 * time.Minute
+	reclaimRetention       = 7 * 24 * time.Hour
+	reclaimMaintenanceWait = 10 * time.Minute
+	// reclaimEgressSettle is how long the controller waits for the egress policy to open the foreign
+	// endpoint it just recorded, before it looks at the node again.
+	reclaimEgressSettle       = 5 * time.Second
 	reclaimWaitWindow         = 20 * time.Second
 	reclaimWaitInterval       = 5 * time.Second
 	reclaimRequeueWhileWaitng = 10 * time.Second
@@ -194,6 +197,20 @@ func (r *MachineReclaimReconciler) attend(ctx context.Context, mr *ichorv1alpha1
 	in, err := node.Inspect(ctx)
 	if err != nil {
 		return r.fail(ctx, mr, safeError(mr.Spec.Address, "inspecting", err))
+	}
+
+	// The foreign endpoint and etcd peers are known only from the node's configuration, so the first look
+	// cannot have had them allowed. Record them, give the egress policy time to open exactly those, and
+	// look again; the second look judges reachability.
+	if !in.ClusterReachable && len(in.ProbeTargets) > 0 &&
+		(mr.Status.Inspection == nil || !slices.Equal(mr.Status.Inspection.ProbeTargets, in.ProbeTargets)) {
+		mr.Status.Inspection = &ichorv1alpha1.MachineReclaimInspection{ProbeTargets: in.ProbeTargets}
+
+		if err := r.Status().Update(ctx, mr); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: reclaimEgressSettle}, nil
 	}
 
 	plan := reclaim.Assess(in, known, opt)
@@ -627,7 +644,7 @@ func inspectionStatus(in reclaim.Inspection, plan reclaim.Plan) *ichorv1alpha1.M
 		UUID: in.UUID, Hostname: in.Hostname, Role: role, TalosVersion: in.Version,
 		ClusterName: in.ClusterName, ClusterID: in.ClusterID, ClusterReachable: in.ClusterReachable,
 		Graceful: plan.Graceful, NeedsForce: plan.NeedsForce,
-		Refusals: plan.Refusals, Warnings: plan.Warnings,
+		Refusals: plan.Refusals, Warnings: plan.Warnings, ProbeTargets: in.ProbeTargets,
 	}
 
 	for _, m := range in.EtcdMembers {

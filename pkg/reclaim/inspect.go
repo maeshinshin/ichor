@@ -56,6 +56,9 @@ type Inspection struct {
 	// ClusterName and ClusterID identify the foreign cluster the node belongs to.
 	ClusterName string
 	ClusterID   string
+	// ProbeTargets are the host:port pairs the reachability check dialled (the cluster endpoint of a
+	// worker, the etcd peers of a control plane), so that the caller can open them to this process.
+	ProbeTargets []string
 	// Version is the running Talos release tag.
 	Version string
 	// ClusterReachable is true when the foreign cluster answers from this node's

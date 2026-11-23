@@ -559,6 +559,10 @@ command does. Each item is described where it is listed below.
 
 ### Nodes
 
+- A graceful `reclaim node` from a healthy foreign cluster is no longer refused
+  as "not reachable from the node". The controller opens its network policy to
+  that cluster's endpoint and etcd peers, each only on its own port, for as long
+  as the request is live.
 - **A removal that fails no longer leaves the machine open to a plain delete.**
   Removing a node from ichor-ui restores its delete guard even when the browser
   disconnected mid-request, and the controller clears the guard when arming it

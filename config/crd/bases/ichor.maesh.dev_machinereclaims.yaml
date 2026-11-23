@@ -257,6 +257,14 @@ spec:
                     type: string
                   needsForce:
                     type: boolean
+                  probeTargets:
+                    description: |-
+                      probeTargets are the host:port pairs the controller dials to judge whether the foreign cluster
+                      is reachable: its cluster endpoint and its etcd peers, as the node's own configuration names
+                      them. The controller's network policy allows exactly these while the request is live.
+                    items:
+                      type: string
+                    type: array
                   refusals:
                     description: refusals are why the reset cannot be sent; empty
                       means it can, once confirmed.

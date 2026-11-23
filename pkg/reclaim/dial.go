@@ -165,6 +165,7 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	if in.ControlPlane {
 		inspectEtcd(ctx, n.c, n.timeout, &in)
 	} else if endpoint != "" {
+		in.ProbeTargets = append(in.ProbeTargets, probeAddr(endpoint))
 		in.ClusterReachable = tcpReachable(ctx, endpoint)
 	}
 
@@ -198,6 +199,12 @@ func inspectEtcd(ctx context.Context, api etcdAPI, timeout time.Duration, in *In
 
 	for _, msg := range resp.GetMessages() {
 		for _, m := range msg.GetMembers() {
+			for _, raw := range m.GetPeerUrls() {
+				if u, err := url.Parse(raw); err == nil && u.Host != "" {
+					in.ProbeTargets = append(in.ProbeTargets, probeAddr(u.Host))
+				}
+			}
+
 			in.EtcdMembers = append(in.EtcdMembers, EtcdMember{
 				ID: m.GetId(), Hostname: m.GetHostname(), Unhealthy: !memberReachable(ctx, m.GetPeerUrls()),
 			})
@@ -366,10 +373,17 @@ func orphanCandidate(s *blockres.DiscoveredVolumeSpec, systemDisk string) bool {
 // HostOnly drops the port of address, if it has one.
 var HostOnly = endpointguard.HostOf
 
-func tcpReachable(ctx context.Context, hostport string) bool {
+// probeAddr is hostport with port 443 when it names none: what tcpReachable dials.
+func probeAddr(hostport string) string {
 	if _, _, err := net.SplitHostPort(hostport); err != nil {
-		hostport = net.JoinHostPort(hostport, "443")
+		return net.JoinHostPort(hostport, "443")
 	}
+
+	return hostport
+}
+
+func tcpReachable(ctx context.Context, hostport string) bool {
+	hostport = probeAddr(hostport)
 
 	d := net.Dialer{Timeout: clusterProbeTimeout}
 

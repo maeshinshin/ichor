@@ -15,6 +15,16 @@ reference](../reference/crds/talosoperation.md)). State lives in `status`
 (`phase`, a per-machine list), so a restarted controller or new leader resumes
 where it was.
 
+The controller can restart in the middle of an operation, and that is expected.
+It exits when it loses its leader lease, which is what controller-runtime
+requires (`manager.go`: "the binary must be exited immediately after this
+returns, otherwise components that need leader election might continue to run
+after the leader lock was lost"). The lease is renewed for up to 90 s
+(`cmd/leaderelection.go`), so a control plane whose API server is down longer
+than that, as during a rollout, restarts the pod once. Every step records
+itself in `status` or reads the node before it acts, so the new process applies
+a step again or only waits for it, and never repeats a finished one.
+
 ## Phases
 
 `Pending` until it holds the cluster lock, `InProgress` while it advances

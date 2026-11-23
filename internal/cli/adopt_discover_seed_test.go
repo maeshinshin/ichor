@@ -65,11 +65,11 @@ func TestDiscoverMachinesRefusesClusterPoolBeforeDialingMembers(t *testing.T) {
 	deps := adoptDeps{
 		Seed: cpSeed,
 		Target: fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(
-			node("cp", cpSeed), node("wk", wkHost), testDS("cilium", ciliumImage), ciliumCM("false")).Build(),
+			node("cp", cpSeed), node("wk", wkHost), testDS("cilium", ciliumImage), ciliumCM(kprOff)).Build(),
 		Preflight: func(_ context.Context, in cilium.PreflightInput) (*cilium.PreflightReport, error) {
 			rep := &cilium.PreflightReport{}
 			if in.ConflictsOnly {
-				rep.Conflicts = []cilium.Conflict{{Key: "mode", Live: "cluster-pool", Level: cilium.Blocking}}
+				rep.Conflicts = []cilium.Conflict{{Key: ipamModeKey, Live: poolMode, Level: cilium.Blocking}}
 			}
 
 			return rep, nil
@@ -97,6 +97,12 @@ func TestDiscoverMachinesRefusesClusterPoolBeforeDialingMembers(t *testing.T) {
 	}
 }
 
+const (
+	kprOff, poolMode, routeNative, routingModeKey = "false", "cluster-pool", "native", "routing-mode"
+	ipamModeKey, ipamK8s                          = "mode", "kubernetes"
+	tunnelValueKey, ipamValueKey, routingValueKey = "tunnelProtocol", "ipam", "routingMode"
+)
+
 // ownedKeyPreflight answers like cilium.Preflight does for a Cilium whose live values are live: the owned-key
 // conflicts for the tunnel and kube-proxy mode it is given.
 func ownedKeyPreflight(t *testing.T, live map[string]any) ciliumPreflight {
@@ -112,7 +118,7 @@ func ownedKeyPreflight(t *testing.T, live map[string]any) ciliumPreflight {
 func foreignCiliumTarget(t *testing.T, data map[string]string) client.Client {
 	t.Helper()
 
-	cm := ciliumCM("false")
+	cm := ciliumCM(kprOff)
 	cm.Data = data
 
 	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), cm).Build()
@@ -121,10 +127,10 @@ func foreignCiliumTarget(t *testing.T, data map[string]string) client.Client {
 // A foreign Cilium on geneve is taken over with spec.cni.tunnel=geneve, so the early check must not compare it
 // with the default tunnel when --tunnel is absent.
 func TestRefuseBlockingCiliumAcceptsLiveGeneveWithoutTunnelFlag(t *testing.T) {
-	data := map[string]string{"kube-proxy-replacement": "false", ciliumTunnelKey: ciliumTunnelGeneve}
+	data := map[string]string{ciliumKPRKey: kprOff, ciliumTunnelKey: ciliumTunnelGeneve}
 	deps := adoptDeps{
 		Target:    foreignCiliumTarget(t, data),
-		Preflight: ownedKeyPreflight(t, map[string]any{"tunnelProtocol": "geneve", "ipam": map[string]any{"mode": "kubernetes"}}),
+		Preflight: ownedKeyPreflight(t, map[string]any{tunnelValueKey: ciliumTunnelGeneve, ipamValueKey: map[string]any{ipamModeKey: ipamK8s}}),
 	}
 
 	if err := refuseBlockingCilium(context.Background(), deps); err != nil {
@@ -135,7 +141,7 @@ func TestRefuseBlockingCiliumAcceptsLiveGeneveWithoutTunnelFlag(t *testing.T) {
 		cluster: &ichorv1alpha1.TalosCluster{}, kubeProxy: kubeProxyEnabled, rep: &cniReport{Kind: detectedCilium},
 	}
 	if err := st.mapRunningCilium(factsFor(t, testDS("cilium", ciliumImage), &corev1.ConfigMap{
-		Namespace: k8sFactsSystemNamespace, Name: "cilium-config", Data: data})); err != nil {
+		Namespace: k8sFactsSystemNamespace, Name: ciliumConfigMapName, Data: data})); err != nil {
 		t.Fatal(err)
 	}
 
@@ -147,31 +153,31 @@ func TestRefuseBlockingCiliumAcceptsLiveGeneveWithoutTunnelFlag(t *testing.T) {
 // The early check and the plan's preflight answer one question, whether the live Cilium can be taken over:
 // they must refuse exactly the same configs.
 func TestRefuseBlockingCiliumAgreesWithPlanPreflight(t *testing.T) {
-	k8sIPAM := map[string]any{"mode": "kubernetes"}
+	k8sIPAM := map[string]any{ipamModeKey: ipamK8s}
 	tests := []struct {
 		name string
 		cm   map[string]string
 		live map[string]any
 	}{
-		{"vxlan", map[string]string{ciliumTunnelKey: "vxlan"}, map[string]any{"tunnelProtocol": "vxlan", "ipam": k8sIPAM}},
-		{"geneve", map[string]string{ciliumTunnelKey: "geneve"}, map[string]any{"tunnelProtocol": "geneve", "ipam": k8sIPAM}},
-		{"native routing", map[string]string{"routing-mode": "native"}, map[string]any{"routingMode": "native", "ipam": k8sIPAM}},
-		{"cluster-pool", map[string]string{ciliumTunnelKey: "vxlan"},
-			map[string]any{"tunnelProtocol": "vxlan", "ipam": map[string]any{"mode": "cluster-pool"}}},
-		{"geneve cluster-pool", map[string]string{ciliumTunnelKey: "geneve"},
-			map[string]any{"tunnelProtocol": "geneve", "ipam": map[string]any{"mode": "cluster-pool"}}},
+		{ciliumTunnelVxlan, map[string]string{ciliumTunnelKey: ciliumTunnelVxlan}, map[string]any{tunnelValueKey: ciliumTunnelVxlan, ipamValueKey: k8sIPAM}},
+		{ciliumTunnelGeneve, map[string]string{ciliumTunnelKey: ciliumTunnelGeneve}, map[string]any{tunnelValueKey: ciliumTunnelGeneve, ipamValueKey: k8sIPAM}},
+		{"native routing", map[string]string{routingModeKey: routeNative}, map[string]any{routingValueKey: routeNative, ipamValueKey: k8sIPAM}},
+		{poolMode, map[string]string{ciliumTunnelKey: ciliumTunnelVxlan},
+			map[string]any{tunnelValueKey: ciliumTunnelVxlan, ipamValueKey: map[string]any{ipamModeKey: poolMode}}},
+		{"geneve cluster-pool", map[string]string{ciliumTunnelKey: ciliumTunnelGeneve},
+			map[string]any{tunnelValueKey: ciliumTunnelGeneve, ipamValueKey: map[string]any{ipamModeKey: poolMode}}},
 	}
 
 	for _, tt := range tests {
 		for _, kp := range []string{kubeProxyEnabled, kubeProxyReplaced} {
 			t.Run(tt.name+"/"+kp, func(t *testing.T) {
-				tt.cm["kube-proxy-replacement"] = "false"
+				tt.cm[ciliumKPRKey] = kprOff
 				pre := ownedKeyPreflight(t, tt.live)
 
 				early := refuseBlockingCilium(context.Background(), adoptDeps{Target: foreignCiliumTarget(t, tt.cm), Preflight: pre}) != nil
 
 				facts := factsFor(t, testDS("cilium", ciliumImage), &corev1.ConfigMap{
-					Namespace: k8sFactsSystemNamespace, Name: "cilium-config", Data: tt.cm})
+					Namespace: k8sFactsSystemNamespace, Name: ciliumConfigMapName, Data: tt.cm})
 				st := &adoptState{cluster: &ichorv1alpha1.TalosCluster{}, kubeProxy: kp, rep: &cniReport{Kind: detectedCilium}}
 
 				if err := st.mapRunningCilium(facts); err != nil {

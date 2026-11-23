@@ -964,7 +964,7 @@ func (c *keyRun) finalize(ctx context.Context) (ctrl.Result, error) {
 	c.bundle = bundle
 
 	for _, m := range cps {
-		_, hash, err := c.render(ctx, m, bundle, patches, nil)
+		rendered, hash, err := c.render(ctx, m, bundle, patches, nil)
 		if err != nil {
 			return c.retry(ctx, fmt.Sprintf("rendering %q's configuration failed: %v", m.Name, err))
 		}
@@ -975,7 +975,7 @@ func (c *keyRun) finalize(ctx context.Context) (ctrl.Result, error) {
 				return fmt.Errorf("ichor cannot reach %q: %w", m.Name, err)
 			}
 
-			if render.Hash(current) != hash {
+			if paths, err := changedPaths(current, rendered, hash); err != nil || len(paths) > 0 {
 				return fmt.Errorf("%q does not run the configuration the replaced bundle renders", m.Name)
 			}
 

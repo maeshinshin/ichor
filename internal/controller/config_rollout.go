@@ -171,7 +171,7 @@ func (a *configRolloutAdvancer) Advance(
 	case restarting:
 		return a.afterRestart(ctx, dialCtx, talos, cluster, m, current, rendered, hash)
 	case rebooting:
-		return a.afterReboot(ctx, dialCtx, talos, cluster, m, current, hash)
+		return a.afterReboot(ctx, dialCtx, talos, cluster, m, current, rendered, hash)
 	case render.Hash(current) == hash:
 		// A retried wait: the configuration is on the node but its API server did not
 		// answer in time last time; wait again with a fresh clock instead of calling it done.
@@ -560,7 +560,7 @@ func etcdAllMembersPresent(
 // if the node does not run the rendered configuration, or finishes.
 func (a *configRolloutAdvancer) afterReboot(
 	ctx, dialCtx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	current []byte, hash string,
+	current, rendered []byte, hash string,
 ) (bool, error) {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout)
 
@@ -573,7 +573,7 @@ func (a *configRolloutAdvancer) afterReboot(
 		return false, a.stillWaiting(ctx, cluster, m, "the node has not rebooted")
 	}
 
-	if render.Hash(current) != hash {
+	if paths, err := changedPaths(current, rendered, hash); err != nil || len(paths) > 0 {
 		return false, a.fail(ctx, cluster, m, fmt.Errorf(
 			"node %q rebooted but is not running the rendered configuration: the staged configuration was not activated", m.Name))
 	}

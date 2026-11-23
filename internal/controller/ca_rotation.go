@@ -930,7 +930,7 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	for _, m := range machines {
-		_, hash, err := c.plainRender(ctx, m, bundle, patches.Items, nil)
+		rendered, hash, err := c.plainRender(ctx, m, bundle, patches.Items, nil)
 		if err != nil {
 			return c.retry(ctx, fmt.Sprintf("rendering %q's configuration failed: %v", m.Name, err))
 		}
@@ -941,7 +941,7 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 				return fmt.Errorf("ichor cannot reach %q with the replaced bundle: %w", m.Name, err)
 			}
 
-			if render.Hash(current) != hash {
+			if paths, err := changedPaths(current, rendered, hash); err != nil || len(paths) > 0 {
 				return fmt.Errorf("%q does not run the configuration the replaced bundle renders", m.Name)
 			}
 

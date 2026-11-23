@@ -19,6 +19,7 @@ package uiapi
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/resources/block"
 )
@@ -38,5 +39,38 @@ func TestInstallableDisks(t *testing.T) {
 
 	if want := []string{"/dev/vda", "/dev/nvme0n1"}; !slices.Equal(paths, want) {
 		t.Fatalf("got %v, want %v", paths, want)
+	}
+}
+
+func TestParseLogTime(t *testing.T) {
+	want := time.Date(2026, 11, 24, 10, 11, 12, 123456789, time.UTC)
+
+	for name, tc := range map[string]struct {
+		service, line string
+		want          time.Time
+	}{
+		"kernel line keeps its own RFC3339Nano time": {"", "kern:    info: [2026-11-24T10:11:12.123456789Z]: eth0 up", want},
+		"service JSON ts string":                     {"etcd", `{"level":"info","ts":"2026-11-24T10:11:12.123456789Z","msg":"x"}`, want},
+		"service JSON time string":                   {"apid", `{"time":"2026-11-24T10:11:12.123456789Z","msg":"x"}`, want},
+		"service JSON epoch milliseconds":            {"kubelet", `{"ts":1795515072123.456,"msg":"x"}`, time.Unix(1795515072, 123456000).UTC()},
+		"service plain line has no time":             {"etcd", "just some text", time.Time{}},
+		"service JSON without time has none":         {"etcd", `{"msg":"x"}`, time.Time{}},
+		"kernel line without a bracketed time":       {"", "kern:    info: eth0 up", time.Time{}},
+		"service text that only looks like a kernel": {"etcd", "kern:    info: [2026-11-24T10:11:12Z]: x", time.Time{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := parseLogTime(tc.service, tc.line)
+			if tc.want.IsZero() {
+				if !got.IsZero() {
+					t.Fatalf("parseLogTime = %v, want no time", got)
+				}
+
+				return
+			}
+
+			if d := got.Sub(tc.want); d > time.Microsecond || d < -time.Microsecond {
+				t.Fatalf("parseLogTime = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

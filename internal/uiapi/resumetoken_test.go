@@ -25,8 +25,8 @@ import (
 func TestResumeTokenRoundTrip(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
-	tok := resumeToken{}.advance("default/m1", LogLine{Time: now, Message: "a"})
-	tok = tok.advance("default/m2", LogLine{Time: now.Add(time.Second), Message: "b"})
+	tok := resumeToken{}.advance("default/m1", LogLine{Seen: now, Message: "a"})
+	tok = tok.advance("default/m2", LogLine{Seen: now.Add(time.Second), Message: "b"})
 
 	s, err := tok.encode()
 	if err != nil {
@@ -48,19 +48,19 @@ func TestResumeTokenOrdinalBreaksTies(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	tok := resumeToken{}
-	tok = tok.advance("default/m1", LogLine{Time: now, Message: "a"})
+	tok = tok.advance("default/m1", LogLine{Seen: now, Message: "a"})
 
 	if tok["default/m1"].Ordinal != 0 {
 		t.Fatalf("first line ordinal = %d, want 0", tok["default/m1"].Ordinal)
 	}
 
-	tok = tok.advance("default/m1", LogLine{Time: now, Message: "b"})
+	tok = tok.advance("default/m1", LogLine{Seen: now, Message: "b"})
 
 	if tok["default/m1"].Ordinal != 1 {
 		t.Fatalf("second same-timestamp line ordinal = %d, want 1", tok["default/m1"].Ordinal)
 	}
 
-	tok = tok.advance("default/m1", LogLine{Time: now.Add(time.Millisecond), Message: "c"})
+	tok = tok.advance("default/m1", LogLine{Seen: now.Add(time.Millisecond), Message: "c"})
 
 	if tok["default/m1"].Ordinal != 0 {
 		t.Fatalf("ordinal did not reset on a new timestamp: got %d", tok["default/m1"].Ordinal)
@@ -88,7 +88,7 @@ func TestDecodeResumeTokenNeverReturnsAnUnusableToken(t *testing.T) {
 			t.Fatalf("%s: got a nil token", name)
 		}
 
-		tok = tok.advance("default/m1", LogLine{Time: time.Unix(1, 0), Message: "a"})
+		tok = tok.advance("default/m1", LogLine{Seen: time.Unix(1, 0), Message: "a"})
 		if tok["default/m1"].Time.IsZero() {
 			t.Fatalf("%s: advance did not record the line", name)
 		}

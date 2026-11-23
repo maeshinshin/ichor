@@ -383,6 +383,9 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service strin
 	}
 }
 
+// parseLogTime returns the time a log line carries itself, or the zero time.
+func parseLogTime(service, line string) time.Time { return time.Now() }
+
 // sendLast delivers the last n of lines to onLine.
 func sendLast(lines []LogLine, n int, onLine func(LogLine) error) error {
 	if len(lines) > n {

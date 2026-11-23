@@ -113,5 +113,6 @@ type LogOptions struct {
 // backend's own clock is the only stable ordering key across a resume.
 type LogLine struct {
 	Time    time.Time
+	Seen    time.Time
 	Message string
 }

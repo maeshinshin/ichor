@@ -80,11 +80,11 @@ func (tok resumeToken) encode() (string, error) {
 }
 
 // advance records that line was just sent for machine key, bumping the
-// ordinal when line.Time repeats the previous checkpoint's timestamp
+// ordinal when line.Seen repeats the previous checkpoint's timestamp
 // exactly, and returns the updated token.
 func (tok resumeToken) advance(key string, line LogLine) resumeToken {
-	next := checkpoint{Time: line.Time, Ordinal: 0}
-	if prev, ok := tok[key]; ok && prev.Time.Equal(line.Time) {
+	next := checkpoint{Time: line.Seen, Ordinal: 0}
+	if prev, ok := tok[key]; ok && prev.Time.Equal(line.Seen) {
 		next.Ordinal = prev.Ordinal + 1
 	}
 

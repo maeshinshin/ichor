@@ -127,7 +127,7 @@ func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, si
 	f.gotOpts = opts
 
 	for _, l := range f.lines {
-		if !l.Time.After(since) {
+		if !l.Seen.After(since) {
 			continue
 		}
 
@@ -234,8 +234,8 @@ var _ = Describe("NodeService", func() {
 
 		t0 := time.Now().Add(-time.Minute)
 		fake := &fakeNodeTalosClient{lines: []LogLine{
-			{Time: t0, Message: "first"},
-			{Time: t0.Add(time.Second), Message: "second"},
+			{Seen: t0, Message: "first"},
+			{Seen: t0.Add(time.Second), Message: "second"},
 		}}
 
 		client, closeFn := newTestNodeServer(fake, nil)
@@ -279,8 +279,8 @@ var _ = Describe("NodeService", func() {
 		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-logdup"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
 
 		fake := &fakeNodeTalosClient{lines: []LogLine{
-			{Time: time.Now().Add(-time.Minute), Message: "[0.0] Command line: talos.platform=metal talos.config=https://x?token=hunter2"},
-			{Time: time.Now().Add(-time.Second), Message: `[0.1] Unknown kernel command line parameters "talos.config=https://x?token=hunter2"`},
+			{Seen: time.Now().Add(-time.Minute), Message: "[0.0] Command line: talos.platform=metal talos.config=https://x?token=hunter2"},
+			{Seen: time.Now().Add(-time.Second), Message: `[0.1] Unknown kernel command line parameters "talos.config=https://x?token=hunter2"`},
 		}}
 		client, closeFn := newTestNodeServer(fake, nil)
 		defer closeFn()
@@ -357,6 +357,33 @@ var _ = Describe("NodeService", func() {
 
 		drain(&pb.StreamNodeLogsRequest{TailLines: -1})
 		Expect(fake.gotOpts.TailLines).To(Equal(int32(-1)))
+	})
+
+	It("sends no time for a line that carries none, and the line's own time when it has one", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-logts"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		own := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+		seen := time.Now().Add(-time.Minute)
+		fake := &fakeNodeTalosClient{lines: []LogLine{
+			{Seen: seen, Message: "no time"},
+			{Time: own, Seen: seen.Add(time.Second), Message: "own time"},
+		}}
+		client, closeFn := newTestNodeServer(fake, nil)
+		defer closeFn()
+
+		stream, err := client.StreamNodeLogs(ctx, connect.NewRequest(&pb.StreamNodeLogsRequest{
+			Machines: []*pb.ObjectRef{objectRef(m.Namespace, m.Name)},
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		got := map[string]*pb.StreamNodeLogsResponse{}
+		for stream.Receive() {
+			got[stream.Msg().GetMessage()] = stream.Msg()
+		}
+		Expect(stream.Err()).NotTo(HaveOccurred())
+		Expect(got["no time"].GetTime()).To(BeNil(), "no real time means no time on the wire")
+		Expect(got["own time"].GetTime().AsTime()).To(Equal(own))
 	})
 
 	It("sendLast delivers only the last n lines", func() {

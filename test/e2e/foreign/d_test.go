@@ -104,9 +104,13 @@ func flannelRunning(t *testing.T, kc string) {
 }
 
 // requireAdopted fails a D4 case run on a bare `foreign up` cluster: the CLI needs the Ichor CRDs, which TestD1
-// installs by adopting.
-func requireAdopted(t *testing.T, c *foreign.Cluster) {
+// installs by adopting. kc is the kubeconfig to ask with:
+// after a CA rotation c.LocalKube no longer trusts the API server.
+func requireAdopted(t *testing.T, c *foreign.Cluster, kc string) {
 	t.Helper()
+	inner := func(_ *foreign.Cluster, args ...string) (string, error) {
+		return utils.Run(kube.InnerCommand(kc, args...))
+	}
 	if out, err := inner(c, "get", "crd", "talosclusters.ichor.maesh.dev"); err != nil {
 		t.Fatalf("the cluster is not adopted (run TestD1FlannelAdoptedUnmanaged first, with ICHOR_E2E_F_ATTACH=1 "+
 			"ICHOR_E2E_F_KEEP=1): %v\n%s", err, out)
@@ -139,7 +143,7 @@ func TestD4Talos(t *testing.T) {
 	i := strings.LastIndex(from, ".")
 	patch, _ := strconv.Atoi(from[i+1:])
 	c := build(t, foreign.Options{Workers: 1, TalosVersion: fmt.Sprintf("%s.%d", from[:i], patch-1)})
-	requireAdopted(t, c)
+	requireAdopted(t, c, c.LocalKube)
 	to := env("ICHOR_E2E_F_UPGRADE_TO", release.Pinned.Talos)
 	// Under ATTACH the lab keeps the version `foreign up --talos` gave it, whatever Options says here.
 	if v, _ := talosctl.Version(ns, c.Nodes()[0], ftc(t, c)); serverTag(v) == to {
@@ -168,7 +172,7 @@ func TestD4Talos(t *testing.T) {
 // foreign default v1.34.12.
 func TestD4K8s(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, K8sVersion: foreignK8sUpgradeStart})
-	requireAdopted(t, c)
+	requireAdopted(t, c, c.LocalKube)
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	start := time.Now()
 	if out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, flagYes); err != nil {
@@ -190,7 +194,7 @@ func TestD4K8s(t *testing.T) {
 // TestD4RotateCA: `ichor rotate ca` (without --follow: the call returns after the credential hand-off).
 func TestD4RotateCA(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
-	requireAdopted(t, c)
+	requireAdopted(t, c, c.LocalKube)
 	// adopt turned sign-in on: every control plane is APIServerRestartRequired until `ichor rollout config` (the
 	// documented step), and rotate ca refuses while one waits.
 	if out, err := ichorCLI(t, c, "rollout", "config", flagYes); err != nil {
@@ -233,8 +237,8 @@ func rotatedKube(t *testing.T, c *foreign.Cluster) string {
 // afterwards.
 func TestD4RotateCAWait(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
-	requireAdopted(t, c)
 	kc := rotatedKube(t, c)
+	requireAdopted(t, c, kc)
 	waitOps(t, kc, "ca-rotation", 9*time.Minute)
 	noHandover(t, c, kc)
 	flannelRunning(t, kc)

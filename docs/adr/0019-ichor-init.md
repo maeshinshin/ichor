@@ -75,12 +75,8 @@ install manifest is applied separately, after step 4, by
 - CRDs need a moment to become Established before resources that depend
   on them can be created (kustomize's own ordering already puts the
   Namespace and CRDs first in `dist/install.yaml`, but "created" and
-  "Established" are not the same moment). Amended: `createWithRetry` and its 10 attempts of 500ms are gone.
-  Every init apply step runs through `retryInit` (`internal/cli/init_ichor.go`), which retries for
-  `initRetryWindow` (3 minutes) with backoff, and retries on `initRetryable` errors: a NoMatch error (the CRD is not
-  Established yet), a transient API error, and an admission-webhook failure.
-  (`shortcut:` a fixed time window, not a watch on the CRD's `Established` condition; upgrade if a slower cluster
-  ever needs longer than 3 minutes here.)
+  "Established" are not the same moment). Amended: `createWithRetry` and its 10 attempts of 500ms are gone; see
+  "Amendment (2026-11-24)" below.
 
 **Argo CD itself is never installed by `init`, at all**, with or without
 `--argocd`. Fetching and applying a third-party install manifest during
@@ -211,3 +207,11 @@ bootstrap patch:
   "discouraged" for exactly the I/O-contention reason that makes it a
   reasonable thing to leave for whoever actually needs it.
 - `--discover-address` and `--discover-cidr` (repeatable) fill `spec.discovery` with the same IPv4 and /24-or-smaller limits the CRD enforces, so nodes booted into maintenance mode after init are found without a hand patch (ADR 0011); unset leaves discovery off.
+
+## Amendment (2026-11-24): init retries through `retryInit`
+
+`createWithRetry` and its 10 attempts of 500ms no longer exist. Every init apply step runs through `retryInit`
+(`internal/cli/init_ichor.go`), which retries for `initRetryWindow` (3 minutes) with backoff. It retries the errors
+`initRetryable` accepts: a NoMatch error (the CRD is not Established yet), a transient API error, and an
+admission-webhook failure. (`shortcut:` a fixed time window, not a watch on the CRD's `Established` condition;
+upgrade if a slower cluster ever needs longer than 3 minutes here.)

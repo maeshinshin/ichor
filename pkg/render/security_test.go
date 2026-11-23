@@ -356,3 +356,17 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	requireAll(t, v1alpha1CP, "kubernetesTalosAPIAccess")
 	requireNone(t, mustRender(t, pre114, testMachine("w", roleWorker, nil), bundle, patches), "kubernetesTalosAPIAccess")
 }
+
+// The Kubernetes API rule opens the port kube-apiserver listens on, which a patch may move off 6443.
+func TestFirewallFollowsTheLocalAPIServerPort(t *testing.T) {
+	cp := testMachine("cp", roleControlPlane, nil)
+	patch := configPatch("port", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{
+		ControlPlane: &ichorconfig.ClusterControlPlane{LocalAPIServerPort: 7443},
+	}})
+
+	rule := ruleDoc(mustRender(t, fwCluster(nil), cp, testBundle(t), []ichorv1alpha1.TalosConfigPatch{patch}),
+		"ichor-fw-kubernetes-api")
+
+	requireAll(t, rule, "7443")
+	requireNone(t, rule, "6443")
+}

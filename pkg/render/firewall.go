@@ -301,3 +301,21 @@ func injectFirewall(
 
 	return mergeDocument(cfg, "ingress firewall", docs...)
 }
+
+// followAPIServerPort moves the Kubernetes API firewall rule to the port the merged config gives
+// kube-apiserver, which a patch can set after the firewall layer rendered the default 6443. A rule a
+// patch already changed is left alone.
+func followAPIServerPort(cfg coreconfig.Provider, cluster *ichorv1alpha1.TalosCluster, machineType machine.Type) {
+	api := cfg.K8sAPIServerConfig()
+	if api == nil || machineType != machine.TypeControlPlane || !FirewallEnabled(cluster) {
+		return
+	}
+
+	for _, d := range cfg.Documents() {
+		r, ok := d.(*network.RuleConfigV1Alpha1)
+		if ok && r.MetaName == ruleNameFirewall+"kubernetes-api" && len(r.PortSelector.Ports) == 1 &&
+			r.PortSelector.Ports[0] == single(constants.DefaultControlPlanePort) {
+			r.PortSelector.Ports = network.PortRanges{single(uint16(api.APIPort()))}
+		}
+	}
+}

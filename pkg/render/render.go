@@ -290,6 +290,8 @@ func BuildConfig(
 		return nil, fmt.Errorf("render: applying patches: %w", err)
 	}
 
+	followAPIServerPort(cfg, cluster, machineType)
+
 	cfg, err = injectHostname(cfg, contract, m)
 	if err != nil {
 		return nil, err

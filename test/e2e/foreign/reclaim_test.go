@@ -74,7 +74,9 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 	}
 	f, err := foreign.Attach(opts)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("the foreign lab (VMs %s-cp0, %s-w0 and the Ichor cluster %s) is not up; bring it up first with "+
+			"`go run ./test/harness/foreign up` and run with ICHOR_E2E_F_ATTACH=1 ICHOR_E2E_F_KEEP=1: %v",
+			opts.Prefix, opts.Prefix, ichorName, err)
 	}
 	root, err := foreign.Root()
 	if err != nil {

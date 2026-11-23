@@ -709,17 +709,19 @@ func TestA6Accepted119(t *testing.T) {
 	trafficReport(t, c, "across the A6 1.19 to 1.20 takeover")
 }
 
-// TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and
-// writes nothing.
+// TestA1AcceptAll: on an inline-manifest cluster whose Cilium runs ipam.mode cluster-pool, adopt with every accept
+// flag is still refused for ipam.mode and writes nothing. (The Talos-guide values, ipam.mode kubernetes, are taken
+// over: TestA1Adopt.)
 func TestA1AcceptAll(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline,
+		CiliumSets: []string{"ipam.mode=cluster-pool"}})
 	before := cniPaths(t, c)
 	out, err := adopt(t, c, "--accept-cilium-changes", "--accept-cilium-diff")
 	if err == nil {
 		t.Fatal("adopt with the accept flags succeeded")
 	}
-	if !strings.Contains(out, "ipam.mode") {
-		t.Errorf("the refusal does not name ipam.mode")
+	if !strings.Contains(out, "ipam.mode") || !strings.Contains(out, "cannot be taken over") {
+		t.Errorf("the refusal does not say ipam.mode cannot be taken over")
 	}
 	sameHashes(t, before, cniPaths(t, c))
 	if got, err := inner(c, "get", "namespace", crNS, "--no-headers"); err == nil {

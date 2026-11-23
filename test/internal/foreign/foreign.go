@@ -464,15 +464,18 @@ func Up(o Options) (*Cluster, error) {
 		ips[n] = ip
 	}
 	for _, n := range names {
+		var last string // the last talosctl failure, so a timeout says why
 		if _, err := kube.Poll("waiting for "+n+" maintenance mode", 10*time.Minute, func() (string, bool) {
 			out, err := talosctl.Get(namespace, ips[n], "machinestatus")
 			if err != nil {
+				last = tail(err.Error() + " " + out)
 				return "", false
 			}
+			last = tail(out)
 			objs, derr := talosctl.DecodeAll(out)
 			return "", derr == nil && len(objs) == 1 && talosctl.SpecField(objs[0], "stage") == "maintenance"
 		}); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w (last machinestatus answer: %s)", err, last)
 		}
 	}
 	for i := range o.ControlPlanes {

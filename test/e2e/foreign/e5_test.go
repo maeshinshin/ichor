@@ -59,8 +59,9 @@ func e5(t *testing.T, trigger string, killAfter time.Duration) {
 	managedAdopted(t, c, before)
 }
 
-// TestE5KillDuringHelmInstall: the CLI is killed 20 s into the Helm install of Cilium.
-func TestE5KillDuringHelmInstall(t *testing.T) { e5(t, "adopt: installing Cilium", 20*time.Second) }
+// TestE5KillDuringHelmInstall: the CLI is killed 20 s into the Helm install of Cilium. The step UI shows adopt's
+// "adopt: installing Cilium ..." line (internal/cli/adopt_run.go) as the detail of the "Install Cilium" step.
+func TestE5KillDuringHelmInstall(t *testing.T) { e5(t, "installing Cilium", 20*time.Second) }
 
 // TestE5KillAfterCiliumWait: the CLI is killed right after the Cilium wait.
 func TestE5KillAfterCiliumWait(t *testing.T) {

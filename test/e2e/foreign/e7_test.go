@@ -51,7 +51,9 @@ func e7(t *testing.T, cni, detected string, wantPolicies bool) {
 	t.Logf("CiliumNetworkPolicies in %s:\n%s", crNS, pols)
 	notice := "not applying Ichor's network policies: the detected CNI is \"" + detected + "\", not cilium"
 	if wantPolicies {
-		if !strings.Contains(out, "applied Ichor's network policies") || pols == "" {
+		// The "applied Ichor's network policies" line is step detail that the next progress line overwrites, so the
+		// policies themselves are the evidence.
+		if !strings.Contains(pols, "ichor-default-deny") {
 			t.Errorf("Ichor's policies were not applied on a Cilium adopted --cni-unmanaged")
 		}
 		return

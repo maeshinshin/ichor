@@ -227,7 +227,19 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 		t.Errorf("get cni-values was not refused with the unmanaged text (err=%v)", err)
 	}
 
-	// UI API through the `ichor ui` port-forward.
+	// UI API through the `ichor ui` port-forward. ichor-ui requires sign-in, so make an admin the way the first admin
+	// of an install is made (`create user --bootstrap`, straight through the Kubernetes API) and let cniui sign in.
+	uout, uerr := exec.Command(ichorBin(t), "create", "user", "d6", "--role", "admin", "--generate", "--bootstrap", //nolint:gosec // test harness
+		flagKubeconfig, c.LocalKube, "-n", crNS).CombinedOutput()
+	pw := ""
+	for l := range strings.SplitSeq(string(uout), "\n") {
+		if strings.HasPrefix(l, "Password for d6 ") {
+			pw = l[strings.LastIndex(l, ": ")+2:]
+		}
+	}
+	if uerr != nil || pw == "" {
+		t.Fatalf("create user d6 --bootstrap: %v\n%s", uerr, uout) // the output holds the password only on success
+	}
 	port := env("ICHOR_E2E_F_UI_PORT", "5144")
 	ui := exec.Command(ichorBin(t), "ui", "--open-browser=false", "--local-port", port, //nolint:gosec // test harness
 		flagKubeconfig, c.LocalKube, "-n", crNS)
@@ -247,26 +259,20 @@ func TestD6UnmanagedSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := exec.Command("go", "run", "./test/harness/cniui", //nolint:gosec // test harness
-		"-url", "https://127.0.0.1:"+port, "-cluster", c.Opts.Prefix)
+		"-url", "https://127.0.0.1:"+port, "-cluster", c.Opts.Prefix, "-user", "d6", "-password", pw)
 	api.Dir = root
 	apiOut, err := api.CombinedOutput()
 	t.Logf("UI API (err=%v):\n%s", err, apiOut)
 	s := string(apiOut)
-	// shortcut: adopt turns sign-in on and cniui sends no token (`ichor auth login` is browser-only), so every call
-	// is refused as unauthenticated and proves nothing about the CNI; assert only when a call got past sign-in.
-	// Drop this when cniui can take a bearer token.
-	if strings.Contains(s, "GetCluster: ERROR unauthenticated") {
-		t.Logf("UI API not asserted: ichor-ui requires sign-in")
-	} else {
-		for _, want := range []string{`"cniPreset":"unmanaged"`, `"cniDetected":"flannel"`} {
-			if !strings.Contains(s, want) {
-				t.Errorf("GetCluster does not report %s", want)
-			}
+	for _, want := range []string{`"cniPreset":"unmanaged"`, `"cniDetected":"flannel"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("GetCluster does not report %s", want)
 		}
-		for _, rpc := range []string{"GetCiliumValues", "SetCiliumValues", "StartCniUpgrade"} {
-			if !strings.Contains(s, rpc+": ERROR") {
-				t.Errorf("%s was not refused", rpc)
-			}
+	}
+	for _, rpc := range []string{"GetCiliumValues", "SetCiliumValues", "StartCniUpgrade"} {
+		// refused with the CNI's reason, not for want of a sign-in
+		if !strings.Contains(s, rpc+": ERROR") || strings.Contains(s, rpc+": ERROR unauthenticated") {
+			t.Errorf("%s was not refused by the unmanaged CNI", rpc)
 		}
 	}
 

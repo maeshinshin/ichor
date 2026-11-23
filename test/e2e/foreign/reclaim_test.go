@@ -104,10 +104,18 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 func (r *rig) stage(t *testing.T) {
 	t.Helper()
 	root, _ := foreign.Root()
+	// The tools image has no libc: a cgo binary fails with "no such file or directory" (exit 255), so build static.
+	helper := filepath.Join(root, "bin/reclaimui")
+	build := exec.Command("go", "build", "-o", helper, "./test/harness/reclaimui") //nolint:gosec // test harness
+	build.Dir = root
+	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building reclaimui: %v\n%s", err, out)
+	}
 	for _, cp := range [][2]string{
 		{r.f.Talosconfig, "/tmp/foreign-talosconfig"},
 		{filepath.Join(root, "bin/foreign/ichor-e2e-fj-r/tc/talosconfig"), "/tmp/ichor-talosconfig"},
-		{filepath.Join(root, "bin/reclaimui"), "/tmp/reclaimui"},
+		{helper, "/tmp/reclaimui"},
 	} {
 		if _, err := utils.Run(kube.Command("-n", ns, "cp", cp[0], ichorTools+":"+cp[1])); err != nil {
 			t.Fatalf("staging %s: %v", cp[1], err)

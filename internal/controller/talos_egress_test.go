@@ -426,7 +426,7 @@ func TestTalosEgressOpensTheForeignProbeTargetsOfALiveReclaim(t *testing.T) {
 		ProbeTargets: []string{"10.244.2.146:6443", "10.244.2.147:2380"},
 	}
 
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mr, staticControllerPolicy(trustNamespace, "ichor")).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mr, staticControllerPolicy(trustNamespace, "other")).Build()
 	e := &TalosEgress{Client: c, Namespace: trustNamespace}
 
 	read := func() string {

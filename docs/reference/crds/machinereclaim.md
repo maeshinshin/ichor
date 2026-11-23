@@ -67,6 +67,7 @@ Version v1alpha1: has a `status` subresource.
 | `status.inspection.graceful` | `boolean` | no |  |
 | `status.inspection.hostname` | `string` | no |  |
 | `status.inspection.needsForce` | `boolean` | no |  |
+| `status.inspection.probeTargets` | `[]string` | no | probeTargets are the host:port pairs the controller dials to judge whether the foreign cluster is reachable: its cluster endpoint and its etcd peers, as the node's own configuration names them. The controller's network policy allows exactly these while the request is live. |
 | `status.inspection.refusals` | `[]string` | no | refusals are why the reset cannot be sent; empty means it can, once confirmed. |
 | `status.inspection.role` | `string` | no |  |
 | `status.inspection.talosVersion` | `string` | no |  |

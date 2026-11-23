@@ -81,7 +81,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
   const service = LOG_SOURCES.find((s) => s.value === source)?.wire ?? ''
   const sourceLabel = LOG_SOURCES.find((s) => s.value === source)?.label ?? source
   // One string for the copy button, built only when the lines change.
-  const copyText = useMemo(() => entries.map((e) => formatTimestamp(e.item.time) + ' ' + e.item.message).join('\n'), [entries])
+  const copyText = useMemo(() => entries.map((e) => (e.item.time ? formatTimestamp(e.item.time) + ' ' : '') + e.item.message).join('\n'), [entries])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -224,7 +224,8 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
                 const canCollapse = open && e.item.message.length > MAX_CHARS
                 return (
                   <CodeBlockLine key={e.id}>
-                    <span class="text-muted-foreground">{formatTimestamp(e.item.time)}</span> {text}
+                    {e.item.time && <span class="text-muted-foreground">{formatTimestamp(e.item.time)} </span>}
+                    {text}
                     {(truncated || canCollapse) && (
                       <>
                         {truncated && '… '}

@@ -1010,6 +1010,8 @@ func (x *StreamNodeLogsRequest) GetFollow() bool {
 type StreamNodeLogsResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
+	// time is the time the log line itself carries. Absent means unknown: the
+	// line has no time, and the read time is never substituted.
 	Time    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=time,proto3" json:"time,omitempty"`
 	Message string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	// resume_token checkpoints this entry; the caller replays the latest one

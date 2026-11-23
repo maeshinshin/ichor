@@ -931,6 +931,11 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
+- **A node log line shows the time it was logged, or no time.** Every line used to
+  show the moment ichor-ui read it, so a past snapshot read as "now". A kernel log
+  line now shows the time Talos stamps it with, and a service log line shows the
+  `ts` or `time` of a JSON line; a line with neither shows no time, and the
+  `time` field of `StreamNodeLogsResponse` is absent for it.
 - **The UI shows a Talos or Kubernetes upgrade that fell back, or whose verification
   timed out, as failed.** Its `TalosUpgrade` or `KubernetesUpgrade` condition was
   neutral; it now has the failure tone, as `ichor status` already marks it.

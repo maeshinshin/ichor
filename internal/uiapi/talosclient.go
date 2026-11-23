@@ -107,10 +107,10 @@ type LogOptions struct {
 	TailLines int32
 }
 
-// LogLine is one line NodeTalosClient.StreamLogs delivers. Time is when the
-// backend observed the line, not a timestamp parsed out of it: Dmesg's own
-// lines carry a monotonic boot-relative offset, not wall-clock time, so the
-// backend's own clock is the only stable ordering key across a resume.
+// LogLine is one line NodeTalosClient.StreamLogs delivers. Time is the time
+// the line itself carries, zero when it carries none: never the read time.
+// Seen is when the backend read the line; it is the resume key, since the
+// lines have no stable identity across a reconnect.
 type LogLine struct {
 	Time    time.Time
 	Seen    time.Time

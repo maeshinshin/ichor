@@ -463,6 +463,9 @@ export type StreamNodeLogsResponse = Message<"ichor.v1alpha1.StreamNodeLogsRespo
   machine?: ObjectRef | undefined;
 
   /**
+   * time is the time the log line itself carries. Absent means unknown: the
+   * line has no time, and the read time is never substituted.
+   *
    * @generated from field: google.protobuf.Timestamp time = 2;
    */
   time?: Timestamp | undefined;

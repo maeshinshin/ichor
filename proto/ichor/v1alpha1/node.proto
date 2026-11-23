@@ -173,6 +173,8 @@ message StreamNodeLogsRequest {
 
 message StreamNodeLogsResponse {
   ObjectRef machine = 1;
+  // time is the time the log line itself carries. Absent means unknown: the
+  // line has no time, and the read time is never substituted.
   google.protobuf.Timestamp time = 2;
   string message = 3;
   // resume_token checkpoints this entry; the caller replays the latest one

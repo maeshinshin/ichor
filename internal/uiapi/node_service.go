@@ -212,9 +212,12 @@ func (s *Server) StreamNodeLogs(
 			return err
 		}
 
-		return stream.Send(&pb.StreamNodeLogsResponse{
-			Machine: ref, Time: timestamppb.New(line.Time), Message: line.Message, ResumeToken: token,
-		})
+		resp := &pb.StreamNodeLogsResponse{Machine: ref, Message: line.Message, ResumeToken: token}
+		if !line.Time.IsZero() {
+			resp.Time = timestamppb.New(line.Time)
+		}
+
+		return stream.Send(resp)
 	}
 
 	g, gctx := errgroup.WithContext(ctx)

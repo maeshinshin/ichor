@@ -19,9 +19,12 @@ package uiapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -298,12 +301,8 @@ type dataStream interface {
 // with that fact stated plainly, in case a future Talos version changes
 // it.
 //
-// shortcut: Dmesg's lines are not timestamped in wall-clock time in the
-// vendored module's resource shape (no controller source ships with it to
-// check against), so every line's LogLine.Time is when this method
-// observed it, not a time parsed from the line itself -- see LogLine's own
-// doc comment on why that is still a valid resume key. Logs' lines (a
-// container's stdout/stderr, framed by containerd) are not either.
+// Each LogLine.Time is the line's own time (parseLogTime) or zero when it has
+// none; LogLine.Seen is when this method read it, the resume key.
 func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service string, since time.Time, opts LogOptions, onLine func(LogLine) error) error {
 	var (
 		stream dataStream
@@ -371,20 +370,66 @@ func (t *machineryNodeTalosClient) StreamLogs(ctx context.Context, service strin
 			}
 
 			if trim {
-				ring = append(ring, LogLine{Time: now, Message: line})
+				ring = append(ring, LogLine{Time: parseLogTime(service, line), Seen: now, Message: line})
 
 				continue
 			}
 
-			if err := onLine(LogLine{Time: now, Message: line}); err != nil {
+			if err := onLine(LogLine{Time: parseLogTime(service, line), Seen: now, Message: line}); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-// parseLogTime returns the time a log line carries itself, or the zero time.
-func parseLogTime(service, line string) time.Time { return time.Now() }
+// kernelLogTime matches the prefix Talos's Dmesg puts on every line:
+// "%s: %7s: [%s]: %s" of facility, priority, time.RFC3339Nano and message
+// (internal/app/machined/internal/server/v1alpha1, Server.Dmesg, v1.14.5).
+var kernelLogTime = regexp.MustCompile(`^\w+: +\w+: \[([^\]]+)\]: `)
+
+// parseLogTime returns the wall-clock time a log line carries itself, or the
+// zero time when it carries none. Dmesg lines carry one, already converted
+// from the boot offset by the node. Logs returns each service's own bytes
+// untouched, so a time exists only when the service wrote a JSON line with a
+// "ts" or "time" field; Talos reads the same two keys, as an RFC3339Nano
+// string or epoch seconds or milliseconds (runtime/logging/extract.go).
+func parseLogTime(service, line string) time.Time {
+	if service == "" {
+		if m := kernelLogTime.FindStringSubmatch(line); m != nil {
+			if t, err := time.Parse(time.RFC3339Nano, m[1]); err == nil {
+				return t
+			}
+		}
+
+		return time.Time{}
+	}
+
+	var fields map[string]any
+	if !strings.HasPrefix(line, "{") || json.Unmarshal([]byte(line), &fields) != nil {
+		return time.Time{}
+	}
+
+	for _, k := range []string{"time", "ts"} {
+		switch ts := fields[k].(type) {
+		case string:
+			if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				return t
+			}
+		case float64:
+			sec, frac := math.Modf(ts)
+			if sec > maxEpochSeconds {
+				sec, frac = math.Modf(ts / 1000)
+			}
+
+			return time.Unix(int64(sec), int64(frac*float64(time.Second))).UTC()
+		}
+	}
+
+	return time.Time{}
+}
+
+// maxEpochSeconds is the year 3000: a larger number is epoch milliseconds.
+const maxEpochSeconds = 32503680000
 
 // sendLast delivers the last n of lines to onLine.
 func sendLast(lines []LogLine, n int, onLine func(LogLine) error) error {

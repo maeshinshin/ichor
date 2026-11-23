@@ -596,11 +596,9 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		return nil, err
 	}
 
-	// The controller's namespace, not --namespace: that is where the controller reads
+	// checkControllerNamespace made --namespace the controller's namespace, where it reads
 	// authSecretRef Secrets from, so the CLI resolves the same ones.
-	// shortcut: this is the default namespace, right for every install but a Helm install into
-	// another one; drop when the namespace runAdopt checks is carried here.
-	if st.sys, err = render.ResolveSystemInputs(ctx, deps.K8s, ichorControllerNamespace, st.cluster); err != nil {
+	if st.sys, err = render.ResolveSystemInputs(ctx, deps.K8s, namespace, st.cluster); err != nil {
 		return nil, fmt.Errorf("adopt: %w", err)
 	}
 
@@ -1288,7 +1286,7 @@ func waitHandover(ctx context.Context, deps adoptDeps, key types.NamespacedName)
 	what := "the Cilium takeover (" + render.ConditionCNIHandover + ")"
 
 	err := pollDiag(ctx, timeout, cmp.Or(deps.Interval, defaultReleaseInterval), deps.Stderr,
-		what, newWaitDiag(deps.K8s, deps.Stderr), func(ctx context.Context) error {
+		what, newWaitDiag(deps.K8s, key.Namespace, deps.Stderr), func(ctx context.Context) error {
 			var c ichorv1alpha1.TalosCluster
 
 			if err := deps.K8s.Get(ctx, key, &c); err == nil && apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {

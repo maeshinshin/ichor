@@ -15,8 +15,7 @@ import (
 )
 
 // The controller Deployment and the Service of its admission webhooks, as Ichor's manifest and
-// chart name them. shortcut: a Helm release with another name or namespace is not looked up by
-// label; the wait then times out with the message below.
+// chart name them; the namespace is the caller's, as a Helm install may use any.
 const (
 	controllerDeploymentName = "ichor-controller-manager"
 	webhookServiceName       = "ichor-webhook-service"
@@ -29,10 +28,10 @@ var waitForController = waitForWebhookServer
 // webhookServerNotReady says why the controller cannot serve Ichor's webhooks yet, or returns
 // nil when it can: its Deployment is rolled out with an available replica, and the webhook
 // Service has a ready endpoint (what the API server needs to call the webhook).
-func webhookServerNotReady(ctx context.Context, c client.Reader) error {
+func webhookServerNotReady(ctx context.Context, c client.Reader, ns string) error {
 	var d appsv1.Deployment
 
-	switch err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: controllerDeploymentName}, &d); {
+	switch err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: controllerDeploymentName}, &d); {
 	case apierrors.IsNotFound(err):
 		return fmt.Errorf("the Deployment %s does not exist yet", controllerDeploymentName)
 	case err != nil:
@@ -45,7 +44,7 @@ func webhookServerNotReady(ctx context.Context, c client.Reader) error {
 
 	var slices discoveryv1.EndpointSliceList
 
-	err := c.List(ctx, &slices, client.InNamespace(ichorControllerNamespace),
+	err := c.List(ctx, &slices, client.InNamespace(ns),
 		client.MatchingLabels{discoveryv1.LabelServiceName: webhookServiceName})
 	// shortcut: an operator who may not read EndpointSlices relies on the Deployment alone.
 	if apierrors.IsForbidden(err) {
@@ -71,15 +70,15 @@ func webhookServerNotReady(ctx context.Context, c client.Reader) error {
 // webhooks (webhookServerNotReady), so the first CR write is not the one that finds out. It
 // prints what is missing at each poll and why the pods are not running, and it ends early on a
 // cluster with no pod network.
-func waitForWebhookServer(ctx context.Context, c client.Reader, timeout, interval time.Duration, progress io.Writer) error {
-	err := pollDiag(ctx, timeout, interval, progress, "the controller to serve Ichor's webhooks", newWaitDiag(c, progress),
-		func(ctx context.Context) error { return webhookServerNotReady(ctx, c) }, func(error) bool { return true },
-		fmt.Sprintf("waiting for the controller Deployment %s in %s to be Ready did not finish within %s", controllerDeploymentName, ichorControllerNamespace, timeout))
+func waitForWebhookServer(ctx context.Context, c client.Reader, ns string, timeout, interval time.Duration, progress io.Writer) error {
+	err := pollDiag(ctx, timeout, interval, progress, "the controller to serve Ichor's webhooks", newWaitDiag(c, ns, progress),
+		func(ctx context.Context) error { return webhookServerNotReady(ctx, c, ns) }, func(error) bool { return true },
+		fmt.Sprintf("waiting for the controller Deployment %s in %s to be Ready did not finish within %s", controllerDeploymentName, ns, timeout))
 	if err == nil || ctx.Err() != nil || errors.Is(err, errNoPodNetwork) {
 		return err
 	}
 
-	return fmt.Errorf("%w; check `kubectl -n %s get pods`", err, ichorControllerNamespace)
+	return fmt.Errorf("%w; check `kubectl -n %s get pods`", err, ns)
 }
 
 // deploymentNotRolledOut says why d is not rolled out with an available replica, or returns nil.

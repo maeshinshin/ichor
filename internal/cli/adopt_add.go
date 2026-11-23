@@ -56,7 +56,7 @@ func resolveClusterBundle(ctx context.Context, k8s client.Reader, namespace, clu
 
 	var secret corev1.Secret
 
-	key := types.NamespacedName{Namespace: ichorControllerNamespace, Name: cluster.Spec.SecretsRef.Name}
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Spec.SecretsRef.Name}
 	if err := k8s.Get(ctx, key, &secret); err != nil {
 		return nil, fmt.Errorf("adopt: getting the secrets bundle Secret %s: %w; pass --secrets-bundle or --recover-secrets instead", key, err)
 	}
@@ -173,7 +173,7 @@ func (st *adoptState) loadAdded(
 		return err
 	}
 
-	if st.sys, err = render.ResolveSystemInputs(ctx, deps.K8s, ichorControllerNamespace, st.cluster); err != nil {
+	if st.sys, err = render.ResolveSystemInputs(ctx, deps.K8s, namespace, st.cluster); err != nil {
 		return fmt.Errorf("adopt: %w", err)
 	}
 

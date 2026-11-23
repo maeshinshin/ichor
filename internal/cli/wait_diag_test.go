@@ -42,7 +42,7 @@ func TestWaitDiagPrintsPendingReasonEvery30s(t *testing.T) {
 	var out bytes.Buffer
 
 	now := time.Unix(0, 0)
-	d := newWaitDiag(c, &out)
+	d := newWaitDiag(c, ichorControllerNamespace, &out)
 	d.now = func() time.Time { return now }
 
 	_ = d.tick(context.Background())
@@ -67,7 +67,7 @@ func TestWaitDiagFailsEarlyOnNotReadyNodes(t *testing.T) {
 	).Build()
 
 	now := time.Unix(0, 0)
-	d := newWaitDiag(c, &bytes.Buffer{})
+	d := newWaitDiag(c, ichorControllerNamespace, &bytes.Buffer{})
 	d.now = func() time.Time { return now }
 
 	if err := d.tick(context.Background()); err != nil {
@@ -95,7 +95,7 @@ func TestWaitDiagKeepsWaitingWhileCiliumIsInstalling(t *testing.T) {
 	).Build()
 
 	now := time.Unix(0, 0)
-	d := newWaitDiag(c, &bytes.Buffer{})
+	d := newWaitDiag(c, ichorControllerNamespace, &bytes.Buffer{})
 	d.now = func() time.Time { return now }
 
 	_ = d.tick(context.Background())
@@ -110,7 +110,7 @@ func TestWaitDiagKeepsWaitingWhenNodesAreReady(t *testing.T) {
 	c := fake.NewClientBuilder().WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
 
 	now := time.Unix(0, 0)
-	d := newWaitDiag(c, &bytes.Buffer{})
+	d := newWaitDiag(c, ichorControllerNamespace, &bytes.Buffer{})
 	d.now = func() time.Time { return now }
 
 	for range 5 {
@@ -129,7 +129,7 @@ func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
 	).Build()
 
 	now := time.Unix(0, 0)
-	d := newWaitDiag(notReady, &bytes.Buffer{})
+	d := newWaitDiag(notReady, ichorControllerNamespace, &bytes.Buffer{})
 	d.now = func() time.Time { return now }
 
 	errNot := errors.New("not yet")
@@ -145,7 +145,7 @@ func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
 	}
 
 	ready := fake.NewClientBuilder().WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
-	d = newWaitDiag(ready, &bytes.Buffer{})
+	d = newWaitDiag(ready, ichorControllerNamespace, &bytes.Buffer{})
 
 	err = pollDiag(context.Background(), 30*time.Millisecond, time.Millisecond, &bytes.Buffer{}, "Ichor's webhooks", d,
 		func(context.Context) error { return errNot }, func(error) bool { return true }, "Ichor's webhooks did not finish within 30ms")
@@ -171,7 +171,7 @@ func TestWaitDiagFailsEarlyOnPodsStuckInContainerCreating(t *testing.T) {
 		nodeWithReady(corev1.ConditionFalse, "container runtime network not ready: cni plugin not initialized")).Build()
 
 	now := time.Unix(0, 0)
-	d := newWaitDiag(c, &bytes.Buffer{})
+	d := newWaitDiag(c, ichorControllerNamespace, &bytes.Buffer{})
 	d.now = func() time.Time { return now }
 
 	if err := d.tick(context.Background()); err != nil {

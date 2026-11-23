@@ -39,8 +39,8 @@ type waitDiag struct {
 	stuck    time.Time // when "all pods unschedulable on a NotReady cluster" first held
 }
 
-func newWaitDiag(c client.Reader, w io.Writer) *waitDiag {
-	return &waitDiag{c: c, ns: ichorControllerNamespace, w: w, now: time.Now}
+func newWaitDiag(c client.Reader, ns string, w io.Writer) *waitDiag {
+	return &waitDiag{c: c, ns: ns, w: w, now: time.Now}
 }
 
 // tick is called after a failed attempt. It returns errNoPodNetwork when the wait cannot succeed.

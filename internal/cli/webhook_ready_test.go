@@ -39,7 +39,9 @@ import (
 // Deployment to wait for, so the readiness wait is off for them. The tests of the wait itself
 // call waitForWebhookServer directly or put the real one back with realWebhookWait.
 func TestMain(m *testing.M) {
-	waitForController = func(context.Context, client.Reader, time.Duration, time.Duration, io.Writer) error { return nil }
+	waitForController = func(context.Context, client.Reader, string, time.Duration, time.Duration, io.Writer) error {
+		return nil
+	}
 	waitForUI = func(context.Context, client.Reader, time.Duration, time.Duration, io.Writer) error { return nil }
 
 	os.Exit(m.Run())
@@ -77,7 +79,7 @@ func TestWaitForWebhookServer_ReadyAtOnce(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
 		WithObjects(readyControllerDeployment(1), webhookSlice(nil)).Build() // a nil Ready means ready
 
-	if err := waitForWebhookServer(context.Background(), c, time.Second, time.Millisecond, &bytes.Buffer{}); err != nil {
+	if err := waitForWebhookServer(context.Background(), c, ichorControllerNamespace, time.Second, time.Millisecond, &bytes.Buffer{}); err != nil {
 		t.Fatalf("waitForWebhookServer: %v", err)
 	}
 }
@@ -111,7 +113,7 @@ func TestWaitForWebhookServer_WaitsUntilTheDeploymentIsAvailable(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := waitForWebhookServer(context.Background(), c, 30*time.Second, time.Millisecond, &out); err != nil {
+	if err := waitForWebhookServer(context.Background(), c, ichorControllerNamespace, 30*time.Second, time.Millisecond, &out); err != nil {
 		t.Fatalf("waitForWebhookServer: %v", err)
 	}
 
@@ -131,7 +133,7 @@ func TestWaitForWebhookServer_TimesOutWithAnActionableMessage(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build()
 
 			start := time.Now()
-			err := waitForWebhookServer(context.Background(), c, 50*time.Millisecond, time.Millisecond, &bytes.Buffer{})
+			err := waitForWebhookServer(context.Background(), c, ichorControllerNamespace, 50*time.Millisecond, time.Millisecond, &bytes.Buffer{})
 
 			if err == nil {
 				t.Fatal("waitForWebhookServer succeeded on a controller that is not ready")
@@ -167,7 +169,7 @@ func TestCreateWhenWebhooksUp_WaitsForTheControllerBeforeWriting(t *testing.T) {
 
 	cm := &ichorv1alpha1.IchorInstallation{Name: "x"}
 
-	if err := createWhenWebhooksUp(context.Background(), c, cm, 50*time.Millisecond, time.Millisecond, &bytes.Buffer{}); err == nil {
+	if err := createWhenWebhooksUp(context.Background(), c, ichorControllerNamespace, cm, 50*time.Millisecond, time.Millisecond, &bytes.Buffer{}); err == nil {
 		t.Fatal("createWhenWebhooksUp succeeded with no controller")
 	}
 
@@ -183,7 +185,7 @@ func TestCreateWhenWebhooksUp_WaitsForTheControllerBeforeWriting(t *testing.T) {
 
 	creates = 0
 
-	if err := createWhenWebhooksUp(context.Background(), c, cm, time.Second, time.Millisecond, &bytes.Buffer{}); err != nil {
+	if err := createWhenWebhooksUp(context.Background(), c, ichorControllerNamespace, cm, time.Second, time.Millisecond, &bytes.Buffer{}); err != nil {
 		t.Fatalf("createWhenWebhooksUp: %v", err)
 	}
 

@@ -293,7 +293,7 @@ func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn 
 
 	// The IchorInstallation has a validating webhook, served by the controller this
 	// command just deployed: wait for it as long as step 5 waits for the CRs, not initRetryWindow.
-	err = createWhenWebhooksUp(ctx, k8sClient, &unstructured.Unstructured{Object: content}, cmp.Or(wait, defaultWebhookWait), followRetryDelay, warn)
+	err = createWhenWebhooksUp(ctx, k8sClient, ichorControllerNamespace, &unstructured.Unstructured{Object: content}, cmp.Or(wait, defaultWebhookWait), followRetryDelay, warn)
 	// The controller's Seed creates the singleton as soon as it serves, without the installer pin, so it
 	// can win this create; the object it made is pinned below rather than failing the install.
 	if err != nil && !apierrors.IsAlreadyExists(err) {

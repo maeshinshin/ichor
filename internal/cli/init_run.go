@@ -533,7 +533,7 @@ func initInstall(
 	// Step 5: create the CRs.
 	err = steps.Run("Cluster resources", func(s *step) (string, error) {
 		create := func(ctx context.Context, obj client.Object) error {
-			err := createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, s)
+			err := createWhenWebhooksUp(ctx, k8sClient, ichorControllerNamespace, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, s)
 			if m, ok := obj.(*ichorv1alpha1.TalosMachine); ok {
 				return AdoptDiscoveredMachine(ctx, k8sClient, m, err)
 			}

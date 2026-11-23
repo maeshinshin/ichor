@@ -186,15 +186,16 @@ func waitForAPIServer(ctx context.Context, c ctrlclient.Client, timeout, interva
 	return err
 }
 
-// createWhenWebhooksUp creates obj once the controller serves Ichor's admission webhooks
+// createWhenWebhooksUp creates obj once (ns is the controller's namespace: init passes ichorControllerNamespace, which its own
+// manifest fixes; adopt passes the one its --namespace check found) the controller serves Ichor's admission webhooks
 // (failurePolicy Fail; the controller was started moments ago by the manifest): it waits up to
 // timeout for the controller to be Ready (waitForController), then creates through
 // createRetrying, which only rides out a refusal that is left (the webhook's certificate not
 // yet in the API server's configuration) for initRetryWindow.
 func createWhenWebhooksUp(
-	ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object, timeout, interval time.Duration, progress io.Writer,
+	ctx context.Context, c ctrlclient.Client, ns string, obj ctrlclient.Object, timeout, interval time.Duration, progress io.Writer,
 ) error {
-	if err := waitForController(ctx, c, timeout, interval, progress); err != nil {
+	if err := waitForController(ctx, c, ns, timeout, interval, progress); err != nil {
 		return err
 	}
 

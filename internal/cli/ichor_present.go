@@ -128,6 +128,14 @@ func (p ichorPresence) CiliumPoliciesValue() *bool {
 	return nil
 }
 
+// controllerNamespace is the namespace the installed controller runs in, where it reads authSecretRef
+// Secrets and secrets bundles from; the default when no controller can be seen.
+func controllerNamespace(ctx context.Context, c client.Reader) (string, error) {
+	p, err := ichorPresent(ctx, c)
+
+	return p.Namespace(), err
+}
+
 // ichorPresent reads, never writes, whether Ichor is installed. A cluster that does not serve a
 // kind, or an operator who may not list Secrets or Deployments cluster-wide, simply has no
 // evidence from that source.

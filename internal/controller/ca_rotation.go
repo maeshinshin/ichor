@@ -403,6 +403,19 @@ func (c *caRun) plainRender(
 	return render.Render(c.cluster, m, bundle, patches, sys)
 }
 
+// pendingRollout says what to run when m waits for a person to roll out its configuration (a reboot or an API
+// server restart nothing does on its own); retrying a rotation cannot clear that, so it refuses at once.
+func pendingRollout(m *ichorv1alpha1.TalosMachine) string {
+	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionReady)
+	if cond == nil || cond.Status != metav1.ConditionFalse ||
+		(cond.Reason != reasonRebootRequired && cond.Reason != reasonAPIServerRestartRequired) {
+		return ""
+	}
+
+	return fmt.Sprintf("%q has a configuration change waiting for a rollout; run `ichor rollout config --cluster %s --follow` "+
+		"before rotating", m.Name, m.Spec.ClusterRef.Name)
+}
+
 // nodesReady fails unless every Kubernetes Node is Ready, asked through the first control plane's
 // admin kubeconfig.
 func (c *caRun) nodesReady(ctx context.Context, first *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) error {
@@ -452,6 +465,10 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	for _, m := range machines {
+		if msg := pendingRollout(m); msg != "" {
+			return c.fail(ctx, "not starting the rotation: "+msg)
+		}
+
 		_, hash, err := c.plainRender(ctx, m, c.bundle, patches.Items, nil)
 		if err != nil {
 			return c.retry(ctx, fmt.Sprintf("rendering %q's configuration failed: %v", m.Name, err))

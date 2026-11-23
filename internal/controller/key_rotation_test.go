@@ -1008,6 +1008,15 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 			return f, bothTargets
 		}, "converge"),
+		Entry("a control plane waits for a configuration rollout", func() (*keyRotFixture, []string) {
+			f := newKeyRotFixture(fastBundle())
+			m := fetchMachine(f.controlPlanes()[0])
+			apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+				Type: conditionReady, Status: metav1.ConditionFalse, Reason: reasonAPIServerRestartRequired, Message: "pending"})
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+			return f, bothTargets
+		}, "ichor rollout config"),
 		Entry("a kube-apiserver is not ready", func() (*keyRotFixture, []string) {
 			f := newKeyRotFixture(fastBundle())
 			f.world.nodes[f.controlPlanes()[1].Name].notReady = 100

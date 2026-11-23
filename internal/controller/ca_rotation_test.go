@@ -945,6 +945,25 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey))
 	})
 
+	DescribeTable("refuses at once, naming the rollout, while a machine waits for one",
+		func(reason string) {
+			f := newCARotFixture()
+
+			m := fetchMachine(f.machines[0])
+			apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{
+				Type: conditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: "pending"})
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+			op := f.step(f.newOp())
+
+			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(op.Status.FailureReason).To(ContainSubstring("ichor rollout config --cluster " + f.cluster.Name))
+			Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey))
+		},
+		Entry("an API server restart", reasonAPIServerRestartRequired),
+		Entry("a reboot", reasonRebootRequired),
+	)
+
 	It("keeps the machine controller from rendering, dialing or applying while a rotation is under way", func() {
 		f := newCARotFixture()
 		op := f.newOp()

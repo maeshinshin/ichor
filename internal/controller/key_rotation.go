@@ -500,6 +500,12 @@ func (c *keyRun) addNewKeys(kr *secretsbundle.KeyRotation) {
 func (c *keyRun) preflightMachine(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, patches []ichorv1alpha1.TalosConfigPatch, kr *secretsbundle.KeyRotation,
 ) (ctrl.Result, bool, error) {
+	if msg := pendingRollout(m); msg != "" {
+		res, err := c.fail(ctx, "not starting the rotation: "+msg)
+
+		return res, true, err
+	}
+
 	_, plain, err := c.render(ctx, m, c.bundle, patches, nil)
 	if err != nil {
 		res, err := c.retry(ctx, fmt.Sprintf("rendering %q's configuration failed: %v", m.Name, err))

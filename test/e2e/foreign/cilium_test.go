@@ -479,7 +479,10 @@ func TestA1Upgrade(t *testing.T) {
 		// A node that fails pauses the operation, so waiting out the deadline on Paused only hides why.
 		if strings.Contains(ph, "Failed") || strings.Contains(ph, "Paused") {
 			st, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o", "jsonpath={.items[*].status}")
-			t.Fatalf("a TalosOperation failed or paused: %q\nstatus: %s", ph, st)
+			// A drain that times out names no pod, so list every pod with its node and deletion time, and the PDBs.
+			pods, _ := inner(c, "get", "pods", "-A", "-o", "wide")
+			pdbs, _ := inner(c, "get", "pdb", "-A")
+			t.Fatalf("a TalosOperation failed or paused: %q\nstatus: %s\npods:\n%s\npdbs:\n%s", ph, st, pods, pdbs)
 		}
 		time.Sleep(15 * time.Second)
 	}

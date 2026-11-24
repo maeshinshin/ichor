@@ -321,4 +321,33 @@ var _ = Describe("drainForReboot with nowhere to send the pods", func() {
 		Expect(err).To(MatchError(ContainSubstring("default/web-pdb")))
 		Expect(err).NotTo(MatchError(ContainSubstring("default/agent")), "a DaemonSet pod is never evicted")
 	})
+
+	It("does not time out a drain that has nothing left to evict, however long the clock ran", func() {
+		node := drainTestNode("a", true)
+		node.Annotations = map[string]string{
+			drainStartedAnnotation: time.Now().Add(-2 * drainTimeout).UTC().Format(time.RFC3339),
+		}
+
+		kube := newDrainFake(func() int { return 0 }, node, drainTestNode("b", false), owner,
+			drainTestPod("agent", "a", "DaemonSet", false))
+
+		done, err := drainForReboot(ctx, kube, "a")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+	})
+
+	It("does not claim a budget when only a pod holds a timed-out drain", func() {
+		node := drainTestNode("a", true)
+		node.Annotations = map[string]string{
+			drainStartedAnnotation: time.Now().Add(-2 * drainTimeout).UTC().Format(time.RFC3339),
+		}
+
+		kube := newDrainFake(func() int { return 0 }, node, drainTestNode("b", false), owner,
+			drainTestPod("web-a", "a", "ReplicaSet", false))
+		kube.blocked["web-a"] = true
+
+		_, err := drainForReboot(ctx, kube, "a")
+		Expect(err).To(MatchError(ContainSubstring("default/web-a")))
+		Expect(err).NotTo(MatchError(ContainSubstring("PodDisruptionBudget")))
+	})
 })

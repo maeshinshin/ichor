@@ -215,7 +215,7 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 		}
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
-		kube := newDrainFake(func() int { return fake.rebootCalls }, node)
+		kube := newDrainFake(func() int { return fake.rebootCalls }, node, drainTestPod("stuck", "node-dr-late", "ReplicaSet", false))
 
 		done, err := drainRolloutAdvancer(fake, kube).Advance(ctx, f.cluster, fetchMachine(m), nil)
 		Expect(err).To(MatchError(ContainSubstring("did not finish")))
@@ -328,8 +328,7 @@ var _ = Describe("drainForReboot with nowhere to send the pods", func() {
 			drainStartedAnnotation: time.Now().Add(-2 * drainTimeout).UTC().Format(time.RFC3339),
 		}
 
-		kube := newDrainFake(func() int { return 0 }, node, drainTestNode("b", false), owner,
-			drainTestPod("agent", "a", "DaemonSet", false))
+		kube := newDrainFake(func() int { return 0 }, node, drainTestNode("b", false))
 
 		done, err := drainForReboot(ctx, kube, "a")
 		Expect(err).NotTo(HaveOccurred())

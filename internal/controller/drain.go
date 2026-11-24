@@ -129,9 +129,13 @@ func drainForReboot(ctx context.Context, kube kubernetes.Interface, name string)
 		}
 	}
 
+	// The clock is wall time, so a controller that was down or starved for the whole bound finds it spent with
+	// nothing wrong on the node. Only a pod or budget that still holds the drain fails it.
 	if elapsed := time.Since(started); elapsed > drainTimeout {
-		return false, fmt.Errorf("draining node %q did not finish within %s (a PodDisruptionBudget or a pod that will not "+
-			"terminate is holding it back: %s); it was uncordoned and not rebooted", name, drainTimeout, drainBlockers(ctx, kube, name))
+		if held := drainBlockers(ctx, kube, name); held != "" {
+			return false, fmt.Errorf("draining node %q did not finish within %s (%s); it was uncordoned and not rebooted",
+				name, drainTimeout, held)
+		}
 	}
 
 	if err := cordonAndDrain(newDrainHelper(ctx, kube, drainStepTimeout), node); err != nil {
@@ -192,7 +196,7 @@ func skipDrain(ctx context.Context, kube kubernetes.Interface, node *corev1.Node
 const drainBlockerLimit = 5
 
 // drainBlockers names what still holds a drain back: the pods left on the node (DaemonSet and mirror
-// pods are not evicted, so not listed) and the budgets that allow no disruption. Best effort.
+// pods are not evicted, so not listed) and the budgets that allow no disruption. Empty when neither holds it. Best effort.
 func drainBlockers(ctx context.Context, kube kubernetes.Interface, name string) string {
 	var pods []string
 
@@ -219,7 +223,17 @@ func drainBlockers(ctx context.Context, kube kubernetes.Interface, name string) 
 
 	slices.Sort(pods)
 
-	return "pods still on the node: " + boundedList(pods) + "; PodDisruptionBudgets allowing no disruption: " + boundedList(pdbs)
+	var parts []string
+
+	if len(pods) > 0 {
+		parts = append(parts, "pods still on the node: "+boundedList(pods))
+	}
+
+	if len(pdbs) > 0 {
+		parts = append(parts, "PodDisruptionBudgets allowing no disruption: "+boundedList(pdbs))
+	}
+
+	return strings.Join(parts, "; ")
 }
 
 func ownedByDaemonSet(p *corev1.Pod) bool {
@@ -234,10 +248,6 @@ func ownedByDaemonSet(p *corev1.Pod) bool {
 
 // boundedList joins the first drainBlockerLimit items and counts the rest.
 func boundedList(items []string) string {
-	if len(items) == 0 {
-		return "none found"
-	}
-
 	if len(items) <= drainBlockerLimit {
 		return strings.Join(items, ", ")
 	}

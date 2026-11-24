@@ -118,6 +118,7 @@ spec:
             path: /healthz
             port: 8081
           periodSeconds: 10
+          timeoutSeconds: 5
           failureThreshold: 36
         livenessProbe:
           httpGet:

@@ -77,7 +77,7 @@ func TestControllerSurvivesALoadedCluster(t *testing.T) {
 			t.Errorf("%s: GOMEMLIMIT %s is not below the memory limit %s", label, goLimit, mem.String())
 		}
 
-		for _, probe := range []string{"livenessProbe", "readinessProbe"} {
+		for _, probe := range []string{"startupProbe", "livenessProbe", "readinessProbe"} {
 			if got := probeField(c, probe, "timeoutSeconds"); got < 5 {
 				t.Errorf("%s: %s timeoutSeconds = %v, want at least 5", label, probe, got)
 			}

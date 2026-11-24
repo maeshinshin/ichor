@@ -132,9 +132,16 @@ func drainForReboot(ctx context.Context, kube kubernetes.Interface, name string)
 	// The clock is wall time, so a controller that was down or starved for the whole bound finds it spent with
 	// nothing wrong on the node. Only a pod or budget that still holds the drain fails it.
 	if elapsed := time.Since(started); elapsed > drainTimeout {
-		if held := drainBlockers(ctx, kube, name); held != "" {
+		held, listErr := drainBlockers(ctx, kube, name)
+		if held != "" {
 			return false, fmt.Errorf("draining node %q did not finish within %s (%s); it was uncordoned and not rebooted",
 				name, drainTimeout, held)
+		}
+
+		// Past the first bound an unreadable pod list is not read as "nothing holds it" for ever.
+		if listErr != nil && elapsed > 2*drainTimeout {
+			return false, fmt.Errorf("draining node %q did not finish within %s and its pods could not be listed (%w); "+
+				"it was uncordoned and not rebooted", name, 2*drainTimeout, listErr)
 		}
 	}
 
@@ -196,11 +203,13 @@ func skipDrain(ctx context.Context, kube kubernetes.Interface, node *corev1.Node
 const drainBlockerLimit = 5
 
 // drainBlockers names what still holds a drain back: the pods left on the node (DaemonSet and mirror
-// pods are not evicted, so not listed) and the budgets that allow no disruption. Empty when neither holds it. Best effort.
-func drainBlockers(ctx context.Context, kube kubernetes.Interface, name string) string {
+// pods are not evicted, so not listed) and the budgets that allow no disruption. Empty when neither holds it. The error is the
+// pod list's own; the budgets are best effort.
+func drainBlockers(ctx context.Context, kube kubernetes.Interface, name string) (string, error) {
 	var pods []string
 
-	if list, err := kube.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + name}); err == nil {
+	list, listErr := kube.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + name})
+	if listErr == nil {
 		for _, p := range list.Items {
 			if p.Spec.NodeName != name || p.Annotations[corev1.MirrorPodAnnotationKey] != "" || ownedByDaemonSet(&p) {
 				continue
@@ -233,7 +242,7 @@ func drainBlockers(ctx context.Context, kube kubernetes.Interface, name string) 
 		parts = append(parts, "PodDisruptionBudgets allowing no disruption: "+boundedList(pdbs))
 	}
 
-	return strings.Join(parts, "; ")
+	return strings.Join(parts, "; "), listErr
 }
 
 func ownedByDaemonSet(p *corev1.Pod) bool {

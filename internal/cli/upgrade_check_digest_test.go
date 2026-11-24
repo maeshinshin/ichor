@@ -50,7 +50,7 @@ func checkClient(t *testing.T, complete bool) client.Client {
 func TestUpgradeIchorOperationCarriesTheCheckedDigest(t *testing.T) {
 	installerCheckPoll, installerCheckWait = time.Millisecond, 5*time.Second
 
-	checked, err := runInstallerCheck(context.Background(), checkClient(t, true), fakeImages{}, io.Discard, "v0.3.0", "", false)
+	checked, err := runInstallerCheck(context.Background(), checkClient(t, true), fakeImages{}, io.Discard, "v0.3.0", "", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestUpgradeIchorOperationCarriesTheCheckedDigest(t *testing.T) {
 
 // A registry the CLI cannot read stops the upgrade before any Job, and the error says what to do.
 func TestUpgradeIchorUnreachableRegistryNamesTheWayOut(t *testing.T) {
-	_, err := runInstallerCheck(context.Background(), checkClient(t, false), failingImages{}, io.Discard, "v0.3.0", "", false)
+	_, err := runInstallerCheck(context.Background(), checkClient(t, false), failingImages{}, io.Discard, "v0.3.0", "", false, false)
 	if err == nil {
 		t.Fatal("no error")
 	}

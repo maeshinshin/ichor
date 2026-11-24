@@ -131,6 +131,13 @@ func upgradeWithSignIn(ctx context.Context, k client.Client, in io.Reader, errw 
 	return err
 }
 
+// signInIsPending reports whether this command is going to turn sign-in on (ensureSignIn will act). It reads only.
+func signInIsPending(ctx context.Context, k client.Client, opts initOptions) (bool, error) {
+	plan, _, err := signInPlanFor(ctx, k, opts)
+
+	return plan != nil, err
+}
+
 // preflightIchorUpgrade is every refusal of `ichor upgrade ichor` that can be judged before the first write: a
 // downgrade (the rule the executor and the UI's plan use, version.IsDowngrade) and a stored patch that holds a field
 // the new release retires. It only reads.

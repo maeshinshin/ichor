@@ -85,6 +85,9 @@ var installerRunCmd = &cobra.Command{
 	},
 }
 
+// installerCheckSignInPending is `installer check --sign-in-pending`; `installer run` has no such flag.
+var installerCheckSignInPending bool
+
 // installerCheckCmd is the reads of `installer run` that come before its first write, and nothing else: the CLI starts
 // it as a short Job before it changes anything, so an upgrade the installer would refuse is refused first.
 var installerCheckCmd = &cobra.Command{
@@ -103,6 +106,7 @@ var installerCheckCmd = &cobra.Command{
 			NetworkPolicies:    installmanifest.NetworkPolicies,
 			CNIDetected:        installerRunOpts.CNIDetected,
 			SkipCiliumPolicies: installerRunOpts.NoPolicies,
+			SignInPending:      installerCheckSignInPending,
 			Log:                cmd.ErrOrStderr(),
 		})
 		if err != nil {
@@ -157,4 +161,5 @@ func init() {
 	c.StringVar(&installerRunOpts.Namespace, "namespace", ichorControllerNamespace, "namespace Ichor is installed in")
 	c.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected")
 	c.BoolVar(&installerRunOpts.NoPolicies, "no-cilium-policies", false, "as for run")
+	c.BoolVar(&installerCheckSignInPending, "sign-in-pending", false, "the caller turns Ichor's sign-in on before it starts the upgrade, so an ichor-ui with none is not a refusal")
 }

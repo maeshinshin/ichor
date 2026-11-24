@@ -553,10 +553,14 @@ func PinInstallerImage(ctx context.Context, images InstallerImages, inst *ichorv
 // NewInstallerCheckJob is the Job `ichor upgrade ichor` runs before it writes: the target version's installer image,
 // as newInstallerJob runs it, under the same ServiceAccount, with `installer check` as its only command.
 // The pod keeps the installer's name label: its network policy selects the pod by it.
-func NewInstallerCheckJob(ns, name string, inst *ichorv1alpha1.IchorInstallation, digest, cni string, noPolicies bool) *batchv1.Job {
+func NewInstallerCheckJob(ns, name string, inst *ichorv1alpha1.IchorInstallation, digest, cni string, noPolicies, signInPending bool) *batchv1.Job {
 	args := []string{installerBinaryCmd, "check", "--namespace=" + ns, "--cni-detected=" + cni}
 	if noPolicies {
 		args = append(args, "--no-cilium-policies")
+	}
+
+	if signInPending {
+		args = append(args, "--sign-in-pending") // the caller turns sign-in on before it starts the upgrade
 	}
 
 	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, installerCheckDeadline,

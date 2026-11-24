@@ -147,7 +147,7 @@ func TestUpgradeIchorInstallerCheckRefusesBeforeSignIn(t *testing.T) {
 	started := false
 	err = upgradeWithSignIn(context.Background(), k, strings.NewReader(""), io.Discard, initOptions{}, true,
 		func() error {
-			_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false)
+			_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false, false)
 
 			return err
 		},

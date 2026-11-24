@@ -170,7 +170,12 @@ and in which order, and asks for confirmation unless --yes.`,
 					return fmt.Errorf("upgrade: %w", err)
 				}
 
-				if checked, err = runInstallerCheck(cmd.Context(), k, images, cmd.ErrOrStderr(), target, upgradeInstallerDigest, upgradeSkipSignature); err != nil {
+				pending, err := signInIsPending(cmd.Context(), k, upgradeSignIn)
+				if err != nil {
+					return err
+				}
+
+				if checked, err = runInstallerCheck(cmd.Context(), k, images, cmd.ErrOrStderr(), target, upgradeInstallerDigest, upgradeSkipSignature, pending); err != nil {
 					return err
 				}
 

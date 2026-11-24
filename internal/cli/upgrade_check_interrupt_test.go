@@ -41,7 +41,7 @@ func TestUpgradeIchorInstallerCheckInterruptDeletesTheJob(t *testing.T) {
 		},
 	}).Build()
 
-	_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false)
+	_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false, false)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("want the wait to end with context.Canceled, got %v", err)
 	}

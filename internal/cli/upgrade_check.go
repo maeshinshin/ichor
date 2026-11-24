@@ -31,9 +31,10 @@ var (
 
 // runInstallerCheck runs `installer check` of the target version's installer image as a short Job, before the upgrade
 // writes anything, and returns its refusal verbatim. The image is pinned and verified as the upgrade pins it
-// (digest and skipSignature are --installer-digest and --skip-signature-check). It writes the Job and its pod, and
+// (digest and skipSignature are --installer-digest and --skip-signature-check). signInPending says the command turns
+// sign-in on itself before the upgrade, so the installer does not refuse an ichor-ui that has none. It writes the Job and its pod, and
 // deletes the Job again (background propagation).
-func runInstallerCheck(ctx context.Context, k client.Client, images controller.InstallerImages, errw io.Writer, target, digest string, skipSignature bool) (string, error) {
+func runInstallerCheck(ctx context.Context, k client.Client, images controller.InstallerImages, errw io.Writer, target, digest string, skipSignature, signInPending bool) (string, error) {
 	var inst ichorv1alpha1.IchorInstallation
 	if err := k.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
 		return "", fmt.Errorf("upgrade: reading IchorInstallation: %w", err)
@@ -59,13 +60,13 @@ func runInstallerCheck(ctx context.Context, k client.Client, images controller.I
 			"--installer-digest sha256:... --skip-signature-check, which reads no registry): %w", want.Spec.InstallerRepository, want.Spec.Version, want.Spec.InstallerRepository, err)
 	}
 
-	return pinned, runCheckJob(ctx, k, errw, want, pinned)
+	return pinned, runCheckJob(ctx, k, errw, want, pinned, signInPending)
 }
 
 // runCheckJob runs the check Job of the pinned image and waits for it; the Job is deleted on every way out.
-func runCheckJob(ctx context.Context, k client.Client, errw io.Writer, want *ichorv1alpha1.IchorInstallation, pinned string) error {
+func runCheckJob(ctx context.Context, k client.Client, errw io.Writer, want *ichorv1alpha1.IchorInstallation, pinned string, signInPending bool) error {
 	name := "ichor-installer-check-" + rand.String(5)
-	job := controller.NewInstallerCheckJob(ichorControllerNamespace, name, want, pinned, "", false)
+	job := controller.NewInstallerCheckJob(ichorControllerNamespace, name, want, pinned, "", false, signInPending)
 
 	if err := k.Create(ctx, job); err != nil {
 		return fmt.Errorf("upgrade: starting the check Job: %w", err)

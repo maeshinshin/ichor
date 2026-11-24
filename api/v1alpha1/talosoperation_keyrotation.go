@@ -204,6 +204,17 @@ type KeyRotationReencryption struct {
 	// scanned is how many Secrets the last complete sweep looked at.
 	// +optional
 	Scanned int64 `json:"scanned,omitempty"`
+
+	// continue is where the sweep under way stopped: the continue token of the next page of Secrets. While it is
+	// set, scanned, rewritten and conflicts count that sweep so far; a controller that restarts resumes from it.
+	// Empty when no sweep is under way. An expired token restarts the sweep from the beginning.
+	// +optional
+	// +kubebuilder:validation:MaxLength=4096
+	Continue string `json:"continue,omitempty"`
+
+	// conflicts is how many Secrets changed while the sweep under way (continue set) updated them.
+	// +optional
+	Conflicts int64 `json:"conflicts,omitempty"`
 }
 
 // KeyRotationOutdatesSnapshot reports whether op, a TalosOperation, is a key rotation that was not finished

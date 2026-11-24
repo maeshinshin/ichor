@@ -108,6 +108,8 @@ Version v1alpha1: has a `status` subresource.
 | `status.keyRotation.keys[].next` | `string` | yes | next is the new key, held in the bundle Secret's keyrotation.yaml until the rotation is finalized. |
 | `status.keyRotation.keys[].previous` | `string` | yes | previous is the key the rotation started from. |
 | `status.keyRotation.reencryption` | `object` | no | reencryption is the progress of the Reencrypting stage. |
+| `status.keyRotation.reencryption.conflicts` | `integer` | no | conflicts is how many Secrets changed while the sweep under way (continue set) updated them. |
+| `status.keyRotation.reencryption.continue` | `string` | no | continue is where the sweep under way stopped: the continue token of the next page of Secrets. While it is set, scanned, rewritten and conflicts count that sweep so far; a controller that restarts resumes from it. Empty when no sweep is under way. An expired token restarts the sweep from the beginning. |
 | `status.keyRotation.reencryption.rewritten` | `integer` | no | rewritten is how many Secrets the last complete sweep stored again under the new key. The stage ends after a sweep that rewrote none. |
 | `status.keyRotation.reencryption.scanned` | `integer` | no | scanned is how many Secrets the last complete sweep looked at. |
 | `status.keyRotation.reencryption.sweeps` | `integer` | no | sweeps is how many complete passes over every Secret have run. |

@@ -79,7 +79,7 @@ func TestReencryptSweepRewritesOnlyWhatTheServerStoredAgain(t *testing.T) {
 	)
 	fakeStore(cs, map[string]bool{"one": true, "three": true}, nil)
 
-	first, err := reencryptSweep(context.Background(), cs)
+	first, err := reencryptSweep(context.Background(), cs, ReencryptResult{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestReencryptSweepRewritesOnlyWhatTheServerStoredAgain(t *testing.T) {
 	}
 
 	// A sweep that finds nothing stale is the proof the stage waits for.
-	second, err := reencryptSweep(context.Background(), cs)
+	second, err := reencryptSweep(context.Background(), cs, ReencryptResult{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestReencryptSweepLeavesConflictsAndNotFoundsToTheNextSweep(t *testing.T) {
 		return false, nil, nil
 	})
 
-	got, err := reencryptSweep(context.Background(), cs)
+	got, err := reencryptSweep(context.Background(), cs, ReencryptResult{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestReencryptSweepLeavesConflictsAndNotFoundsToTheNextSweep(t *testing.T) {
 	cs = fake.NewSimpleClientset(secretIn("a", "fine", corev1.SecretTypeOpaque, nil))
 	fakeStore(cs, nil, nil)
 
-	got, err = reencryptSweep(context.Background(), cs)
+	got, err = reencryptSweep(context.Background(), cs, ReencryptResult{})
 	if err != nil || !got.Clean() {
 		t.Fatalf("a sweep with nothing stale and no conflict is clean: %+v %v", got, err)
 	}
@@ -152,7 +152,7 @@ func TestReencryptSweepFailsOnAnError(t *testing.T) {
 		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: secretsResource}, "one", errors.New("no"))
 	})
 
-	if _, err := reencryptSweep(context.Background(), cs); err == nil {
+	if _, err := reencryptSweep(context.Background(), cs, ReencryptResult{}); err == nil {
 		t.Fatal("an error other than a conflict or a missing Secret must stop the sweep")
 	}
 }
@@ -241,5 +241,144 @@ func TestLegacyTokensSignedByFindsOnlyTheOnesTheOldKeyVerifies(t *testing.T) {
 
 	if _, err := legacyTokensSignedBy(context.Background(), fake.NewSimpleClientset(), []byte("not a key")); err == nil {
 		t.Fatal("a public key that is not PEM must be an error")
+	}
+}
+
+// pagedSecrets serves n Secrets, in order, the way the API server pages a list: at most Limit per call, and the
+// continue token is the index of the next Secret. expireAt, when set, makes the list with that token answer 410
+// Gone once.
+type pagedSecrets struct {
+	lists     int
+	maxServed int
+	starts    []string
+	expireAt  string
+	updates   map[string]int
+}
+
+func newPagedClient(n int, p *pagedSecrets) *fake.Clientset {
+	cs := fake.NewSimpleClientset()
+	p.updates = map[string]int{}
+
+	cs.PrependReactor("list", secretsResource, func(action k8stesting.Action) (bool, runtime.Object, error) {
+		opts := action.(k8stesting.ListActionImpl).ListOptions
+		p.lists++
+		p.starts = append(p.starts, opts.Continue)
+
+		if opts.Continue != "" && opts.Continue == p.expireAt {
+			p.expireAt = ""
+
+			return true, nil, apierrors.NewResourceExpired("the continue token has expired")
+		}
+
+		from, _ := strconv.Atoi(opts.Continue)
+		to := min(n, from+int(opts.Limit))
+		out := &corev1.SecretList{}
+
+		for i := from; i < to; i++ {
+			out.Items = append(out.Items, corev1.Secret{Namespace: "ns", Name: "s" + strconv.Itoa(i), ResourceVersion: "1"})
+		}
+
+		if to < n {
+			out.Continue = strconv.Itoa(to)
+		}
+
+		p.maxServed = max(p.maxServed, len(out.Items))
+
+		return true, out, nil
+	})
+	cs.PrependReactor("update", secretsResource, func(action k8stesting.Action) (bool, runtime.Object, error) {
+		secret := action.(k8stesting.UpdateAction).GetObject().(*corev1.Secret)
+		p.updates[secret.Name]++
+
+		return true, secret.DeepCopy(), nil
+	})
+
+	return cs
+}
+
+func TestReencryptSweepPagesEverySecret(t *testing.T) {
+	const total = 3*reencryptPage + 7
+
+	var p pagedSecrets
+
+	cs := newPagedClient(total, &p)
+
+	got, err := reencryptSweep(context.Background(), cs, ReencryptResult{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Scanned != total || got.Continue != "" {
+		t.Fatalf("a sweep of %d Secrets: %+v", total, got)
+	}
+
+	if len(p.updates) != total {
+		t.Fatalf("%d Secrets were swept, want %d", len(p.updates), total)
+	}
+
+	if p.maxServed > reencryptPage || p.lists != 4 {
+		t.Fatalf("list calls %d (want 4), largest page %d (want at most %d)", p.lists, p.maxServed, reencryptPage)
+	}
+}
+
+func TestReencryptSweepStopsAfterItsPagesAndResumesFromTheToken(t *testing.T) {
+	const total = reencryptPagesPerCall*reencryptPage + 30
+
+	var p pagedSecrets
+
+	cs := newPagedClient(total, &p)
+
+	first, err := reencryptSweep(context.Background(), cs, ReencryptResult{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if first.Continue == "" || first.Scanned != reencryptPagesPerCall*reencryptPage || p.lists != reencryptPagesPerCall {
+		t.Fatalf("one call does at most %d pages and keeps the position: %+v after %d lists", reencryptPagesPerCall, first, p.lists)
+	}
+
+	// A new call, as after a restart, is given only what status kept.
+	p.lists, p.starts = 0, nil
+
+	second, err := reencryptSweep(context.Background(), cs, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p.lists != 1 || p.starts[0] != first.Continue {
+		t.Fatalf("the resumed call must list once, from %q: %d lists starting at %v", first.Continue, p.lists, p.starts)
+	}
+
+	if second.Continue != "" || second.Scanned != total {
+		t.Fatalf("resumed sweep: %+v", second)
+	}
+
+	for name, n := range p.updates {
+		if n != 1 {
+			t.Fatalf("Secret %s was updated %d times; resuming must not reprocess", name, n)
+		}
+	}
+}
+
+func TestReencryptSweepStartsOverWhenTheContinueTokenExpired(t *testing.T) {
+	const total = 2*reencryptPage + 5
+
+	var p pagedSecrets
+
+	cs := newPagedClient(total, &p)
+	p.expireAt = strconv.Itoa(reencryptPage)
+
+	got, err := reencryptSweep(context.Background(), cs, ReencryptResult{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pages: 0, 500 (410), then from the start again: 0, 500, 1000.
+	if p.starts[len(p.starts)-3] != "" || got.Continue != "" || got.Scanned != total {
+		t.Fatalf("after a 410 the sweep restarts from the beginning and finishes: %+v, list starts %q", got, p.starts)
+	}
+
+	if len(p.updates) != total {
+		t.Fatalf("%d Secrets swept, want %d", len(p.updates), total)
 	}
 }

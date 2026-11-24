@@ -43,16 +43,22 @@ type ReencryptResult struct {
 	Rewritten int64
 	// Conflicts is how many changed while they were being updated, so this pass did not look at them.
 	Conflicts int64
+	// Continue is where the pass stopped: the list continue token of the next page. Empty means the pass is complete.
+	Continue string
 }
 
-// Clean reports whether the pass proves no Secret is left under the old key: it wrote nothing and left nothing out.
-func (r ReencryptResult) Clean() bool { return r.Rewritten == 0 && r.Conflicts == 0 }
+// Clean reports whether the pass proves no Secret is left under the old key: it is complete, wrote nothing and left nothing out.
+func (r ReencryptResult) Clean() bool {
+	return r.Continue == "" && r.Rewritten == 0 && r.Conflicts == 0
+}
 
-// ReencryptSecretsFunc runs one complete pass over every Secret in the cluster that talos belongs to, updating
-// each with its own content so that the API server stores it under the current encryption key (the
-// `kubectl get secrets -A -o json | kubectl replace -f -` of the Kubernetes procedure). A seam so tests never
-// reach a cluster; cmd/main.go wires NewReencryptSecrets.
-type ReencryptSecretsFunc func(ctx context.Context, talos TalosClient) (ReencryptResult, error)
+// ReencryptSecretsFunc continues a pass over every Secret in the cluster that talos belongs to from where `from`
+// stopped (a zero `from` starts a pass), updating each with its own content so that the API server stores it
+// under the current encryption key (the `kubectl get secrets -A -o json | kubectl replace -f -` of the
+// Kubernetes procedure). It does at most reencryptPagesPerCall pages and returns the state to keep: the counts
+// so far and the continue token, empty once the pass is complete. A seam so tests never reach a cluster;
+// cmd/main.go wires NewReencryptSecrets.
+type ReencryptSecretsFunc func(ctx context.Context, talos TalosClient, from ReencryptResult) (ReencryptResult, error)
 
 // LegacyTokensFunc lists the Secrets of type kubernetes.io/service-account-token ("namespace/name") whose
 // token the service-account public key oldPublicKey (PEM) verifies: they stop working when that key is dropped.
@@ -61,6 +67,10 @@ type LegacyTokensFunc func(ctx context.Context, talos TalosClient, oldPublicKey 
 
 // reencryptPage is how many Secrets one list call returns.
 const reencryptPage = 500
+
+// reencryptPagesPerCall bounds one call, so the position reaches status every 10,000 Secrets and a restart
+// loses at most that much work.
+const reencryptPagesPerCall = 20
 
 // adminClientQPS is the rate of a re-encryption pass. client-go's default (5 requests a second) would take
 // hours for a cluster with thousands of Secrets.
@@ -88,30 +98,40 @@ func adminClientset(ctx context.Context, talos TalosClient) (kubernetes.Interfac
 
 // NewReencryptSecrets returns the ReencryptSecretsFunc cmd/main.go wires in.
 func NewReencryptSecrets() ReencryptSecretsFunc {
-	return func(ctx context.Context, talos TalosClient) (ReencryptResult, error) {
+	return func(ctx context.Context, talos TalosClient, from ReencryptResult) (ReencryptResult, error) {
 		cs, err := adminClientset(ctx, talos)
 		if err != nil {
 			return ReencryptResult{}, err
 		}
 
-		return reencryptSweep(ctx, cs)
+		return reencryptSweep(ctx, cs, from)
 	}
 }
 
-// reencryptSweep updates every Secret with the content it was listed with. The API server skips the write
-// of an object whose stored form is current and rewrites one whose stored form another key produced
-// (etcd3 store GuaranteedUpdate: `!origState.stale && bytes.Equal(data, origState.data)`), so a changed
-// resourceVersion in the response is exactly a Secret that was moved to the current key.
+// reencryptSweep continues a pass from `from` (see ReencryptSecretsFunc) and updates every Secret with the
+// content it was listed with. The API server skips the write of an object whose stored form is current and
+// rewrites one whose stored form another key produced (etcd3 store GuaranteedUpdate:
+// `!origState.stale && bytes.Equal(data, origState.data)`), so a changed resourceVersion in the response is
+// exactly a Secret that was moved to the current key.
 //
-// shortcut: one sweep is sequential and bounded only by ctx; a cluster with hundreds of thousands of Secrets
-// restarts its sweep every reconcile and may never finish. A continue token kept in status would fix that.
-func reencryptSweep(ctx context.Context, cs kubernetes.Interface) (ReencryptResult, error) {
-	var res ReencryptResult
+// It is idempotent: a Secret already under the current key is skipped by the server, so updating it again
+// changes nothing and counts as scanned only. A page repeated after a restart, or the whole pass repeated after
+// the continue token expired, therefore costs requests and no writes. Memory is one page.
+func reencryptSweep(ctx context.Context, cs kubernetes.Interface, from ReencryptResult) (ReencryptResult, error) {
+	res := from
+	opts := metav1.ListOptions{Limit: reencryptPage, Continue: from.Continue}
 
-	opts := metav1.ListOptions{Limit: reencryptPage}
-
-	for {
+	for pages := 0; pages < reencryptPagesPerCall; pages++ {
 		page, err := cs.CoreV1().Secrets(metav1.NamespaceAll).List(ctx, opts)
+		if apierrors.IsResourceExpired(err) && opts.Continue != "" {
+			// 410 Gone: the token outlived the server's snapshot (about five minutes). Only a list from the
+			// start is consistent, so start the pass again with its counts.
+			res, opts.Continue = ReencryptResult{}, ""
+			pages--
+
+			continue
+		}
+
 		if err != nil {
 			return res, fmt.Errorf("listing Secrets: %w", err)
 		}
@@ -140,12 +160,13 @@ func reencryptSweep(ctx context.Context, cs kubernetes.Interface) (ReencryptResu
 			}
 		}
 
+		res.Continue, opts.Continue = page.Continue, page.Continue
 		if page.Continue == "" {
-			return res, nil
+			break
 		}
-
-		opts.Continue = page.Continue
 	}
+
+	return res, nil
 }
 
 // NewLegacyTokens returns the LegacyTokensFunc cmd/main.go wires in.

@@ -790,7 +790,8 @@ func (c *keyRun) awaitRestart(
 	return ctrl.Result{}, false, nil
 }
 
-// reencrypt runs one sweep over every Secret; the stage ends after a sweep that stored nothing again.
+// reencrypt runs a slice of a sweep over every Secret and keeps its position in status, so a restarted controller
+// resumes it; the stage ends after a complete sweep that stored nothing again.
 func (c *keyRun) reencrypt(ctx context.Context) (ctrl.Result, error) {
 	cps, err := c.controlPlanes(ctx)
 	if err != nil {
@@ -801,12 +802,18 @@ func (c *keyRun) reencrypt(ctx context.Context) (ctrl.Result, error) {
 		return c.retry(ctx, "the cluster has no approved control plane to reach the Kubernetes API through")
 	}
 
+	var from ReencryptResult
+
+	if r := c.op.Status.KeyRotation.Reencryption; r != nil && r.Continue != "" {
+		from = ReencryptResult{Scanned: r.Scanned, Rewritten: r.Rewritten, Conflicts: r.Conflicts, Continue: r.Continue}
+	}
+
 	var res ReencryptResult
 
 	err = c.withNode(ctx, cps[0], keyReencryptTimeout, func(ctx context.Context, talos TalosClient) error {
 		var err error
 
-		res, err = c.r.Reencrypt(ctx, talos)
+		res, err = c.r.Reencrypt(ctx, talos, from)
 
 		return err
 	})
@@ -819,6 +826,15 @@ func (c *keyRun) reencrypt(ctx context.Context) (ctrl.Result, error) {
 	sweeps := int32(1)
 	if rs.Reencryption != nil {
 		sweeps += rs.Reencryption.Sweeps
+	}
+
+	if res.Continue != "" {
+		// Not finished: the position is saved and the next reconcile continues from it. Sweeps counts finished ones.
+		rs.Reencryption = &ichorv1alpha1.KeyRotationReencryption{Sweeps: sweeps - 1, Rewritten: res.Rewritten, Scanned: res.Scanned,
+			Conflicts: res.Conflicts, Continue: res.Continue}
+
+		return ctrl.Result{RequeueAfter: keyRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
+			reasonKeyRotationReencrypting, fmt.Sprintf("sweep %d under way: %d Secret(s) looked at, %d rewritten so far", sweeps, res.Scanned, res.Rewritten))
 	}
 
 	rs.Reencryption = &ichorv1alpha1.KeyRotationReencryption{Sweeps: sweeps, Rewritten: res.Rewritten, Scanned: res.Scanned}

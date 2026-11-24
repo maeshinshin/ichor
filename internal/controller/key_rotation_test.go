@@ -117,6 +117,7 @@ type keyWorld struct {
 	// sweeps is what each re-encryption sweep reports, in order; the last one repeats.
 	sweeps      []ReencryptResult
 	sweepCalls  int
+	sweepFroms  []ReencryptResult
 	sweepErr    error
 	sweepConfig []keyState
 
@@ -290,8 +291,9 @@ func (c *keyClient) APIServerReady(context.Context) error {
 	return nil
 }
 
-func (w *keyWorld) reencrypt(context.Context, TalosClient) (ReencryptResult, error) {
+func (w *keyWorld) reencrypt(_ context.Context, _ TalosClient, from ReencryptResult) (ReencryptResult, error) {
 	w.sweepCalls++
+	w.sweepFroms = append(w.sweepFroms, from)
 
 	// The sweep must run on the configuration where the new key already encrypts everywhere.
 	for _, n := range w.nodes {
@@ -455,6 +457,47 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		Expect(f.world.keysSavedAtFirstApply).NotTo(BeNil())
 		Expect(*f.world.keysSavedAtFirstApply).To(BeTrue(), "the Secret did not hold keyrotation.yaml when the first control plane was told anything")
 		Expect(f.storedKeys()).NotTo(BeNil())
+	})
+
+	It("resumes a sweep from the position in status after the controller restarts", func() {
+		f := newKeyRotFixture(newTestBundle("v1.14"))
+		f.world.sweeps = []ReencryptResult{
+			{Scanned: 10000, Rewritten: 7, Continue: "page-21"},
+			{Scanned: 10050, Rewritten: 7, Continue: "page-41"},
+			{Scanned: 10100, Rewritten: 7},
+			{Scanned: 10100},
+		}
+
+		op := f.newOp(bothTargets)
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageReencrypting))
+		f.world.sweepFroms = nil
+
+		// Every step builds a new reconciler: nothing but status carries the position across.
+		for range 40 {
+			before := f.world.sweepCalls
+			res, err := reconcileOperation(f.newReconciler(), op)
+			Expect(err).NotTo(HaveOccurred())
+
+			op = fetchOperation(op)
+
+			// A continue token expires after about five minutes: the next slice must follow promptly, or a long sweep
+			// would start over for ever.
+			if f.world.sweepCalls > before && f.world.sweepFroms[len(f.world.sweepFroms)-1].Continue != "" && op.Status.KeyRotation.Reencryption.Continue != "" {
+				Expect(res.RequeueAfter).To(BeNumerically(">", 0))
+				Expect(res.RequeueAfter).To(BeNumerically("<", time.Minute), "a partial sweep must be requeued well inside the continue token's life")
+			}
+
+			if f.world.sweepCalls >= 4 {
+				break
+			}
+		}
+
+		Expect(f.world.sweepFroms).To(HaveLen(4))
+		Expect(f.world.sweepFroms[0]).To(Equal(ReencryptResult{}), "the first call starts from the beginning")
+		Expect(f.world.sweepFroms[1]).To(Equal(ReencryptResult{Scanned: 10000, Rewritten: 7, Continue: "page-21"}),
+			"a new reconciler must resume from the saved position and counts")
+		Expect(f.world.sweepFroms[2].Continue).To(Equal("page-41"))
+		Expect(f.world.sweepFroms[3]).To(Equal(ReencryptResult{}), "a finished sweep that rewrote Secrets is followed by a sweep from the beginning")
 	})
 
 	It("rotates both keys through every stage in the dual-key period, one control plane at a time", func() {

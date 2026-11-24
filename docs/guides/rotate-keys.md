@@ -13,7 +13,7 @@ aggregator (`--ca etcd`, `--ca kubernetes-aggregator`, `--all`).
 |---|---|---|
 | `Accepting` | new public key accepted; old still signs | new key added as a second, decrypt-only provider |
 | `Issuing` | new key signs; old still accepted | new key encrypts; old still decrypts |
-| `Reencrypting` | | every Secret rewritten; ends after a sweep that rewrote nothing |
+| `Reencrypting` | | every Secret rewritten, a page at a time with the position kept in status; ends after a sweep that rewrote nothing |
 | `SettlingTokens` | old key kept while pods' tokens are re-issued, until no legacy token Secret depends on it | |
 | `Dropping` | old public key removed | old key removed |
 | `Finalizing` | bundle in the cluster replaced, retired keys recorded | |

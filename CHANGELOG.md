@@ -625,6 +625,12 @@ command does. Each item is described where it is listed below.
 
 ### Operations
 
+- **A key rotation's Secret sweep finishes on a cluster with hundreds of thousands
+  of Secrets.** The sweep restarted from the first Secret at every reconcile and
+  never ended once it outlasted its time limit. It now works a page at a time,
+  keeps its position in `status.keyRotation.reencryption.continue` (new, with
+  `conflicts`), resumes after a controller restart, and starts over when the API
+  server answers `410 Gone` for an expired continue token.
 - **`ichor approve operation` starts an operation that waits for approval.** An operation
   that its creator marked approval-gated (`ichor.maesh.dev/awaits-approval`), such as the upgrade a storage preset creates, and that has run no step, has
   the Paused reason `AwaitingApproval` and the message "waiting for approval … ichor

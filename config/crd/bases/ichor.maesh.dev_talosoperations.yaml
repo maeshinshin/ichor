@@ -687,6 +687,18 @@ spec:
                     description: reencryption is the progress of the Reencrypting
                       stage.
                     properties:
+                      conflicts:
+                        description: conflicts is how many Secrets changed while the
+                          sweep under way (continue set) updated them.
+                        format: int64
+                        type: integer
+                      continue:
+                        description: |-
+                          continue is where the sweep under way stopped: the continue token of the next page of Secrets. While it is
+                          set, scanned, rewritten and conflicts count that sweep so far; a controller that restarts resumes from it.
+                          Empty when no sweep is under way. An expired token restarts the sweep from the beginning.
+                        maxLength: 4096
+                        type: string
                       rewritten:
                         description: |-
                           rewritten is how many Secrets the last complete sweep stored again under the new key. The stage ends

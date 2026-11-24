@@ -115,7 +115,7 @@ func TestC2ControlPlanes(t *testing.T) {
 	}
 	members, err = talosctl.EtcdMembers(ns, keeper, tc)
 	t.Logf("etcd members after (err=%v):\n%s", err, members)
-	if n := strings.Count(members, "ichor-e2e-fj-cp"); n != 2 {
+	if n := strings.Count(members, r.f.Opts.Prefix+"-cp"); n != 2 {
 		t.Errorf("C2: etcd lists %d members after the reclaim, want 2", n)
 	}
 	// talosctl health reaches every etcd check (healthy, consistent members) but then fails on the Kubernetes Node object

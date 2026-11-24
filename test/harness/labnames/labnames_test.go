@@ -45,8 +45,6 @@ var allowed = []struct {
 }{
 	{"test/e2e/e2e_test.go",
 		codeConstant},
-	{"test/e2e/foreign/reclaim_edges_test.go",
-		codeConstant},
 	{"test/e2e/foreign/reclaim_test.go",
 		codeConstant},
 	{"test/e2e/foreign/reclaim_ui_test.go",

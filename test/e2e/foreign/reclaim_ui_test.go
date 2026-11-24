@@ -98,7 +98,7 @@ func (r *rig) ensureForeign(t *testing.T) {
 			t.Logf("deleting TalosMachine %s: %v %s", mname, err, out)
 		}
 	}
-	r.refoereignize(t, r.ichorTC, "ichor-e2e-fj-w0")
+	r.refoereignize(t, r.ichorTC, foreign.VMName(r.f.Opts.Prefix, "w", 0))
 	if strings.Contains(nodes, "ichor-e2e-r-w") {
 		_, _ = r.ikDelete("delete", "node", "ichor-e2e-r-w", "--wait=false")
 	}

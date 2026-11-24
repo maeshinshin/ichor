@@ -83,3 +83,9 @@ func TestPodLegAddSumsEveryField(t *testing.T) {
 		t.Fatalf("Add = %+v", got)
 	}
 }
+
+func TestVMName(t *testing.T) {
+	if got := VMName("example", "w", 0); got != "example-w0" {
+		t.Errorf("VMName = %q", got)
+	}
+}

@@ -149,7 +149,8 @@ func (o *Options) defaults() error {
 	return nil
 }
 
-func vmName(prefix, role string, i int) string { return fmt.Sprintf("%s-%s%d", prefix, role, i) }
+// VMName is the name of the VM (and Kubernetes node) number i of a role ("cp" or "w") under a prefix.
+func VMName(prefix, role string, i int) string { return fmt.Sprintf("%s-%s%d", prefix, role, i) }
 
 // Dir is where a prefix keeps its files.
 func Dir(prefix string) (string, error) {
@@ -437,10 +438,10 @@ func Up(o Options) (*Cluster, error) {
 	// VMs.
 	var names []string
 	for i := range o.ControlPlanes {
-		names = append(names, vmName(o.Prefix, "cp", i))
+		names = append(names, VMName(o.Prefix, "cp", i))
 	}
 	for i := range o.Workers {
-		names = append(names, vmName(o.Prefix, "w", i))
+		names = append(names, VMName(o.Prefix, "w", i))
 	}
 	for i, n := range names {
 		mem := o.CPMemory
@@ -479,10 +480,10 @@ func Up(o Options) (*Cluster, error) {
 		}
 	}
 	for i := range o.ControlPlanes {
-		c.CPs = append(c.CPs, ips[vmName(o.Prefix, "cp", i)])
+		c.CPs = append(c.CPs, ips[VMName(o.Prefix, "cp", i)])
 	}
 	for i := range o.Workers {
-		c.Workers = append(c.Workers, ips[vmName(o.Prefix, "w", i)])
+		c.Workers = append(c.Workers, ips[VMName(o.Prefix, "w", i)])
 	}
 
 	if err := c.generate(mirror); err != nil {
@@ -801,10 +802,10 @@ func Down(prefix string, withRegistry bool) error {
 	}
 	var vms []string
 	for i := range maxCPs {
-		vms = append(vms, vmName(prefix, "cp", i))
+		vms = append(vms, VMName(prefix, "cp", i))
 	}
 	for i := range maxWorkers {
-		vms = append(vms, vmName(prefix, "w", i))
+		vms = append(vms, VMName(prefix, "w", i))
 	}
 	for _, vm := range vms {
 		for _, n := range []string{"vm/" + vm, "dv/" + vm + "-iso", "dv/" + vm + "-system", "dv/" + vm + "-data"} {
@@ -981,14 +982,14 @@ func Attach(o Options) (*Cluster, error) {
 		return strings.TrimSpace(out), err
 	}
 	for i := range o.ControlPlanes {
-		v, err := ip(vmName(o.Prefix, "cp", i))
+		v, err := ip(VMName(o.Prefix, "cp", i))
 		if err != nil {
 			return nil, err
 		}
 		c.CPs = append(c.CPs, v)
 	}
 	for i := range o.Workers {
-		v, err := ip(vmName(o.Prefix, "w", i))
+		v, err := ip(VMName(o.Prefix, "w", i))
 		if err != nil {
 			return nil, err
 		}

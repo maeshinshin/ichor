@@ -83,7 +83,13 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &rig{f: f, ichorKC: filepath.Join(root, "bin/foreign/ichor-e2e-fj-r/kubeconfig.local")}
+	// The Ichor cluster's relay files live under <prefix>-r; ichorName is the fixed name ichor init gave the cluster.
+	ichorDir := filepath.Join(root, "bin/foreign", opts.Prefix+"-r")
+	r := &rig{f: f, ichorKC: filepath.Join(ichorDir, "kubeconfig.local")}
+	// reclaimui reaches ichor-ui on the control plane's node port; apply is idempotent.
+	if out, err := r.ik("apply", "-f", filepath.Join(root, "test/harness/ui-demo/inner-nodeport.yaml")); err != nil {
+		t.Fatalf("applying test/harness/ui-demo/inner-nodeport.yaml to %s: %v\n%s", ichorName, err, out)
+	}
 	out, err := utils.Run(kube.Command("-n", ns, "get", "vmi", ichorName+"-cp", "-o",
 		"jsonpath={.status.interfaces[0].ipAddress}"))
 	if err != nil {
@@ -93,8 +99,7 @@ func newRig(t *testing.T, opts foreign.Options) *rig {
 	if len(f.Workers) > 0 {
 		r.foreignW = f.Workers[0]
 	}
-	tcFile := filepath.Join(root, "bin/foreign/ichor-e2e-fj-r/tc/talosconfig")
-	if r.ichorTC, err = os.ReadFile(tcFile); err != nil {
+	if r.ichorTC, err = os.ReadFile(filepath.Join(ichorDir, "tc/talosconfig")); err != nil {
 		t.Fatalf("the Ichor cluster's talosconfig (generate it from its secrets bundle): %v", err)
 	}
 	r.stage(t)
@@ -136,7 +141,7 @@ func (r *rig) stage(t *testing.T) {
 	}
 	for _, cp := range [][2]string{
 		{r.f.Talosconfig, "/tmp/foreign-talosconfig"},
-		{filepath.Join(root, "bin/foreign/ichor-e2e-fj-r/tc/talosconfig"), "/tmp/ichor-talosconfig"},
+		{filepath.Join(root, "bin/foreign", r.f.Opts.Prefix+"-r", "tc/talosconfig"), "/tmp/ichor-talosconfig"},
 		{helper, "/tmp/reclaimui"},
 	} {
 		if _, err := utils.Run(kube.Command("-n", ns, "cp", cp[0], ichorTools+":"+cp[1])); err != nil {

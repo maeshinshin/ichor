@@ -63,6 +63,10 @@ type TalosConfigPatchCustomValidator struct {
 
 // ValidateCreate implements admission.Validator.
 func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+	if err := checkDocuments(nil, obj); err != nil {
+		return nil, err
+	}
+
 	return v.validate(ctx, obj)
 }
 
@@ -89,9 +93,14 @@ func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, ol
 		return nil, nil // a finalizer removal must not be refused
 	}
 
+	if err := checkDocuments(oldObj, newObj); err != nil {
+		return nil, err
+	}
+
 	// The Talos API access rule is for what the update writes: a patch stored before it existed
 	// can still be edited for something else.
-	if apiequality.Semantic.DeepEqual(oldObj.Spec.Config, newObj.Spec.Config) {
+	if apiequality.Semantic.DeepEqual(oldObj.Spec.Config, newObj.Spec.Config) &&
+		apiequality.Semantic.DeepEqual(oldObj.Spec.Documents, newObj.Spec.Documents) {
 		return nil, v.dryRender(ctx, newObj)
 	}
 
@@ -166,6 +175,22 @@ func (v *TalosConfigPatchCustomValidator) dryRender(ctx context.Context, p *icho
 		} else {
 			return fmt.Errorf("the patch would make the configuration of node %q fail to render: %w", m.Name, err)
 		}
+	}
+
+	return nil
+}
+
+// checkDocuments refuses spec.documents, which is deprecated and read-only: it may stay as stored, or be cleared (the
+// migration clears it in the update that sets spec.config), but a create, or an update that adds or changes it, is
+// refused, and so is a patch that sets it together with spec.config unless it is unchanged.
+func checkDocuments(oldObj, newObj *ichorv1alpha1.TalosConfigPatch) error {
+	if len(newObj.Spec.Documents) == 0 {
+		return nil
+	}
+
+	if oldObj == nil || !apiequality.Semantic.DeepEqual(oldObj.Spec.Documents, newObj.Spec.Documents) {
+		return fmt.Errorf("spec.documents is deprecated and cannot be set or changed: write the settings in spec.config " +
+			"(a stored patch is converted by ichor migrate patches)")
 	}
 
 	return nil

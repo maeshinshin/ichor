@@ -25,25 +25,28 @@ import (
 
 // Keys these tests repeat (goconst).
 const (
-	kSpec       = "spec"
-	kMetadata   = "metadata"
-	kAPIVersion = "apiVersion"
-	kKind       = "kind"
-	kType       = "type"
-	kGitops     = "gitops"
-	kHandover   = "handover"
-	kStack      = "stack"
-	kObject     = "object"
-	kName       = "name"
-	kKeep       = "keep"
-	kProperties = "properties"
-	kAddress    = "address"
-	kEndpoint   = "endpoint"
-	kDefault    = "default"
-	kCNI        = "cni"
-	kCustom     = "custom"
-	kNamespace  = "namespace"
-	kDocuments  = "documents"
+	kSpec         = "spec"
+	kMetadata     = "metadata"
+	kAPIVersion   = "apiVersion"
+	kKind         = "kind"
+	kType         = "type"
+	kGitops       = "gitops"
+	kHandover     = "handover"
+	kStack        = "stack"
+	kObject       = "object"
+	kName         = "name"
+	kKeep         = "keep"
+	kProperties   = "properties"
+	kAddress      = "address"
+	kEndpoint     = "endpoint"
+	kDefault      = "default"
+	kCNI          = "cni"
+	kCustom       = "custom"
+	kNamespace    = "namespace"
+	kDocuments    = "documents"
+	kClusterRef   = "clusterRef"
+	kClusterLayer = "cluster"
+	kCluster      = "cluster"
 )
 
 // crdWith builds a one-version CRD named name whose spec has the given string properties and
@@ -117,3 +120,16 @@ func TestCheckAdditiveStillRefusesOtherRemovals(t *testing.T) {
 		t.Fatal("a removal of spec.cni.other was allowed")
 	}
 }
+
+// Keys the migration tests repeat (goconst).
+const (
+	kSysctlConfig = "SysctlConfig"
+	kSysctlKey    = "sysctlConfig"
+	kParams       = "params"
+	kIPForward    = "net.ipv4.ip_forward"
+	kVersion      = "version"
+	kExample      = "x.example"
+	kConfigKind   = "Config"
+	kConfigKey    = "config"
+	kV1           = "v1alpha1"
+)

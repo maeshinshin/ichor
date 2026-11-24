@@ -129,12 +129,12 @@ func readPatchFile(stdin io.Reader, path, defaultNamespace string) (*ichorv1alph
 
 	var p ichorv1alpha1.TalosConfigPatch
 	if err := sigsyaml.UnmarshalStrict(raw, &p); err != nil {
-		if strings.Contains(err.Error(), `unknown field "documents"`) {
-			return nil, fmt.Errorf("patch: %s sets spec.documents, which a TalosConfigPatch no longer has: "+
-				"write its settings in spec.config, once each (see the TalosConfigPatch reference): %w", path, err)
-		}
-
 		return nil, fmt.Errorf("patch: decoding %s as a TalosConfigPatch: %w", path, err)
+	}
+
+	if len(p.Spec.Documents) > 0 {
+		return nil, fmt.Errorf("patch: %s sets spec.documents, which is deprecated and read-only: "+
+			"write its settings in spec.config, once each (see the TalosConfigPatch reference)", path)
 	}
 
 	if p.Kind != "" && p.Kind != "TalosConfigPatch" {

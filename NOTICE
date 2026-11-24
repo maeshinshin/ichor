@@ -24,6 +24,7 @@ config/crd/bases/ichor.maesh.dev_talosclusters.yaml
 config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml
 dist/chart/templates/crd/talosclusters.ichor.maesh.dev.yaml
 dist/chart/templates/crd/talosconfigpatches.ichor.maesh.dev.yaml
+internal/installer/testdata/talosconfigpatches-v0.2.4.yaml
 docs/reference/crds/taloscluster.md
 docs/reference/crds/talosconfigpatch.md
 

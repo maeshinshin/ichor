@@ -179,15 +179,9 @@ var _ = Describe("TalosConfigPatch spec.config", func() {
 		Expect(strictClient.Create(context.Background(), u)).NotTo(Succeed())
 	})
 
-	// spec.documents is gone from the CRD. A client that asks for strict field validation, as kubectl does and
-	// as every Ichor client does, is refused; one that does not has the field pruned, and the object keeps no trace of it.
-	It("refuses an object that still sets spec.documents as an unknown field", func() {
-		err := strictClient.Create(context.Background(), patchWithDocuments())
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(And(ContainSubstring("spec.documents"), ContainSubstring("unknown field")))
-	})
-
-	It("prunes spec.documents from an object written without strict validation", func() {
+	// spec.documents is deprecated but stays in the CRD, so an object stored by Ichor v0.2 is never pruned; the webhook
+	// refuses to write it.
+	It("keeps spec.documents of a stored object", func() {
 		u := patchWithDocuments()
 		Expect(k8sClient.Create(context.Background(), u)).To(Succeed())
 
@@ -195,9 +189,10 @@ var _ = Describe("TalosConfigPatch spec.config", func() {
 		readBack.SetGroupVersionKind(u.GroupVersionKind())
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: u.GetName(), Namespace: u.GetNamespace()}, readBack)).To(Succeed())
 
-		_, found, err := unstructured.NestedFieldNoCopy(readBack.Object, "spec", "documents")
+		docs, found, err := unstructured.NestedSlice(readBack.Object, "spec", "documents")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(found).To(BeFalse())
+		Expect(found).To(BeTrue())
+		Expect(docs).NotTo(BeEmpty())
 	})
 
 	It("round-trips a non-trivial config through the API server", func() {

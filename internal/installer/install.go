@@ -231,6 +231,12 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		logf(opts.Log, "could not record what this run installed; the next run prunes less, never more: %v", err)
 	}
 
+	// The new CRD and controller are in place. A patch that is not migrated keeps rendering from spec.documents, so
+	// a failure here costs nothing: it is logged, and `ichor migrate patches` does it again.
+	if _, err := MigratePatches(ctx, c, opts.Namespace, opts.Log); err != nil {
+		logf(opts.Log, "migrating TalosConfigPatches: %v", err)
+	}
+
 	return nil
 }
 

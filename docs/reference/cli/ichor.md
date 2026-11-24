@@ -83,6 +83,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.
 * [ichor defrag](ichor_defrag.md)	 - Defragment etcd on a control plane node
 * [ichor export](ichor_export.md)	 - Save a cluster's secrets bundle locally
 * [ichor forfeit-leadership](ichor_forfeit-leadership.md)	 - Hand etcd leadership over from a control plane node that leads
+* [ichor migrate](ichor_migrate.md)	 - Move stored objects to the current schema
 * [ichor pause](ichor_pause.md)	 - Pause a running operation
 * [ichor restore](ichor_restore.md)	 - Restore etcd from a backup: into the running cluster (restore etcd) or after losing it (restore cluster)
 * [ichor resume](ichor_resume.md)	 - Resume a paused operation

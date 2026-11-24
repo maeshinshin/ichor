@@ -241,6 +241,21 @@ rules:
   - talosclusters
   verbs:
   - list
+# The last step of a run moves each TalosConfigPatch of this namespace from the deprecated spec.documents to
+# spec.config (migrate_patches.go) and records the Migrated condition.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches
+  verbs:
+  - list
+  - patch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches/status
+  verbs:
+  - patch
 - apiGroups:
   # The Cilium policies of config/cilium-network-policy, applied only when Cilium's CRD exists.
   - cilium.io

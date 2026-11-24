@@ -213,3 +213,47 @@ func TestTalosConfigPatchResolverConfig(t *testing.T) {
 func badSetting() *ichorconfig.Config {
 	return &ichorconfig.Config{Machine: &ichorconfig.Machine{Kubelet: &ichorconfig.MachineKubelet{Image: "!!"}}}
 }
+
+// spec.documents is deprecated and read-only: a create or an update that adds or changes it is refused, an update
+// that leaves it as stored or clears it (the migration does) is allowed.
+func TestTalosConfigPatchRefusesNewDocumentsAndAllowsClearingThem(t *testing.T) {
+	ctx := context.Background()
+	v := dryRenderValidator(t)
+
+	withDocs := func(value string) *ichorv1alpha1.TalosConfigPatch {
+		p := configPatch("old", nil)
+		p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
+			Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": value}},
+		}}
+
+		return p
+	}
+
+	if _, err := v.ValidateCreate(ctx, withDocs("1")); err == nil || !strings.Contains(err.Error(), "spec.documents") {
+		t.Errorf("a create with spec.documents: want a refusal naming it, got %v", err)
+	}
+
+	if _, err := v.ValidateUpdate(ctx, configPatch("old", nil), withDocs("1")); err == nil {
+		t.Error("an update that adds spec.documents was allowed")
+	}
+
+	if _, err := v.ValidateUpdate(ctx, withDocs("1"), withDocs("0")); err == nil {
+		t.Error("an update that changes spec.documents was allowed")
+	}
+
+	if _, err := v.ValidateUpdate(ctx, withDocs("1"), withDocs("1")); err != nil {
+		t.Errorf("an update that leaves spec.documents as stored was refused: %v", err)
+	}
+
+	migrated := configPatch("old", &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.ipv4.ip_forward": "1"}}})
+	if _, err := v.ValidateUpdate(ctx, withDocs("1"), migrated); err != nil {
+		t.Errorf("an update that clears spec.documents and sets spec.config was refused: %v", err)
+	}
+
+	both := withDocs("1")
+	both.Spec.Config = migrated.Spec.Config
+
+	if _, err := v.ValidateUpdate(ctx, configPatch("old", nil), both); err == nil {
+		t.Error("an update that sets spec.config and adds spec.documents was allowed")
+	}
+}

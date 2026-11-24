@@ -55,3 +55,19 @@ Decided by the maintainer: `TalosConfigPatch.spec.documents` is retired as a thi
 
 **What stays.** The `TalosConfigPatchDocument` Go type, which the conversion of `spec.config` decodes into.
 
+
+## Amendment (2026-11-24): spec.documents stays, deprecated, and the migration is automatic
+
+Decided by the maintainer: the retirement of `TalosConfigPatch.spec.documents` above is withdrawn. The field is back in the CRD with its schema, deprecated, so the API server never prunes a stored value and no upgrade, `ichor upgrade ichor` or `helm upgrade`, loses a setting. `retiredFields` no longer lists it; the two credential paths under it stay retired.
+
+**Why.** The upgrade could not move a setting first: the CRD of v0.2.x has no `spec.config`, so the "write each setting in `spec.config` before you upgrade" of the first amendment could not be followed, and the nodes would have lost the settings at their next apply.
+
+**Writes.** The webhook refuses a create, and an update that adds or changes `spec.documents`, and a patch that sets it together with `spec.config` unless it is unchanged. It allows an update that leaves it as stored or clears it.
+
+**Render.** While a patch sets `spec.documents` and no `spec.config`, `EffectiveDocuments` converts it with `ConfigFromDocuments`, the conversion `spec.config` itself goes through, so migrating it does not change the render. Before that, `liftV1Alpha1` moves the settings Talos 1.14 spells in a document of its own out of the `v1alpha1` document, typed and without loss: `cluster.apiServer.certSANs` to `KubeAPIServerConfig` `certExtraSANs`; `cluster.coreDNS.disabled` and `machine.time.disabled` to `enabled`, inverted, of `KubeCoreDNSConfig` and `TimeSyncConfig`; `machine.time.servers` to `TimeSyncConfig` `ntp.servers`; `machine.kernel.modules`, `machine.network.extraHostEntries` (named by address), `machine.registries.mirrors` (the per-mirror `overridePath` on each endpoint) and `cluster.inlineManifests` to `KernelModuleConfig`, `StaticHostConfig`, `RegistryMirrorConfig` and `KubeInlineManifestConfig`; `nameservers`, `searchDomains` and `disableSearchDomain` to `ResolverConfig`; `machine.features.imageCache.localEnabled` to `ImageCacheConfig` `local.enabled`. A setting with no place (`cluster.extraManifests`, a list of URLs without the names a `KubeExternalManifestConfig` needs) cannot be converted; the patch then renders with the other settings lifted and that one as stored, as it did before, and the migration reports it. `machine.network.hostname` converts, and still fails to render, as it did in v0.2.4, because Ichor owns the hostname of a machine.
+
+**Migration.** The controller never writes `spec`. The installer, as the last step of `ichor upgrade ichor` (its namespaced Role gains `list` and `patch` on `talosconfigpatches` and `patch` on their status), and `ichor migrate patches`, which a Helm user runs after `helm upgrade`, rewrite each patch: `spec.config` from `ConfigFromDocuments`, `spec.documents` cleared, in one update, with `Migrated=True`. A patch with a setting that has no place is left as it is, listed, with `Migrated=False` naming the setting; its owner writes it in `spec.config` and clears `spec.documents`. The command is idempotent.
+
+**Not restored.** `TalosCluster.spec.cni.custom.documents` stays retired: it cannot be stored (the webhook has refused it since v0.1.0), and restoring it would take 392,672 bytes of the Helm release record.
+
+**Consequence.** The record grows by the schema of `spec.documents`, to 967,784 of 1,048,576 bytes.

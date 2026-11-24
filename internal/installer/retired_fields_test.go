@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -330,11 +329,10 @@ func TestStoredTalosClusterWithCNICustomDocumentsSurvivesTheCRDUpgrade(t *testin
 	}
 }
 
-// ADR 0152, amended again: spec.documents of a TalosConfigPatch is retired, spec.config being the one place to write
-// Talos configuration. A patch stored under the schema that had it is read without it as soon as the current CRD is
-// installed, and stays writable; the installer's check accepts the removal because the path is on the list.
-func TestStoredTalosConfigPatchWithDocumentsSurvivesTheCRDUpgrade(t *testing.T) {
-	old := loadCRD(t, "testdata/talosconfigpatches-before-removal.yaml")
+// ADR 0152, amended: TalosConfigPatch spec.documents stays in the CRD, deprecated, so the upgrade from v0.2.4 does not
+// prune a stored value. checkCRDs accepts the new CRD and, once it is installed, the stored patch still has it.
+func TestStoredTalosConfigPatchDocumentsSurviveTheCRDUpgradeFromV024(t *testing.T) {
+	old := loadCRD(t, "testdata/talosconfigpatches-v0.2.4.yaml")
 	installOldCRD(t, old)
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
@@ -342,44 +340,43 @@ func TestStoredTalosConfigPatchWithDocumentsSurvivesTheCRDUpgrade(t *testing.T) 
 		kKind:       "TalosConfigPatch",
 		kMetadata:   map[string]any{kName: "old-patch", kNamespace: kDefault},
 		kSpec: map[string]any{
-			"clusterRef": map[string]any{kName: "c"},
-			"layer":      "cluster",
+			kClusterRef: map[string]any{kName: "c"},
+			"layer":     kClusterLayer,
 			kDocuments: []any{map[string]any{
-				kKind:          "SysctlConfig",
-				"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
+				kKind:      kConfigKind,
+				kConfigKey: map[string]any{kVersion: kV1, kCluster: map[string]any{"apiServer": map[string]any{"certSANs": []any{kExample}}}},
 			}},
 		},
 	}}
 
 	createWhenEstablished(t, obj)
 
-	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, kDocuments); !found {
-		t.Fatal("the old schema did not keep spec.documents")
+	target := loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml")
+	if err := checkCRDs(context.Background(), k8sClient, []*unstructured.Unstructured{target}); err != nil {
+		t.Fatalf("the installer refuses the upgrade: %v", err)
 	}
 
 	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml")
 
-	updateUntilPruned(t, types.NamespacedName{Namespace: kDefault, Name: "old-patch"}, obj,
-		[]string{kSpec, "clusterRef", kName}, "c", [][]string{{kSpec, kDocuments}})
-}
+	deadline := time.Now().Add(30 * time.Second)
 
-// Without the entry on the list the installer refuses the upgrade, which is what keeps every other removal a
-// deliberate one.
-func TestInstallerRefusesToDropTalosConfigPatchDocumentsUnlessRetired(t *testing.T) {
-	old := loadCRD(t, "testdata/talosconfigpatches-before-removal.yaml")
-	current := loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml")
+	for {
+		got := &unstructured.Unstructured{}
+		got.SetGroupVersionKind(obj.GroupVersionKind())
 
-	if err := checkAdditive(old, current); err != nil {
-		t.Fatalf("the retired removal was refused: %v", err)
-	}
+		err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: kDefault, Name: "old-patch"}, got)
+		if err == nil {
+			docs, _, _ := unstructured.NestedSlice(got.Object, kSpec, kDocuments)
+			if len(docs) == 1 && strings.Contains(fmt.Sprint(docs[0]), kExample) {
+				return
+			}
+		}
 
-	saved := retiredFields
-	retiredFields = slices.DeleteFunc(slices.Clone(retiredFields), func(f retiredField) bool { return f.path == "spec.documents" })
+		if time.Now().After(deadline) {
+			t.Fatalf("the stored spec.documents is gone after the CRD upgrade: %v", got.Object[kSpec])
+		}
 
-	defer func() { retiredFields = saved }()
-
-	if err := checkAdditive(old, current); err == nil || !strings.Contains(err.Error(), kDocuments) {
-		t.Fatalf("want a refusal naming documents once it is not retired, got %v", err)
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 

@@ -1,0 +1,2580 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: talosconfigpatches.ichor.maesh.dev
+spec:
+  group: ichor.maesh.dev
+  names:
+    kind: TalosConfigPatch
+    listKind: TalosConfigPatchList
+    plural: talosconfigpatches
+    shortNames:
+    - tcp
+    singular: talosconfigpatch
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.layer
+      name: Layer
+      type: string
+    - jsonPath: .spec.priority
+      name: Priority
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TalosConfigPatch is the Schema for the talosconfigpatches API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of TalosConfigPatch
+            properties:
+              clusterRef:
+                description: clusterRef names the TalosCluster this patch applies
+                  to.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+                x-kubernetes-validations:
+                - message: clusterRef.name is required
+                  rule: self.name != ''
+              documents:
+                description: documents holds the Talos config documents this patch
+                  applies, restricted to an allow-list of kinds.
+                items:
+                  description: |-
+                    TalosConfigPatchDocument carries exactly one Talos config document, restricted to Ichor's
+                    allow-list of kinds. kind is a discriminator: it says which of the fields below is
+                    populated, the same way a Talos config document's own "kind" field says what the rest of the
+                    document is. mirrorgen's roots (internal/tools/mirrorgen/main.go) names the same kinds this
+                    enum does; TestAllowListMatchesCRDEnum there checks the two agree, since a kubebuilder marker
+                    is plain text and can't reference that Go value directly.
+                  properties:
+                    config:
+                      description: config is a Talos v1alpha1 Config document; populated
+                        when kind is "Config".
+                      properties:
+                        cluster:
+                          description: 'Talos: ClusterConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                          properties:
+                            acceptedCAs:
+                              items:
+                                description: 'github.com/siderolabs/crypto/x509: PEMEncodedCertificate'
+                                properties:
+                                  crt:
+                                    format: byte
+                                    type: string
+                                required:
+                                - crt
+                                type: object
+                              type: array
+                            adminKubeconfig:
+                              description: 'Talos: AdminKubeconfigConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                certLifetime:
+                                  type: string
+                              type: object
+                            allowSchedulingOnControlPlanes:
+                              type: boolean
+                            allowSchedulingOnMasters:
+                              type: boolean
+                            apiServer:
+                              description: 'Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                admissionControl:
+                                  items:
+                                    description: 'Talos: AdmissionPluginConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      name:
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
+                                  type: array
+                                auditPolicy:
+                                  description: |-
+                                    Policy defines the configuration of audit logging, and the rules for how different request
+                                    categories are logged.
+                                  properties:
+                                    apiVersion:
+                                      description: |-
+                                        APIVersion defines the versioned schema of this representation of an object.
+                                        Servers should convert recognized schemas to the latest internal value, and
+                                        may reject unrecognized values.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                                      type: string
+                                    kind:
+                                      description: |-
+                                        Kind is a string value representing the REST resource this object represents.
+                                        Servers may infer this from the endpoint the client submits requests to.
+                                        Cannot be updated.
+                                        In CamelCase.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                      type: string
+                                    metadata:
+                                      description: ObjectMeta is included for interoperability
+                                        with API infrastructure.
+                                      type: object
+                                    omitManagedFields:
+                                      description: |-
+                                        OmitManagedFields indicates whether to omit the managed fields of the request
+                                        and response bodies from being written to the API audit log.
+                                        This is used as a global default - a value of 'true' will omit the managed fileds,
+                                        otherwise the managed fields will be included in the API audit log.
+                                        Note that this can also be specified per rule in which case the value specified
+                                        in a rule will override the global default.
+                                      type: boolean
+                                    omitStages:
+                                      description: |-
+                                        OmitStages is a list of stages for which no events are created. Note that this can also
+                                        be specified per rule in which case the union of both are omitted.
+                                      items:
+                                        description: Stage defines the stages in request
+                                          handling that audit events may be generated.
+                                        type: string
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    rules:
+                                      description: |-
+                                        Rules specify the audit Level a request should be recorded at.
+                                        A request may match multiple rules, in which case the FIRST matching rule is used.
+                                        The default audit level is None, but can be overridden by a catch-all rule at the end of the list.
+                                        PolicyRules are strictly ordered.
+                                      items:
+                                        description: |-
+                                          PolicyRule maps requests based off metadata to an audit Level.
+                                          Requests must match the rules of every field (an intersection of rules).
+                                        properties:
+                                          level:
+                                            description: The Level that requests matching
+                                              this rule are recorded at.
+                                            type: string
+                                          namespaces:
+                                            description: |-
+                                              Namespaces that this rule matches.
+                                              The empty string "" matches non-namespaced resources.
+                                              An empty list implies every namespace.
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          nonResourceURLs:
+                                            description: |-
+                                              NonResourceURLs is a set of URL paths that should be audited.
+                                              `*`s are allowed, but only as the full, final step in the path.
+                                              Examples:
+                                              - `/metrics` - Log requests for apiserver metrics
+                                              - `/healthz*` - Log all health checks
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          omitManagedFields:
+                                            description: |-
+                                              OmitManagedFields indicates whether to omit the managed fields of the request
+                                              and response bodies from being written to the API audit log.
+                                              - a value of 'true' will drop the managed fields from the API audit log
+                                              - a value of 'false' indicates that the managed fileds should be included
+                                                in the API audit log
+                                              Note that the value, if specified, in this rule will override the global default
+                                              If a value is not specified then the global default specified in
+                                              Policy.OmitManagedFields will stand.
+                                            type: boolean
+                                          omitStages:
+                                            description: |-
+                                              OmitStages is a list of stages for which no events are created. Note that this can also
+                                              be specified policy wide in which case the union of both are omitted.
+                                              An empty list means no restrictions will apply.
+                                            items:
+                                              description: Stage defines the stages
+                                                in request handling that audit events
+                                                may be generated.
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          resources:
+                                            description: Resources that this rule
+                                              matches. An empty list implies all kinds
+                                              in all API groups.
+                                            items:
+                                              description: GroupResources represents
+                                                resource kinds in an API group.
+                                              properties:
+                                                group:
+                                                  description: |-
+                                                    Group is the name of the API group that contains the resources.
+                                                    The empty string represents the core API group.
+                                                    `*` matches all groups
+                                                  type: string
+                                                resourceNames:
+                                                  description: |-
+                                                    ResourceNames is a list of resource instance names that the policy matches.
+                                                    Using this field requires Resources to be specified.
+                                                    An empty list implies that every instance of the resource is matched.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                                resources:
+                                                  description: |-
+                                                    Resources is a list of resources this rule applies to.
+
+                                                    For example:
+                                                    - `pods` matches pods.
+                                                    - `pods/log` matches the log subresource of pods.
+                                                    - `*` matches all resources and their subresources.
+                                                    - `pods/*` matches all subresources of pods.
+                                                    - `*/scale` matches all scale subresources.
+
+                                                    If wildcard is present, the validation rule will ensure resources do not
+                                                    overlap with each other.
+
+                                                    An empty list implies all resources and subresources in this API groups apply.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          userGroups:
+                                            description: |-
+                                              The user groups this rule applies to. A user is considered matching
+                                              if it is a member of any of the UserGroups.
+                                              An empty list implies every user group.
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          users:
+                                            description: |-
+                                              The users (by authenticated user name) this rule applies to.
+                                              An empty list implies every user.
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          verbs:
+                                            description: |-
+                                              The verbs that match this rule.
+                                              An empty list implies every verb.
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        required:
+                                        - level
+                                        type: object
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                  required:
+                                  - rules
+                                  type: object
+                                authorizationConfig:
+                                  items:
+                                    description: 'Talos: AuthorizationConfigAuthorizerConfig
+                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      name:
+                                        type: string
+                                      type:
+                                        type: string
+                                      webhook:
+                                        properties:
+                                          authorizedTTL:
+                                            description: |-
+                                              The duration to cache 'authorized' responses from the webhook
+                                              authorizer.
+                                              Same as setting `--authorization-webhook-cache-authorized-ttl` flag
+                                              Default: 5m0s
+                                            type: string
+                                          cacheAuthorizedRequests:
+                                            description: |-
+                                              CacheAuthorizedRequests specifies whether authorized requests should be cached.
+                                              If set to true, the TTL for cached decisions can be configured via the
+                                              AuthorizedTTL field.
+                                              Default: true
+                                            type: boolean
+                                          cacheUnauthorizedRequests:
+                                            description: |-
+                                              CacheUnauthorizedRequests specifies whether unauthorized requests should be cached.
+                                              If set to true, the TTL for cached decisions can be configured via the
+                                              UnauthorizedTTL field.
+                                              Default: true
+                                            type: boolean
+                                          connectionInfo:
+                                            description: ConnectionInfo defines how
+                                              we talk to the webhook
+                                            properties:
+                                              kubeConfigFile:
+                                                description: |-
+                                                  Path to KubeConfigFile for connection info
+                                                  Required, if connectionInfo.Type is KubeConfig
+                                                type: string
+                                              type:
+                                                description: |-
+                                                  Controls how the webhook should communicate with the server.
+                                                  Valid values:
+                                                  - KubeConfigFile: use the file specified in kubeConfigFile to locate the
+                                                    server.
+                                                  - InClusterConfig: use the in-cluster configuration to call the
+                                                    SubjectAccessReview API hosted by kube-apiserver. This mode is not
+                                                    allowed for kube-apiserver.
+                                                type: string
+                                            required:
+                                            - kubeConfigFile
+                                            - type
+                                            type: object
+                                          failurePolicy:
+                                            description: |-
+                                              Controls the authorization decision when a webhook request fails to
+                                              complete or returns a malformed response or errors evaluating
+                                              matchConditions.
+                                              Valid values:
+                                                - NoOpinion: continue to subsequent authorizers to see if one of
+                                                  them allows the request
+                                                - Deny: reject the request without consulting subsequent authorizers
+                                              Required, with no default.
+                                            type: string
+                                          matchConditionSubjectAccessReviewVersion:
+                                            description: |-
+                                              MatchConditionSubjectAccessReviewVersion specifies the SubjectAccessReview
+                                              version the CEL expressions are evaluated against
+                                              Valid values: v1
+                                              Required, no default value
+                                            type: string
+                                          matchConditions:
+                                            description: |-
+                                              matchConditions is a list of conditions that must be met for a request to be sent to this
+                                              webhook. An empty list of matchConditions matches all requests.
+                                              There are a maximum of 64 match conditions allowed.
+
+                                              The exact matching logic is (in order):
+                                                1. If at least one matchCondition evaluates to FALSE, then the webhook is skipped.
+                                                2. If ALL matchConditions evaluate to TRUE, then the webhook is called.
+                                                3. If at least one matchCondition evaluates to an error (but none are FALSE):
+                                                   - If failurePolicy=Deny, then the webhook rejects the request
+                                                   - If failurePolicy=NoOpinion, then the error is ignored and the webhook is skipped
+                                            items:
+                                              properties:
+                                                expression:
+                                                  description: |-
+                                                    expression represents the expression which will be evaluated by CEL. Must evaluate to bool.
+                                                    CEL expressions have access to the contents of the SubjectAccessReview in v1 version.
+                                                    If version specified by subjectAccessReviewVersion in the request variable is v1beta1,
+                                                    the contents would be converted to the v1 version before evaluating the CEL expression.
+
+                                                    - 'resourceAttributes' describes information for a resource access request and is unset for non-resource requests. e.g. has(request.resourceAttributes) && request.resourceAttributes.namespace == 'default'
+                                                    - 'nonResourceAttributes' describes information for a non-resource access request and is unset for resource requests. e.g. has(request.nonResourceAttributes) && request.nonResourceAttributes.path == '/healthz'.
+                                                    - 'user' is the user to test for. e.g. request.user == 'alice'
+                                                    - 'groups' is the groups to test for. e.g. ('group1' in request.groups)
+                                                    - 'extra' corresponds to the user.Info.GetExtra() method from the authenticator.
+                                                    - 'uid' is the information about the requesting user. e.g. request.uid == '1'
+
+                                                    Documentation on CEL: https://kubernetes.io/docs/reference/using-api/cel/
+                                                  type: string
+                                              required:
+                                              - expression
+                                              type: object
+                                            type: array
+                                          subjectAccessReviewVersion:
+                                            description: |-
+                                              The API version of the authorization.k8s.io SubjectAccessReview to
+                                              send to and expect from the webhook.
+                                              Same as setting `--authorization-webhook-version` flag
+                                              Valid values: v1beta1, v1
+                                              Required, no default value
+                                            type: string
+                                          timeout:
+                                            description: |-
+                                              Timeout for the webhook request
+                                              Maximum allowed value is 30s.
+                                              Required, no default value.
+                                            type: string
+                                          unauthorizedTTL:
+                                            description: |-
+                                              The duration to cache 'unauthorized' responses from the webhook
+                                              authorizer.
+                                              Same as setting `--authorization-webhook-cache-unauthorized-ttl` flag
+                                              Default: 30s
+                                            type: string
+                                        required:
+                                        - authorizedTTL
+                                        - connectionInfo
+                                        - failurePolicy
+                                        - matchConditionSubjectAccessReviewVersion
+                                        - matchConditions
+                                        - subjectAccessReviewVersion
+                                        - timeout
+                                        - unauthorizedTTL
+                                        type: object
+                                    required:
+                                    - name
+                                    - type
+                                    type: object
+                                  type: array
+                                certSANs:
+                                  items:
+                                    type: string
+                                  type: array
+                                disablePodSecurityPolicy:
+                                  type: boolean
+                                env:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                extraVolumes:
+                                  items:
+                                    description: 'Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      hostPath:
+                                        type: string
+                                      mountPath:
+                                        type: string
+                                      readonly:
+                                        type: boolean
+                                    required:
+                                    - hostPath
+                                    - mountPath
+                                    type: object
+                                  type: array
+                                image:
+                                  type: string
+                                resources:
+                                  description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    limits:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                    requests:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                  type: object
+                              type: object
+                            clusterName:
+                              type: string
+                            controlPlane:
+                              description: 'Talos: ControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                endpoint:
+                                  type: string
+                                localAPIServerPort:
+                                  type: integer
+                              required:
+                              - endpoint
+                              type: object
+                            controllerManager:
+                              description: 'Talos: ControllerManagerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                env:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                extraVolumes:
+                                  items:
+                                    description: 'Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      hostPath:
+                                        type: string
+                                      mountPath:
+                                        type: string
+                                      readonly:
+                                        type: boolean
+                                    required:
+                                    - hostPath
+                                    - mountPath
+                                    type: object
+                                  type: array
+                                image:
+                                  type: string
+                                resources:
+                                  description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    limits:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                    requests:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                  type: object
+                              type: object
+                            coreDNS:
+                              description: 'Talos: CoreDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                disabled:
+                                  type: boolean
+                                image:
+                                  type: string
+                              type: object
+                            discovery:
+                              description: 'Talos: ClusterDiscoveryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                enabled:
+                                  type: boolean
+                                registries:
+                                  description: 'Talos: DiscoveryRegistriesConfig —
+                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    kubernetes:
+                                      description: 'Talos: RegistryKubernetesConfig
+                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      properties:
+                                        disabled:
+                                          type: boolean
+                                      type: object
+                                    service:
+                                      description: 'Talos: RegistryServiceConfig —
+                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      properties:
+                                        disabled:
+                                          type: boolean
+                                        endpoint:
+                                          type: string
+                                      type: object
+                                  required:
+                                  - kubernetes
+                                  - service
+                                  type: object
+                              required:
+                              - registries
+                              type: object
+                            etcd:
+                              description: 'Talos: EtcdConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                advertisedSubnets:
+                                  items:
+                                    type: string
+                                  type: array
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                image:
+                                  type: string
+                                listenSubnets:
+                                  items:
+                                    type: string
+                                  type: array
+                                subnet:
+                                  type: string
+                              type: object
+                            externalCloudProvider:
+                              description: 'Talos: ExternalCloudProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                enabled:
+                                  type: boolean
+                                manifests:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            extraManifestHeaders:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            extraManifests:
+                              items:
+                                type: string
+                              type: array
+                            id:
+                              type: string
+                            inlineManifests:
+                              items:
+                                description: 'Talos: ClusterInlineManifest — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                properties:
+                                  contents:
+                                    type: string
+                                  name:
+                                    type: string
+                                required:
+                                - contents
+                                - name
+                                type: object
+                              type: array
+                            network:
+                              description: 'Talos: ClusterNetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                cni:
+                                  description: 'Talos: CNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    flannel:
+                                      description: 'Talos: FlannelCNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      properties:
+                                        extraArgs:
+                                          items:
+                                            type: string
+                                          type: array
+                                        kubeNetworkPoliciesEnabled:
+                                          type: boolean
+                                      type: object
+                                    name:
+                                      type: string
+                                    urls:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                dnsDomain:
+                                  type: string
+                                podSubnets:
+                                  items:
+                                    type: string
+                                  type: array
+                                serviceSubnets:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - dnsDomain
+                              - podSubnets
+                              - serviceSubnets
+                              type: object
+                            proxy:
+                              description: 'Talos: ProxyConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                disabled:
+                                  type: boolean
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                image:
+                                  type: string
+                                mode:
+                                  type: string
+                              type: object
+                            scheduler:
+                              description: 'Talos: SchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                env:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                extraVolumes:
+                                  items:
+                                    description: 'Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      hostPath:
+                                        type: string
+                                      mountPath:
+                                        type: string
+                                      readonly:
+                                        type: boolean
+                                    required:
+                                    - hostPath
+                                    - mountPath
+                                    type: object
+                                  type: array
+                                image:
+                                  type: string
+                                resources:
+                                  description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    limits:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                    requests:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                  type: object
+                              type: object
+                          type: object
+                        debug:
+                          type: boolean
+                        machine:
+                          description: 'Talos: MachineConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                          properties:
+                            acceptedCAs:
+                              items:
+                                description: 'github.com/siderolabs/crypto/x509: PEMEncodedCertificate'
+                                properties:
+                                  crt:
+                                    format: byte
+                                    type: string
+                                required:
+                                - crt
+                                type: object
+                              type: array
+                            certSANs:
+                              items:
+                                type: string
+                              type: array
+                            controlPlane:
+                              description: 'Talos: MachineControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                controllerManager:
+                                  description: 'Talos: MachineControllerManagerConfig
+                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    disabled:
+                                      type: boolean
+                                  type: object
+                                scheduler:
+                                  description: 'Talos: MachineSchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    disabled:
+                                      type: boolean
+                                  type: object
+                              type: object
+                            disks:
+                              items:
+                                description: 'Talos: MachineDisk — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                properties:
+                                  device:
+                                    type: string
+                                  partitions:
+                                    items:
+                                      description: 'Talos: DiskPartition — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      properties:
+                                        mountpoint:
+                                          type: string
+                                        size:
+                                          type: string
+                                      type: object
+                                    type: array
+                                type: object
+                              type: array
+                            env:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            features:
+                              description: 'Talos: FeaturesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                apidCheckExtKeyUsage:
+                                  type: boolean
+                                diskQuotaSupport:
+                                  type: boolean
+                                hostDNS:
+                                  description: 'Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                    forwardKubeDNSToHost:
+                                      type: boolean
+                                    resolveMemberNames:
+                                      type: boolean
+                                  type: object
+                                imageCache:
+                                  description: 'Talos: ImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    localEnabled:
+                                      type: boolean
+                                  type: object
+                                kubePrism:
+                                  description: 'Talos: KubePrism — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                    port:
+                                      type: integer
+                                  type: object
+                                kubernetesTalosAPIAccess:
+                                  description: 'Talos: KubernetesTalosAPIAccessConfig
+                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    allowedKubernetesNamespaces:
+                                      items:
+                                        type: string
+                                      type: array
+                                    allowedRoles:
+                                      items:
+                                        type: string
+                                      type: array
+                                    enabled:
+                                      type: boolean
+                                  type: object
+                                nodeAddressSortAlgorithm:
+                                  type: string
+                                rbac:
+                                  type: boolean
+                                stableHostname:
+                                  type: boolean
+                              type: object
+                            files:
+                              items:
+                                description: 'Talos: MachineFile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                properties:
+                                  content:
+                                    type: string
+                                  op:
+                                    type: string
+                                  path:
+                                    type: string
+                                  permissions:
+                                    type: string
+                                required:
+                                - content
+                                - op
+                                - path
+                                - permissions
+                                type: object
+                              type: array
+                            install:
+                              description: 'Talos: InstallConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                bootloader:
+                                  type: boolean
+                                disk:
+                                  type: string
+                                diskSelector:
+                                  description: 'Talos: InstallDiskSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    busPath:
+                                      type: string
+                                    modalias:
+                                      type: string
+                                    model:
+                                      type: string
+                                    name:
+                                      type: string
+                                    serial:
+                                      type: string
+                                    size:
+                                      type: string
+                                    type:
+                                      type: string
+                                    uuid:
+                                      type: string
+                                    wwid:
+                                      type: string
+                                  type: object
+                                extensions:
+                                  items:
+                                    description: 'Talos: InstallExtensionConfig —
+                                      https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      image:
+                                        type: string
+                                    required:
+                                    - image
+                                    type: object
+                                  type: array
+                                extraKernelArgs:
+                                  items:
+                                    type: string
+                                  type: array
+                                grubUseUKICmdline:
+                                  type: boolean
+                                image:
+                                  type: string
+                                legacyBIOSSupport:
+                                  type: boolean
+                                wipe:
+                                  type: boolean
+                              required:
+                              - wipe
+                              type: object
+                            kernel:
+                              description: 'Talos: KernelConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                modules:
+                                  items:
+                                    description: 'Talos: KernelModuleConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      name:
+                                        type: string
+                                      parameters:
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - name
+                                    type: object
+                                  type: array
+                              type: object
+                            kubelet:
+                              description: 'Talos: KubeletConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                clusterDNS:
+                                  items:
+                                    type: string
+                                  type: array
+                                credentialProviderConfig:
+                                  description: |-
+                                    CredentialProviderConfig is the configuration containing information about
+                                    each exec credential provider. Kubelet reads this configuration from disk and enables
+                                    each provider as specified by the CredentialProvider type.
+                                  properties:
+                                    apiVersion:
+                                      description: |-
+                                        APIVersion defines the versioned schema of this representation of an object.
+                                        Servers should convert recognized schemas to the latest internal value, and
+                                        may reject unrecognized values.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                                      type: string
+                                    kind:
+                                      description: |-
+                                        Kind is a string value representing the REST resource this object represents.
+                                        Servers may infer this from the endpoint the client submits requests to.
+                                        Cannot be updated.
+                                        In CamelCase.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                      type: string
+                                    providers:
+                                      description: |-
+                                        providers is a list of credential provider plugins that will be enabled by the kubelet.
+                                        Multiple providers may match against a single image, in which case credentials
+                                        from all providers will be returned to the kubelet. If multiple providers are called
+                                        for a single image, the results are combined. If providers return overlapping
+                                        auth keys, the value from the provider earlier in this list is attempted first.
+                                      items:
+                                        description: |-
+                                          CredentialProvider represents an exec plugin to be invoked by the kubelet. The plugin is only
+                                          invoked when an image being pulled matches the images handled by the plugin (see matchImages).
+                                        properties:
+                                          apiVersion:
+                                            description: |-
+                                              Required input version of the exec CredentialProviderRequest. The returned CredentialProviderResponse
+                                              MUST use the same encoding version as the input. Current supported values are:
+                                              - credentialprovider.kubelet.k8s.io/v1
+                                            type: string
+                                          args:
+                                            description: Arguments to pass to the
+                                              command when executing it.
+                                            items:
+                                              type: string
+                                            type: array
+                                          defaultCacheDuration:
+                                            description: |-
+                                              defaultCacheDuration is the default duration the plugin will cache credentials in-memory
+                                              if a cache duration is not provided in the plugin response. This field is required.
+                                            type: string
+                                          env:
+                                            description: |-
+                                              Env defines additional environment variables to expose to the process. These
+                                              are unioned with the host's environment, as well as variables client-go uses
+                                              to pass argument to the plugin.
+                                            items:
+                                              description: |-
+                                                ExecEnvVar is used for setting environment variables when executing an exec-based
+                                                credential plugin.
+                                              properties:
+                                                name:
+                                                  type: string
+                                                value:
+                                                  type: string
+                                              required:
+                                              - name
+                                              - value
+                                              type: object
+                                            type: array
+                                          matchImages:
+                                            description: |-
+                                              matchImages is a required list of strings used to match against images in order to
+                                              determine if this provider should be invoked. If one of the strings matches the
+                                              requested image from the kubelet, the plugin will be invoked and given a chance
+                                              to provide credentials. Images are expected to contain the registry domain
+                                              and URL path.
+
+                                              Each entry in matchImages is a pattern which can optionally contain a port and a path.
+                                              Globs can be used in the domain, but not in the port or the path. Globs are supported
+                                              as subdomains like '*.k8s.io' or 'k8s.*.io', and top-level-domains such as 'k8s.*'.
+                                              Matching partial subdomains like 'app*.k8s.io' is also supported. Each glob can only match
+                                              a single subdomain segment, so *.io does not match *.k8s.io.
+
+                                              A match exists between an image and a matchImage when all of the below are true:
+                                              - Both contain the same number of domain parts and each part matches.
+                                              - The URL path of an imageMatch must be a prefix of the target image URL path.
+                                              - If the imageMatch contains a port, then the port must match in the image as well.
+
+                                              Example values of matchImages:
+                                                - 123456789.dkr.ecr.us-east-1.amazonaws.com
+                                                - *.azurecr.io
+                                                - gcr.io
+                                                - *.*.registry.io
+                                                - registry.io:8080/path
+                                            items:
+                                              type: string
+                                            type: array
+                                          name:
+                                            description: |-
+                                              name is the required name of the credential provider. It must match the name of the
+                                              provider executable as seen by the kubelet. The executable must be in the kubelet's
+                                              bin directory (set by the --image-credential-provider-bin-dir flag).
+                                              Required to be unique across all providers.
+                                            type: string
+                                          tokenAttributes:
+                                            description: |-
+                                              tokenAttributes is the configuration for the service account token that will be passed to the plugin.
+                                              The credential provider opts in to using service account tokens for image pull by setting this field.
+                                              When this field is set, kubelet will generate a service account token bound to the pod for which the
+                                              image is being pulled and pass to the plugin as part of CredentialProviderRequest along with other
+                                              attributes required by the plugin.
+
+                                              The service account metadata and token attributes will be used as a dimension to cache
+                                              the credentials in kubelet. The cache key is generated by combining the service account metadata
+                                              (namespace, name, UID, and annotations key+value for the keys defined in
+                                              serviceAccountTokenAttribute.requiredServiceAccountAnnotationKeys and serviceAccountTokenAttribute.optionalServiceAccountAnnotationKeys).
+                                              The pod metadata (namespace, name, UID) that are in the service account token are not used as a dimension
+                                              to cache the credentials in kubelet. This means workloads that are using the same service account
+                                              could end up using the same credentials for image pull. For plugins that don't want this behavior, or
+                                              plugins that operate in pass-through mode; i.e., they return the service account token as-is, they
+                                              can set the credentialProviderResponse.cacheDuration to 0. This will disable the caching of
+                                              credentials in kubelet and the plugin will be invoked for every image pull. This does result in
+                                              token generation overhead for every image pull, but it is the only way to ensure that the
+                                              credentials are not shared across pods (even if they are using the same service account).
+                                            properties:
+                                              cacheType:
+                                                description: |-
+                                                  cacheType indicates the type of cache key use for caching the credentials returned by the plugin
+                                                  when the service account token is used.
+                                                  The most conservative option is to set this to "Token", which means the kubelet will cache returned credentials
+                                                  on a per-token basis. This should be set if the returned credential's lifetime is limited to the service account
+                                                  token's lifetime.
+                                                  If the plugin's credential retrieval logic depends only on the service account and not on pod-specific claims,
+                                                  then the plugin can set this to "ServiceAccount". In this case, the kubelet will cache returned credentials
+                                                  on a per-serviceaccount basis. Use this when the returned credential is valid for all pods using the same service account.
+                                                type: string
+                                              optionalServiceAccountAnnotationKeys:
+                                                description: |-
+                                                  optionalServiceAccountAnnotationKeys is the list of annotation keys that the plugin is interested in
+                                                  and that are optional to be present in the service account.
+                                                  The keys defined in this list will be extracted from the corresponding service account and passed
+                                                  to the plugin as part of the CredentialProviderRequest. The plugin is responsible for validating
+                                                  the existence of annotations and their values.
+                                                  This field is optional and may be empty. Plugins may use this field to extract
+                                                  additional information required to fetch credentials.
+                                                  Keys in this list must be unique.
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: set
+                                              requireServiceAccount:
+                                                description: |-
+                                                  requireServiceAccount indicates whether the plugin requires the pod to have a service account.
+                                                  If set to true, kubelet will only invoke the plugin if the pod has a service account.
+                                                  If set to false, kubelet will invoke the plugin even if the pod does not have a service account
+                                                  and will not include a token in the CredentialProviderRequest in that scenario. This is useful for plugins that
+                                                  are used to pull images for pods without service accounts (e.g., static pods).
+                                                type: boolean
+                                              requiredServiceAccountAnnotationKeys:
+                                                description: |-
+                                                  requiredServiceAccountAnnotationKeys is the list of annotation keys that the plugin is interested in
+                                                  and that are required to be present in the service account.
+                                                  The keys defined in this list will be extracted from the corresponding service account and passed
+                                                  to the plugin as part of the CredentialProviderRequest. If any of the keys defined in this list
+                                                  are not present in the service account, kubelet will not invoke the plugin and will return an error.
+                                                  This field is optional and may be empty. Plugins may use this field to extract
+                                                  additional information required to fetch credentials or allow workloads to opt in to
+                                                  using service account tokens for image pull.
+                                                  If non-empty, requireServiceAccount must be set to true.
+                                                  Keys in this list must be unique.
+                                                  This list needs to be mutually exclusive with optionalServiceAccountAnnotationKeys.
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: set
+                                              serviceAccountTokenAudience:
+                                                description: serviceAccountTokenAudience
+                                                  is the intended audience for the
+                                                  projected service account token.
+                                                type: string
+                                            required:
+                                            - cacheType
+                                            - requireServiceAccount
+                                            - serviceAccountTokenAudience
+                                            type: object
+                                        required:
+                                        - apiVersion
+                                        - defaultCacheDuration
+                                        - matchImages
+                                        - name
+                                        type: object
+                                      type: array
+                                  required:
+                                  - providers
+                                  type: object
+                                defaultRuntimeSeccompProfileEnabled:
+                                  type: boolean
+                                disableManifestsDirectory:
+                                  type: boolean
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                extraMounts:
+                                  items:
+                                    description: 'Talos: ExtraMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      destination:
+                                        type: string
+                                      gidMappings:
+                                        items:
+                                          description: 'Talos: LinuxIDMapping — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            containerID:
+                                              format: int32
+                                              type: integer
+                                            hostID:
+                                              format: int32
+                                              type: integer
+                                            size:
+                                              format: int32
+                                              type: integer
+                                          required:
+                                          - containerID
+                                          - hostID
+                                          - size
+                                          type: object
+                                        type: array
+                                      options:
+                                        items:
+                                          type: string
+                                        type: array
+                                      source:
+                                        type: string
+                                      type:
+                                        type: string
+                                      uidMappings:
+                                        items:
+                                          description: 'Talos: LinuxIDMapping — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            containerID:
+                                              format: int32
+                                              type: integer
+                                            hostID:
+                                              format: int32
+                                              type: integer
+                                            size:
+                                              format: int32
+                                              type: integer
+                                          required:
+                                          - containerID
+                                          - hostID
+                                          - size
+                                          type: object
+                                        type: array
+                                    required:
+                                    - destination
+                                    type: object
+                                  type: array
+                                image:
+                                  type: string
+                                nodeIP:
+                                  description: 'Talos: KubeletNodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    validSubnets:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                registerWithFQDN:
+                                  type: boolean
+                                skipNodeRegistration:
+                                  type: boolean
+                              type: object
+                            logging:
+                              description: 'Talos: LoggingConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                destinations:
+                                  items:
+                                    description: 'Talos: LoggingDestination — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                      extraTags:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      format:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    - format
+                                    type: object
+                                  type: array
+                              required:
+                              - destinations
+                              type: object
+                            network:
+                              description: 'Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                disableSearchDomain:
+                                  type: boolean
+                                extraHostEntries:
+                                  items:
+                                    description: 'Talos: ExtraHost — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      aliases:
+                                        items:
+                                          type: string
+                                        type: array
+                                      ip:
+                                        type: string
+                                    required:
+                                    - aliases
+                                    - ip
+                                    type: object
+                                  type: array
+                                hostname:
+                                  type: string
+                                interfaces:
+                                  items:
+                                    description: 'Talos: Device — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      addresses:
+                                        items:
+                                          type: string
+                                        type: array
+                                      bond:
+                                        description: 'Talos: Bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          adActorSysPrio:
+                                            type: integer
+                                          adActorSystem:
+                                            type: string
+                                          adSelect:
+                                            type: string
+                                          adUserPortKey:
+                                            type: integer
+                                          allSlavesActive:
+                                            type: integer
+                                          arpAllTargets:
+                                            type: string
+                                          arpIPTarget:
+                                            items:
+                                              type: string
+                                            type: array
+                                          arpInterval:
+                                            format: int32
+                                            type: integer
+                                          arpValidate:
+                                            type: string
+                                          deviceSelectors:
+                                            items:
+                                              description: 'Talos: NetworkDeviceSelector
+                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                              properties:
+                                                busPath:
+                                                  type: string
+                                                driver:
+                                                  type: string
+                                                hardwareAddr:
+                                                  type: string
+                                                pciID:
+                                                  type: string
+                                                permanentAddr:
+                                                  type: string
+                                                physical:
+                                                  type: boolean
+                                              type: object
+                                            type: array
+                                          downdelay:
+                                            format: int32
+                                            type: integer
+                                          failOverMac:
+                                            type: string
+                                          interfaces:
+                                            items:
+                                              type: string
+                                            type: array
+                                          lacpRate:
+                                            type: string
+                                          lpInterval:
+                                            format: int32
+                                            type: integer
+                                          miimon:
+                                            format: int32
+                                            type: integer
+                                          minLinks:
+                                            format: int32
+                                            type: integer
+                                          mode:
+                                            type: string
+                                          numPeerNotif:
+                                            type: integer
+                                          packetsPerSlave:
+                                            format: int32
+                                            type: integer
+                                          peerNotifyDelay:
+                                            format: int32
+                                            type: integer
+                                          primary:
+                                            type: string
+                                          primaryReselect:
+                                            type: string
+                                          resendIgmp:
+                                            format: int32
+                                            type: integer
+                                          tlbDynamicLb:
+                                            type: integer
+                                          updelay:
+                                            format: int32
+                                            type: integer
+                                          useCarrier:
+                                            type: boolean
+                                          xmitHashPolicy:
+                                            type: string
+                                        required:
+                                        - interfaces
+                                        - mode
+                                        type: object
+                                      bridge:
+                                        description: 'Talos: Bridge — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          interfaces:
+                                            items:
+                                              type: string
+                                            type: array
+                                          stp:
+                                            description: 'Talos: STP — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            properties:
+                                              enabled:
+                                                type: boolean
+                                            type: object
+                                          vlan:
+                                            description: 'Talos: BridgeVLAN — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            properties:
+                                              vlanFiltering:
+                                                type: boolean
+                                            type: object
+                                        required:
+                                        - interfaces
+                                        type: object
+                                      bridgePort:
+                                        description: 'Talos: BridgePort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          master:
+                                            type: string
+                                        type: object
+                                      cidr:
+                                        type: string
+                                      deviceSelector:
+                                        description: 'Talos: NetworkDeviceSelector
+                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          busPath:
+                                            type: string
+                                          driver:
+                                            type: string
+                                          hardwareAddr:
+                                            type: string
+                                          pciID:
+                                            type: string
+                                          permanentAddr:
+                                            type: string
+                                          physical:
+                                            type: boolean
+                                        type: object
+                                      dhcp:
+                                        type: boolean
+                                      dhcpOptions:
+                                        description: 'Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          duidv6:
+                                            type: string
+                                          ipv4:
+                                            type: boolean
+                                          ipv6:
+                                            type: boolean
+                                          routeMetric:
+                                            format: int32
+                                            type: integer
+                                        required:
+                                        - routeMetric
+                                        type: object
+                                      dummy:
+                                        type: boolean
+                                      ignore:
+                                        type: boolean
+                                      interface:
+                                        type: string
+                                      mtu:
+                                        type: integer
+                                      routes:
+                                        items:
+                                          description: 'Talos: Route — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            gateway:
+                                              type: string
+                                            metric:
+                                              format: int32
+                                              type: integer
+                                            mtu:
+                                              format: int32
+                                              type: integer
+                                            network:
+                                              type: string
+                                            source:
+                                              type: string
+                                          required:
+                                          - gateway
+                                          - network
+                                          type: object
+                                        type: array
+                                      vip:
+                                        description: 'Talos: DeviceVIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          equinixMetal:
+                                            description: 'Talos: VIPEquinixMetalConfig
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            type: object
+                                          hcloud:
+                                            description: 'Talos: VIPHCloudConfig —
+                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            type: object
+                                          ip:
+                                            type: string
+                                        type: object
+                                      vlans:
+                                        items:
+                                          description: 'Talos: Vlan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                          properties:
+                                            addresses:
+                                              items:
+                                                type: string
+                                              type: array
+                                            cidr:
+                                              type: string
+                                            dhcp:
+                                              type: boolean
+                                            dhcpOptions:
+                                              description: 'Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                              properties:
+                                                duidv6:
+                                                  type: string
+                                                ipv4:
+                                                  type: boolean
+                                                ipv6:
+                                                  type: boolean
+                                                routeMetric:
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - routeMetric
+                                              type: object
+                                            mtu:
+                                              format: int32
+                                              type: integer
+                                            routes:
+                                              items:
+                                                description: 'Talos: Route — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                                properties:
+                                                  gateway:
+                                                    type: string
+                                                  metric:
+                                                    format: int32
+                                                    type: integer
+                                                  mtu:
+                                                    format: int32
+                                                    type: integer
+                                                  network:
+                                                    type: string
+                                                  source:
+                                                    type: string
+                                                required:
+                                                - gateway
+                                                - network
+                                                type: object
+                                              type: array
+                                            vip:
+                                              description: 'Talos: DeviceVIPConfig
+                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                              properties:
+                                                equinixMetal:
+                                                  description: 'Talos: VIPEquinixMetalConfig
+                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                                  type: object
+                                                hcloud:
+                                                  description: 'Talos: VIPHCloudConfig
+                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                                  type: object
+                                                ip:
+                                                  type: string
+                                              type: object
+                                            vlanId:
+                                              type: integer
+                                          required:
+                                          - routes
+                                          - vlanId
+                                          type: object
+                                        type: array
+                                      wireguard:
+                                        description: 'Talos: DeviceWireguardConfig
+                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          firewallMark:
+                                            type: integer
+                                          listenPort:
+                                            type: integer
+                                          peers:
+                                            items:
+                                              description: 'Talos: DeviceWireguardPeer
+                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                              properties:
+                                                allowedIPs:
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                endpoint:
+                                                  type: string
+                                                persistentKeepaliveInterval:
+                                                  type: string
+                                                publicKey:
+                                                  type: string
+                                              type: object
+                                            type: array
+                                        type: object
+                                    type: object
+                                  type: array
+                                kubespan:
+                                  description: 'Talos: NetworkKubeSpan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    advertiseKubernetesNetworks:
+                                      type: boolean
+                                    allowDownPeerBypass:
+                                      type: boolean
+                                    enabled:
+                                      type: boolean
+                                    filters:
+                                      description: 'Talos: KubeSpanFilters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      properties:
+                                        endpoints:
+                                          items:
+                                            type: string
+                                          type: array
+                                        excludeAdvertisedNetworks:
+                                          items:
+                                            type: string
+                                          type: array
+                                      type: object
+                                    harvestExtraEndpoints:
+                                      type: boolean
+                                    mtu:
+                                      format: int32
+                                      type: integer
+                                  type: object
+                                nameservers:
+                                  items:
+                                    type: string
+                                  type: array
+                                searchDomains:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            nodeAnnotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            nodeLabels:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            nodeTaints:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            registries:
+                              description: 'Talos: RegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                config:
+                                  additionalProperties:
+                                    description: 'Talos: RegistryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      auth:
+                                        description: 'Talos: RegistryAuthConfig —
+                                          https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          username:
+                                            type: string
+                                        type: object
+                                      tls:
+                                        description: 'Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          ca:
+                                            format: byte
+                                            type: string
+                                          clientIdentity:
+                                            description: 'github.com/siderolabs/crypto/x509:
+                                              PEMEncodedCertificateAndKey'
+                                            properties:
+                                              crt:
+                                                format: byte
+                                                type: string
+                                              key:
+                                                format: byte
+                                                type: string
+                                            required:
+                                            - crt
+                                            - key
+                                            type: object
+                                          insecureSkipVerify:
+                                            type: boolean
+                                        type: object
+                                    type: object
+                                  type: object
+                                mirrors:
+                                  additionalProperties:
+                                    description: 'Talos: RegistryMirrorConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    properties:
+                                      endpoints:
+                                        items:
+                                          type: string
+                                        type: array
+                                      overridePath:
+                                        type: boolean
+                                      skipFallback:
+                                        type: boolean
+                                    required:
+                                    - endpoints
+                                    type: object
+                                  type: object
+                              type: object
+                            seccompProfiles:
+                              items:
+                                description: 'Talos: MachineSeccompProfile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                properties:
+                                  name:
+                                    type: string
+                                  value:
+                                    description: |-
+                                      SeccompProfile is MachineSeccompProfile.MachineSeccompProfileValue's mirror
+                                      type (internal/tools/mirrorgen/main.go's fieldOverrides): byte-for-byte the
+                                      same fields and JSON tags as specs.LinuxSeccomp (github.com/opencontainers/
+                                      runtime-spec), under a local name so DeepCopyInto/DeepCopy can be
+                                      hand-written below. The generic conversion helpers in substitution.go and
+                                      the generated CRD schema are unaffected by the rename -- both work off the
+                                      JSON shape, which is identical.
+
+                                      Why hand-written: specs.LinuxSeccomp has pointer and slice fields but,
+                                      unlike the other four field overrides (all Kubernetes API types), no
+                                      DeepCopy of its own; controller-gen's object:generate step assumes one
+                                      exists for any struct-shaped field type it doesn't otherwise recognize,
+                                      and errors at compile time rather than generation time when it doesn't.
+                                      The methods can't live on specs.LinuxSeccomp directly -- Go forbids
+                                      methods on types from another package -- and can't live one level up, on
+                                      MachineSeccompProfile itself, either: MachineConfig holds
+                                      MachineSeccompProfiles []*MachineSeccompProfile, and controller-gen's
+                                      generated code for a slice of pointers to a type with a *known* DeepCopy
+                                      method assumes a value-typed element and double-dereferences, which
+                                      doesn't compile. Putting the hand-written methods here, one level down,
+                                      avoids both problems: SeccompProfile is reached only through a plain
+                                      pointer field, never through a pointer slice.
+
+                                      deepCopyLinuxSeccomp and deepCopyLinuxSyscall below copy their known
+                                      pointer/slice fields by name rather than reflecting over the upstream
+                                      type, so they go stale -- silently, by sharing instead of copying -- if
+                                      specs-go ever adds one. seccomp_test.go's TestLinuxSeccompShape guards
+                                      against that by pinning the exact field set each one assumes.
+                                    properties:
+                                      architectures:
+                                        items:
+                                          description: Arch used for additional architectures
+                                          type: string
+                                        type: array
+                                      defaultAction:
+                                        description: LinuxSeccompAction taken upon
+                                          Seccomp rule match
+                                        type: string
+                                      defaultErrnoRet:
+                                        type: integer
+                                      flags:
+                                        items:
+                                          description: LinuxSeccompFlag is a flag
+                                            to pass to seccomp(2).
+                                          type: string
+                                        type: array
+                                      listenerMetadata:
+                                        type: string
+                                      listenerPath:
+                                        type: string
+                                      syscalls:
+                                        items:
+                                          description: LinuxSyscall is used to match
+                                            a syscall in Seccomp
+                                          properties:
+                                            action:
+                                              description: LinuxSeccompAction taken
+                                                upon Seccomp rule match
+                                              type: string
+                                            args:
+                                              items:
+                                                description: LinuxSeccompArg used
+                                                  for matching specific syscall arguments
+                                                  in Seccomp
+                                                properties:
+                                                  index:
+                                                    type: integer
+                                                  op:
+                                                    description: LinuxSeccompOperator
+                                                      used to match syscall arguments
+                                                      in Seccomp
+                                                    type: string
+                                                  value:
+                                                    format: int64
+                                                    type: integer
+                                                  valueTwo:
+                                                    format: int64
+                                                    type: integer
+                                                required:
+                                                - index
+                                                - op
+                                                - value
+                                                type: object
+                                              type: array
+                                            errnoRet:
+                                              type: integer
+                                            names:
+                                              items:
+                                                type: string
+                                              type: array
+                                          required:
+                                          - action
+                                          - names
+                                          type: object
+                                        type: array
+                                    required:
+                                    - defaultAction
+                                    type: object
+                                required:
+                                - name
+                                - value
+                                type: object
+                              type: array
+                            sysctls:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            sysfs:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            systemDiskEncryption:
+                              description: 'Talos: SystemDiskEncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                ephemeral:
+                                  description: 'Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    blockSize:
+                                      format: int64
+                                      type: integer
+                                    cipher:
+                                      type: string
+                                    keySize:
+                                      type: integer
+                                    keys:
+                                      items:
+                                        description: 'Talos: EncryptionKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          kms:
+                                            description: 'Talos: EncryptionKeyKMS
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            properties:
+                                              endpoint:
+                                                type: string
+                                            required:
+                                            - endpoint
+                                            type: object
+                                          nodeID:
+                                            description: 'Talos: EncryptionKeyNodeID
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            type: object
+                                          slot:
+                                            type: integer
+                                          tpm:
+                                            description: 'Talos: EncryptionKeyTPM
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            properties:
+                                              checkSecurebootStatusOnEnroll:
+                                                type: boolean
+                                            type: object
+                                        required:
+                                        - slot
+                                        type: object
+                                      type: array
+                                    options:
+                                      items:
+                                        type: string
+                                      type: array
+                                    provider:
+                                      type: string
+                                  required:
+                                  - keys
+                                  - provider
+                                  type: object
+                                state:
+                                  description: 'Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  properties:
+                                    blockSize:
+                                      format: int64
+                                      type: integer
+                                    cipher:
+                                      type: string
+                                    keySize:
+                                      type: integer
+                                    keys:
+                                      items:
+                                        description: 'Talos: EncryptionKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        properties:
+                                          kms:
+                                            description: 'Talos: EncryptionKeyKMS
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            properties:
+                                              endpoint:
+                                                type: string
+                                            required:
+                                            - endpoint
+                                            type: object
+                                          nodeID:
+                                            description: 'Talos: EncryptionKeyNodeID
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            type: object
+                                          slot:
+                                            type: integer
+                                          tpm:
+                                            description: 'Talos: EncryptionKeyTPM
+                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            properties:
+                                              checkSecurebootStatusOnEnroll:
+                                                type: boolean
+                                            type: object
+                                        required:
+                                        - slot
+                                        type: object
+                                      type: array
+                                    options:
+                                      items:
+                                        type: string
+                                      type: array
+                                    provider:
+                                      type: string
+                                  required:
+                                  - keys
+                                  - provider
+                                  type: object
+                              type: object
+                            time:
+                              description: 'Talos: TimeConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                bootTimeout:
+                                  type: string
+                                disabled:
+                                  type: boolean
+                                servers:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            type:
+                              type: string
+                            udev:
+                              description: 'Talos: UdevConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              properties:
+                                rules:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                          type: object
+                        persist:
+                          type: boolean
+                        version:
+                          type: string
+                      required:
+                      - version
+                      type: object
+                    kernelModuleConfig:
+                      description: kernelModuleConfig is a Talos KernelModuleConfig
+                        document; populated when kind is "KernelModuleConfig".
+                      properties:
+                        name:
+                          type: string
+                        parameters:
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - name
+                      type: object
+                    kind:
+                      description: kind selects which of the fields below is populated.
+                      enum:
+                      - SysctlConfig
+                      - KernelModuleConfig
+                      - Config
+                      - VolumeConfig
+                      - UserVolumeConfig
+                      - RawVolumeConfig
+                      - ResolverConfig
+                      type: string
+                    rawVolumeConfig:
+                      description: |-
+                        rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI
+                        provisioner); populated when kind is "RawVolumeConfig".
+                      properties:
+                        encryption:
+                          description: 'Talos: EncryptionSpec'
+                          properties:
+                            allowDiscards:
+                              type: boolean
+                            blockSize:
+                              format: int64
+                              type: integer
+                            cipher:
+                              type: string
+                            keySize:
+                              type: integer
+                            keys:
+                              items:
+                                description: 'Talos: EncryptionKey'
+                                properties:
+                                  kms:
+                                    description: 'Talos: EncryptionKeyKMS'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: 'Talos: EncryptionKeyNodeID'
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  tpm:
+                                    description: 'Talos: EncryptionKeyTPM'
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: 'Talos: EncryptionKeyTPMOptions'
+                                        properties:
+                                          pcrs:
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        name:
+                          type: string
+                        provisioning:
+                          description: 'Talos: ProvisioningSpec'
+                          properties:
+                            diskSelector:
+                              description: 'Talos: DiskSelector'
+                              properties:
+                                match:
+                                  type: string
+                              type: object
+                            grow:
+                              type: boolean
+                            maxSize:
+                              type: string
+                            minSize:
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    resolverConfig:
+                      description: resolverConfig is a Talos ResolverConfig document
+                        (DNS nameservers and search domains); populated when kind
+                        is "ResolverConfig".
+                      properties:
+                        hostDNS:
+                          description: 'Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            forwardKubeDNSToHost:
+                              type: boolean
+                            resolveMemberNames:
+                              type: boolean
+                          type: object
+                        nameservers:
+                          items:
+                            description: 'Talos: NameserverConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                            properties:
+                              address:
+                                type: string
+                              protocol:
+                                type: string
+                              tlsServerName:
+                                type: string
+                            required:
+                            - address
+                            type: object
+                          type: array
+                        searchDomains:
+                          description: 'Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                          properties:
+                            disableDefault:
+                              type: boolean
+                            domains:
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                      type: object
+                    sysctlConfig:
+                      description: sysctlConfig is a Talos SysctlConfig document;
+                        populated when kind is "SysctlConfig".
+                      properties:
+                        params:
+                          additionalProperties:
+                            type: string
+                          type: object
+                      required:
+                      - params
+                      type: object
+                    userVolumeConfig:
+                      description: userVolumeConfig is a Talos UserVolumeConfig document;
+                        populated when kind is "UserVolumeConfig".
+                      properties:
+                        encryption:
+                          description: 'Talos: EncryptionSpec'
+                          properties:
+                            allowDiscards:
+                              type: boolean
+                            blockSize:
+                              format: int64
+                              type: integer
+                            cipher:
+                              type: string
+                            keySize:
+                              type: integer
+                            keys:
+                              items:
+                                description: 'Talos: EncryptionKey'
+                                properties:
+                                  kms:
+                                    description: 'Talos: EncryptionKeyKMS'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: 'Talos: EncryptionKeyNodeID'
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  tpm:
+                                    description: 'Talos: EncryptionKeyTPM'
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: 'Talos: EncryptionKeyTPMOptions'
+                                        properties:
+                                          pcrs:
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        filesystem:
+                          description: 'Talos: FilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          properties:
+                            projectQuotaSupport:
+                              type: boolean
+                            type:
+                              type: string
+                            xfs:
+                              description: 'Talos: XFSSpec'
+                              properties:
+                                minAllocationGroupSize:
+                                  type: string
+                              type: object
+                          type: object
+                        mount:
+                          description: 'Talos: UserMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          properties:
+                            disableAccessTime:
+                              type: boolean
+                            secure:
+                              type: boolean
+                          type: object
+                        name:
+                          type: string
+                        provisioning:
+                          description: 'Talos: ProvisioningSpec'
+                          properties:
+                            diskSelector:
+                              description: 'Talos: DiskSelector'
+                              properties:
+                                match:
+                                  type: string
+                              type: object
+                            grow:
+                              type: boolean
+                            maxSize:
+                              type: string
+                            minSize:
+                              type: string
+                          type: object
+                        scrub:
+                          description: 'Talos: ScrubConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                        trim:
+                          description: 'Talos: TrimConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                        volumeType:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    volumeConfig:
+                      description: |-
+                        volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL,
+                        placed on its own disk); populated when kind is "VolumeConfig".
+                      properties:
+                        encryption:
+                          description: 'Talos: EncryptionSpec'
+                          properties:
+                            allowDiscards:
+                              type: boolean
+                            blockSize:
+                              format: int64
+                              type: integer
+                            cipher:
+                              type: string
+                            keySize:
+                              type: integer
+                            keys:
+                              items:
+                                description: 'Talos: EncryptionKey'
+                                properties:
+                                  kms:
+                                    description: 'Talos: EncryptionKeyKMS'
+                                    properties:
+                                      endpoint:
+                                        type: string
+                                    required:
+                                    - endpoint
+                                    type: object
+                                  lockToState:
+                                    type: boolean
+                                  nodeID:
+                                    description: 'Talos: EncryptionKeyNodeID'
+                                    type: object
+                                  slot:
+                                    type: integer
+                                  tpm:
+                                    description: 'Talos: EncryptionKeyTPM'
+                                    properties:
+                                      checkSecurebootStatusOnEnroll:
+                                        type: boolean
+                                      options:
+                                        description: 'Talos: EncryptionKeyTPMOptions'
+                                        properties:
+                                          pcrs:
+                                            items:
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                required:
+                                - slot
+                                type: object
+                              type: array
+                            options:
+                              items:
+                                type: string
+                              type: array
+                            provider:
+                              type: string
+                          required:
+                          - keys
+                          - provider
+                          type: object
+                        filesystem:
+                          description: 'Talos: SystemVolumeFilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          properties:
+                            xfs:
+                              description: 'Talos: XFSSpec'
+                              properties:
+                                minAllocationGroupSize:
+                                  type: string
+                              type: object
+                          type: object
+                        mount:
+                          description: 'Talos: MountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          properties:
+                            disableAccessTime:
+                              type: boolean
+                            secure:
+                              type: boolean
+                          type: object
+                        name:
+                          type: string
+                        provisioning:
+                          description: 'Talos: ProvisioningSpec'
+                          properties:
+                            diskSelector:
+                              description: 'Talos: DiskSelector'
+                              properties:
+                                match:
+                                  type: string
+                              type: object
+                            grow:
+                              type: boolean
+                            maxSize:
+                              type: string
+                            minSize:
+                              type: string
+                          type: object
+                        scrub:
+                          description: 'Talos: ScrubConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                        trim:
+                          description: 'Talos: TrimConfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - kind
+                  type: object
+                  x-kubernetes-validations:
+                  - message: exactly one of sysctlConfig, kernelModuleConfig, config,
+                      volumeConfig, userVolumeConfig, rawVolumeConfig or resolverConfig
+                      must be set
+                    rule: '(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig)
+                      ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig)
+                      ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig)
+                      ? 1 : 0) + (has(self.resolverConfig) ? 1 : 0) == 1'
+                  - message: kind must match the populated field
+                    rule: 'self.kind == ''SysctlConfig'' ? has(self.sysctlConfig)
+                      : self.kind == ''KernelModuleConfig'' ? has(self.kernelModuleConfig)
+                      : self.kind == ''Config'' ? has(self.config) : self.kind ==
+                      ''VolumeConfig'' ? has(self.volumeConfig) : self.kind == ''UserVolumeConfig''
+                      ? has(self.userVolumeConfig) : self.kind == ''RawVolumeConfig''
+                      ? has(self.rawVolumeConfig) : has(self.resolverConfig)'
+                type: array
+              layer:
+                description: |-
+                  layer is where this patch applies in the bottom-up stack; "system" is absent because Ichor generates that layer
+                  itself.
+                enum:
+                - cluster
+                - role
+                - selector
+                - machine
+                type: string
+              priority:
+                default: 0
+                description: priority orders patches within the same layer.
+                format: int32
+                type: integer
+              target:
+                description: 'target narrows which machines this patch applies to;
+                  required for every layer but "cluster", and its kind follows the
+                  layer: role -> role, selector -> labelSelector, machine -> machineRef.'
+                properties:
+                  labelSelector:
+                    description: labelSelector targets machines whose Kubernetes Node
+                      labels match.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  machineRef:
+                    description: machineRef targets a single named TalosMachine.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                    - message: machineRef.name is required
+                      rule: self.name != ''
+                  role:
+                    description: role targets every machine with this role.
+                    enum:
+                    - controlplane
+                    - worker
+                    type: string
+                type: object
+            required:
+            - clusterRef
+            - layer
+            type: object
+            x-kubernetes-validations:
+            - message: target must set exactly one of role, labelSelector or machineRef
+              rule: '!has(self.target) || (has(self.target.role) ? 1 : 0) + (has(self.target.labelSelector)
+                ? 1 : 0) + (has(self.target.machineRef) ? 1 : 0) == 1'
+            - message: layer 'cluster' requires target to be absent; layer 'role',
+                'selector' or 'machine' requires target to be present
+              rule: 'self.layer == ''cluster'' ? !has(self.target) : has(self.target)'
+            - message: 'the target must match the layer: layer ''role'' takes target.role,
+                ''selector'' takes target.labelSelector, ''machine'' takes target.machineRef'
+              rule: '!has(self.target) || (self.layer == ''role'' ? has(self.target.role)
+                : (self.layer == ''selector'' ? has(self.target.labelSelector) : (self.layer
+                == ''machine'' ? has(self.target.machineRef) : true)))'
+          status:
+            description: status defines the observed state of TalosConfigPatch
+            properties:
+              conditions:
+                description: conditions represent the current state of the TalosConfigPatch
+                  resource, kstatus-compatible.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: observedGeneration is the most recent generation the
+                  controller has reconciled.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

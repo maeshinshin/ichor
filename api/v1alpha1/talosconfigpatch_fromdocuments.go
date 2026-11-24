@@ -32,6 +32,11 @@ import (
 // a setting the schema does not carry is refused, naming it, rather than losing it: the result is converted
 // back and must give the documents it was made from.
 func ConfigFromDocuments(docs []TalosConfigPatchDocument) (*ichorconfig.Config, error) {
+	docs, err := liftV1Alpha1(docs)
+	if err != nil {
+		return nil, err
+	}
+
 	trees := map[instance]map[string]any{}
 	order := map[string][]instance{}
 

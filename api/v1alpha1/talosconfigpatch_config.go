@@ -49,11 +49,28 @@ const (
 // whether the machines the patch applies to take the documents Talos 1.14 added for the Kubernetes
 // components; when they do not, those settings are written into the v1alpha1 document instead.
 func (s *TalosConfigPatchSpec) EffectiveDocuments(multidoc bool) ([]TalosConfigPatchDocument, error) {
-	if s.Config == nil {
+	cfg := s.Config
+
+	if cfg == nil && len(s.Documents) > 0 {
+		// A patch stored by Ichor v0.2 and not migrated yet. When spec.config has a place for every setting it is
+		// converted like spec.config, so the render does not change when it is migrated. Otherwise the documents
+		// render as stored, with the settings Talos 1.14 moved lifted into their own documents (the v1alpha1 spelling
+		// conflicts with them): a setting is never dropped (the migration lists the patch).
+		var err error
+		if cfg, err = ConfigFromDocuments(s.Documents); err != nil {
+			if lifted, lerr := liftV1Alpha1(s.Documents); lerr == nil {
+				return lifted, nil
+			}
+
+			return slices.Clone(s.Documents), nil
+		}
+	}
+
+	if cfg == nil {
 		return nil, nil
 	}
 
-	return ConvertConfig(s.Config, multidoc)
+	return ConvertConfig(cfg, multidoc)
 }
 
 type instance struct {

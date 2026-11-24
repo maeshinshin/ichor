@@ -10,10 +10,6 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -26,10 +22,7 @@ import (
 func TestUpgradeIchorInstallerCheckInterruptDeletesTheJob(t *testing.T) {
 	installerCheckPoll, installerCheckWait = time.Millisecond, 30*time.Second
 
-	scheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{})
-	metav1.AddToGroupVersion(scheme, ichorv1alpha1.GroupVersion)
+	scheme := newTestScheme(t)
 
 	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: runningVersion, InstallerRepository: checkTestRepo}}
 	inst.Name = ichorv1alpha1.IchorInstallationName

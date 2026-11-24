@@ -1,15 +1,18 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -55,11 +58,15 @@ func noticeTargetWith(t *testing.T, host, installed string, rel *ichorv1alpha1.I
 	return noticeTarget{Host: host, Client: c}
 }
 
-// unreadableTarget is a cluster whose client cannot read IchorInstallation (its scheme lacks the type).
+// unreadableTarget is a cluster whose client cannot read IchorInstallation.
 func unreadableTarget(t *testing.T) noticeTarget {
 	t.Helper()
 
-	return noticeTarget{Host: noticeHostBroken, Client: fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()}
+	return noticeTarget{Host: noticeHostBroken, Client: fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+			return errors.New("the IchorInstallation cannot be read")
+		},
+	}).Build()}
 }
 
 func plainCmd() *cobra.Command {

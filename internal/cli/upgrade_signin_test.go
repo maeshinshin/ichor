@@ -11,12 +11,8 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -215,18 +211,26 @@ func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
 			cluster := newTestCluster()
 			cluster.Namespace, cluster.Spec.VersionContract = ichorControllerNamespace, testVersionContract
 
-			// No typed TalosConfigPatch: the fake keeps the stored object as written, as the API server does for an
-			// unstructured read, instead of dropping the field the Go type no longer has.
-			scheme := runtime.NewScheme()
-			utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-			scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{}, &ichorv1alpha1.TalosCluster{}, &ichorv1alpha1.TalosClusterList{}, &ichorv1alpha1.IchorUser{}, &ichorv1alpha1.IchorUserList{})
-			metav1.AddToGroupVersion(scheme, ichorv1alpha1.GroupVersion)
+			scheme := newTestScheme(t)
 
 			writes := 0
 			count := func() { writes++ }
 			k := fake.NewClientBuilder().WithScheme(scheme).
-				WithObjects(slices.Concat(uiObjects(), []client.Object{cluster, inst}, tc.extra)...).
+				WithObjects(slices.Concat(uiObjects(), []client.Object{cluster, inst})...).
 				WithInterceptorFuncs(interceptor.Funcs{
+					// The stored patches are served as written, as the API server does for an unstructured list: the
+					// typed TalosConfigPatch in cliScheme would drop the field the Go type no longer has.
+					List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, opts ...client.ListOption) error {
+						if ul, ok := l.(*unstructured.UnstructuredList); ok && ul.GetKind() == "TalosConfigPatchList" {
+							for _, o := range tc.extra {
+								ul.Items = append(ul.Items, *o.(*unstructured.Unstructured).DeepCopy())
+							}
+
+							return nil
+						}
+
+						return c.List(ctx, l, opts...)
+					},
 					Create: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.CreateOption) error {
 						count()
 						return c.Create(ctx, o, opts...)

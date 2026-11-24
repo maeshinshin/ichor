@@ -37,7 +37,7 @@ func nodeWithReady(status corev1.ConditionStatus, msg string) *corev1.Node {
 func TestWaitDiagPrintsPendingReasonEvery30s(t *testing.T) {
 	const msg = "0/3 nodes are available: 3 node(s) had untolerated taint"
 
-	c := fake.NewClientBuilder().WithObjects(pendingPod(msg), nodeWithReady(corev1.ConditionTrue, "")).Build()
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingPod(msg), nodeWithReady(corev1.ConditionTrue, "")).Build()
 
 	var out bytes.Buffer
 
@@ -61,7 +61,7 @@ func TestWaitDiagPrintsPendingReasonEvery30s(t *testing.T) {
 }
 
 func TestWaitDiagFailsEarlyOnNotReadyNodes(t *testing.T) {
-	c := fake.NewClientBuilder().WithObjects(
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(
 		pendingPod("0/1 nodes are available"),
 		nodeWithReady(corev1.ConditionFalse, "container runtime network not ready: cni plugin not initialized"),
 	).Build()
@@ -89,7 +89,7 @@ func TestWaitDiagKeepsWaitingWhileCiliumIsInstalling(t *testing.T) {
 	agent := &corev1.Pod{}
 	agent.Namespace, agent.Name, agent.Labels = k8sFactsSystemNamespace, "cilium-x", map[string]string{"k8s-app": "cilium"}
 
-	c := fake.NewClientBuilder().WithObjects(
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(
 		pendingPod("0/1 nodes are available"), agent,
 		nodeWithReady(corev1.ConditionFalse, "container runtime network not ready: cni plugin not initialized"),
 	).Build()
@@ -107,7 +107,7 @@ func TestWaitDiagKeepsWaitingWhileCiliumIsInstalling(t *testing.T) {
 }
 
 func TestWaitDiagKeepsWaitingWhenNodesAreReady(t *testing.T) {
-	c := fake.NewClientBuilder().WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
 
 	now := time.Unix(0, 0)
 	d := newWaitDiag(c, ichorControllerNamespace, &bytes.Buffer{})
@@ -123,7 +123,7 @@ func TestWaitDiagKeepsWaitingWhenNodesAreReady(t *testing.T) {
 }
 
 func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
-	notReady := fake.NewClientBuilder().WithObjects(
+	notReady := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(
 		pendingPod("0/1 nodes are available"),
 		nodeWithReady(corev1.ConditionFalse, "cni plugin not initialized"),
 	).Build()
@@ -144,7 +144,7 @@ func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
 		t.Fatalf("got %v, want errNoPodNetwork", err)
 	}
 
-	ready := fake.NewClientBuilder().WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
+	ready := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
 	d = newWaitDiag(ready, ichorControllerNamespace, &bytes.Buffer{})
 
 	err = pollDiag(context.Background(), 30*time.Millisecond, time.Millisecond, &bytes.Buffer{}, "Ichor's webhooks", d,
@@ -167,7 +167,7 @@ func TestWaitDiagFailsEarlyOnPodsStuckInContainerCreating(t *testing.T) {
 	}}
 	p.Namespace, p.Name = ichorControllerNamespace, "ichor-creating"
 
-	c := fake.NewClientBuilder().WithObjects(p,
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(p,
 		nodeWithReady(corev1.ConditionFalse, "container runtime network not ready: cni plugin not initialized")).Build()
 
 	now := time.Unix(0, 0)

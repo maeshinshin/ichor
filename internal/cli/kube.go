@@ -20,7 +20,9 @@ import (
 	"regexp"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authnv1 "k8s.io/api/authentication/v1"
 	authv1 "k8s.io/api/authorization/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -90,9 +92,11 @@ func cliScheme() (*runtime.Scheme, error) {
 	// discovery/v1: init and adopt wait for the webhook Service's ready endpoint;
 	// authorization/v1: local mode runs the uiapi server in-process, and its override and
 	// diagnostics checks create SelfSubjectAccessReviews;
-	// rbac/v1: `ichor upgrade ichor` lists roles that still grant the earlier override verb.
+	// rbac/v1: `ichor upgrade ichor` lists roles that still grant the earlier override verb;
+	// batch/v1: `ichor upgrade ichor` runs the installer check as a Job;
+	// authentication/v1: local mode's reclaim asks Kubernetes who it is (a SelfSubjectReview).
 	builder := runtime.NewSchemeBuilder(corev1.AddToScheme, appsv1.AddToScheme, discoveryv1.AddToScheme, authv1.AddToScheme,
-		rbacv1.AddToScheme, ichorv1alpha1.AddToScheme)
+		rbacv1.AddToScheme, batchv1.AddToScheme, authnv1.AddToScheme, ichorv1alpha1.AddToScheme)
 
 	if err := builder.AddToScheme(scheme); err != nil {
 		return nil, err

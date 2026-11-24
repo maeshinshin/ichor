@@ -27,7 +27,7 @@ func TestDiscoverMachinesPicksNodeAddressesNotCiliumHostOnes(t *testing.T) {
 		}
 	}
 
-	deps := adoptDeps{Seed: cpSeed, Target: fake.NewClientBuilder().WithObjects(node("cp", cpSeed), node("wk", wkIP)).Build()}
+	deps := adoptDeps{Seed: cpSeed, Target: fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(node("cp", cpSeed), node("wk", wkIP)).Build()}
 	deps.DialTalos = func(context.Context, string) (talosConfigReader, error) {
 		return &membersReader{members: []ClusterMember{
 			{Hostname: "cp", Addresses: []string{cpHost, cpSeed}, Role: roleControlPlane},

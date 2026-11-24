@@ -11,11 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -68,11 +64,7 @@ spec:
 func TestUpgradeIchorInstallerCheckRefusesBeforeSignIn(t *testing.T) {
 	installerCheckPoll, installerCheckWait = time.Millisecond, 5*time.Second
 
-	scheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
-	scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{}, &ichorv1alpha1.TalosCluster{}, &ichorv1alpha1.TalosClusterList{}, &ichorv1alpha1.IchorUser{}, &ichorv1alpha1.IchorUserList{})
-	metav1.AddToGroupVersion(scheme, ichorv1alpha1.GroupVersion)
+	scheme := newTestScheme(t)
 
 	live, err := installer.Decode([]byte(widgetCRD("color", "size")))
 	if err != nil {

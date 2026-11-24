@@ -33,15 +33,16 @@ import (
 // CheckStoredRetiredFields refuses while a stored TalosConfigPatch still holds a credential field ADR 0152 retired
 // (cluster.extraManifestHeaders, machine.registries.config.<host>.tls.clientIdentity). The new CRD prunes them, so a
 // node that used one would lose it silently at its next apply. It reads only, and must run before the new CRD is
-// installed and before any write: the installer's Run and `ichor upgrade ichor` both call it. In the v0.2.4 schema the
+// installed and before any write: the installer's Run and `ichor upgrade ichor` both call it. namespace is where the
+// caller may list (the installer's own: its Role grants nothing wider); empty is every namespace. In the v0.2.4 schema the
 // two fields exist only under spec.documents[].config.
-func CheckStoredRetiredFields(ctx context.Context, c client.Reader) error {
+func CheckStoredRetiredFields(ctx context.Context, c client.Reader, namespace string) error {
 	list := &unstructured.UnstructuredList{}
 	list.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
 	list.SetKind("TalosConfigPatchList")
 
 	// No CRD yet (a first install) means nothing is stored.
-	if err := c.List(ctx, list); apimeta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+	if err := c.List(ctx, list, client.InNamespace(namespace)); apimeta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("listing TalosConfigPatches: %w", err)

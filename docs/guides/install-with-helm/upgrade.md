@@ -13,3 +13,5 @@ sidebar_order: 9
 
 > [!IMPORTANT]
 > `helm uninstall` keeps the CRDs by default (`crd.keep: true`), and so every cluster object. Cilium is a separate release and stays.
+
+For an Ichor the installer made, see [Upgrade Ichor with the installer](../upgrade-ichor.md).

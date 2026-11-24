@@ -124,6 +124,10 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		return err
 	}
 
+	if err := CheckStoredRetiredFields(ctx, c); err != nil {
+		return err
+	}
+
 	policies, err := networkPolicies(ctx, c, opts)
 	if err != nil {
 		return err

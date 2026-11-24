@@ -9,7 +9,7 @@ sidebar_order: 9
 *Helm owns upgrade and uninstall.*
 
 - Upgrade with `helm upgrade`; the CRDs are in the chart's templates and upgrade with it.
-- After an upgrade from v0.2.x, run `ichor migrate patches`, then `ichor rollout config`: migrated settings reach a node only when that rollout runs it.
+- After an upgrade from v0.2.x, run `ichor migrate patches`. A migration alone changes no node; run `ichor rollout config` only when a setting's value changed.
 - `ichor` commands that would run the installer Job refuse and print the Helm command. The UI's Helm detection is limited, so some of its upgrade prompts may still describe the installer path.
 
 > [!IMPORTANT]

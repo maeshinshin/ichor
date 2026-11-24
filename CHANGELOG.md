@@ -75,9 +75,9 @@ command does. Each item is described where it is listed below.
   `extraManifests` in `spec.config` as named entries and clear `spec.documents`;
   Ichor sets the hostname of a machine itself. A migration that
   moves settings into their own documents (for example time servers into
-  `TimeSyncConfig`) does not change any node by itself: the machines report
-  `RebootRequired` (or `APIServerRestartRequired`) until you run `ichor rollout
-  config`, which rolls the change out node by node.
+  `TimeSyncConfig`) changes no node: a setting that only moved to its own document
+  renders what the node already holds. A node waits for `ichor rollout config`,
+  which rolls a change out node by node, only when a setting's value changed.
 - **A client older than this release cannot write a patch through `PatchService`.**
   `Patch.documents` is deprecated and never set, not even for a patch that is not
   migrated yet; `Patch.config` is the patch's `spec.config` as JSON, `{}` until the
@@ -98,7 +98,9 @@ command does. Each item is described where it is listed below.
 - **A `TalosConfigPatch` or `TalosCluster` that sets
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
-  (Typed configuration).
+  (Typed configuration). `ichor upgrade ichor` now refuses while either field is
+  stored in a `TalosConfigPatch`: move it out of Ichor and set it on the node
+  outside Ichor first.
 - **The open mode is removed, and an ichor-ui with no sign-in cannot exist.**
   `--allow-unauthenticated` on `ichor init` and `ichor adopt` (and
   `ui.allowUnauthenticated` in an init file), on `ichor-ui` (and
@@ -431,6 +433,12 @@ command does. Each item is described where it is listed below.
   unpinned. `init` now accepts that object and fills in the pin it was given. It refuses,
   before it writes anything, an object that names another version or manager, or a
   digest or signature mode that differs from the pin, rather than re-pointing the cluster.
+
+- `ichor upgrade ichor` now refuses before it turns sign-in on or writes anything.
+  It refuses a downgrade, a plan the server blocks, a stored `TalosConfigPatch` that
+  still holds `tls.clientIdentity` or `extraManifestHeaders` (ADR 0152), and a
+  refusal from the target installer's own check (ADR 0059).
+- `ichor migrate patches` no longer rewrites the status of a patch it cannot migrate.
 
 ### Adopt
 
@@ -1251,6 +1259,16 @@ command does. Each item is described where it is listed below.
   an update that leaves it as stored, or clears it, is allowed. A stored value is
   kept and migrated, as the Upgrade notes say (ADR 0152). `ichor patch apply`
   names `spec.config` in its refusal.
+- Saving a patch from the UI or `ichor apply` that still holds a v0.2
+  `spec.documents` now writes the converted `spec.config` and clears
+  `spec.documents`. An update that sets `spec.config` beside stored
+  `spec.documents` is refused, naming `ichor migrate patches`. A patch that cannot
+  be converted is shown read-only with the reason, in the UI and in `ichor get`
+  and `ichor describe patch`.
+- A setting an earlier build wrote in the `v1alpha1` document, and that the render
+  now writes in its own document, no longer holds nodes at `RebootRequired` after an
+  upgrade. This covers time servers, the resolver, kernel modules, host entries,
+  inline manifests, API server SANs, CoreDNS and the image cache.
 - **Breaking for a manifest that sets it:** `TalosCluster` loses
   `spec.cni.custom.documents`, a second copy of the whole `TalosConfigPatch`
   document union that sat under the deprecated, refused `custom` CNI and that

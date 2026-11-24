@@ -285,3 +285,21 @@ func TestPatchMachineOutputIsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// A patch whose documents cannot be converted says why: its config is "{}" there, which is not an empty patch.
+func TestPatchGetShowsWhyAnUnmigratedPatchHasNoConfig(t *testing.T) {
+	p := patchesFixture()[1]
+	p.Config = "{}"
+	p.UnmigratedReason = "cluster extraManifests has no place in spec.config"
+
+	var out bytes.Buffer
+	if err := renderPatchGet(newHuman(&out), &pb.GetPatchResponse{Patch: p}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{p.GetUnmigratedReason(), "ichor migrate patches", "spec.config"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("%q missing from:\n%s", want, out.String())
+		}
+	}
+}

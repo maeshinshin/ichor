@@ -519,6 +519,8 @@ export const en = {
   'patch.previewAllClear': 'Nothing special: no install-only or unsupported fields.',
   'patch.previewStale': 'The patch changed since this preview. Run it again.',
   'patch.previewNever': 'You have not previewed the impact of this patch yet.',
+  'patch.unmigratedTitle': 'Not migrated to spec.config',
+  'patch.unmigratedHelp': 'This patch still holds spec.documents, which cannot be converted, so its config is not shown and it cannot be saved here. Run `ichor migrate patches` after fixing it, or rewrite it in spec.config.',
   'patch.saveReminder': 'The impact preview is missing or out of date. You can still save; running it first shows whether a reboot is needed.',
   'patch.create': 'Create',
   'patch.save': 'Save',

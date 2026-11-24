@@ -95,6 +95,7 @@ export function PatchDetail({ name }: { name?: string }) {
   const [machineRef, setMachineRef] = useState('')
   // spec.config as JSON text, and the settings chosen in the search, each edited over that same text.
   const [config, setConfig] = useState('{}')
+  const [unmigratedReason, setUnmigratedReason] = useState('')
   const [chosen, setChosen] = useState<Chosen[]>([])
   const [searching, setSearching] = useState(false)
   // The field index holds the schema's required lists (lib/fieldSearch requiredMissing). Without it the required check is not run, and the page says so.
@@ -146,6 +147,7 @@ export function PatchDetail({ name }: { name?: string }) {
         setPriority(p.priority)
         applyTargetFields(targetFieldsFor(layerKeyOf(p.layer), p.target))
         setConfig(prettyConfig(p.config))
+        setUnmigratedReason(p.unmigratedReason)
         setLoaded(true)
       },
       (err) => {
@@ -281,6 +283,7 @@ export function PatchDetail({ name }: { name?: string }) {
     role,
     machineRef,
     configOk,
+    unmigratedReason,
   })
 
   return (
@@ -399,6 +402,18 @@ export function PatchDetail({ name }: { name?: string }) {
           </CardContent>
         </Card>
 
+        {unmigratedReason && (
+          <Alert variant="destructive">
+            <InfoIcon />
+            <AlertTitle>{t('patch.unmigratedTitle')}</AlertTitle>
+            <AlertDescription>
+              {unmigratedReason}
+              <br />
+              {t('patch.unmigratedHelp')}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card id="config" className="scroll-mt-section">
           <CardHeader>
             <CardTitle>{t('patch.config')}</CardTitle>
@@ -424,7 +439,7 @@ export function PatchDetail({ name }: { name?: string }) {
                   </CollapsibleContent>
                 </Collapsible>
               )}
-              {chosen.length === 0 && config.trim() === '{}' && <EmptyNote icon={FileCogIcon}>{t('patch.noSettings')}</EmptyNote>}
+              {!unmigratedReason && chosen.length === 0 && config.trim() === '{}' && <EmptyNote icon={FileCogIcon}>{t('patch.noSettings')}</EmptyNote>}
               {chosen.map((c) => (
                 <FieldInput
                   key={c.id}
@@ -437,7 +452,7 @@ export function PatchDetail({ name }: { name?: string }) {
               ))}
               <Field>
                 <FieldLabel htmlFor="patch-config-json">{t('patch.jsonLabel')}</FieldLabel>
-                <Textarea id="patch-config-json" rows={10} value={config} onInput={(e) => setConfig((e.target as HTMLTextAreaElement).value)} />
+                <Textarea id="patch-config-json" rows={10} value={config} readOnly={!!unmigratedReason} onInput={(e) => setConfig((e.target as HTMLTextAreaElement).value)} />
                 <FieldDescription>{t('patch.jsonHelp')}</FieldDescription>
               </Field>
             </FieldGroup>

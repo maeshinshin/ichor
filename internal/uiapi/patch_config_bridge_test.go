@@ -12,6 +12,7 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -300,7 +301,7 @@ func TestSavingConfigOverUnconvertibleDocumentsIsRefusedWithTheWayOut(t *testing
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: "c"},
 			Layer:      layerCluster,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: &typedconfig.Config{
+			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: &typedconfig.Config{
 				ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
 			}}},
 		},
@@ -331,5 +332,39 @@ func TestSavingConfigOverUnconvertibleDocumentsIsRefusedWithTheWayOut(t *testing
 	_, err := (&Server{Client: c}).UpdatePatch(context.Background(), connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire}))
 	if err == nil || !strings.Contains(err.Error(), "ichor migrate patches") {
 		t.Fatalf("want the refusal naming ichor migrate patches, got %v", err)
+	}
+}
+
+// An unconvertible patch is sent with its reason; every other patch is not.
+func TestUnconvertiblePatchCarriesTheReasonOnTheWire(t *testing.T) {
+	p := &ichorv1alpha1.TalosConfigPatch{
+		Name: "p", Namespace: testNS,
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			Layer: layerCluster,
+			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: &typedconfig.Config{
+				ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
+			}}},
+		},
+	}
+
+	wire, err := patchToPB(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(wire.GetUnmigratedReason(), "extraManifests") {
+		t.Errorf("reason is %q, want the conversion error", wire.GetUnmigratedReason())
+	}
+
+	// The Migrated condition's message is preferred: it is what the migration told the user.
+	p.Status.Conditions = []metav1.Condition{{Type: "Migrated", Status: metav1.ConditionFalse, Message: "from the condition"}}
+
+	if wire, _ = patchToPB(p); wire.GetUnmigratedReason() != "from the condition" {
+		t.Errorf("reason is %q, want the condition's message", wire.GetUnmigratedReason())
+	}
+
+	// A convertible or migrated patch has none.
+	if wire, _ = patchToPB(&ichorv1alpha1.TalosConfigPatch{Spec: ichorv1alpha1.TalosConfigPatchSpec{Layer: layerCluster}}); wire.GetUnmigratedReason() != "" {
+		t.Errorf("an empty patch has reason %q", wire.GetUnmigratedReason())
 	}
 }

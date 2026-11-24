@@ -112,9 +112,11 @@ export function buildPatchTarget(layer: LayerKey, role: string, labelSelectorTex
 
 // canSavePatch gates the Save button: a layer is chosen and the target value
 // that layer asks for is filled (a selector always has a value: its JSON).
+// unmigratedReason is the wire's: set, the patch is read-only.
 // configOk is the config's own check: no required setting missing, and no setting in the way of another (lib/fieldSearch).
-export function canSavePatch(f: { name: string; hasCluster: boolean; layer: LayerKey; role: string; machineRef: string; configOk: boolean }): boolean {
-  if (f.name === '' || !f.hasCluster || f.layer === 'unset' || !f.configOk) return false
+export function canSavePatch(f: { name: string; hasCluster: boolean; layer: LayerKey; role: string; machineRef: string; configOk: boolean; unmigratedReason?: string }): boolean {
+  // A patch whose documents were not converted is shown read-only: its config is not what it holds.
+  if (f.unmigratedReason || f.name === '' || !f.hasCluster || f.layer === 'unset' || !f.configOk) return false
   if (f.layer === 'role') return f.role !== ''
   if (f.layer === 'machine') return f.machineRef !== ''
   return true

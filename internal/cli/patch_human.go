@@ -127,6 +127,15 @@ func renderPatchGet(h *human, resp *pb.GetPatchResponse) error {
 	h.Block(nsName(p.GetRef()), kv{labelCluster, p.GetCluster().GetName()}, kv{"Target", patchTarget(p)},
 		kv{"Priority", fmt.Sprint(p.GetPriority())}, kv{labelCreated, agoOrEmpty(p.GetCreatedAt())})
 
+	if p.GetUnmigratedReason() != "" {
+		h.Title("Not migrated")
+		h.Line(p.GetUnmigratedReason())
+		h.Line("The patch still holds spec.documents and renders from them; its config is not shown. " +
+			"Run `ichor migrate patches` after fixing it, or rewrite it in spec.config.")
+
+		return h.Err()
+	}
+
 	if configSections(p) == "" {
 		return h.Err()
 	}

@@ -178,4 +178,8 @@ message Patch {
   // client that does not know config cannot clear a patch by saving it. A setting spec.config does not carry is
   // refused by name, never dropped.
   string config = 8;
+  // unmigrated_reason is set for a patch stored by v0.2 whose spec.documents cannot be converted to spec.config: why
+  // (the Migrated condition's message, else the conversion error). config is "{}" for it, which does not mean the
+  // patch sets nothing, so a client shows it read-only and a save is refused. Empty for every other patch.
+  string unmigrated_reason = 9;
 }

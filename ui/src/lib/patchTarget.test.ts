@@ -103,3 +103,9 @@ test('canSavePatch needs name, cluster, layer, and the target value its layer as
   assert.equal(canSavePatch({ ...ok, layer: 'selector' }), true)
   assert.equal(canSavePatch({ ...ok, layer: 'cluster', role: '' }), true)
 })
+
+test('canSavePatch refuses a patch shown read-only because its documents were not converted', () => {
+  const ok = { name: 'p', hasCluster: true, layer: 'cluster' as const, role: '', machineRef: '', configOk: true }
+  assert.equal(canSavePatch({ ...ok, unmigratedReason: '' }), true)
+  assert.equal(canSavePatch({ ...ok, unmigratedReason: 'cluster extraManifests has no place in spec.config' }), false)
+})

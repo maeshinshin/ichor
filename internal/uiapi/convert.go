@@ -24,6 +24,7 @@ import (
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	sigsjson "sigs.k8s.io/json"
@@ -315,6 +316,8 @@ func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
 		Target:    targetToPB(p.Spec.Target),
 		Config:    config,
 		CreatedAt: createdAtToPB(p.CreationTimestamp),
+
+		UnmigratedReason: unmigratedReason(p),
 	}, nil
 }
 
@@ -329,6 +332,25 @@ func storedConfig(s *ichorv1alpha1.TalosConfigPatchSpec) *ichorconfig.Config {
 	}
 
 	return s.Config
+}
+
+// unmigratedReason is why a patch stored by v0.2 shows no config: its spec.documents do not convert to spec.config.
+// The Migrated condition's message is what the migration told the user; the conversion error is the fallback.
+func unmigratedReason(p *ichorv1alpha1.TalosConfigPatch) string {
+	if p.Spec.Config != nil || len(p.Spec.Documents) == 0 {
+		return ""
+	}
+
+	_, err := ichorv1alpha1.ConfigFromDocuments(p.Spec.Documents)
+	if err == nil {
+		return ""
+	}
+
+	if c := apimeta.FindStatusCondition(p.Status.Conditions, "Migrated"); c != nil && c.Status == metav1.ConditionFalse && c.Message != "" {
+		return c.Message
+	}
+
+	return err.Error()
 }
 
 // applyPatchSpec fills spec from the wire Patch CreatePatch/UpdatePatch

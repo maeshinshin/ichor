@@ -949,9 +949,13 @@ type Patch struct {
 	// A patch that sets nothing is "{}"; a write that leaves it out is refused rather than read as that, so a
 	// client that does not know config cannot clear a patch by saving it. A setting spec.config does not carry is
 	// refused by name, never dropped.
-	Config        string `protobuf:"bytes,8,opt,name=config,proto3" json:"config,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Config string `protobuf:"bytes,8,opt,name=config,proto3" json:"config,omitempty"`
+	// unmigrated_reason is set for a patch stored by v0.2 whose spec.documents cannot be converted to spec.config: why
+	// (the Migrated condition's message, else the conversion error). config is "{}" for it, which does not mean the
+	// patch sets nothing, so a client shows it read-only and a save is refused. Empty for every other patch.
+	UnmigratedReason string `protobuf:"bytes,9,opt,name=unmigrated_reason,json=unmigratedReason,proto3" json:"unmigrated_reason,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Patch) Reset() {
@@ -1041,6 +1045,13 @@ func (x *Patch) GetConfig() string {
 	return ""
 }
 
+func (x *Patch) GetUnmigratedReason() string {
+	if x != nil {
+		return x.UnmigratedReason
+	}
+	return ""
+}
+
 var File_ichor_v1alpha1_patch_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
@@ -1097,7 +1108,7 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"machineRef\"?\n" +
 	"\rPatchDocument\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
-	"\bdocument\x18\x02 \x01(\tR\bdocument\"\x81\x03\n" +
+	"\bdocument\x18\x02 \x01(\tR\bdocument\"\xae\x03\n" +
 	"\x05Patch\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -1107,7 +1118,8 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\tdocuments\x18\x06 \x03(\v2\x1d.ichor.v1alpha1.PatchDocumentB\x02\x18\x01R\tdocuments\x129\n" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
-	"\x06config\x18\b \x01(\tR\x06config2\x9b\x04\n" +
+	"\x06config\x18\b \x01(\tR\x06config\x12+\n" +
+	"\x11unmigrated_reason\x18\t \x01(\tR\x10unmigratedReason2\x9b\x04\n" +
 	"\fPatchService\x12V\n" +
 	"\vListPatches\x12\".ichor.v1alpha1.ListPatchesRequest\x1a#.ichor.v1alpha1.ListPatchesResponse\x12M\n" +
 	"\bGetPatch\x12\x1f.ichor.v1alpha1.GetPatchRequest\x1a .ichor.v1alpha1.GetPatchResponse\x12V\n" +

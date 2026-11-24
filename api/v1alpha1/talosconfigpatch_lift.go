@@ -50,13 +50,8 @@ func liftV1Alpha1(docs []TalosConfigPatchDocument) ([]TalosConfigPatchDocument, 
 
 	l := &lifter{insts: insts, trees: trees}
 
-	for _, move := range []func(map[string]any) error{
-		l.certSANs, l.disabledToEnabled, l.timeServers, l.kernelModules, l.hostEntries, l.resolver, l.mirrors,
-		l.imageCache, l.inlineManifests,
-	} {
-		if err := move(root); err != nil {
-			return nil, err
-		}
+	if err := l.moveAll(root); err != nil {
+		return nil, err
 	}
 
 	out := make([]TalosConfigPatchDocument, 0, len(l.insts))
@@ -78,6 +73,44 @@ func liftV1Alpha1(docs []TalosConfigPatchDocument) ([]TalosConfigPatchDocument, 
 	}
 
 	return out, nil
+}
+
+// moveAll makes every move out of the v1alpha1 tree root. It is the one table of moves.
+func (l *lifter) moveAll(root map[string]any) error {
+	for _, move := range []func(map[string]any) error{
+		l.certSANs, l.disabledToEnabled, l.timeServers, l.kernelModules, l.hostEntries, l.resolver, l.mirrors,
+		l.imageCache, l.inlineManifests,
+	} {
+		if err := move(root); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// LiftSettings moves the settings of the v1alpha1 tree root that Talos 1.14 spells in a document of their own into
+// docs, keyed by {kind, name} (name empty for an unnamed document), making the documents it needs and leaving the
+// others as they are. It is the move liftV1Alpha1 makes for a patch, for a caller that holds raw trees. On an error
+// root and docs may be half moved.
+func LiftSettings(root map[string]any, docs map[[2]string]map[string]any) error {
+	l := &lifter{trees: map[instance]map[string]any{}}
+
+	for k, t := range docs {
+		i := instance{k[0], k[1]}
+		l.insts = append(l.insts, i)
+		l.trees[i] = t
+	}
+
+	if err := l.moveAll(root); err != nil {
+		return err
+	}
+
+	for _, i := range l.insts {
+		docs[[2]string{i.kind, i.name}] = l.trees[i]
+	}
+
+	return nil
 }
 
 type lifter struct {

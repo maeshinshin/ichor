@@ -99,8 +99,11 @@ command does. Each item is described where it is listed below.
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
   (Typed configuration). `ichor upgrade ichor` now refuses while either field is
-  stored in a `TalosConfigPatch`: move it out of Ichor and set it on the node
-  outside Ichor first.
+  stored in a `TalosConfigPatch` in any namespace, from the UI as well as the CLI:
+  move it out of Ichor and set it on the node outside Ichor first.
+- **`ichor upgrade ichor` needs the CLI's machine to reach the installer image's
+  registry.** Otherwise pin the image with `--installer-digest sha256:…
+  --skip-signature-check`.
 - **The open mode is removed, and an ichor-ui with no sign-in cannot exist.**
   `--allow-unauthenticated` on `ichor init` and `ichor adopt` (and
   `ui.allowUnauthenticated` in an init file), on `ichor-ui` (and
@@ -438,6 +441,11 @@ command does. Each item is described where it is listed below.
   It refuses a downgrade, a plan the server blocks, a stored `TalosConfigPatch` that
   still holds `tls.clientIdentity` or `extraManifestHeaders` (ADR 0152), and a
   refusal from the target installer's own check (ADR 0059).
+- `ichor upgrade ichor` checks the target installer image before it writes. It pins
+  the image's digest and verifies its signature from the machine running the CLI,
+  then runs the image's `installer check` as a short Job, and the operation runs
+  that same digest. The machine running the CLI must reach the image registry, or
+  you pin the image with `--installer-digest sha256:… --skip-signature-check`.
 - `ichor migrate patches` no longer rewrites the status of a patch it cannot migrate.
 
 ### Adopt

@@ -33,10 +33,10 @@ var (
 // writes anything, and returns its refusal verbatim. The image is pinned and verified as the upgrade pins it
 // (digest and skipSignature are --installer-digest and --skip-signature-check). It writes the Job and its pod, and
 // deletes the Job again (background propagation).
-func runInstallerCheck(ctx context.Context, k client.Client, images controller.InstallerImages, errw io.Writer, target, digest string, skipSignature bool) error {
+func runInstallerCheck(ctx context.Context, k client.Client, images controller.InstallerImages, errw io.Writer, target, digest string, skipSignature bool) (string, error) {
 	var inst ichorv1alpha1.IchorInstallation
 	if err := k.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
-		return fmt.Errorf("upgrade: reading IchorInstallation: %w", err)
+		return "", fmt.Errorf("upgrade: reading IchorInstallation: %w", err)
 	}
 
 	// The upgrade is not started yet, so spec still names the running version: ask for the target's image, with the
@@ -54,9 +54,16 @@ func runInstallerCheck(ctx context.Context, k client.Client, images controller.I
 
 	pinned, err := controller.PinInstallerImage(ctx, images, want)
 	if err != nil {
-		return fmt.Errorf("upgrade: checking the upgrade before it writes: %w", err)
+		return "", fmt.Errorf("upgrade: the installer image %s:%s could not be pinned and verified from this machine, so nothing was checked and nothing was written "+
+			"(the CLI reads the registry itself: run it from a host that reaches %s, or pin the image you pushed with "+
+			"--installer-digest sha256:... --skip-signature-check, which reads no registry): %w", want.Spec.InstallerRepository, want.Spec.Version, want.Spec.InstallerRepository, err)
 	}
 
+	return pinned, runCheckJob(ctx, k, errw, want, pinned)
+}
+
+// runCheckJob runs the check Job of the pinned image and waits for it; the Job is deleted on every way out.
+func runCheckJob(ctx context.Context, k client.Client, errw io.Writer, want *ichorv1alpha1.IchorInstallation, pinned string) error {
 	name := "ichor-installer-check-" + rand.String(5)
 	job := controller.NewInstallerCheckJob(ichorControllerNamespace, name, want, pinned, "", false)
 

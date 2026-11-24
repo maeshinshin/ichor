@@ -43,11 +43,11 @@ func withInstallerFlags(t *testing.T, digest string, skip bool) {
 func TestInstallerOptionsOnlyForAnIchorUpgrade(t *testing.T) {
 	withInstallerFlags(t, "sha256:"+strings.Repeat("a", 64), true)
 
-	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_TALOS); o != nil {
+	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_TALOS, ""); o != nil {
 		t.Errorf("a Talos upgrade carries installer options: %v", o)
 	}
 
-	o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR)
+	o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR, "")
 	if o.GetDigest() != "sha256:"+strings.Repeat("a", 64) || !o.GetSkipSignature() {
 		t.Errorf("options = %v", o)
 	}
@@ -55,7 +55,7 @@ func TestInstallerOptionsOnlyForAnIchorUpgrade(t *testing.T) {
 	// With no flags an Ichor upgrade still sends the (empty) options, which clears an earlier pin or skip.
 	withInstallerFlags(t, "", false)
 
-	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR); o == nil || o.GetDigest() != "" || o.GetSkipSignature() {
+	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR, ""); o == nil || o.GetDigest() != "" || o.GetSkipSignature() {
 		t.Errorf("options without flags = %v", o)
 	}
 }

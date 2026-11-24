@@ -79,7 +79,7 @@ func TestUpgradeIchorInstallerCheckRefusesBeforeSignIn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: runningVersion, InstallerRepository: "registry.example/ichor"}}
+	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: runningVersion, InstallerRepository: checkTestRepo}}
 	inst.Name = ichorv1alpha1.IchorInstallationName
 	cluster := newTestCluster()
 	cluster.Namespace, cluster.Spec.VersionContract = ichorControllerNamespace, testVersionContract
@@ -155,7 +155,9 @@ func TestUpgradeIchorInstallerCheckRefusesBeforeSignIn(t *testing.T) {
 	started := false
 	err = upgradeWithSignIn(context.Background(), k, strings.NewReader(""), io.Discard, initOptions{}, true,
 		func() error {
-			return runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false)
+			_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false)
+
+			return err
 		},
 		func() error { started = true; return nil })
 

@@ -31,7 +31,7 @@ func TestUpgradeIchorInstallerCheckInterruptDeletesTheJob(t *testing.T) {
 	scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{})
 	metav1.AddToGroupVersion(scheme, ichorv1alpha1.GroupVersion)
 
-	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: runningVersion, InstallerRepository: "registry.example/ichor"}}
+	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: runningVersion, InstallerRepository: checkTestRepo}}
 	inst.Name = ichorv1alpha1.IchorInstallationName
 
 	k := fake.NewClientBuilder().WithScheme(scheme).WithObjects(inst).WithInterceptorFuncs(interceptor.Funcs{
@@ -48,7 +48,7 @@ func TestUpgradeIchorInstallerCheckInterruptDeletesTheJob(t *testing.T) {
 		},
 	}).Build()
 
-	err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false)
+	_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("want the wait to end with context.Canceled, got %v", err)
 	}

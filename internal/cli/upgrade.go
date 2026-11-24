@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -119,6 +120,9 @@ and in which order, and asks for confirmation unless --yes.`,
 
 			listOnly := optional && upgradeList
 
+			// The digest the installer check pinned and verified: the upgrade runs that image, not whatever the tag names later.
+			var checked string
+
 			start := func() error {
 				return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 					if listOnly {
@@ -139,7 +143,7 @@ and in which order, and asks for confirmation unless --yes.`,
 						target = t
 					}
 
-					return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind)})
+					return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind, checked)})
 				})
 			}
 
@@ -166,12 +170,12 @@ and in which order, and asks for confirmation unless --yes.`,
 					return fmt.Errorf("upgrade: %w", err)
 				}
 
-				if err := runInstallerCheck(cmd.Context(), k, images, cmd.ErrOrStderr(), target, upgradeInstallerDigest, upgradeSkipSignature); err != nil {
+				if checked, err = runInstallerCheck(cmd.Context(), k, images, cmd.ErrOrStderr(), target, upgradeInstallerDigest, upgradeSkipSignature); err != nil {
 					return err
 				}
 
 				return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-					_, _, err := planStart(ctx, c, startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind)})
+					_, _, err := planStart(ctx, c, startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind, checked)})
 
 					return err
 				})
@@ -290,12 +294,13 @@ func checkInstallerFlags() error {
 
 // installerOptionsFor is the installer image settings of an `ichor upgrade ichor`, nil for the other kinds.
 // An Ichor upgrade always sends them, so a pin or a skip from an earlier upgrade is cleared unless it is given again.
-func installerOptionsFor(kind pb.OperationKind) *pb.IchorInstallerOptions {
+// checked is the digest the installer check ran and verified; it is the pin, so a tag that moves cannot change the image.
+func installerOptionsFor(kind pb.OperationKind, checked string) *pb.IchorInstallerOptions {
 	if kind != pb.OperationKind_OPERATION_KIND_ICHOR {
 		return nil
 	}
 
-	return &pb.IchorInstallerOptions{Digest: upgradeInstallerDigest, SkipSignature: upgradeSkipSignature}
+	return &pb.IchorInstallerOptions{Digest: cmp.Or(checked, upgradeInstallerDigest), SkipSignature: upgradeSkipSignature}
 }
 
 func addStartFlags(cmd *cobra.Command, f *startFlags) {

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -333,6 +334,32 @@ var _ = Describe("drainForReboot with nowhere to send the pods", func() {
 		done, err := drainForReboot(ctx, kube, "a")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
+	})
+
+	It("fails a drain past twice its bound when the node's pods cannot be listed, and carries on before that", func() {
+		kube := newDrainFake(func() int { return 0 }, drainTestNode("a", true), drainTestNode("b", false))
+		kube.PrependReactor("list", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("apiserver unreachable")
+		})
+
+		started := func(ago time.Duration) {
+			_, err := patchNodeAnnotations(ctx, kube, "a",
+				map[string]string{drainStartedAnnotation: time.Now().Add(-ago).UTC().Format(time.RFC3339)})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		started(drainTimeout + time.Minute)
+
+		_, err := drainForReboot(ctx, kube, "a")
+		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(MatchError(ContainSubstring("did not finish")))
+		Expect(err).NotTo(MatchError(ContainSubstring("could not be listed")))
+
+		started(2*drainTimeout + time.Minute)
+
+		_, err = drainForReboot(ctx, kube, "a")
+		Expect(err).To(MatchError(ContainSubstring("pods could not be listed")))
+		Expect(err).To(MatchError(ContainSubstring("apiserver unreachable")))
 	})
 
 	It("does not claim a budget when only a pod holds a timed-out drain", func() {

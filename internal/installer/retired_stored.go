@@ -22,6 +22,8 @@ import (
 	"slices"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -38,7 +40,10 @@ func CheckStoredRetiredFields(ctx context.Context, c client.Reader) error {
 	list.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
 	list.SetKind("TalosConfigPatchList")
 
-	if err := c.List(ctx, list); err != nil {
+	// No CRD yet (a first install) means nothing is stored.
+	if err := c.List(ctx, list); apimeta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("listing TalosConfigPatches: %w", err)
 	}
 

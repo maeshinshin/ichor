@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"slices"
@@ -188,12 +189,12 @@ func TestUpgradeSignIn_LeavesWhatHasSignInAlone(t *testing.T) {
 // TestUpgradeIchorRefusesBeforeItWrites: a downgrade target, or a stored patch that holds a retired field, makes
 // `ichor upgrade ichor` refuse with sign-in still off, and the cluster is never written.
 func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
-	retired := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "ichor.maesh.dev/v1alpha1", "kind": "TalosConfigPatch",
-		"metadata": map[string]any{"name": "reg", "namespace": ichorControllerNamespace},
-		"spec": map[string]any{"documents": []any{map[string]any{"kind": "v1alpha1", "config": map[string]any{
-			"machine": map[string]any{"registries": map[string]any{"config": map[string]any{"r.example": map[string]any{"tls": map[string]any{"clientIdentity": map[string]any{"crt": "x"}}}}}}}}}},
-	}}
+	retired := &unstructured.Unstructured{}
+	if err := json.Unmarshal([]byte(`{"apiVersion":"ichor.maesh.dev/v1alpha1","kind":"TalosConfigPatch",
+		"metadata":{"name":"reg","namespace":"`+ichorControllerNamespace+`"},
+		"spec":{"documents":[{"kind":"v1alpha1","config":{"machine":{"registries":{"config":{"r.example":{"tls":{"clientIdentity":{"crt":"x"}}}}}}}}]}}`), &retired.Object); err != nil {
+		t.Fatal(err)
+	}
 
 	cases := map[string]struct {
 		target string
@@ -201,16 +202,16 @@ func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
 		want   string
 	}{
 		"a downgrade":            {"v0.2.3", nil, "cannot downgrade ichor from v0.2.4 to v0.2.3"},
-		"a retired stored field": {"v0.3.0", []client.Object{retired}, "move it out of the patch and set it on the node outside Ichor (ADR 0152) before upgrading"},
+		"a retired stored field": {humanLatest, []client.Object{retired}, "move it out of the patch and set it on the node outside Ichor (ADR 0152) before upgrading"},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			inst := &ichorv1alpha1.IchorInstallation{
-				ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
-				Spec:       ichorv1alpha1.IchorInstallationSpec{Version: "v0.2.4"},
-				Status:     ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.4"},
+				Spec:   ichorv1alpha1.IchorInstallationSpec{Version: "v0.2.4"},
+				Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.4"},
 			}
+			inst.Name = ichorv1alpha1.IchorInstallationName
 			cluster := newTestCluster()
 			cluster.Namespace, cluster.Spec.VersionContract = ichorControllerNamespace, testVersionContract
 

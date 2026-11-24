@@ -140,7 +140,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 			cp.Status.NodeName = rotCPNode
 			Expect(k8sClient.Status().Update(ctx, cp)).To(Succeed())
 
-			kc := fake.NewClientset(&corev1.Node{Name: rotCPNode})
+			kc := fake.NewClientset(&corev1.Node{Name: rotCPNode}, drainTestNode("spare", false))
 			f.kube = kc
 
 			op := f.newOp()

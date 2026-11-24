@@ -166,7 +166,7 @@ var _ = Describe("TalosOperation ca-rotation etcd roll by reboot", func() {
 		cp := f.machines[0]
 		f.world.nodeNames[cp.Name] = rotCPNode
 
-		kc := fake.NewClientset(&corev1.Node{Name: rotCPNode})
+		kc := fake.NewClientset(&corev1.Node{Name: rotCPNode}, drainTestNode("spare", false))
 		f.kube = kc
 
 		cordoned := false

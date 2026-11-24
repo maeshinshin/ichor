@@ -36,6 +36,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+const drainOwner = "owner"
+
 func drainTestNode(name string, unschedulable bool) *corev1.Node {
 	return &corev1.Node{
 		Name:   name,
@@ -46,14 +48,14 @@ func drainTestNode(name string, unschedulable bool) *corev1.Node {
 
 func drainTestPod(name, node, ownerKind string, mirror bool) *corev1.Pod {
 	p := &corev1.Pod{
-		Namespace: "default", Name: name, Annotations: map[string]string{},
+		Namespace: metav1.NamespaceDefault, Name: name, Annotations: map[string]string{},
 		Spec:   corev1.PodSpec{NodeName: node},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 
 	if ownerKind != "" {
 		p.OwnerReferences = []metav1.OwnerReference{{
-			APIVersion: "apps/v1", Kind: ownerKind, Name: "owner", UID: types.UID("uid-" + name), Controller: ptr.To(true),
+			APIVersion: "apps/v1", Kind: ownerKind, Name: drainOwner, UID: types.UID("uid-" + name), Controller: ptr.To(true),
 		}}
 	}
 
@@ -114,7 +116,7 @@ func (f *drainFake) node(name string) *corev1.Node {
 }
 
 func (f *drainFake) hasPod(name string) bool {
-	_, err := f.CoreV1().Pods("default").Get(context.Background(), name, metav1.GetOptions{})
+	_, err := f.CoreV1().Pods(metav1.NamespaceDefault).Get(context.Background(), name, metav1.GetOptions{})
 
 	return err == nil
 }
@@ -134,7 +136,7 @@ func drainRolloutAdvancer(fake *fakeTalosClient, kube *drainFake) *configRollout
 }
 
 var _ = Describe("configRolloutAdvancer drain", func() {
-	owner := &appsv1.DaemonSet{Namespace: "default", Name: "owner"}
+	owner := &appsv1.DaemonSet{Namespace: metav1.NamespaceDefault, Name: drainOwner}
 
 	It("cordons and drains before the reboot, skips DaemonSet and mirror pods, and uncordons once the node is back", func() {
 		f := newRolloutFixture()
@@ -143,7 +145,7 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		kube := newDrainFake(func() int { return fake.rebootCalls },
-			drainTestNode("node-dr-ok", false), owner,
+			drainTestNode("node-dr-ok", false), drainTestNode("spare", false), owner,
 			drainTestPod("web", "node-dr-ok", "ReplicaSet", false),
 			drainTestPod("agent", "node-dr-ok", "DaemonSet", false),
 			drainTestPod("static", "node-dr-ok", "", true),
@@ -180,7 +182,7 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		kube := newDrainFake(func() int { return fake.rebootCalls },
-			drainTestNode("node-dr-pdb", false), drainTestPod("db", "node-dr-pdb", "StatefulSet", false))
+			drainTestNode("node-dr-pdb", false), drainTestNode("spare", false), drainTestPod("db", "node-dr-pdb", "StatefulSet", false))
 		kube.blocked["db"] = true
 
 		adv := drainRolloutAdvancer(fake, kube)
@@ -228,7 +230,7 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 		setHostname(m, "node-dr-admin")
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
-		kube := newDrainFake(func() int { return fake.rebootCalls }, drainTestNode("node-dr-admin", true))
+		kube := newDrainFake(func() int { return fake.rebootCalls }, drainTestNode("node-dr-admin", true), drainTestNode("spare", false))
 		adv := drainRolloutAdvancer(fake, kube)
 
 		_, err := adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
@@ -241,5 +243,82 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeTrue())
 		Expect(kube.node("node-dr-admin").Spec.Unschedulable).To(BeTrue(), "the administrator's cordon is theirs to lift")
+	})
+})
+
+var _ = Describe("drainForReboot with nowhere to send the pods", func() {
+	owner := &appsv1.ReplicaSet{Namespace: metav1.NamespaceDefault, Name: drainOwner}
+
+	budget := func() *policyv1.PodDisruptionBudget {
+		return &policyv1.PodDisruptionBudget{
+			Namespace: metav1.NamespaceDefault, Name: "web-pdb",
+			Status: policyv1.PodDisruptionBudgetStatus{DisruptionsAllowed: 0, ExpectedPods: 2},
+		}
+	}
+
+	skipEvents := func(kube *drainFake) int {
+		evs, err := kube.CoreV1().Events(metav1.NamespaceDefault).List(ctx, metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		n := 0
+		for _, e := range evs.Items {
+			if e.Reason == "DrainSkipped" {
+				n++
+			}
+		}
+
+		return n
+	}
+
+	It("skips the drain of a single-node cluster and records it", func() {
+		kube := newDrainFake(func() int { return 0 }, drainTestNode("solo", false), owner, budget(),
+			drainTestPod("web-a", "solo", "ReplicaSet", false), drainTestPod("web-b", "solo", "ReplicaSet", false))
+
+		done, err := drainForReboot(ctx, kube, "solo")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(kube.evicted).To(BeEmpty(), "the pods have nowhere to go, so none is evicted")
+		Expect(kube.node("solo").Spec.Unschedulable).To(BeFalse(), "nothing was cordoned")
+		Expect(skipEvents(kube)).To(Equal(1))
+	})
+
+	It("skips the drain when the only other node is cordoned", func() {
+		kube := newDrainFake(func() int { return 0 }, drainTestNode("a", false), drainTestNode("b", true), owner, budget(),
+			drainTestPod("web-a", "a", "ReplicaSet", false))
+
+		done, err := drainForReboot(ctx, kube, "a")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeTrue())
+		Expect(kube.evicted).To(BeEmpty())
+		Expect(skipEvents(kube)).To(Equal(1))
+	})
+
+	It("still drains, respecting the budget, when another node is Ready and schedulable", func() {
+		shortenDrain(300 * time.Millisecond)
+
+		kube := newDrainFake(func() int { return 0 }, drainTestNode("a", false), drainTestNode("b", false), owner, budget(),
+			drainTestPod("web-a", "a", "ReplicaSet", false))
+		kube.blocked["web-a"] = true
+
+		done, err := drainForReboot(ctx, kube, "a")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse(), "the budget holds the eviction back, so the drain goes on")
+		Expect(kube.node("a").Spec.Unschedulable).To(BeTrue())
+		Expect(skipEvents(kube)).To(BeZero())
+	})
+
+	It("names the pod and the budget when the drain outlasts its bound", func() {
+		node := drainTestNode("a", true)
+		node.Annotations = map[string]string{
+			drainStartedAnnotation: time.Now().Add(-2 * drainTimeout).UTC().Format(time.RFC3339),
+		}
+
+		kube := newDrainFake(func() int { return 0 }, node, drainTestNode("b", false), owner, budget(),
+			drainTestPod("web-a", "a", "ReplicaSet", false), drainTestPod("agent", "a", "DaemonSet", false))
+
+		_, err := drainForReboot(ctx, kube, "a")
+		Expect(err).To(MatchError(ContainSubstring("default/web-a")))
+		Expect(err).To(MatchError(ContainSubstring("default/web-pdb")))
+		Expect(err).NotTo(MatchError(ContainSubstring("default/agent")), "a DaemonSet pod is never evicted")
 	})
 })

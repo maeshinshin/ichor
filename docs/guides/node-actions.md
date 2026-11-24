@@ -43,7 +43,9 @@ does not cover them.
 | Forfeit leadership | The node is a worker, etcd has one member, the node does not lead, or a member is missing. |
 
 The only control plane can be rebooted: the Kubernetes API is unavailable until
-it is back, and the plan says so.
+it is back, and the plan says so. With no other Ready, schedulable node the
+drain is skipped (a `DrainSkipped` Event on the Node) and the pods restart with
+the node. A drain that times out names the pods and budgets that held it.
 
 ## Failure, retry and approval
 

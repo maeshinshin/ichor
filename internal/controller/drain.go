@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // Talos 1.14.3's Reboot does not cordon or drain (Sequencer.Reboot has no drain phase,
@@ -101,6 +103,15 @@ func drainForReboot(ctx context.Context, kube kubernetes.Interface, name string)
 		return false, fmt.Errorf("reading node %q to drain it: %w", name, err)
 	}
 
+	// A drain that has not begun and has nowhere to send the pods cannot succeed: the budget refuses
+	// the last replica for ever ("the drain never completes", Kubernetes, Configure a PodDisruptionBudget),
+	// and the reboot restarts the pods anyway. Nothing is cordoned, so there is nothing to undo.
+	if _, begun := node.Annotations[drainStartedAnnotation]; !begun && !hasOtherSchedulableNode(ctx, kube, name) {
+		skipDrain(ctx, kube, node)
+
+		return true, nil
+	}
+
 	started := time.Now()
 
 	if v, ok := node.Annotations[drainStartedAnnotation]; ok {
@@ -120,7 +131,7 @@ func drainForReboot(ctx context.Context, kube kubernetes.Interface, name string)
 
 	if elapsed := time.Since(started); elapsed > drainTimeout {
 		return false, fmt.Errorf("draining node %q did not finish within %s (a PodDisruptionBudget or a pod that will not "+
-			"terminate is holding it back); it was uncordoned and not rebooted", name, drainTimeout)
+			"terminate is holding it back: %s); it was uncordoned and not rebooted", name, drainTimeout, drainBlockers(ctx, kube, name))
 	}
 
 	if err := cordonAndDrain(newDrainHelper(ctx, kube, drainStepTimeout), node); err != nil {
@@ -133,6 +144,105 @@ func drainForReboot(ctx context.Context, kube kubernetes.Interface, name string)
 	}
 
 	return true, nil
+}
+
+// hasOtherSchedulableNode reports whether a node other than name is Ready and not cordoned, so an
+// evicted pod could be rescheduled. A list that fails counts as yes: the drain runs as it always has.
+// Taints are not weighed: a Ready, schedulable node that only some pods tolerate still counts, which
+// errs toward draining (today's behaviour) rather than toward skipping a drain that could have worked.
+func hasOtherSchedulableNode(ctx context.Context, kube kubernetes.Interface, name string) bool {
+	list, err := kube.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return true
+	}
+
+	for i := range list.Items {
+		n := &list.Items[i]
+		if n.Name == name || n.Spec.Unschedulable {
+			continue
+		}
+
+		for _, c := range n.Status.Conditions {
+			if c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+const drainSkippedMessage = "no other schedulable node; the drain was skipped and the pods restart with the node"
+
+// skipDrain records, as a log line and an Event on the node, that the drain was skipped. The Event is best effort.
+func skipDrain(ctx context.Context, kube kubernetes.Interface, node *corev1.Node) {
+	ctrl.LoggerFrom(ctx).Info(drainSkippedMessage, "node", node.Name)
+
+	now := metav1.Now()
+	_, _ = kube.CoreV1().Events(metav1.NamespaceDefault).Create(ctx, &corev1.Event{
+		GenerateName: node.Name + ".", Namespace: metav1.NamespaceDefault,
+		InvolvedObject: corev1.ObjectReference{Kind: "Node", Name: node.Name, UID: node.UID},
+		Reason:         "DrainSkipped", Message: drainSkippedMessage, Type: corev1.EventTypeNormal,
+		Source:         corev1.EventSource{Component: managedByValue},
+		FirstTimestamp: now, LastTimestamp: now, Count: 1,
+	}, metav1.CreateOptions{})
+}
+
+// drainBlockerLimit bounds how many pods or budgets a drain failure names.
+const drainBlockerLimit = 5
+
+// drainBlockers names what still holds a drain back: the pods left on the node (DaemonSet and mirror
+// pods are not evicted, so not listed) and the budgets that allow no disruption. Best effort.
+func drainBlockers(ctx context.Context, kube kubernetes.Interface, name string) string {
+	var pods []string
+
+	if list, err := kube.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + name}); err == nil {
+		for _, p := range list.Items {
+			if p.Spec.NodeName != name || p.Annotations[corev1.MirrorPodAnnotationKey] != "" || ownedByDaemonSet(&p) {
+				continue
+			}
+
+			s := p.Namespace + "/" + p.Name
+			if p.DeletionTimestamp != nil {
+				s += " (terminating)"
+			}
+
+			pods = append(pods, s)
+		}
+	}
+
+	var pdbs []string
+
+	if list, err := kube.PolicyV1().PodDisruptionBudgets(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err == nil {
+		pdbs = zeroDisruptionPDBs(list.Items)
+	}
+
+	slices.Sort(pods)
+
+	return "pods still on the node: " + boundedList(pods) + "; PodDisruptionBudgets allowing no disruption: " + boundedList(pdbs)
+}
+
+func ownedByDaemonSet(p *corev1.Pod) bool {
+	for _, o := range p.OwnerReferences {
+		if o.Controller != nil && *o.Controller && o.Kind == "DaemonSet" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// boundedList joins the first drainBlockerLimit items and counts the rest.
+func boundedList(items []string) string {
+	if len(items) == 0 {
+		return "none found"
+	}
+
+	if len(items) <= drainBlockerLimit {
+		return strings.Join(items, ", ")
+	}
+
+	return fmt.Sprintf("%s and %d more", strings.Join(items[:drainBlockerLimit], ", "), len(items)-drainBlockerLimit)
 }
 
 // uncordonAfterReboot undoes drainForReboot: it uncordons the node if the drain cordoned it and

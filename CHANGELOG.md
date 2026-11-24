@@ -572,6 +572,13 @@ command does. Each item is described where it is listed below.
 
 ### Nodes
 
+- **A reboot-requiring operation no longer pauses on a cluster with one schedulable
+  node.** The drain before a reboot (config rollout, node reboot, Kubernetes
+  upgrade kubelets stage, CA rotation) is skipped when no other node is Ready and
+  schedulable, because Ichor's own PodDisruptionBudgets would refuse the last
+  replica for ever; a `DrainSkipped` Event on the Node says so, and the reboot
+  restarts the pods. A drain that does time out now names the pods still on the
+  node and the budgets allowing no disruption (ADR 0080).
 - A graceful `reclaim node` from a healthy foreign cluster is no longer refused
   as "not reachable from the node". The controller opens its network policy to
   that cluster's endpoint and etcd peers, each only on its own port, for as long

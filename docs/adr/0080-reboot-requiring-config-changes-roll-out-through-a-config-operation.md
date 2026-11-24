@@ -180,3 +180,11 @@ The etcd restore already refused on an unreadable name: it needs the name of eve
 ## Amendment (2026-11-24): the probe follows the local API server port
 
 The probe no longer assumes port 6443. `APIServerReady` reads the node's active machine configuration and dials the port its `K8sAPIServerConfig().APIPort()` gives: `cluster.controlPlane.localAPIServerPort` (or `cluster.apiServer.port` in a `KubeAPIServerConfig` document), and Talos's default 6443 (`constants.DefaultControlPlanePort`, the documented default of the field) when unset (`internal/controller/talosclient_apiserver.go`, `probeAPIServer`). Before, a cluster with a custom port paused every API-server restart at `APIServerNotReady`.
+
+## Amendment (2026-11-24): a drain with nowhere to send the pods is skipped, and a timed-out drain names what held it
+
+Kubernetes documents that a budget that allows no eviction means a drain of a node running one of its pods "never completes" (Configure a PodDisruptionBudget). On a cluster whose only schedulable node is the one being drained, Ichor's own `minAvailable: 1` budgets do that: the first replica is evicted, its replacement stays Pending on the cordoned node, and the second eviction is refused for the whole bound. Every reboot-requiring operation on a one-node cluster then paused after 10 minutes.
+
+`drainForReboot` now looks first, before it cordons, for a node other than the one named that is Ready and not cordoned. If there is none it returns done without cordoning or evicting anything, logs it and writes a `DrainSkipped` Event on the Node ("no other schedulable node; the drain was skipped and the pods restart with the node"); the reboot restarts the pods anyway. A drain already begun (the `drain-started-at` annotation is set) is not re-judged. Taints are not weighed: a Ready, schedulable node counts even if some pods cannot run there, so the check errs toward draining as before. A failed node list counts as "there is one". The budgets are unchanged.
+
+When the bound passes, the error names the pods still on the node (not DaemonSet or mirror pods; at most five, then a count) and the budgets that allow no disruption (the same test the shutdown stall message uses, `zeroDisruptionPDBs`).

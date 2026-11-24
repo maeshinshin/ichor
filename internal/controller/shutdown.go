@@ -418,6 +418,11 @@ func (r *TalosOperationReconciler) stalledPDBs(ctx context.Context) []string {
 		pdbs = list.Items
 	}
 
+	return zeroDisruptionPDBs(pdbs)
+}
+
+// zeroDisruptionPDBs names, sorted, the budgets in pdbs that allow no disruption right now.
+func zeroDisruptionPDBs(pdbs []policyv1.PodDisruptionBudget) []string {
 	var names []string
 
 	for _, p := range pdbs {

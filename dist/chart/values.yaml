@@ -13,9 +13,9 @@ manager:
   ##
   enabled: true
 
-  ## Two replicas by default (design 2.4). Single-node clusters should set
-  ## this to 1 and turn off manager.podDisruptionBudget.enabled below; the
-  ## automatic switch is an installer feature, not phase 1.
+  ## Two replicas by default (design 2.4). On a single-node cluster the budget
+  ## is harmless: a drain with no other schedulable node is skipped (ADR 0080),
+  ## so replicas may stay at 2.
   ##
   replicas: 2
 

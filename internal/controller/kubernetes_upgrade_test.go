@@ -520,7 +520,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
-		kube := newDrainFake(func() int { return 0 }, bareNode(name))
+		kube := newDrainFake(func() int { return 0 }, bareNode(name), drainTestNode("spare", false))
 
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
@@ -1183,7 +1183,7 @@ var _ = Describe("a staged Kubernetes upgrade through TalosOperationReconciler",
 		f := newKubernetesFleet("own", 3, 1)
 		cp1, cp2, cp3, w := f.machines[0], f.machines[1], f.machines[2], f.machines[3]
 		f.ownNode = cp1.Spec.Hostname
-		f.kube = newDrainFake(func() int { return 0 }, bareNode(cp1.Spec.Hostname), bareNode(cp2.Spec.Hostname), bareNode(cp3.Spec.Hostname), bareNode(w.Spec.Hostname))
+		f.kube = newDrainFake(func() int { return 0 }, bareNode(cp1.Spec.Hostname), bareNode(cp2.Spec.Hostname), bareNode(cp3.Spec.Hostname), bareNode(w.Spec.Hostname), drainTestNode("spare", false))
 		kube := f.kube
 
 		var kubelets []string

@@ -24,9 +24,8 @@ import ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 // no volume document. Rook takes its devices from its own CephCluster settings rather than from a
 // node label or annotation Ichor sets, and Ichor writes nothing Rook could contradict.
 //
-// shortcut: writes no disk config, so Ichor does not prepare the disk Rook is given, and a
-// formatting document from elsewhere on the node is not refused; drop this once the Talos-side
-// decision says whether to write a RawVolumeConfig (an unformatted partition, Talos 1.14).
+// The preset renders no volume config, by ADR 0167. The disks given to Ceph, and installing Rook
+// itself, are the user's responsibility; the guide is docs/guides/rook-ceph.md.
 type rookV1 struct{}
 
 // RequiredExtensions implements Preset. Rook's prerequisites name no Talos system extension. They

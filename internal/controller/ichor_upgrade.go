@@ -442,7 +442,7 @@ func installerJobSettled(ctx context.Context, uncached client.Reader, ns string,
 // installerJobFailure is the error for a failed installer Job: the installer's own error, its termination
 // message, when the Job's pod has one; the pod log is the pointer when it has none.
 func installerJobFailure(ctx context.Context, uncached client.Reader, ns string, job *batchv1.Job, failed *batchv1.JobCondition) error {
-	msg, err := jobTerminationMessage(ctx, uncached, ns, job.Name)
+	msg, err := JobTerminationMessage(ctx, uncached, ns, job.Name)
 	if err != nil {
 		return fmt.Errorf("installer Job %s failed (%s: %s), and reading its pod for the installer's message failed: %w",
 			job.Name, failed.Reason, failed.Message, err)
@@ -530,4 +530,29 @@ func newInstallerJob(
 			Image: inst.Spec.InstallerRepository + "@" + digest,
 			Args:  args,
 		})
+}
+
+// installerCheckDeadline bounds the check Job; it only reads.
+const installerCheckDeadline = 3 * 60
+
+// PinInstallerImage is the digest of the installer image inst names (spec.installerRepository at spec.version),
+// resolved and its signature checked the way an upgrade does it. `ichor upgrade ichor` calls it on a copy of the
+// installation that names the target, to run the check before anything is written.
+func PinInstallerImage(ctx context.Context, images InstallerImages, inst *ichorv1alpha1.IchorInstallation) (string, error) {
+	img, err := pinInstallerImage(ctx, images, inst)
+
+	return img.Digest, err
+}
+
+// NewInstallerCheckJob is the Job `ichor upgrade ichor` runs before it writes: the target version's installer image,
+// as newInstallerJob runs it, under the same ServiceAccount, with `installer check` as its only command.
+func NewInstallerCheckJob(ns, name string, inst *ichorv1alpha1.IchorInstallation, digest, cni string, noPolicies bool) *batchv1.Job {
+	args := []string{"installer", "check", "--namespace=" + ns, "--cni-detected=" + cni}
+	if noPolicies {
+		args = append(args, "--no-cilium-policies")
+	}
+
+	return newJob(ns, name, "ichor-installer-check", IchorInstallerServiceAccount, installerCheckDeadline,
+		nil, map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version, IchorInstallerDigestAnnotation: digest},
+		corev1.Container{Name: "installer", Image: inst.Spec.InstallerRepository + "@" + digest, Args: args})
 }

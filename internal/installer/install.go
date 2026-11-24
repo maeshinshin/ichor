@@ -87,12 +87,27 @@ type Options struct {
 	Log io.Writer
 }
 
-// Run applies opts.Manifest. On any failure after the snapshot is taken it restores the
-// snapshot and returns an error that says so; the error is never nil unless the new
-// manifest is applied and every post-check passed.
-func Run(ctx context.Context, c client.Client, opts Options) error {
+// prepared is what the reads before the first write settle.
+type prepared struct {
+	p          plan
+	uiSettings UISettings
+	policies   []*unstructured.Unstructured
+}
+
+// Check is every refusal Run makes before its snapshot, through Run's own function and with no write: it returns the
+// error Run returns for the same cluster and manifest, or nil. `ichor installer check` runs it, so the CLI can refuse
+// before it changes anything.
+func Check(ctx context.Context, c client.Client, opts Options) error {
+	_, _, err := prepare(ctx, c, opts)
+
+	return err
+}
+
+// prepare is the part of Run that only reads: decoding the manifest, carrying init's customizations over, and every
+// refusal that comes before the snapshot. Run and Check both call it, so they cannot disagree.
+func prepare(ctx context.Context, c client.Client, opts Options) (Options, prepared, error) {
 	if bytes.Contains(opts.Manifest, []byte(installmanifest.PlaceholderSentinel)) {
-		return errors.New("this installer binary has no install manifest embedded (built without -tags installembed)")
+		return opts, prepared{}, errors.New("this installer binary has no install manifest embedded (built without -tags installembed)")
 	}
 
 	if opts.Log == nil {
@@ -105,14 +120,14 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 
 	objs, err := Decode(opts.Manifest)
 	if err != nil {
-		return fmt.Errorf("decoding the embedded manifest: %w", err)
+		return opts, prepared{}, fmt.Errorf("decoding the embedded manifest: %w", err)
 	}
 
 	// What init customized is re-derived from the live Deployments and applied to the new
 	// manifest's objects, so an upgrade keeps the cluster as init left it.
 	objs, uiSettings, err := customizeFromLive(ctx, c, objs)
 	if err != nil {
-		return fmt.Errorf("carrying init's customizations over to the new manifest: %w", err)
+		return opts, prepared{}, fmt.Errorf("carrying init's customizations over to the new manifest: %w", err)
 	}
 
 	markInstalled(objs)
@@ -121,20 +136,34 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 
 	// Refusals come before the snapshot and before any write: nothing to roll back.
 	if err := checkCRDs(ctx, c, p.crds); err != nil {
-		return err
+		return opts, prepared{}, err
 	}
 
 	if err := CheckStoredRetiredFields(ctx, c); err != nil {
-		return err
+		return opts, prepared{}, err
 	}
 
 	policies, err := networkPolicies(ctx, c, opts)
 	if err != nil {
-		return err
+		return opts, prepared{}, err
 	}
 
 	CustomizePolicies(policies, uiSettings)
 	markInstalled(policies)
+
+	return opts, prepared{p: p, uiSettings: uiSettings, policies: policies}, nil
+}
+
+// Run applies opts.Manifest. On any failure after the snapshot is taken it restores the
+// snapshot and returns an error that says so; the error is never nil unless the new
+// manifest is applied and every post-check passed.
+func Run(ctx context.Context, c client.Client, opts Options) error {
+	opts, pre, err := prepare(ctx, c, opts)
+	if err != nil {
+		return err
+	}
+
+	p, uiSettings, policies := pre.p, pre.uiSettings, pre.policies
 
 	// Stage 0: the installer's cluster-scoped RBAC (ClusterRoles, ClusterRoleBindings). A run
 	// started by an older release holds that release's rights, which cannot reach a namespace

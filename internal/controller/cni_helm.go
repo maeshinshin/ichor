@@ -300,7 +300,7 @@ func AdvanceCNIHelmJob(
 	}
 
 	if failed != nil {
-		detail, err := jobTerminationMessage(ctx, pods, cniJobNamespace, name)
+		detail, err := JobTerminationMessage(ctx, pods, cniJobNamespace, name)
 		if err != nil {
 			return false, err
 		}

@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
@@ -156,6 +157,16 @@ and in which order, and asks for confirmation unless --yes.`,
 			// the server's plan (an unfinished operation, an even control-plane count, ...).
 			preflight := func() error {
 				if err := preflightIchorUpgrade(cmd.Context(), k, target); err != nil {
+					return err
+				}
+
+				// The installer's own refusals (a CRD that would lose a field, ...), in the target's image, read-only.
+				images, err := imagesig.New()
+				if err != nil {
+					return fmt.Errorf("upgrade: %w", err)
+				}
+
+				if err := runInstallerCheck(cmd.Context(), k, images, cmd.ErrOrStderr(), target, upgradeInstallerDigest, upgradeSkipSignature); err != nil {
 					return err
 				}
 

@@ -85,6 +85,36 @@ var installerRunCmd = &cobra.Command{
 	},
 }
 
+// installerCheckCmd is the reads of `installer run` that come before its first write, and nothing else: the CLI starts
+// it as a short Job before it changes anything, so an upgrade the installer would refuse is refused first.
+var installerCheckCmd = &cobra.Command{
+	Use:   "check",
+	Short: "Run the refusals of `installer run` that precede its first write, and write nothing",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		c, err := newKubeClient(kubeconfigPath)
+		if err != nil {
+			return err
+		}
+
+		err = installer.Check(cmd.Context(), c, installer.Options{
+			Namespace:          installerRunOpts.Namespace,
+			Manifest:           installmanifest.Manifest,
+			NetworkPolicies:    installmanifest.NetworkPolicies,
+			CNIDetected:        installerRunOpts.CNIDetected,
+			SkipCiliumPolicies: installerRunOpts.NoPolicies,
+			Log:                cmd.ErrOrStderr(),
+		})
+		if err != nil {
+			if werr := writeTerminationMessage(installerTerminationLog, err); werr != nil {
+				_, _ = io.WriteString(cmd.ErrOrStderr(), "installer: could not write the termination message: "+werr.Error()+"\n")
+			}
+		}
+
+		return err
+	},
+}
+
 // writeTerminationMessage puts err's text at the start of path. It opens an existing file only
 // (no O_CREATE): the kubelet mounts the file, and nothing else should ever be created here.
 func writeTerminationMessage(path string, err error) error {
@@ -114,7 +144,7 @@ func truncateAtRune(s string, limit int) string {
 
 func init() {
 	rootCmd.AddCommand(installerCmd)
-	installerCmd.AddCommand(installerRunCmd)
+	installerCmd.AddCommand(installerRunCmd, installerCheckCmd)
 
 	f := installerRunCmd.Flags()
 	f.StringVar(&installerRunOpts.Namespace, "namespace", ichorControllerNamespace, "namespace the snapshot is saved in")
@@ -122,4 +152,9 @@ func init() {
 	f.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected; Ichor's CiliumNetworkPolicies are applied only for cilium")
 	f.BoolVar(&installerRunOpts.NoPolicies, "no-cilium-policies", false, "skip Ichor's CiliumNetworkPolicies even on Cilium (operator opt-out)")
 	_ = installerRunCmd.MarkFlagRequired("run-id")
+
+	c := installerCheckCmd.Flags()
+	c.StringVar(&installerRunOpts.Namespace, "namespace", ichorControllerNamespace, "namespace Ichor is installed in")
+	c.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected")
+	c.BoolVar(&installerRunOpts.NoPolicies, "no-cilium-policies", false, "as for run")
 }

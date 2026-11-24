@@ -65,12 +65,12 @@ func jobOutcome(job *batchv1.Job) (done bool, failed *batchv1.JobCondition) {
 // one to this many bytes (Container.terminationMessagePath in the Kubernetes API reference).
 const jobMessageLimit = 4096
 
-// jobTerminationMessage is the termination message a Job's container wrote, as the kubelet copied it into
+// JobTerminationMessage is the termination message a Job's container wrote, as the kubelet copied it into
 // the pod's status: that of the container that finished last among the Job's pods and wrote one, "" when
 // none did. The Job's backoffLimit is 0, so there is one pod unless a pod was lost before it failed. A
 // message at jobMessageLimit may have been cut, and says so. pods must be uncached: the controller's
 // cache holds no pods (it has no watch on them).
-func jobTerminationMessage(ctx context.Context, pods client.Reader, ns, jobName string) (string, error) {
+func JobTerminationMessage(ctx context.Context, pods client.Reader, ns, jobName string) (string, error) {
 	var list corev1.PodList
 	if err := pods.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{jobNameLabel: jobName}); err != nil {
 		return "", fmt.Errorf("listing the pods of Job %s: %w", jobName, err)

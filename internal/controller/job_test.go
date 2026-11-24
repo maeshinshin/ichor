@@ -55,8 +55,8 @@ func TestJobTerminationMessageSelectsByThePrefixedJobNameLabel(t *testing.T) {
 		pod("unprefixed", map[string]string{"job-name": "j"}),
 	).Build()
 
-	got, err := jobTerminationMessage(context.Background(), c, "ns", "j")
+	got, err := JobTerminationMessage(context.Background(), c, "ns", "j")
 	if err != nil || got != "prefixed" {
-		t.Fatalf("jobTerminationMessage = %q, %v; want the pod with batch.kubernetes.io/job-name", got, err)
+		t.Fatalf("JobTerminationMessage = %q, %v; want the pod with batch.kubernetes.io/job-name", got, err)
 	}
 }

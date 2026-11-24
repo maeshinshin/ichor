@@ -962,6 +962,10 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
+- **The UI downloads an etcd snapshot of any size.** It used to read the snapshot into the page and
+  refuse one over 1 GiB. The browser now saves it to disk as it arrives from a form post, and ichor-ui
+  copies it from the node without holding it, so a multi-gigabyte etcd downloads. The server's 8 GiB cap
+  is removed too, and the 30 minute time limit becomes 5 minutes without data, so a slow link does not cut a large snapshot. The same checks, `download` permission and audit Event apply.
 - **A node log line shows the time it was logged, or no time.** Every line used to
   show the moment ichor-ui read it, so a past snapshot read as "now". A kernel log
   line now shows the time Talos stamps it with, and a service log line shows the

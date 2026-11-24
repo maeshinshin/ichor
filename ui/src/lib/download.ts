@@ -4,14 +4,15 @@
 // diagnostics.ts because it needs the DOM.
 import { diagnosticsClient, operationClient, userClient } from '@/lib/connect'
 import { downloadName } from '@/lib/users'
-import { collect, fileNameOf } from '@/lib/diagnostics'
+import { collect, etcdSnapshotForm, etcdSnapshotPath, fileNameOf } from '@/lib/diagnostics'
+import { storedToken } from '@/lib/oidc'
 import type { CapturePacketsRequest } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 
 type Ref = { namespace: string; name: string }
 
 export type DiagnosticsDownloadRequest =
   | { kind: 'support-bundle'; machine: Ref }
-  | { kind: 'etcd-snapshot'; machine: Ref }
+  | { kind: 'etcd-snapshot'; machine: Ref } // saved by saveEtcdSnapshot, not download
   | { kind: 'packet-capture'; capture: Pick<CapturePacketsRequest, 'interface' | 'bpfFilter' | 'durationSeconds'> & { machine: Ref } }
 
 // The new credentials of a CA rotation are saved the same way.
@@ -26,7 +27,7 @@ function open(req: DownloadRequest, signal: AbortSignal): AsyncIterable<{ filena
     case 'support-bundle':
       return diagnosticsClient.downloadSupportBundle({ target: { case: 'machine', value: req.machine } }, { signal })
     case 'etcd-snapshot':
-      return diagnosticsClient.downloadEtcdSnapshot({ machine: req.machine }, { signal })
+      throw new Error('an etcd snapshot is saved by saveEtcdSnapshot')
     case 'packet-capture':
       return diagnosticsClient.capturePackets(req.capture, { signal })
     case 'ca-credentials':
@@ -52,7 +53,7 @@ function saveFile(parts: BlobPart[], type: string, name: string): void {
 }
 
 // download runs the call to its end, saves the file and returns its name. Nothing is saved if the
-// stream breaks or is too large for the browser.
+// stream breaks.
 export async function download(req: DownloadRequest, signal: AbortSignal): Promise<string> {
   const got = await collect(open(req, signal))
   const name = fileNameOf(got, req.kind)
@@ -66,4 +67,39 @@ export async function downloadKubeconfig(): Promise<string> {
   const name = downloadName(res.filename, 'kubeconfig.yaml')
   saveFile([res.kubeconfig], 'application/yaml', name)
   return name
+}
+
+// saveEtcdSnapshot hands the snapshot to the browser as a form post to a hidden frame, so the browser writes
+// the response to disk as it arrives and neither the page nor ichor-ui holds the file, whatever its size.
+// The frame stays empty while a download runs; if the server refuses, it shows the reason, which is thrown.
+export async function saveEtcdSnapshot(machine: Ref): Promise<void> {
+  // A cheap call first: it refreshes an expired ID token, which a form post cannot do.
+  await userClient.whoAmI({})
+  const frame = document.createElement('iframe')
+  frame.name = `snapshot-${crypto.randomUUID()}`
+  frame.hidden = true
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = etcdSnapshotPath
+  form.target = frame.name
+  for (const [name, value] of Object.entries(etcdSnapshotForm(storedToken() ?? '', machine))) {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = name
+    input.value = value
+    form.append(input)
+  }
+  const refused = new Promise<string>((resolve) => {
+    // A download fires no load event; a refusal is a page, and its text is the reason.
+    frame.addEventListener('load', () => resolve(frame.contentDocument?.body?.innerText.trim() ?? ''))
+  })
+  document.body.append(frame, form)
+  form.submit()
+  const reason = await Promise.race([refused, new Promise<null>((r) => setTimeout(() => r(null), 15_000))])
+  form.remove()
+  // The frame stays: removing it would cancel a download still running.
+  if (reason) {
+    frame.remove()
+    throw new Error(reason)
+  }
 }

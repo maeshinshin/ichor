@@ -58,7 +58,7 @@ import {
   type DownloadKind,
   type Permissions,
 } from '@/lib/diagnostics'
-import { download, type DiagnosticsDownloadRequest } from '@/lib/download'
+import { download, saveEtcdSnapshot, type DiagnosticsDownloadRequest } from '@/lib/download'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { t } from '@/lib/i18n'
 
@@ -119,6 +119,10 @@ export function NodeActions({
     abort.current = controller
     const id = toast.loading(t('actions.working', { what: t(`actions.what.${req.kind}`) }), { duration: Infinity })
     try {
+      if (req.kind === 'etcd-snapshot') {
+        await saveEtcdSnapshot(req.machine)
+        return toast.success(t('actions.saving'), { id, duration: 8000 })
+      }
       const file = await download(req, controller.signal)
       toast.success(t('actions.done', { file }), { id, duration: 8000 })
     } catch (err) {

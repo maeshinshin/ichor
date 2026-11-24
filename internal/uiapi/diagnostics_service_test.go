@@ -57,7 +57,11 @@ type fakeDownloadClient struct {
 	entries  map[string][]byte
 	problems []string
 	snapshot []byte
-	openErr  error
+	// stream, when set, is the snapshot instead of snapshot (a generated one, never held in memory).
+	stream io.Reader
+	// streamFor, when set, makes the snapshot from the call's context, to model a stream that stalls until it is cancelled.
+	streamFor func(context.Context) io.Reader
+	openErr   error
 	// pcap, when set, makes the capture write the header and then these bytes.
 	pcap     []byte
 	pcapHold bool
@@ -79,9 +83,17 @@ func (f *fakeDownloadClient) CollectSupport(_ context.Context, add func(string, 
 	return f.problems, nil
 }
 
-func (f *fakeDownloadClient) EtcdSnapshot(context.Context) (io.ReadCloser, error) {
+func (f *fakeDownloadClient) EtcdSnapshot(ctx context.Context) (io.ReadCloser, error) {
 	if f.openErr != nil {
 		return nil, f.openErr
+	}
+
+	if f.streamFor != nil {
+		return io.NopCloser(f.streamFor(ctx)), nil
+	}
+
+	if f.stream != nil {
+		return io.NopCloser(f.stream), nil
 	}
 
 	return io.NopCloser(bytes.NewReader(f.snapshot)), nil
@@ -376,21 +388,38 @@ var _ = Describe("DiagnosticsService", func() {
 			Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
 		})
 
-		It("stops at the size cap and says the file is incomplete", func() {
-			old := etcdSnapshotCap
-			etcdSnapshotCap = 1000
+		It("does not cut a slow snapshot that keeps moving, and cuts a stalled one after the idle period", func() {
+			old := etcdSnapshotIdle
+			etcdSnapshotIdle = 150 * time.Millisecond
 
-			DeferCleanup(func() { etcdSnapshotCap = old })
+			DeferCleanup(func() { etcdSnapshotIdle = old })
 
-			c, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{snapshot: bytes.Repeat([]byte("x"), 5000)}, k8sClient, nil)
+			fake := &fakeDownloadClient{}
+			c, _, closeFn := newDiagnosticsServer(fake, k8sClient, nil)
 			defer closeFn()
 
-			s, err := c.DownloadEtcdSnapshot(ctx, asDiagUser(diagAdminUser, &pb.DownloadEtcdSnapshotRequest{Machine: objectRef(cp.Namespace, cp.Name)}))
+			req := func() *connect.Request[pb.DownloadEtcdSnapshotRequest] {
+				return asDiagUser(diagAdminUser, &pb.DownloadEtcdSnapshotRequest{Machine: objectRef(cp.Namespace, cp.Name)})
+			}
+
+			fake.streamFor = func(c context.Context) io.Reader {
+				return &paced{left: 30 << 10, chunk: 1 << 10, gap: 20 * time.Millisecond, ctx: c}
+			}
+			s, err := c.DownloadEtcdSnapshot(ctx, req())
 			Expect(err).NotTo(HaveOccurred())
 
 			_, data, err := collect(s)
-			Expect(connect.CodeOf(err)).To(Equal(connect.CodeResourceExhausted))
-			Expect(len(data)).To(BeNumerically("<=", 1000))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(data).To(HaveLen(30 << 10))
+
+			fake.streamFor = func(c context.Context) io.Reader {
+				return &paced{left: 1 << 10, chunk: 1 << 10, ctx: c, stallAfter: true}
+			}
+			s, err = c.DownloadEtcdSnapshot(ctx, req())
+			Expect(err).NotTo(HaveOccurred())
+
+			_, _, err = collect(s)
+			Expect(connect.CodeOf(err)).To(Equal(connect.CodeDeadlineExceeded))
 		})
 
 		It("bounds the text of a Talos error", func() {

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,10 +59,8 @@ const (
 	MaxCaptureDuration     = 5 * time.Minute
 	MaxCaptureBytes        = 100 << 20
 	MaxSupportBundleBytes  = 256 << 20
-	MaxEtcdSnapshotBytes   = 8 << 30
 
 	supportBundleTimeout   = 10 * time.Minute
-	etcdSnapshotTimeout    = 30 * time.Minute
 	maxBPFInstructions     = 4096
 	downloadChunkSize      = 64 << 10
 	maxConcurrentDownloads = 2
@@ -70,12 +69,17 @@ const (
 	maxLogMachines          = 32
 	maxConcurrentLogStreams = 64
 
-	pcapContentType = "application/vnd.tcpdump.pcap"
+	pcapContentType         = "application/vnd.tcpdump.pcap"
+	etcdSnapshotContentType = "application/octet-stream"
 )
 
 // The caps as the handlers read them, variables so a test can lower them.
 var (
-	etcdSnapshotCap  int64 = MaxEtcdSnapshotBytes
+	// etcdSnapshotIdle ends a snapshot when no byte has moved for this long, however large the file is.
+	// There is no overall ceiling: the sign-in's end (AuthInterceptor, EtcdSnapshotHandler) and the drain
+	// already bound a download, and the idle period bounds a stuck one.
+	etcdSnapshotIdle = 5 * time.Minute
+
 	supportBundleCap int64 = MaxSupportBundleBytes
 )
 
@@ -443,56 +447,108 @@ func (w *chunkWriter) finish() error {
 
 func stamp(t time.Time) string { return t.UTC().Format("20060102T150405Z") }
 
-// DownloadEtcdSnapshot streams an etcd snapshot from one control plane node.
-func (s *Server) DownloadEtcdSnapshot(
-	ctx context.Context, req *connect.Request[pb.DownloadEtcdSnapshotRequest], stream *connect.ServerStream[pb.DownloadEtcdSnapshotResponse],
-) error {
-	m, cluster, err := s.getMachineAndCluster(ctx, req.Msg.GetMachine())
+// openEtcdSnapshot checks, audits and opens the snapshot stream of one control plane node. done
+// releases the download slot and the Talos connection and must always be called; the returned context
+// ends with the drain and the timeout.
+func (s *Server) openEtcdSnapshot(ctx context.Context, ref *pb.ObjectRef) (_ context.Context, rc io.ReadCloser, filename string, done func(), _ error) {
+	m, cluster, err := s.getMachineAndCluster(ctx, ref)
 	if err != nil {
-		return err
+		return ctx, nil, "", nil, err
 	}
 
 	if m.Spec.Role != opRoleControlPlane {
-		return invalid("node %q is not a control plane node; an etcd snapshot comes from a control plane node", m.Name)
+		return ctx, nil, "", nil, invalid("node %q is not a control plane node; an etcd snapshot comes from a control plane node", m.Name)
+	}
+
+	// Authorised before a slot is taken, so a caller who may not download cannot hold one.
+	if err := s.authorizeDownload(ctx, m, ScopeEtcdSnapshot); err != nil {
+		return ctx, nil, "", nil, err
 	}
 
 	release, err := s.acquireDownloadSlot()
 	if err != nil {
-		return err
+		return ctx, nil, "", nil, err
 	}
-
-	defer release()
 
 	ctx, cancel := s.withDrain(ctx)
-	defer cancel()
-
-	ctx, cancelT := context.WithTimeout(ctx, etcdSnapshotTimeout)
-	defer cancelT()
+	ctx, cancelT := context.WithCancel(ctx)
+	var idle *time.Timer
 
 	tc, closeFn, err := s.startDownload(ctx, m, cluster, ScopeEtcdSnapshot, "")
+	if err == nil {
+		rc, err = tc.EtcdSnapshot(ctx)
+		if err != nil {
+			closeFn()
+
+			err = talosCallError("etcd snapshot", err)
+		}
+	}
+
+	if rc != nil {
+		// Started only now: the certificate and the connection take their own time.
+		idle = time.AfterFunc(etcdSnapshotIdle, cancelT)
+		rc = &idleReader{ReadCloser: rc, timer: idle, idle: etcdSnapshotIdle}
+	}
+
+	done = func() {
+		if rc != nil {
+			idle.Stop()
+			_ = rc.Close()
+			closeFn()
+		}
+
+		cancelT()
+		cancel()
+		release()
+	}
+
+	if err != nil {
+		done()
+
+		return ctx, nil, "", nil, err
+	}
+
+	return ctx, rc, fmt.Sprintf("etcd-%s-%s.snapshot.db", m.Name, stamp(s.now())), done, nil
+}
+
+// idleReader restarts a timer on every read that moves bytes, so a download is cut only when it stalls.
+type idleReader struct {
+	io.ReadCloser
+
+	timer *time.Timer
+	idle  time.Duration
+}
+
+func (r *idleReader) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if n > 0 {
+		r.timer.Reset(r.idle)
+	}
+
+	return n, err
+}
+
+// DownloadEtcdSnapshot streams an etcd snapshot from one control plane node, whatever its size
+// (the CLI uses this; the UI downloads through EtcdSnapshotHandler).
+func (s *Server) DownloadEtcdSnapshot(
+	ctx context.Context, req *connect.Request[pb.DownloadEtcdSnapshotRequest], stream *connect.ServerStream[pb.DownloadEtcdSnapshotResponse],
+) error {
+	ctx, rc, filename, done, err := s.openEtcdSnapshot(ctx, req.Msg.GetMachine())
 	if err != nil {
 		return err
 	}
 
-	defer closeFn()
-
-	rc, err := tc.EtcdSnapshot(ctx)
-	if err != nil {
-		return talosCallError("etcd snapshot", err)
-	}
-
-	defer func() { _ = rc.Close() }()
+	defer done()
 
 	w := &chunkWriter{
 		send: func(f, c string, d []byte) error {
 			return stream.Send(&pb.DownloadEtcdSnapshotResponse{Filename: f, ContentType: c, Data: d})
 		},
-		max: etcdSnapshotCap, contentType: "application/octet-stream",
-		filename: fmt.Sprintf("etcd-%s-%s.snapshot.db", m.Name, stamp(s.now())),
+		max: math.MaxInt64, contentType: etcdSnapshotContentType, filename: filename,
 	}
 
 	if _, err := io.Copy(w, rc); err != nil {
-		return downloadCopyError("etcd snapshot", ctx, err, etcdSnapshotCap)
+		return downloadCopyError("etcd snapshot", ctx, err, 0)
 	}
 
 	return w.finish()
@@ -773,7 +829,7 @@ func downloadCopyError(what string, ctx context.Context, err error, maxBytes int
 			fmt.Errorf("%s stopped at the %d byte limit; the file is incomplete", what, maxBytes))
 	case ctx.Err() != nil:
 		return connect.NewError(connect.CodeDeadlineExceeded,
-			fmt.Errorf("%s did not finish in time or the backend is shutting down; the file is incomplete", what))
+			fmt.Errorf("%s did not finish: it timed out or stalled, the sign-in ended or the backend is shutting down; the file is incomplete", what))
 	default:
 		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("%s: %s", what, truncateText(err.Error(), 300)))
 	}

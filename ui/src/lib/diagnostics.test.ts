@@ -5,7 +5,7 @@ import {
   captureInterfaces,
   checkCapture,
   collect,
-  DownloadTooLarge,
+  etcdSnapshotForm,
   fileNameOf,
   filterProblem,
   parseDuration,
@@ -82,8 +82,8 @@ test('collect keeps the order, the file name and the type from the first chunk',
   assert.equal(new TextDecoder().decode(await new Blob(got.parts).arrayBuffer()), 'abcd')
 })
 
-test('collect refuses a stream past the limit', async () => {
-  await assert.rejects(collect(chunks({ filename: 'x', contentType: '', data: enc('12345') }), 4), DownloadTooLarge)
+test('the snapshot form carries the token and the machine in the body', () => {
+  assert.deepEqual(etcdSnapshotForm('tok', { namespace: 'ns', name: 'cp-1' }), { authorization: 'tok', namespace: 'ns', name: 'cp-1' })
 })
 
 test('collect surfaces a stream error instead of returning half a file', async () => {

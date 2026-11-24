@@ -13,9 +13,8 @@ export type Permissions = ActionPermissions & { supportBundle: boolean; etcdSnap
 // The server enforces these too; the form says so before the call.
 export const maxCaptureSeconds = 300
 export const defaultCaptureSeconds = 30
-// The browser keeps the whole file in memory until it is saved, so a very large download is refused
-// here rather than taking the tab down. The CLI has no such limit.
-export const maxBrowserBytes = 1024 * 1024 * 1024
+// An etcd snapshot has no size limit: the browser saves it from a form post as it arrives (see
+// etcdSnapshotForm). The other downloads are capped by the server far below what a tab can hold.
 
 // availableActions lists the downloads to show: only those the user may start, and an etcd snapshot
 // only on a control plane node.
@@ -82,23 +81,14 @@ export type Chunk = { filename: string; contentType: string; data: Uint8Array }
 
 export type Collected = { filename: string; contentType: string; parts: Uint8Array<ArrayBuffer>[]; size: number }
 
-export class DownloadTooLarge extends Error {
-  limit: number
-  constructor(limit: number) {
-    super(`The file is larger than ${Math.round(limit / (1024 * 1024))} MiB, which a browser cannot hold safely.`)
-    this.limit = limit
-  }
-}
-
-// collect reads a download stream to its end, keeping the parts in order. It stops with DownloadTooLarge
-// past maxBytes, and rethrows a stream error so a half file is never offered for saving.
-export async function collect(stream: AsyncIterable<Chunk>, maxBytes: number = maxBrowserBytes): Promise<Collected> {
+// collect reads a download stream to its end, keeping the parts in order, and rethrows a stream error so a
+// half file is never offered for saving.
+export async function collect(stream: AsyncIterable<Chunk>): Promise<Collected> {
   const out: Collected = { filename: '', contentType: 'application/octet-stream', parts: [], size: 0 }
   for await (const c of stream) {
     if (c.filename && !out.filename) out.filename = c.filename
     if (c.contentType && out.parts.length === 0) out.contentType = c.contentType
     out.size += c.data.length
-    if (out.size > maxBytes) throw new DownloadTooLarge(maxBytes)
     if (c.data.length > 0) out.parts.push(new Uint8Array(c.data))
   }
   return out
@@ -108,4 +98,11 @@ export async function collect(stream: AsyncIterable<Chunk>, maxBytes: number = m
 export function fileNameOf(c: Collected, kind: DownloadKind | 'ca-credentials' | 'reader-talosconfig'): string {
   if (c.filename) return c.filename
   return { 'support-bundle': 'support-bundle.zip', 'etcd-snapshot': 'etcd.snapshot.db', 'packet-capture': 'capture.pcap', 'ca-credentials': 'credentials.zip', 'reader-talosconfig': 'talosconfig-reader.yaml' }[kind]
+}
+
+// etcdSnapshotForm is the POST the browser makes to save a snapshot: the fields are in the body, never in
+// a URL, so the ID token reaches no log or history, and there is no cookie for another site to ride.
+export const etcdSnapshotPath = '/download/etcd-snapshot'
+export function etcdSnapshotForm(token: string, machine: { namespace: string; name: string }): Record<string, string> {
+  return { authorization: token, namespace: machine.namespace, name: machine.name }
 }

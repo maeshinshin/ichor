@@ -51,14 +51,14 @@ All three commands share these rules:
 - They need `ichor-ui`. `--local` uses your own kubeconfig's RBAC instead; a
   refusal says so.
 - At most two downloads run at once.
-- In the UI a warning dialog comes first. The browser holds the whole file in
-  memory and refuses one over 1 GiB; the CLI has no such limit.
+- In the UI a warning dialog comes first. An etcd snapshot of any size goes
+  straight from the node to your disk; the browser does not hold it.
 
 | Command | Gets | Verb on | Cap |
 |---|---|---|---|
 | `ichor support-bundle NODE` | A zip per node: kernel log, each service log, service list, process names, mounts, memory, containers, every Talos resource not marked sensitive | `talosmachines/support-bundle` | 256 MiB, 10 min |
 | `ichor pcap NODE` | A pcap of one interface | `talosmachines/packet-capture` | 5 min, 100 MiB |
-| `ichor snapshot etcd --node CP` | A plaintext etcd snapshot | `talosmachines/etcd-snapshot` | 8 GiB, 30 min |
+| `ichor snapshot etcd --node CP` | A plaintext etcd snapshot | `talosmachines/etcd-snapshot` | none, ends after 5 min with no data |
 
 ### Support bundle
 

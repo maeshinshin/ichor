@@ -182,3 +182,12 @@ func TestVersionHeaderIsNotSentToAnonymousCallers(t *testing.T) {
 		t.Errorf("refused RPC: X-Ichor-Version = %q, want none", got)
 	}
 }
+
+func TestCSPAllowsTheSnapshotDownloadFrame(t *testing.T) {
+	for _, ext := range []bool{false, true} {
+		got := contentSecurityPolicy(ext)
+		if !strings.Contains(got, "default-src 'none';") || !strings.Contains(got, "frame-src 'self'") || !strings.Contains(got, "form-action 'self'") {
+			t.Fatalf("csp = %q", got)
+		}
+	}
+}

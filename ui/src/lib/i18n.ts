@@ -880,6 +880,7 @@ export const en = {
   'actions.download': 'Download',
   'actions.working': 'Preparing {what}…',
   'actions.done': 'Saved {file}',
+  'actions.saving': 'Your browser is saving the snapshot. Follow it in its downloads.',
   'actions.failed': 'The download failed',
   'actions.what.support-bundle': 'the support bundle',
   'actions.what.etcd-snapshot': 'the etcd snapshot',

@@ -255,6 +255,10 @@ func main() {
 
 	mux.Handle("/metrics", metricsHandler)
 
+	if authn != nil {
+		mux.Handle("POST "+uiapi.EtcdSnapshotPath, server.EtcdSnapshotHandler(authn.Authenticate, log.Default()))
+	}
+
 	mountRPC(mux, server, authn)
 
 	srv := httpsServer(*addr, securityHeaders(http.MaxBytesHandler(mux, bodyBackstop), contentSecurityPolicy(*oidcIssuer != "")), servingCertificate(ctx, *tlsCert, *tlsKey, *tlsDir))

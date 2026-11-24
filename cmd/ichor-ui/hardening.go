@@ -75,7 +75,9 @@ func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
 // the sonner shim); inline CSS cannot run script, so the risk is accepted
 // rather than editing stock components. With an external OIDC provider the SPA itself
 // fetches the provider's discovery document and token endpoint, whose origins are not
-// known here, so connect-src widens to any https origin; scripts stay 'self' only.
+// known here, so connect-src widens to any https origin; scripts stay 'self' only. frame-src 'self' is
+// for the hidden frame an etcd snapshot download posts its form to: without it frame-src falls back to
+// child-src and then default-src 'none' (MDN, Content-Security-Policy: frame-src), and the navigation is blocked.
 func contentSecurityPolicy(externalOIDC bool) string {
 	connectSrc := "'self'"
 	if externalOIDC {
@@ -83,7 +85,7 @@ func contentSecurityPolicy(externalOIDC bool) string {
 	}
 
 	return "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src " + connectSrc + "; " +
-		"img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		"img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'self'"
 }
 
 // securityHeaders sets the browser-facing protections on every response of the

@@ -116,7 +116,7 @@ func TestUpgradeRefusesALiveUIWithNoSignIn(t *testing.T) {
 				objs = append(objs, u)
 			}
 
-			_, _, err := customizeFromLive(context.Background(), c, objs)
+			_, _, err := customizeFromLive(context.Background(), c, objs, false)
 			if (err != nil) != tc.refused {
 				t.Fatalf("customizeFromLive error = %v, want refused=%v", err, tc.refused)
 			}

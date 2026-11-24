@@ -74,6 +74,10 @@ type Options struct {
 	// networkPolicy.cilium.enabled=false): the policies are not applied even on Cilium.
 	SkipCiliumPolicies bool
 
+	// SignInPending is for Check only: the caller turns sign-in on before it starts the upgrade, so an ichor-ui with no
+	// sign-in is not a refusal. Run ignores it: by the time Run starts, sign-in is on.
+	SignInPending bool
+
 	// Ready overrides the post-check, for tests (envtest runs no Deployment controller).
 	Ready ReadyFunc
 
@@ -125,7 +129,7 @@ func prepare(ctx context.Context, c client.Client, opts Options) (Options, prepa
 
 	// What init customized is re-derived from the live Deployments and applied to the new
 	// manifest's objects, so an upgrade keeps the cluster as init left it.
-	objs, uiSettings, err := customizeFromLive(ctx, c, objs)
+	objs, uiSettings, err := customizeFromLive(ctx, c, objs, opts.SignInPending)
 	if err != nil {
 		return opts, prepared{}, fmt.Errorf("carrying init's customizations over to the new manifest: %w", err)
 	}
@@ -160,6 +164,8 @@ func prepare(ctx context.Context, c client.Client, opts Options) (Options, prepa
 // snapshot and returns an error that says so; the error is never nil unless the new
 // manifest is applied and every post-check passed.
 func Run(ctx context.Context, c client.Client, opts Options) error {
+	opts.SignInPending = false // only Check takes it
+
 	opts, pre, err := prepare(ctx, c, opts)
 	if err != nil {
 		return err

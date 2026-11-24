@@ -537,7 +537,7 @@ var errNoSignInToUpgrade = errors.New("this ichor-ui has no sign-in (no Ichor us
 // customizeFromLive reads the live ichor-ui and controller Deployments the manifest names and
 // customizes the manifest's objects with the settings they carry. A Deployment that does not
 // exist yet (a first install by the installer) reads as a plain install.
-func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructured.Unstructured) ([]*unstructured.Unstructured, UISettings, error) {
+func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructured.Unstructured, signInPending bool) ([]*unstructured.Unstructured, UISettings, error) {
 	live := func(o *unstructured.Unstructured) (*appsv1.Deployment, error) {
 		d := &appsv1.Deployment{}
 
@@ -588,7 +588,8 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	// ichor-ui of this release does not start without a sign-in, so rolling it out over one that has none
 	// would take the UI down. The CLI sets sign-in up first (`ichor upgrade ichor`); an upgrade started any other
 	// way (a hand-written TalosOperation, the controller's own patch upgrades) stops here, with the instruction.
-	if uiDep != nil && !s.SignedIn {
+	// signInPending is the check run by a command that turns sign-in on itself before it starts the upgrade.
+	if uiDep != nil && !s.SignedIn && !signInPending {
 		return nil, UISettings{}, errNoSignInToUpgrade
 	}
 

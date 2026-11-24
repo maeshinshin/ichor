@@ -60,7 +60,7 @@ func factsFor(t *testing.T, objs ...client.Object) *k8sFacts {
 
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build()
 
-	f, err := gatherK8sFacts(context.Background(), c)
+	f, err := gatherK8sFacts(context.Background(), c, ichorControllerNamespace)
 	if err != nil {
 		t.Fatalf("gatherK8sFacts: %v", err)
 	}

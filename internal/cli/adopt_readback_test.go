@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -55,7 +56,7 @@ func TestIchorCiliumReadBack_SpecReproducesTheDeployedValues(t *testing.T) {
 
 				target := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(rec).Build()
 
-				rb, err := ichorCiliumReadBack(context.Background(), target)
+				rb, err := ichorCiliumReadBack(context.Background(), target, ichorControllerNamespace)
 				if err != nil || rb == nil {
 					t.Fatalf("read back: %v, %v", rb, err)
 				}
@@ -157,7 +158,7 @@ func TestReadBackIchorCilium_TunnelFlagOnARerun(t *testing.T) {
 func TestIchorCiliumReadBack_NoRecord(t *testing.T) {
 	target := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 
-	if rb, err := ichorCiliumReadBack(context.Background(), target); rb != nil || err != nil {
+	if rb, err := ichorCiliumReadBack(context.Background(), target, ichorControllerNamespace); rb != nil || err != nil {
 		t.Fatalf("got %v, %v; want nil, nil", rb, err)
 	}
 }
@@ -176,4 +177,50 @@ func roundTrip(t *testing.T, v map[string]any) map[string]any {
 	}
 
 	return out
+}
+
+// A controller in namespace "tenant" writes Ichor's Cilium release record there (the CNI Job's
+// --storage-namespace is the controller's namespace); adopt must recognise it as Ichor's own and read
+// it back, not treat it as a foreign Helm release.
+func TestAdopt_IchorCiliumRecordInControllerNamespace(t *testing.T) {
+	dep := controllerDeployment(true)
+	dep.Namespace = "tenant"
+
+	deployed, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, ciliumTunnelVxlan, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := json.Marshal(&release.Release{Name: string(detectedCilium), Version: 1, Config: deployed})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := helmRecord("tenant")
+	rec.Data = map[string][]byte{helmReleaseKey: []byte(base64.StdEncoding.EncodeToString(raw))}
+
+	scheme := newTestScheme(t)
+	deps := adoptDeps{
+		K8s:    fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep).Build(),
+		Target: fake.NewClientBuilder().WithScheme(scheme).WithObjects(testDS("cilium", ciliumImage), rec).Build(),
+		Stderr: io.Discard,
+	}
+
+	rep, _, err := inspectCNI(context.Background(), deps, CNIFacts{Kind: CNINone}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if rep.Provenance != provenanceIchor {
+		t.Fatalf("provenance = %q, want %q: the record in the controller's namespace is Ichor's own", rep.Provenance, provenanceIchor)
+	}
+
+	st := &adoptState{fresh: true, rep: rep}
+	if err := st.readBackIchorCilium(context.Background(), deps); err != nil {
+		t.Fatal(err)
+	}
+
+	if st.readBack == nil {
+		t.Fatal("no read-back: the record in the controller's namespace was not read")
+	}
 }

@@ -134,7 +134,7 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 		return fmt.Errorf("bootstrap cni: %w", err)
 	}
 
-	facts, err := gatherK8sFacts(ctx, d.Target)
+	facts, err := gatherK8sFacts(ctx, d.Target, ichorControllerNamespace) // shortcut: no management client here, so the default namespace; drop when bootstrap cni learns the controller's
 	if err != nil {
 		return fmt.Errorf("bootstrap cni: inspecting the CNI: %w", err)
 	}

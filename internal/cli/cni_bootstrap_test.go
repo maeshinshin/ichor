@@ -172,7 +172,7 @@ func TestAdopt_AfterBootstrapCiliumIsIchorsAndNotTakenOver(t *testing.T) {
 		node("cp", "10.244.0.0/24"), node("wk", nodeCIDR), testDS("cilium", ciliumImage), record, ciliumCM("false"),
 	).Build()
 
-	facts, err := gatherK8sFacts(ctx, f.deps.Target)
+	facts, err := gatherK8sFacts(ctx, f.deps.Target, ichorControllerNamespace)
 	if err != nil {
 		t.Fatal(err)
 	}

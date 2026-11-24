@@ -136,6 +136,17 @@ func controllerNamespace(ctx context.Context, c client.Reader) (string, error) {
 	return p.Namespace(), err
 }
 
+// ichorNS is the controller's namespace, where it stores Ichor's own Cilium release record in the
+// cluster being adopted (the namespace it passes the CNI Job as --storage-namespace). Adopt without a
+// management client (tests) falls back to the default.
+func (d adoptDeps) ichorNS(ctx context.Context) (string, error) {
+	if d.K8s == nil {
+		return ichorControllerNamespace, nil
+	}
+
+	return controllerNamespace(ctx, d.K8s)
+}
+
 // ichorPresent reads, never writes, whether Ichor is installed. A cluster that does not serve a
 // kind, or an operator who may not list Secrets or Deployments cluster-wide, simply has no
 // evidence from that source.

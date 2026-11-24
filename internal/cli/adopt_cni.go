@@ -181,7 +181,7 @@ func ciliumProvenance(f *k8sFacts) cniProvenance {
 	foreign := false
 
 	for _, ns := range f.CiliumReleaseNamespaces {
-		if ns == ichorControllerNamespace {
+		if ns == f.IchorNamespace {
 			return provenanceIchor
 		}
 

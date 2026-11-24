@@ -75,6 +75,8 @@ type k8sFacts struct {
 
 	// CiliumReleaseNamespaces are the namespaces holding Helm release records named "cilium".
 	CiliumReleaseNamespaces []string
+	// IchorNamespace is where the controller stores Ichor's own Cilium release record.
+	IchorNamespace string
 
 	// Nodes are the cluster's Nodes; CiliumNodeCRD is whether the CiliumNode CRD exists.
 	Nodes         []nodeFact
@@ -107,8 +109,9 @@ func networkNotReady(n *corev1.Node) bool {
 }
 
 // gatherK8sFacts reads the CNI and kube-proxy facts from r.
-func gatherK8sFacts(ctx context.Context, r client.Reader) (*k8sFacts, error) {
-	facts := &k8sFacts{}
+// ichorNS is the controller's namespace, where it stores its Cilium release record.
+func gatherK8sFacts(ctx context.Context, r client.Reader, ichorNS string) (*k8sFacts, error) {
+	facts := &k8sFacts{IchorNamespace: ichorNS}
 
 	var dsl appsv1.DaemonSetList
 	if err := r.List(ctx, &dsl); err != nil {
@@ -194,13 +197,13 @@ func ciliumHelmReleases(ctx context.Context, r client.Reader) ([]string, error) 
 	return out, nil
 }
 
-// ichorCiliumReadBack reads what Ichor's own Cilium release (record in ichor-system) was installed
+// ichorCiliumReadBack reads what Ichor's own Cilium release (record in the controller's namespace ichorNS) was installed
 // with, so adopt writes a spec whose effective values equal the deployed ones. nil when there is
 // no record.
-func ichorCiliumReadBack(ctx context.Context, r client.Reader) (*cilium.ReadBack, error) {
+func ichorCiliumReadBack(ctx context.Context, r client.Reader, ichorNS string) (*cilium.ReadBack, error) {
 	var secrets corev1.SecretList
 
-	if err := r.List(ctx, &secrets, client.InNamespace(ichorControllerNamespace),
+	if err := r.List(ctx, &secrets, client.InNamespace(ichorNS),
 		client.MatchingLabels{helmOwnerLabel: helmOwnerValue, helmNameLabel: string(detectedCilium)}); err != nil {
 		return nil, fmt.Errorf("listing Ichor's Cilium release records: %w", err)
 	}

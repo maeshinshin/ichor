@@ -809,7 +809,12 @@ func (st *adoptState) readBackIchorCilium(ctx context.Context, deps adoptDeps) e
 		return nil
 	}
 
-	rb, err := ichorCiliumReadBack(ctx, deps.Target)
+	ichorNS, err := deps.ichorNS(ctx)
+	if err != nil {
+		return fmt.Errorf("adopt: %w", err)
+	}
+
+	rb, err := ichorCiliumReadBack(ctx, deps.Target, ichorNS)
 	if err != nil {
 		return fmt.Errorf("adopt: reading Ichor's Cilium release: %w", err)
 	}
@@ -1214,8 +1219,10 @@ func (st *adoptState) takeoverPlan(ctx context.Context, deps adoptDeps) (takeove
 	if rep.Foreign != nil && st.rep.Provenance == provenanceHelm {
 		tp.deleteRecord = true
 
+		ns, _ := deps.ichorNS(ctx) // the preflight above read it; an error there returned already
+
 		deps.say(adoptWarn, "the Helm release record(s) of the existing Cilium will be copied to Secret ichor-cilium-prior-release in %s "+
-			"and then deleted (the record Secrets only; helm uninstall is never run)", ichorControllerNamespace)
+			"and then deleted (the record Secrets only; helm uninstall is never run)", ns)
 	}
 
 	if err := rep.Err(deps.AcceptCiliumChanges, deps.AcceptCiliumDiff); err != nil {
@@ -1244,8 +1251,13 @@ func (st *adoptState) preflight(ctx context.Context, deps adoptDeps, user map[st
 		return nil, fmt.Errorf("adopt: %w", err)
 	}
 
+	ichorNS, err := deps.ichorNS(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("adopt: %w", err)
+	}
+
 	rep, err := deps.Preflight(ctx, cilium.PreflightInput{
-		IchorNamespace: ichorControllerNamespace, Effective: effective, UserValues: deps.CiliumValues,
+		IchorNamespace: ichorNS, Effective: effective, UserValues: deps.CiliumValues,
 		KubeProxy: mode, Tunnel: st.cluster.Spec.CNI.Tunnel, KubePrism: st.kubePrismAnswers(deps),
 	})
 	if err != nil {
@@ -1623,7 +1635,12 @@ func confirm(r io.Reader, w io.Writer, prompt string) (bool, error) {
 // inspectCNI runs the read-only CNI inspection, prints the report, and returns the refusal of
 // When the cluster may not be adopted in the requested mode. Nothing is written.
 func inspectCNI(ctx context.Context, deps adoptDeps, talos CNIFacts, unmanaged bool) (*cniReport, *k8sFacts, error) {
-	facts, err := gatherK8sFacts(ctx, deps.Target)
+	ichorNS, err := deps.ichorNS(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("adopt: %w", err)
+	}
+
+	facts, err := gatherK8sFacts(ctx, deps.Target, ichorNS)
 	if err != nil {
 		return nil, nil, fmt.Errorf("adopt: inspecting the CNI: %w", err)
 	}

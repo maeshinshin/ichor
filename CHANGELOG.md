@@ -1,18 +1,24 @@
 # Changelog
 
-## v0.3.0 (unreleased)
+## v0.3.0 (2026-11-24)
 
 The command line is verb first, which breaks every script that calls it, and a
 `TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts, up from
 7. `ichor init` and `ichor adopt` now always turn sign-in on, and the open mode
-(ichor-ui without a sign-in) is removed everywhere, `ichor adopt` takes
-Talos v1.14 or later only, and an endpoint is `vip` or `node`: a load
+(ichor-ui without a sign-in) is removed everywhere, `ichor adopt` takes a
+cluster only when every node runs Talos v1.14 or later (`--add-machine` into a
+cluster adopted earlier still takes v1.12), and an endpoint is `vip` or `node`: a load
 balancer's name or address goes in `node`. The Talos, Kubernetes and Cilium
-versions a first install gets are the same as in v0.2.4. The CRDs gain the 58
-new document fields and one wipe mode, and lose two credential fields and the
-`dns` endpoint type; `loadBalancer` stays in the endpoint enum only so that a
-stored object still reads, and is refused (see Cluster and Typed
-configuration). With `--endpoint-type vip`, each control plane now holds the
+versions a first install gets are the same as in v0.2.4. The CRDs gain 58
+new Talos document kinds in `spec.config` and one wipe mode. They keep
+`spec.documents` on `TalosConfigPatch` as a deprecated, read-only field that
+upgrades migrate to `spec.config`, and lose `spec.cni.custom.documents` on
+`TalosCluster` (refused since v0.1.0), the credential fields
+`machine.registries.config.<host>.tls.clientIdentity` and
+`cluster.extraManifestHeaders`, and the `dns` endpoint type. `loadBalancer`
+stays in the endpoint enum only so that a stored object still reads; a new
+object with it, or an update that changes the type or the address, is refused
+(see Cluster and Typed configuration). With `--endpoint-type vip`, each control plane now holds the
 endpoint address on its primary link, and `ichor init` takes the first node's
 network for it.
 
@@ -47,22 +53,39 @@ command does. Each item is described where it is listed below.
   `TalosCluster` and run `ichor rollout config` (Users and login); users need a Talos
   v1.14 contract, and OIDC is the alternative without it. `ichor upgrade ichor` does not
   touch a Helm install. Your own CI that renders the chart needs the same addition.
-- **A `TalosConfigPatch` that sets `spec.documents` loses it.** The field is gone
-  from the CRD: `spec.config`, Ichor's own schema for a patch, is the only place
-  to write Talos configuration. The API server prunes `documents` from a stored
-  patch when this release's CRD is installed, so the nodes a patch reached lose
-  its settings at their next apply, and `kubectl apply` of a manifest that still
-  sets it is refused as an unknown field. Write each setting in `spec.config`
-  before you upgrade, once each, in the place its meaning gives it; the Kubernetes
-  component settings in it need machines on Talos 1.14 or later. A patch you
-  wrote for a bond, bridge or other link is the exception to "once each": see
-  Typed configuration.
+- A `TalosConfigPatch` that sets `spec.documents` keeps working. The field is
+  deprecated and read-only: a create, or an update that adds or changes it, is
+  refused, and a stored value is never pruned. The controller converts it to the
+  documents `spec.config` produces, so no node changes. `ichor upgrade ichor` then
+  rewrites each patch to `spec.config` and clears `spec.documents` as its last step.
+  After `helm upgrade`, run `ichor migrate patches`. Settings Talos 1.14 moved out
+  of the `v1alpha1` document are converted for you: `certSANs` becomes
+  `cluster.apiServer.certExtraSANs`, `time.servers` becomes
+  `machine.time.ntp.servers`, `coreDNS.disabled` becomes
+  `cluster.coreDNS.enabled: false`, and the kernel modules, extra host entries, resolver settings, registry
+  mirrors, image cache and inline manifests move to their own entries. A patch that
+  set `certSANs`, `coreDNS.disabled`, `nameservers`, `searchDomains` or `hostname`
+  in `spec.documents` could not be rendered on a Talos 1.14 contract before, and the
+  machines kept their previous configuration; after the migration, all of these
+  except `hostname` apply, and a changed `certExtraSANs` takes effect on the next
+  kube-apiserver restart (`ichor rollout config`). `cluster.extraManifests` (a list
+  of URLs with no names) and `machine.network.hostname` have no place in
+  `spec.config` that renders: the patch is listed, gets the condition
+  `Migrated=False` naming the setting, and keeps rendering as stored. Write
+  `extraManifests` in `spec.config` as named entries and clear `spec.documents`;
+  Ichor sets the hostname of a machine itself. A migration that
+  moves settings into their own documents (for example time servers into
+  `TimeSyncConfig`) does not change any node by itself: the machines report
+  `RebootRequired` (or `APIServerRestartRequired`) until you run `ichor rollout
+  config`, which rolls the change out node by node.
 - **A client older than this release cannot write a patch through `PatchService`.**
-  `Patch.documents` is deprecated and never set; `Patch.config` is the patch's
-  `spec.config` as JSON. A create, update or preview that sets `documents`, or that
+  `Patch.documents` is deprecated and never set, not even for a patch that is not
+  migrated yet; `Patch.config` is the patch's `spec.config` as JSON, `{}` until the
+  patch is migrated. A create, update or preview that sets `documents`, or that
   leaves `config` out, is refused with a message that names `config`, so an older
   browser tab or CLI can no longer save over a patch and clear it: reload the page, or
-  update the CLI. An older client that only reads gets patches with no documents.
+  update the CLI. An older client that only reads gets patches with no documents,
+  and with `config` `{}` until they are migrated.
   A newer ichor-ui serves its own page, so only a tab left open across the upgrade
   is affected, and `ichor` is installed with the release it talks to.
 - **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
@@ -411,6 +434,10 @@ command does. Each item is described where it is listed below.
 
 ### Adopt
 
+- `ichor adopt` and `ichor bootstrap cni` read and write Ichor's own Cilium
+  release record in the controller's namespace instead of assuming
+  `ichor-system`, so an Ichor installed by Helm elsewhere no longer treats its
+  own Cilium as a foreign Helm release.
 - **`ichor adopt` turns Ichor's sign-in on by default.** After the plan is
   written and every hold is released, in the Ichor it installs, adopt creates the
   first admin (`--admin-user`, default `admin`), switches ichor-ui to sign-in at
@@ -577,8 +604,11 @@ command does. Each item is described where it is listed below.
   upgrade kubelets stage, CA rotation) is skipped when no other node is Ready and
   schedulable, because Ichor's own PodDisruptionBudgets would refuse the last
   replica for ever; a `DrainSkipped` Event on the Node says so, and the reboot
-  restarts the pods. A drain that does time out now names the pods still on the
-  node and the budgets allowing no disruption (ADR 0080).
+  restarts the pods. A drain that does time out now names up to five pods still
+  on the node (DaemonSet and mirror pods excluded) and up to five
+  PodDisruptionBudgets allowing no disruption. A drain with nothing left holding
+  it does not time out; one whose pods cannot be listed fails after twice its
+  bound (ADR 0080).
 - A graceful `reclaim node` from a healthy foreign cluster is no longer refused
   as "not reachable from the node". The controller opens its network policy to
   that cluster's endpoint and etcd peers, each only on its own port, for as long
@@ -1026,7 +1056,8 @@ command does. Each item is described where it is listed below.
   not checked here; the server still checks on save.
 - `PatchService` carries a patch's `spec.config` as JSON in `Patch.config`, and no
   longer converts to and from Talos documents. `Patch.documents` is deprecated and
-  never set (see the upgrade notes). `ichor get patches` lists the sections of a patch's
+  never set, and `config` is `{}` for a patch not migrated yet (see the upgrade
+  notes). `ichor get patches` lists the sections of a patch's
   config and `ichor describe patch` prints it.
 - The nodes tile badge counts the nodes that are not ready, and the node rows
   and the node page name a Ready condition's reason, as the list does.
@@ -1119,8 +1150,8 @@ command does. Each item is described where it is listed below.
   `machine.time.enabled` replaces `disabled`, and `cluster.coreDNS.enabled`
   replaces `disabled`. A kind that is a named thing is a map from its name. The
   controller converts it to Talos documents when it renders a machine.
-  It is the only place a patch carries Talos configuration: `spec.documents[]`
-  is removed (see Upgrade notes and ADR 0152). The schema is generated from the
+  It is where a patch carries Talos configuration; `spec.documents[]`
+  is deprecated and read-only (see Upgrade notes). The schema is generated from the
   Talos mirror types (`internal/tools/ichorgen`), so a field Talos adds appears in
   it when `make generate` runs. The links are the exception: the `v1alpha1`
   interfaces and the link documents are not joined yet (see Typed configuration).
@@ -1211,16 +1242,15 @@ command does. Each item is described where it is listed below.
   at the next apply. `kubectl apply` of a manifest that still sets one is
   refused. Nothing replaces them yet; set them on the node outside Ichor until
   a reference to a Secret exists.
-- **Breaking for a manifest that sets it:** `TalosConfigPatch` loses
-  `spec.documents`: the union of document kinds as a list. Ichor's own schema,
-  `spec.config`, writes every setting once, so the union is a second copy of
-  what the schema holds, and it took the chart's Helm release record to 950,492
-  of the 1,048,576 bytes allowed while both were there. It is retired as a third
-  exception to the append-only rule (ADR 0152), and the record with `spec.config`
-  alone is 580,420 bytes, 468,156 free. `kubectl apply` of a manifest that still
-  sets `documents` is refused as an unknown field; a client that does not ask for
-  strict validation has it pruned. `ichor patch apply` names `spec.config` in its
-  refusal.
+- **`TalosConfigPatch.spec.documents` is deprecated and read-only.** It is the
+  union of document kinds as a list, a second copy of what `spec.config`, Ichor's
+  own schema, holds, and it stays in the CRD so that the API server never prunes a
+  stored value. The webhook refuses a create, or an update that adds or changes it,
+  with "spec.documents is deprecated and cannot be set or changed: write the
+  settings in spec.config (a stored patch is converted by ichor migrate patches)";
+  an update that leaves it as stored, or clears it, is allowed. A stored value is
+  kept and migrated, as the Upgrade notes say (ADR 0152). `ichor patch apply`
+  names `spec.config` in its refusal.
 - **Breaking for a manifest that sets it:** `TalosCluster` loses
   `spec.cni.custom.documents`, a second copy of the whole `TalosConfigPatch`
   document union that sat under the deprecated, refused `custom` CNI and that
@@ -1231,6 +1261,11 @@ command does. Each item is described where it is listed below.
   refused with the same message. A stored object that has `documents` stops
   serving it as soon as the CRD is upgraded; nothing used it, so no node
   changes.
+
+### Helm chart
+
+- The controller's startup probe now times out after 5 seconds, as its liveness
+  probe does, so a loaded node no longer restarts it during start-up.
 
 ### Go module
 

@@ -2,7 +2,7 @@
 
 `ichor upgrade ichor VERSION` moves an Ichor that `ichor init` or `ichor adopt` installed. An Ichor that Helm installed is upgraded with [`helm upgrade`](install-with-helm/upgrade.md).
 
-![Five steps in a row: the checks (downgrade, stored fields, plan, installer check), which may refuse; sign-in, set up first if ichor-ui has none; the installer Job, which writes the CRDs, controller and ichor-ui; the TalosConfigPatch migration, spec.documents to spec.config; and ichor rollout config, which you run.](../images/ih-upgrade-ichor.light.drawio.svg)
+![Five steps in a row: the checks (downgrade, stored fields, installer check, plan), which may refuse; sign-in, set up first if ichor-ui has none; the installer Job, which writes the CRDs, controller and ichor-ui; the TalosConfigPatch migration, spec.documents to spec.config; and ichor rollout config, which you run.](../images/ih-upgrade-ichor.light.drawio.svg)
 
 *Refusals come first; the migration is the last write.*
 
@@ -14,13 +14,13 @@
 | Helm | An install owned by Helm is refused and the Helm command is printed | refused |
 | Downgrade | A `VERSION` older than the running Ichor is refused | refused, nothing written |
 | Stored fields | A `TalosConfigPatch` that still holds `tls.clientIdentity` or `extraManifestHeaders` refuses ([below](#credential-fields)) | refused, nothing written |
-| Plan | The server's plan for the upgrade may block it (an unfinished operation, for example) | refused, nothing written |
 | Installer check | The target's installer image runs a check-only Job: a CRD that would lose a version or schema property is refused | refused, nothing written |
+| Plan | The server's plan for the upgrade may block it (an unfinished operation, for example) | refused, nothing written |
 | Sign-in | An ichor-ui with no sign-in gets one, after every check above ([below](#sign-in)) | stops before the upgrade |
 | Write | The installer Job applies the CRDs, the controller, then ichor-ui, and rolls back from its snapshot on failure | rolled back |
 | Migrate | Every `TalosConfigPatch` that sets `spec.documents` is moved to `spec.config` ([below](#talosconfigpatch-migration)) | logged; the upgrade stays done |
 
-The check Job needs an installer image that knows `installer check`; one that does not fails the check with a message saying so. The installer image is verified as for the upgrade ([installer image](install-with-helm/installer-image.md)).
+The check Job needs an installer image that knows `installer check`; one that does not fails the check with a message saying so. The CLI itself resolves and verifies the installer image from your machine, and the upgrade then runs that same digest; if the registry is not reachable from your machine, run the CLI from a host that reaches it, or pin the image you pushed with `--installer-digest sha256:... --skip-signature-check`, which reads no registry ([installer image](install-with-helm/installer-image.md)).
 
 ## Version rule
 

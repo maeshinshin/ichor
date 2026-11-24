@@ -206,6 +206,7 @@ func decodeDocs(b []byte) (map[string]configDoc, error) {
 	}
 
 	normalizeRegistryMirrors(docs)
+	normalizeLiftedSettings(docs)
 
 	return docs, nil
 }

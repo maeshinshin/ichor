@@ -112,6 +112,9 @@ var rules = []rule{
 	// discussion: "time, resolver and sysctl changes apply live without
 	// requiring a reboot").
 	{prefix: "machine.time", safe: true},
+	// TimeSyncConfig is the v1.14 spelling of the same settings: timeserver_config.go and time/sync.go (Talos
+	// v1.14.5) read both through NetworkTimeSyncConfig() and watch the machine config.
+	{prefix: "TimeSyncConfig", safe: true},
 
 	// DNS resolver settings apply through that same live path.
 	{prefix: "machine.network.nameservers", safe: true},
@@ -335,6 +338,7 @@ var rules = []rule{
 	// apiVersion and kind are the document's identity: they show up as changed exactly when
 	// the document appears or goes, i.e. when its nameservers do, so a patch that only sets
 	// nameservers must not demand a reboot because of them.
+	{prefix: "ResolverConfig.searchDomains", safe: true}, // resolver_config.go reads them with the nameservers
 	{prefix: "ResolverConfig.apiVersion", safe: true},
 	{prefix: "ResolverConfig.kind", safe: true},
 }

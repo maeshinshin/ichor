@@ -2,7 +2,7 @@
 
 `ichor upgrade ichor VERSION` moves an Ichor that `ichor init` or `ichor adopt` installed. An Ichor that Helm installed is upgraded with [`helm upgrade`](install-with-helm/upgrade.md).
 
-![Five steps in a row: the checks, which may refuse; sign-in, set up first if ichor-ui has none; the installer Job, which writes the CRDs, controller and ichor-ui; the TalosConfigPatch migration, spec.documents to spec.config; and ichor rollout config, which you run.](../images/ih-upgrade-ichor.light.drawio.svg)
+![Five steps in a row: the checks (downgrade, stored fields, plan, installer check), which may refuse; sign-in, set up first if ichor-ui has none; the installer Job, which writes the CRDs, controller and ichor-ui; the TalosConfigPatch migration, spec.documents to spec.config; and ichor rollout config, which you run.](../images/ih-upgrade-ichor.light.drawio.svg)
 
 *Refusals come first; the migration is the last write.*
 
@@ -12,28 +12,34 @@
 |---|---|---|
 | Version | `VERSION` must be a semantic version, and the CLI may be at most one minor from the running Ichor | refused, nothing written |
 | Helm | An install owned by Helm is refused and the Helm command is printed | refused |
-| Sign-in | An ichor-ui with no sign-in gets one first ([below](#sign-in)) | stops before the upgrade |
-| Downgrade | A `VERSION` older than the running Ichor is refused | the operation fails |
-| CRDs | The new CRDs may only add: a removed version or schema property refuses the whole upgrade | refused before any write |
+| Downgrade | A `VERSION` older than the running Ichor is refused | refused, nothing written |
+| Stored fields | A `TalosConfigPatch` that still holds `tls.clientIdentity` or `extraManifestHeaders` refuses ([below](#credential-fields)) | refused, nothing written |
+| Plan | The server's plan for the upgrade may block it (an unfinished operation, for example) | refused, nothing written |
+| Installer check | The target's installer image runs a check-only Job: a CRD that would lose a version or schema property is refused | refused, nothing written |
+| Sign-in | An ichor-ui with no sign-in gets one, after every check above ([below](#sign-in)) | stops before the upgrade |
 | Write | The installer Job applies the CRDs, the controller, then ichor-ui, and rolls back from its snapshot on failure | rolled back |
 | Migrate | Every `TalosConfigPatch` that sets `spec.documents` is moved to `spec.config` ([below](#talosconfigpatch-migration)) | logged; the upgrade stays done |
 
-Before the Job runs, the controller also checks the installer image ([installer image](install-with-helm/installer-image.md)).
+The check Job needs an installer image that knows `installer check`; one that does not fails the check with a message saying so. The installer image is verified as for the upgrade ([installer image](install-with-helm/installer-image.md)).
 
 ## Version rule
 
 - One minor at a time: write commands, this one included, are refused when the CLI and the running Ichor are more than one minor apart. Use the CLI of the running version, or step through each minor.
-- No downgrades: an older `VERSION` is refused, and so is a CRD that would take anything away.
+- No downgrades: an older `VERSION` is refused, and so is a CRD that would take anything away (the installer check).
 
 ## Sign-in
 
-An Ichor from before sign-in became the default has an ichor-ui without one, and the new release does not start without it. The upgrade then asks first (`--yes` skips the question) and:
+An Ichor from before sign-in became the default has an ichor-ui without one, and the new release does not start without it. Once every check has passed, the upgrade asks (`--yes` skips the question) and:
 
 1. creates the first administrator and switches ichor-ui to sign-in at `--ui-url`;
 2. sets `spec.authentication.ichor` on each `TalosCluster` that can carry it (Talos v1.14 or later);
 3. prints the generated password once, at the end.
 
 Step 2 marks every control plane `APIServerRestartRequired`. kube-apiserver restarts only when you run `ichor rollout config`. With sign-in already on, the `--ui-url`, `--admin-user`, `--ui-tls-*` and `--kube-api-*` flags are refused.
+
+## Credential fields
+
+`tls.clientIdentity` and `extraManifestHeaders` are retired (ADR 0152), and the new CRD would drop them silently. While either is stored, the upgrade refuses. Move it out of Ichor and set it on the node outside Ichor, then upgrade.
 
 ## TalosConfigPatch migration
 
@@ -49,12 +55,12 @@ For a `Migrated=False` patch, write the setting in `spec.config` and clear `spec
 
 ## Reaching the nodes
 
-The controller writes configuration to nodes only through `ichor rollout config`. After the upgrade, run it for the migrated settings, and for the API server restart that sign-in needs, to reach the nodes.
+The controller writes configuration to nodes only through `ichor rollout config`. A migration alone changes nothing on a node: a setting that only moved to its own document renders the same. Run it after the upgrade for a setting whose value changed, and for the API server restart that sign-in needs.
 
 ## Compared with `helm upgrade`
 
 | | `ichor upgrade ichor` | `helm upgrade` |
 |---|---|---|
 | Moves | An installer-made Ichor | A Helm-made Ichor |
-| Sign-in | Set up for you | Set in the chart values first |
+| Sign-in | Set up for you, after the checks | Set in the chart values first |
 | Patch migration | Last step | Not run: run `ichor migrate patches` yourself |

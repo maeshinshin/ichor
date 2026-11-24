@@ -32,7 +32,7 @@ import { FieldSearchDialog } from '@/components/FieldSearchDialog'
 import { pickField, removeField, renameKey, requiredMissing, scalarBlock, settle, steps, withRequiredSiblings, complete, type Chosen, type FieldRow } from '@/lib/fieldSearch'
 import { loadFieldIndex } from '@/lib/fieldIndex'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
-import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
+import { buildPatchTarget, canEditPatchConfig, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
 
 // A Patch-shaped plain object, not the generated Message type: every field
@@ -242,6 +242,7 @@ export function PatchDetail({ name }: { name?: string }) {
   // Choosing a search row puts its setting among the chosen ones, with the required settings it leaves missing
   // beside it; a setting in a map asks for its key.
   function addFromSearch(row: FieldRow) {
+    if (!canEditPatchConfig(unmigratedReason)) return
     const picked = pickField(chosen, row, nextChosenId++)
     const next = withRequiredSiblings(indexRows ?? [], config, picked, nextChosenId)
     nextChosenId += next.length - picked.length
@@ -419,7 +420,7 @@ export function PatchDetail({ name }: { name?: string }) {
             <CardTitle>{t('patch.config')}</CardTitle>
             <CardDescription>{t('patch.configHelp')}</CardDescription>
             <CardAction>
-              <Button size="sm" variant="outline" onClick={() => setSearching(true)}>
+              <Button size="sm" variant="outline" disabled={!canEditPatchConfig(unmigratedReason)} onClick={() => setSearching(true)}>
                 <SearchIcon data-icon="inline-start" aria-hidden="true" />
                 {t('patch.searchFields')}
               </Button>
@@ -427,7 +428,7 @@ export function PatchDetail({ name }: { name?: string }) {
           </CardHeader>
           <CardContent>
             <FieldGroup>
-              {indexRows && (
+              {indexRows && canEditPatchConfig(unmigratedReason) && (
                 <Collapsible>
                   <CollapsibleTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -452,7 +453,7 @@ export function PatchDetail({ name }: { name?: string }) {
               ))}
               <Field>
                 <FieldLabel htmlFor="patch-config-json">{t('patch.jsonLabel')}</FieldLabel>
-                <Textarea id="patch-config-json" rows={10} value={config} readOnly={!!unmigratedReason} onInput={(e) => setConfig((e.target as HTMLTextAreaElement).value)} />
+                <Textarea id="patch-config-json" rows={10} value={config} readOnly={!canEditPatchConfig(unmigratedReason)} onInput={(e) => setConfig((e.target as HTMLTextAreaElement).value)} />
                 <FieldDescription>{t('patch.jsonHelp')}</FieldDescription>
               </Field>
             </FieldGroup>

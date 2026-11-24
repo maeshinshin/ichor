@@ -121,3 +121,9 @@ export function canSavePatch(f: { name: string; hasCluster: boolean; layer: Laye
   if (f.layer === 'machine') return f.machineRef !== ''
   return true
 }
+
+// canEditPatchConfig is false for a patch shown read-only (its wire unmigratedReason is set): the field search and the
+// text box must not offer an edit the save will not take.
+export function canEditPatchConfig(unmigratedReason?: string): boolean {
+  return !unmigratedReason
+}

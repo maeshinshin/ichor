@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   buildPatchTarget,
+  canEditPatchConfig,
   canSavePatch,
   parseLabelSelector,
   stringifyLabelSelector,
@@ -108,4 +109,10 @@ test('canSavePatch refuses a patch shown read-only because its documents were no
   const ok = { name: 'p', hasCluster: true, layer: 'cluster' as const, role: '', machineRef: '', configOk: true }
   assert.equal(canSavePatch({ ...ok, unmigratedReason: '' }), true)
   assert.equal(canSavePatch({ ...ok, unmigratedReason: 'cluster extraManifests has no place in spec.config' }), false)
+})
+
+test('canEditPatchConfig is false while the patch is read-only, so the field search offers no insertion', () => {
+  assert.equal(canEditPatchConfig(''), true)
+  assert.equal(canEditPatchConfig(undefined), true)
+  assert.equal(canEditPatchConfig('cluster extraManifests has no place in spec.config'), false)
 })

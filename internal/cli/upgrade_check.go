@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -44,6 +47,10 @@ func runInstallerCheck(ctx context.Context, k client.Client, images controller.I
 	if skipSignature {
 		want.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 	}
+
+	// Ctrl-C ends the wait instead of the process, so the deferred delete below runs and no Job is left behind.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	pinned, err := controller.PinInstallerImage(ctx, images, want)
 	if err != nil {

@@ -143,5 +143,5 @@ func preflightIchorUpgrade(ctx context.Context, k client.Reader, target string) 
 		}
 	}
 
-	return installer.CheckStoredRetiredFields(ctx, k, "")
+	return installer.CheckStoredRetiredFields(ctx, k)
 }

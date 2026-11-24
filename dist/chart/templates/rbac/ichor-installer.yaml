@@ -186,6 +186,14 @@ rules:
   - ichorinstallations
   verbs:
   - get
+# The refusal that reads every stored TalosConfigPatch (installer.CheckStoredRetiredFields) before the CRD that prunes a
+# retired field goes in: read only, and cluster-wide because a patch may sit in any namespace.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches
+  verbs:
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

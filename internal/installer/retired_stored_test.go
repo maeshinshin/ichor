@@ -41,7 +41,7 @@ func TestCheckStoredRetiredFieldsRefusesAndWritesNothing(t *testing.T) {
 			SubResource: func(c client.WithWatch, s string) client.SubResourceClient { count(); return c.SubResource(s) },
 		}).Build()
 
-	err := CheckStoredRetiredFields(context.Background(), c, "")
+	err := CheckStoredRetiredFields(context.Background(), c)
 	if err == nil {
 		t.Fatal("the check did not refuse")
 	}

@@ -141,7 +141,7 @@ func prepare(ctx context.Context, c client.Client, opts Options) (Options, prepa
 
 	// The running release's Role may not grant the read (v0.2.4's grants none): a forbidden read is left to Run, which
 	// reads again once the new Role is effective.
-	if err := CheckStoredRetiredFields(ctx, c, opts.Namespace); err != nil && !apierrors.IsForbidden(err) {
+	if err := CheckStoredRetiredFields(ctx, c); err != nil && !apierrors.IsForbidden(err) {
 		return opts, prepared{}, err
 	}
 
@@ -210,7 +210,7 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	}
 
 	// The stored-field refusal again, now that the Role that grants the read is in: nothing but RBAC is written yet.
-	if err := CheckStoredRetiredFields(ctx, c, opts.Namespace); err != nil {
+	if err := CheckStoredRetiredFields(ctx, c); err != nil {
 		return failWithRollback(c, opts, snap, err)
 	}
 

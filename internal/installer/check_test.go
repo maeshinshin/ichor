@@ -73,7 +73,7 @@ func checkFixtureClient(t *testing.T, liveProps []string, extra ...client.Object
 func TestCheckAndRunRefuseTheSameWay(t *testing.T) {
 	retired := &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: ichorAPIVersion, kKind: kTalosConfigPatch,
-		kMetadata: map[string]any{kName: "reg", kNamespace: "ns"}, // the installer's namespace: its Role lists there only
+		kMetadata: map[string]any{kName: "reg", kNamespace: kDefault},
 		kSpec: map[string]any{kDocuments: []any{map[string]any{kKind: kConfigKind, kConfigKey: map[string]any{kVersion: kV1,
 			"machine": map[string]any{"registries": map[string]any{"config": map[string]any{"r.example": map[string]any{"tls": map[string]any{"clientIdentity": map[string]any{"crt": "x"}}}}}}}}}},
 	}}

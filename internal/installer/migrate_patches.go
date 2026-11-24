@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -145,9 +146,24 @@ func setMigrated(ctx context.Context, c client.Client, p *unstructured.Unstructu
 	replaced := false
 
 	for i, e := range conds {
-		if m, _ := e.(map[string]any); m != nil && m["type"] == MigratedCondition {
-			conds[i], replaced = cond, true
+		m, _ := e.(map[string]any)
+		if m == nil || m["type"] != MigratedCondition {
+			continue
 		}
+
+		replaced = true
+
+		// meta.SetStatusCondition semantics: the transition time moves only with the status, and an
+		// identical condition is not written at all (a write bumps resourceVersion).
+		if m["status"] == status {
+			cond["lastTransitionTime"] = m["lastTransitionTime"]
+		}
+
+		if reflect.DeepEqual(normalized(m), normalized(cond)) {
+			return nil
+		}
+
+		conds[i] = cond
 	}
 
 	if !replaced {
@@ -159,4 +175,19 @@ func setMigrated(ctx context.Context, c client.Client, p *unstructured.Unstructu
 	}
 
 	return c.Status().Patch(ctx, p, client.MergeFrom(orig))
+}
+
+// normalized is a condition as JSON would hold it (numbers as int64), so a stored one compares with a built one.
+func normalized(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+
+	for k, v := range m {
+		if n, ok := v.(float64); ok {
+			v = int64(n)
+		}
+
+		out[k] = v
+	}
+
+	return out
 }

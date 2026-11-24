@@ -135,3 +135,56 @@ func TestMigratePatchesLeavesAPatchWhoseSettingHasNoPlace(t *testing.T) {
 		t.Errorf("the setting is no longer rendered: %v, %v", docs, err)
 	}
 }
+
+// A second run on a patch that cannot be migrated writes nothing: resourceVersion and the condition's
+// lastTransitionTime stay as they were.
+func TestMigratePatchesSecondRunOnAnUnmigratablePatchWritesNothing(t *testing.T) {
+	c := migrationClient(storedPatch("p", noPlaceDocs))
+	ctx := context.Background()
+
+	if _, err := MigratePatches(ctx, c, "", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+
+	// Age the condition so a reset to now is visible at the second granularity of RFC 3339.
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion(ichorAPIVersion)
+	u.SetKind("TalosConfigPatch")
+
+	key := types.NamespacedName{Namespace: kDefault, Name: "p"}
+	if err := c.Get(ctx, key, u); err != nil {
+		t.Fatal(err)
+	}
+
+	conds, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
+	const aged = "2020-01-01T00:00:00Z"
+
+	conds[0].(map[string]any)["lastTransitionTime"] = aged
+
+	if err := unstructured.SetNestedSlice(u.Object, conds, "status", "conditions"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Status().Update(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+
+	rv := u.GetResourceVersion()
+
+	if _, err := MigratePatches(ctx, c, "", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Get(ctx, key, u); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := u.GetResourceVersion(); got != rv {
+		t.Errorf("the second run wrote: resourceVersion %s -> %s", rv, got)
+	}
+
+	conds, _, _ = unstructured.NestedSlice(u.Object, "status", "conditions")
+	if got := conds[0].(map[string]any)["lastTransitionTime"]; got != aged {
+		t.Errorf("lastTransitionTime was reset to %v", got)
+	}
+}

@@ -335,6 +335,17 @@ func (i authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	}
 }
 
+// notCutAtExpiry lists the one RPC whose stream the token's end does not cut: the etcd snapshot, which
+// is as large as the cluster's etcd and must not die partway through a transfer that is still moving.
+// It is safe because the caller is authenticated and authorised (the download verb, the same checks
+// as EtcdSnapshotHandler) before the first byte, the credential is issued and the audit Event is
+// written at that point, and openEtcdSnapshot's idle timeout (etcdSnapshotIdle) and the drain end it.
+// The support bundle and packet capture stay cut: both are capped in size and time, and a capture
+// follows traffic. Adding a procedure here is a security decision; the list is pinned by a test.
+var notCutAtExpiry = map[string]bool{
+	ichorv1alpha1connect.DiagnosticsServiceDownloadEtcdSnapshotProcedure: true,
+}
+
 func (i authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
 		ctx, err := i.auth(ctx, conn.RequestHeader().Get("Authorization"), conn.Spec().Procedure)
@@ -345,7 +356,7 @@ func (i authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc)
 		// A stream outlives the check made at its start: end it when the token does, so a
 		// revoked or disabled user cannot keep reading logs for hours.
 		id, ok := IdentityFrom(ctx)
-		if !ok || id.Expires.IsZero() {
+		if !ok || id.Expires.IsZero() || notCutAtExpiry[conn.Spec().Procedure] {
 			return next(ctx, conn)
 		}
 

@@ -962,6 +962,11 @@ command does. Each item is described where it is listed below.
 
 ### UI
 
+- **An etcd snapshot downloaded through the API is no longer cut when the sign-in ends.** `ichor snapshot etcd`
+  (and any `DownloadEtcdSnapshot` caller) stopped with "your sign-in expired" when the ID token ended mid-transfer,
+  so a large snapshot failed with a short token lifetime. It is now bounded only by the 5 minute idle limit, as the
+  browser download is; it is still authenticated, authorised and audited at its start. Log streams and the other
+  downloads still end with the token.
 - **The UI downloads an etcd snapshot of any size.** It used to read the snapshot into the page and
   refuse one over 1 GiB. The browser now saves it to disk as it arrives from a form post, and ichor-ui
   copies it from the node without holding it, so a multi-gigabyte etcd downloads. The server's 8 GiB cap

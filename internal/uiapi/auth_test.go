@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -361,5 +362,62 @@ func TestImpersonatorSendsImpersonationHeaders(t *testing.T) {
 
 	if !slices.Equal(hdr.Values("Impersonate-Group"), []string{testGroupDev, "oidc:ops"}) {
 		t.Errorf("Impersonate-Group = %v", hdr.Values("Impersonate-Group"))
+	}
+}
+
+// streamConn is the part of a server stream the interceptor reads.
+type streamConn struct {
+	connect.StreamingHandlerConn
+	header http.Header
+	proc   string
+}
+
+func (c streamConn) RequestHeader() http.Header { return c.header }
+func (c streamConn) Spec() connect.Spec         { return connect.Spec{Procedure: c.proc} }
+
+// runStream sends procedure through the interceptor with a token that ends in two seconds and a
+// handler that stays up until the token has ended; it returns what the interceptor answers and
+// whether the handler's context was cut.
+func runStream(t *testing.T, procedure string) (err error, cut bool) {
+	t.Helper()
+
+	p := newFakeIdP(t)
+	tok := p.mint(t, p.key, func(c map[string]any) { c["exp"] = time.Now().Add(2 * time.Second).Unix() })
+	conn := streamConn{header: http.Header{"Authorization": {"Bearer " + tok}}, proc: procedure}
+
+	wrapped := authInterceptor{a: newTestAuthenticator(t, p)}.WrapStreamingHandler(func(ctx context.Context, _ connect.StreamingHandlerConn) error {
+		id, _ := IdentityFrom(ctx)
+		// Still moving after the token ended.
+		select {
+		case <-ctx.Done():
+			cut = true
+
+			return ctx.Err()
+		case <-time.After(time.Until(id.Expires) + 300*time.Millisecond):
+			return nil
+		}
+	})
+
+	return wrapped(context.Background(), conn), cut
+}
+
+func TestEtcdSnapshotStreamIsNotCutAtTokenExpiry(t *testing.T) {
+	err, cut := runStream(t, ichorv1alpha1connect.DiagnosticsServiceDownloadEtcdSnapshotProcedure)
+	if cut || err != nil {
+		t.Fatalf("a snapshot still moving when the token ended was cut: err %v", err)
+	}
+}
+
+func TestFollowStreamIsStillCutAtTokenExpiry(t *testing.T) {
+	err, cut := runStream(t, ichorv1alpha1connect.NodeServiceStreamNodeLogsProcedure)
+	if !cut || connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Fatalf("a log stream outlived its token: cut %v, err %v", cut, err)
+	}
+}
+
+func TestNotCutAtExpiryHoldsExactlyTheSnapshot(t *testing.T) {
+	want := map[string]bool{ichorv1alpha1connect.DiagnosticsServiceDownloadEtcdSnapshotProcedure: true}
+	if !maps.Equal(notCutAtExpiry, want) {
+		t.Fatalf("notCutAtExpiry = %v, want only the etcd snapshot", notCutAtExpiry)
 	}
 }

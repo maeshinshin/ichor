@@ -20,7 +20,7 @@
 | Write | The installer Job applies the CRDs, the controller, then ichor-ui, and rolls back from its snapshot on failure | rolled back |
 | Migrate | Every `TalosConfigPatch` that sets `spec.documents` is moved to `spec.config` ([below](#talosconfigpatch-migration)) | logged; the upgrade stays done |
 
-The check Job needs an installer image that knows `installer check`; one that does not fails the check with a message saying so. The CLI itself resolves and verifies the installer image from your machine, and the upgrade then runs that same digest; if the registry is not reachable from your machine, run the CLI from a host that reaches it, or pin the image you pushed with `--installer-digest sha256:... --skip-signature-check`, which reads no registry ([installer image](install-with-helm/installer-image.md)).
+An ichor-ui with no sign-in is not a refusal of the check, because this command turns sign-in on right after it; `installer run` still refuses one. The check Job needs an installer image that knows `installer check`; one that does not fails the check with a message saying so. The CLI itself resolves and verifies the installer image from your machine, and the upgrade then runs that same digest; if the registry is not reachable from your machine, run the CLI from a host that reaches it, or pin the image you pushed with `--installer-digest sha256:... --skip-signature-check`, which reads no registry ([installer image](install-with-helm/installer-image.md)).
 
 ## Version rule
 

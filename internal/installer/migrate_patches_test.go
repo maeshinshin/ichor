@@ -17,7 +17,7 @@ import (
 
 func storedPatch(name string, docs []any) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: ichorAPIVersion, kKind: "TalosConfigPatch",
+		kAPIVersion: ichorAPIVersion, kKind: kTalosConfigPatch,
 		kMetadata: map[string]any{kName: name, kNamespace: kDefault},
 		kSpec:     map[string]any{kClusterRef: map[string]any{kName: "c"}, "layer": kClusterLayer, kDocuments: docs},
 	}}
@@ -37,7 +37,7 @@ func getPatch(t *testing.T, c client.Client, name string) *ichorv1alpha1.TalosCo
 
 	u := &unstructured.Unstructured{}
 	u.SetAPIVersion(ichorAPIVersion)
-	u.SetKind("TalosConfigPatch")
+	u.SetKind(kTalosConfigPatch)
 
 	if err := c.Get(context.Background(), types.NamespacedName{Namespace: kDefault, Name: name}, u); err != nil {
 		t.Fatal(err)
@@ -149,7 +149,7 @@ func TestMigratePatchesSecondRunOnAnUnmigratablePatchWritesNothing(t *testing.T)
 	// Age the condition so a reset to now is visible at the second granularity of RFC 3339.
 	u := &unstructured.Unstructured{}
 	u.SetAPIVersion(ichorAPIVersion)
-	u.SetKind("TalosConfigPatch")
+	u.SetKind(kTalosConfigPatch)
 
 	key := types.NamespacedName{Namespace: kDefault, Name: "p"}
 	if err := c.Get(ctx, key, u); err != nil {

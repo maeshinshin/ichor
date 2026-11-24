@@ -228,3 +228,14 @@ Decision 7 is built, with one narrowing. The header is `X-Ichor-Version`, set to
 - **Narrowed from "every response".** Decision 7 said the backend sends the header on every response. It is sent only to an authenticated caller. The pages a logged-out browser can load (the SPA shell, `/auth/config`, the OIDC endpoints) gain nothing from it, while an anonymous caller who can read the exact version of a self-hosted Ichor could choose a known vulnerability to try. The same reason keeps it off the kube-apiserver listener and off `/metrics`, whose caller is a scraper and not the SPA.
 - **Limits.** The reader sees the header only on RPC responses: static assets are not checked, and a call that fails before a response resolves is not checked either.
 - **Not the same fact as the badge.** The top-bar version (the amendment above, item 3) still reads `status.installedVersion`, the controller's version, through `GetIchorInstallation`. The header reports the ichor-ui build that answered. The two can differ only during an upgrade.
+
+## Amendment (2026-11-24): every refusal comes before the first write, and the installer can be asked first
+
+`ichor upgrade ichor` used to switch sign-in on and set `spec.authentication.ichor` before the server or the installer refused, so a refused run left changes behind. The order is now:
+
+1. The version skew gate, the installer flags and the Helm-managed refusal, as before.
+2. The downgrade rule (`version.IsDowngrade`, the one function the UI's plan uses too), stored `TalosConfigPatch` objects that still hold a field ADR 0152 retires (`installer.CheckStoredRetiredFields`), and the server's plan (`PlanOperation`, its `blocked` reason).
+3. The installer's own refusals, from the target version's image: `ichor installer check` runs `installer.Check`, which is the part of `installer.Run` before its snapshot (`prepare`: the additive CRD check, the stored-field check, the network policies read) and nothing else. The CLI pins and verifies that image as an upgrade does (`--installer-digest`, `--skip-signature-check`), runs it as a short Job `ichor-installer-check-<rand>` under the installer's ServiceAccount in the controller's namespace, shows the installer's termination message verbatim, and deletes the Job with background propagation. A check Job that fails without a message means the image does not know `installer check`, and the CLI says so.
+4. Only then sign-in, and the upgrade.
+
+`Run` and `Check` share `prepare`, so they cannot disagree. The check Job runs with the installed release's installer rights, which read only. The CLI writes the Job and its pod, nothing else.

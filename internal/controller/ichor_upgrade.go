@@ -517,7 +517,7 @@ func newInstallerJob(
 ) *batchv1.Job {
 	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
 	// looked at why. The operation pauses instead. installerDeadline bounds the run in time.
-	args := []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni}
+	args := []string{installerBinaryCmd, "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni}
 	if noPolicies {
 		args = append(args, "--no-cilium-policies")
 	}
@@ -526,11 +526,17 @@ func newInstallerJob(
 		map[string]string{ichorInstallerOperationLabel: operationHash(op)[:32]},
 		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version, IchorInstallerDigestAnnotation: digest},
 		corev1.Container{
-			Name:  "installer",
+			Name:  installerContainerName,
 			Image: inst.Spec.InstallerRepository + "@" + digest,
 			Args:  args,
 		})
 }
+
+// installerBinaryCmd is the installer subcommand of the ichor binary; installerContainerName names the Job's container.
+const (
+	installerBinaryCmd     = "installer"
+	installerContainerName = "installer"
+)
 
 // installerCheckDeadline bounds the check Job; it only reads.
 const installerCheckDeadline = 3 * 60
@@ -547,12 +553,12 @@ func PinInstallerImage(ctx context.Context, images InstallerImages, inst *ichorv
 // NewInstallerCheckJob is the Job `ichor upgrade ichor` runs before it writes: the target version's installer image,
 // as newInstallerJob runs it, under the same ServiceAccount, with `installer check` as its only command.
 func NewInstallerCheckJob(ns, name string, inst *ichorv1alpha1.IchorInstallation, digest, cni string, noPolicies bool) *batchv1.Job {
-	args := []string{"installer", "check", "--namespace=" + ns, "--cni-detected=" + cni}
+	args := []string{installerBinaryCmd, "check", "--namespace=" + ns, "--cni-detected=" + cni}
 	if noPolicies {
 		args = append(args, "--no-cilium-policies")
 	}
 
 	return newJob(ns, name, "ichor-installer-check", IchorInstallerServiceAccount, installerCheckDeadline,
 		nil, map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version, IchorInstallerDigestAnnotation: digest},
-		corev1.Container{Name: "installer", Image: inst.Spec.InstallerRepository + "@" + digest, Args: args})
+		corev1.Container{Name: installerContainerName, Image: inst.Spec.InstallerRepository + "@" + digest, Args: args})
 }

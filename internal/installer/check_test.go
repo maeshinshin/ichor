@@ -13,6 +13,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const (
+	kTalosConfigPatch = "TalosConfigPatch"
+	kSize             = "size"
+)
+
 // checkCRDManifest is a one-CRD install manifest whose schema has the given spec properties.
 func checkCRDManifest(props ...string) string {
 	p := ""
@@ -67,7 +72,7 @@ func checkFixtureClient(t *testing.T, liveProps []string, extra ...client.Object
 // same refusal, and Check writes nothing.
 func TestCheckAndRunRefuseTheSameWay(t *testing.T) {
 	retired := &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: ichorAPIVersion, kKind: "TalosConfigPatch",
+		kAPIVersion: ichorAPIVersion, kKind: kTalosConfigPatch,
 		kMetadata: map[string]any{kName: "reg", kNamespace: kDefault},
 		kSpec: map[string]any{kDocuments: []any{map[string]any{kKind: kConfigKind, kConfigKey: map[string]any{kVersion: kV1,
 			"machine": map[string]any{"registries": map[string]any{"config": map[string]any{"r.example": map[string]any{"tls": map[string]any{"clientIdentity": map[string]any{"crt": "x"}}}}}}}}}},
@@ -78,8 +83,8 @@ func TestCheckAndRunRefuseTheSameWay(t *testing.T) {
 		target []string
 		extra  []client.Object
 	}{
-		"a CRD that would lose a property": {live: []string{"color", "size"}, target: []string{"size"}},
-		"a stored retired field":           {live: []string{"size"}, target: []string{"size"}, extra: []client.Object{retired}},
+		"a CRD that would lose a property": {live: []string{"color", kSize}, target: []string{kSize}},
+		"a stored retired field":           {live: []string{kSize}, target: []string{kSize}, extra: []client.Object{retired}},
 	}
 
 	for name, tc := range cases {

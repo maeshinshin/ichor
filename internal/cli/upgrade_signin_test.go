@@ -208,8 +208,8 @@ func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			inst := &ichorv1alpha1.IchorInstallation{
-				Spec:   ichorv1alpha1.IchorInstallationSpec{Version: "v0.2.4"},
-				Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.4"},
+				Spec:   ichorv1alpha1.IchorInstallationSpec{Version: runningVersion},
+				Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: runningVersion},
 			}
 			inst.Name = ichorv1alpha1.IchorInstallationName
 			cluster := newTestCluster()
@@ -219,7 +219,7 @@ func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
 			// unstructured read, instead of dropping the field the Go type no longer has.
 			scheme := runtime.NewScheme()
 			utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-			scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{}, &ichorv1alpha1.TalosCluster{}, &ichorv1alpha1.TalosClusterList{})
+			scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{}, &ichorv1alpha1.TalosCluster{}, &ichorv1alpha1.TalosClusterList{}, &ichorv1alpha1.IchorUser{}, &ichorv1alpha1.IchorUserList{})
 			metav1.AddToGroupVersion(scheme, ichorv1alpha1.GroupVersion)
 
 			writes := 0

@@ -337,7 +337,7 @@ func TestStoredTalosConfigPatchDocumentsSurviveTheCRDUpgradeFromV024(t *testing.
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: ichorAPIVersion,
-		kKind:       "TalosConfigPatch",
+		kKind:       kTalosConfigPatch,
 		kMetadata:   map[string]any{kName: "old-patch", kNamespace: kDefault},
 		kSpec: map[string]any{
 			kClusterRef: map[string]any{kName: "c"},

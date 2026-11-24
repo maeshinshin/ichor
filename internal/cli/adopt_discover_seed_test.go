@@ -154,6 +154,9 @@ func TestRefuseBlockingCiliumAcceptsLiveGeneveWithoutTunnelFlag(t *testing.T) {
 // they must refuse exactly the same configs.
 func TestRefuseBlockingCiliumAgreesWithPlanPreflight(t *testing.T) {
 	k8sIPAM := map[string]any{ipamModeKey: ipamK8s}
+	// The last row's existing TalosCluster has the unmanaged preset: the plan never takes that Cilium over.
+	const unmanagedRow = "cluster-pool, unmanaged preset"
+
 	tests := []struct {
 		name string
 		cm   map[string]string
@@ -166,6 +169,8 @@ func TestRefuseBlockingCiliumAgreesWithPlanPreflight(t *testing.T) {
 			map[string]any{tunnelValueKey: ciliumTunnelVxlan, ipamValueKey: map[string]any{ipamModeKey: poolMode}}},
 		{"geneve cluster-pool", map[string]string{ciliumTunnelKey: ciliumTunnelGeneve},
 			map[string]any{tunnelValueKey: ciliumTunnelGeneve, ipamValueKey: map[string]any{ipamModeKey: poolMode}}},
+		{unmanagedRow, map[string]string{ciliumTunnelKey: ciliumTunnelVxlan},
+			map[string]any{tunnelValueKey: ciliumTunnelVxlan, ipamValueKey: map[string]any{ipamModeKey: poolMode}}},
 	}
 
 	for _, tt := range tests {
@@ -174,7 +179,14 @@ func TestRefuseBlockingCiliumAgreesWithPlanPreflight(t *testing.T) {
 				tt.cm[ciliumKPRKey] = kprOff
 				pre := ownedKeyPreflight(t, tt.live)
 
-				early := refuseBlockingCilium(context.Background(), adoptDeps{Target: foreignCiliumTarget(t, tt.cm), Preflight: pre}) != nil
+				existing := &ichorv1alpha1.TalosCluster{}
+				if tt.name == unmanagedRow {
+					existing.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+				}
+
+				edeps := adoptDeps{Target: foreignCiliumTarget(t, tt.cm), Preflight: pre}
+				edeps.CNIUnmanaged = edeps.cniUnmanaged(existing)
+				early := refuseBlockingCilium(context.Background(), edeps) != nil
 
 				facts := factsFor(t, testDS("cilium", ciliumImage), &corev1.ConfigMap{
 					Namespace: k8sFactsSystemNamespace, Name: ciliumConfigMapName, Data: tt.cm})
@@ -189,10 +201,34 @@ func TestRefuseBlockingCiliumAgreesWithPlanPreflight(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if plan := rep.Err(true, false) != nil; early != plan {
+				plan := rep.Err(true, false) != nil && existing.Spec.CNI.Preset != ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+				if early != plan {
 					t.Errorf("early check refuses = %v, plan preflight refuses = %v", early, plan)
 				}
 			})
 		}
+	}
+}
+
+// A re-run against a TalosCluster whose spec already sets the unmanaged CNI preset, without --cni-unmanaged,
+// is not refused over a Cilium Ichor will never take over.
+func TestRediscoverSkipsCiliumCheckForUnmanagedPreset(t *testing.T) {
+	cm := map[string]string{ciliumKPRKey: kprOff, routingModeKey: routeNative}
+	deps := adoptDeps{
+		Seed:   "192.0.2.9",
+		Target: foreignCiliumTarget(t, cm),
+		Preflight: ownedKeyPreflight(t, map[string]any{
+			ipamValueKey: map[string]any{ipamModeKey: poolMode}, routingValueKey: routeNative}),
+		DialTalos: func(context.Context, string) (talosConfigReader, error) { return nil, errors.New("dial reached") },
+		ReadIdentity: func(context.Context, string) (controller.HardwareIdentity, error) {
+			return controller.HardwareIdentity{}, nil
+		},
+	}
+	cluster := &ichorv1alpha1.TalosCluster{}
+	cluster.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+
+	err := rediscover(context.Background(), deps, cluster, "ns", &[]*ichorv1alpha1.TalosMachine{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "dial reached") {
+		t.Fatalf("err = %v; want the check skipped and the seed dialled", err)
 	}
 }

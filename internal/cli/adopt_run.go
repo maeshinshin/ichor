@@ -239,7 +239,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		}
 
 		// An unmanaged adopt installs no Cilium, so there is none for the pairing to judge.
-		unmanaged := d.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+		unmanaged := d.cniUnmanaged(st.cluster)
 		if err := checkAdoptCompat(d.say, st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion, !unmanaged); err != nil {
 			return "", err
 		}
@@ -521,7 +521,7 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		// shortcut: discovery needs --node; without it a rerun keeps the machines already
 		// written, as before. Drop when --node becomes required on every adopt.
 		if deps.Seed != "" && len(deps.AddMachines) == 0 {
-			if err := rediscover(ctx, deps, clusterName, namespace, &machines, rediscovered); err != nil {
+			if err := rediscover(ctx, deps, &cluster, namespace, &machines, rediscovered); err != nil {
 				return nil, err
 			}
 		}
@@ -605,10 +605,17 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 	return st, nil
 }
 
+// cniUnmanaged is whether adopt treats the CNI as unmanaged: the flag, or an existing cluster's preset.
+func (d adoptDeps) cniUnmanaged(c *ichorv1alpha1.TalosCluster) bool {
+	return d.CNIUnmanaged || c.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+}
+
 // rediscover adds to machines every discovered member of the existing cluster that has no
 // TalosMachine, and records it in added. The membership check is the fresh path's.
-func rediscover(ctx context.Context, deps adoptDeps, clusterName, namespace string, machines *[]*ichorv1alpha1.TalosMachine, added map[*ichorv1alpha1.TalosMachine]bool) error {
-	found, members, err := discoverMachines(ctx, deps, clusterName, namespace)
+func rediscover(ctx context.Context, deps adoptDeps, cluster *ichorv1alpha1.TalosCluster, namespace string, machines *[]*ichorv1alpha1.TalosMachine, added map[*ichorv1alpha1.TalosMachine]bool) error {
+	deps.CNIUnmanaged = deps.cniUnmanaged(cluster)
+
+	found, members, err := discoverMachines(ctx, deps, cluster.Name, namespace)
 	if err != nil {
 		return err
 	}
@@ -699,7 +706,7 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		return errors.New("adopt: no approved node to adopt")
 	}
 
-	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+	st.unmanaged = deps.cniUnmanaged(st.cluster)
 
 	if err := checkTunnel(deps.Tunnel); err != nil {
 		return fmt.Errorf("adopt: %w", err)

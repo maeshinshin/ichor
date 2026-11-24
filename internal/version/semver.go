@@ -115,3 +115,9 @@ func isDigits(s string) bool { return s != "" && strings.Trim(s, "0123456789") =
 func isAlnumHyphen(s string) bool {
 	return strings.Trim(s, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-") == ""
 }
+
+// IsDowngrade reports a target older than current. It is the one rule the UI's plan, the CLI's pre-check and so the
+// executor's refusal share; an unparsable version is never a downgrade here (CheckSemver refuses it elsewhere).
+func IsDowngrade(current, target string) bool {
+	return semver.IsValid(current) && semver.IsValid(target) && semver.Compare(target, current) < 0
+}

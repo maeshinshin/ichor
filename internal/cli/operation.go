@@ -478,14 +478,11 @@ func confirmOrAbort(in io.Reader, errw io.Writer, what, prompt, aborted string) 
 	return nil
 }
 
-// runStartOperation is the shared body of `upgrade`, `set kube-proxy` and
-// `shutdown cluster`: ask the server for the plan, show it, confirm (unless --yes), create.
-// The server changes the spec first and creates the operation second, and
-// refuses everything it can before the first write.
-func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s startSpec) error {
+// planStart asks the server for the plan of s and returns it, or the reason it is blocked as an error. It writes nothing.
+func planStart(ctx context.Context, c *apiClients, s startSpec) (*pb.ObjectRef, *connect.Response[pb.PlanOperationResponse], error) {
 	cluster, err := resolveCluster(ctx, c, s.Cluster)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
@@ -493,11 +490,24 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 		KeyRotation: s.KeyRotation,
 	}))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	if b := plan.Msg.GetBlocked(); b != "" {
-		return fmt.Errorf("%s: %s", kindName(s.Kind), b)
+		return nil, nil, fmt.Errorf("%s: %s", kindName(s.Kind), b)
+	}
+
+	return cluster, plan, nil
+}
+
+// runStartOperation is the shared body of `upgrade`, `set kube-proxy` and
+// `shutdown cluster`: ask the server for the plan, show it, confirm (unless --yes), create.
+// The server changes the spec first and creates the operation second, and
+// refuses everything it can before the first write.
+func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s startSpec) error {
+	cluster, plan, err := planStart(ctx, c, s)
+	if err != nil {
+		return err
 	}
 
 	if err := confirmPlan(in, errw, kindName(s.Kind), planText(s.Kind, cluster.GetName(), plan.Msg)); err != nil {

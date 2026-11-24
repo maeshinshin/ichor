@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/mod/semver"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/installer"
+	"github.com/maeshinshin/ichor/internal/version"
 )
 
 // upgradeSignIn holds the sign-in flags of `ichor upgrade ichor` (init's, with the same meaning).
@@ -109,10 +111,14 @@ func ensureSignIn(ctx context.Context, k client.Client, in io.Reader, errw io.Wr
 	return plan.opts.AdminUser, password, nil
 }
 
-// upgradeWithSignIn is `ichor upgrade ichor` around the upgrade itself: sign-in first, the upgrade, and the
-// generated password last and once, also when either step failed (by then the administrator exists and
-// nothing else could show the password).
-func upgradeWithSignIn(ctx context.Context, k client.Client, in io.Reader, errw io.Writer, opts initOptions, assumeYes bool, start func() error) error {
+// upgradeWithSignIn is `ichor upgrade ichor` around the upgrade itself: every refusal first (preflight reads and
+// writes nothing), then sign-in, the upgrade, and the generated password last and once, also when either step
+// failed (by then the administrator exists and nothing else could show the password).
+func upgradeWithSignIn(ctx context.Context, k client.Client, in io.Reader, errw io.Writer, opts initOptions, assumeYes bool, preflight, start func() error) error {
+	if err := preflight(); err != nil {
+		return err
+	}
+
 	user, password, err := ensureSignIn(ctx, k, in, errw, opts, assumeYes)
 	if err == nil {
 		err = start()
@@ -123,4 +129,19 @@ func upgradeWithSignIn(ctx context.Context, k client.Client, in io.Reader, errw 
 	}
 
 	return err
+}
+
+// preflightIchorUpgrade is every refusal of `ichor upgrade ichor` that can be judged before the first write: a
+// downgrade (the rule the executor and the UI's plan use, version.IsDowngrade) and a stored patch that holds a field
+// the new release retires. It only reads.
+func preflightIchorUpgrade(ctx context.Context, k client.Reader, target string) error {
+	var inst ichorv1alpha1.IchorInstallation
+	if err := k.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst); err == nil {
+		current := cmp.Or(inst.Status.InstalledVersion, inst.Spec.Version)
+		if t := "v" + strings.TrimPrefix(target, "v"); version.IsDowngrade(current, t) {
+			return fmt.Errorf("upgrade: cannot downgrade ichor from %s to %s: the executor refuses it, and nothing was written", current, t)
+		}
+	}
+
+	return installer.CheckStoredRetiredFields(ctx, k)
 }

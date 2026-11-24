@@ -152,7 +152,21 @@ and in which order, and asks for confirmation unless --yes.`,
 				return fmt.Errorf("upgrade: building the Kubernetes client: %w", err)
 			}
 
-			return upgradeWithSignIn(cmd.Context(), k, cmd.InOrStdin(), cmd.ErrOrStderr(), upgradeSignIn, assumeYes, start)
+			// Everything that can refuse comes before the first write: the stored fields and the downgrade, then
+			// the server's plan (an unfinished operation, an even control-plane count, ...).
+			preflight := func() error {
+				if err := preflightIchorUpgrade(cmd.Context(), k, target); err != nil {
+					return err
+				}
+
+				return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+					_, _, err := planStart(ctx, c, startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind)})
+
+					return err
+				})
+			}
+
+			return upgradeWithSignIn(cmd.Context(), k, cmd.InOrStdin(), cmd.ErrOrStderr(), upgradeSignIn, assumeYes, preflight, start)
 		},
 	}
 }

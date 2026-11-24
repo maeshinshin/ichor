@@ -1277,7 +1277,7 @@ func isDowngrade(p *opPlan) bool {
 
 	t, c := p.resp.GetTarget(), p.resp.GetCurrent()
 
-	return semver.IsValid(t) && semver.IsValid(c) && semver.Compare(t, c) < 0
+	return version.IsDowngrade(c, t)
 }
 
 // targetSchematic is the schematic a cluster's nodes should run: spec.schematic.id, or the stock one.

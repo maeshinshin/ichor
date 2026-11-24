@@ -4,14 +4,21 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"slices"
 	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -53,7 +60,7 @@ func TestUpgradeSignIn_AnInstallWithNoSignInEndsWithSignInOn(t *testing.T) {
 			var errw bytes.Buffer
 
 			started := 0
-			err := upgradeWithSignIn(context.Background(), k, strings.NewReader(""), &errw, initOptions{}, true, func() error {
+			err := upgradeWithSignIn(context.Background(), k, strings.NewReader(""), &errw, initOptions{}, true, func() error { return nil }, func() error {
 				started++
 
 				if args := uiDeploymentArgs(t, k); !slices.Contains(args, argUsersEnabled) {
@@ -110,7 +117,7 @@ func TestUpgradeSignIn_AsksBeforeAnythingIsWritten(t *testing.T) {
 
 			var errw bytes.Buffer
 
-			err := upgradeWithSignIn(context.Background(), k, strings.NewReader(answer), &errw, initOptions{}, false, func() error {
+			err := upgradeWithSignIn(context.Background(), k, strings.NewReader(answer), &errw, initOptions{}, false, func() error { return nil }, func() error {
 				t.Error("the upgrade started without consent")
 
 				return nil
@@ -175,5 +182,85 @@ func TestUpgradeSignIn_LeavesWhatHasSignInAlone(t *testing.T) {
 
 	if a := c.Spec.Authentication; a != nil && a.Ichor != nil && a.Ichor.Enabled {
 		t.Errorf("the authenticator was set on a cluster that cannot carry it: %+v", a)
+	}
+}
+
+// TestUpgradeIchorRefusesBeforeItWrites: a downgrade target, or a stored patch that holds a retired field, makes
+// `ichor upgrade ichor` refuse with sign-in still off, and the cluster is never written.
+func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
+	retired := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "ichor.maesh.dev/v1alpha1", "kind": "TalosConfigPatch",
+		"metadata": map[string]any{"name": "reg", "namespace": ichorControllerNamespace},
+		"spec": map[string]any{"documents": []any{map[string]any{"kind": "v1alpha1", "config": map[string]any{
+			"machine": map[string]any{"registries": map[string]any{"config": map[string]any{"r.example": map[string]any{"tls": map[string]any{"clientIdentity": map[string]any{"crt": "x"}}}}}}}}}},
+	}}
+
+	cases := map[string]struct {
+		target string
+		extra  []client.Object
+		want   string
+	}{
+		"a downgrade":            {"v0.2.3", nil, "cannot downgrade ichor from v0.2.4 to v0.2.3"},
+		"a retired stored field": {"v0.3.0", []client.Object{retired}, "move it out of the patch and set it on the node outside Ichor (ADR 0152) before upgrading"},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			inst := &ichorv1alpha1.IchorInstallation{
+				ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName},
+				Spec:       ichorv1alpha1.IchorInstallationSpec{Version: "v0.2.4"},
+				Status:     ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.4"},
+			}
+			cluster := newTestCluster()
+			cluster.Namespace, cluster.Spec.VersionContract = ichorControllerNamespace, testVersionContract
+
+			// No typed TalosConfigPatch: the fake keeps the stored object as written, as the API server does for an
+			// unstructured read, instead of dropping the field the Go type no longer has.
+			scheme := runtime.NewScheme()
+			utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+			scheme.AddKnownTypes(ichorv1alpha1.GroupVersion, &ichorv1alpha1.IchorInstallation{}, &ichorv1alpha1.IchorInstallationList{}, &ichorv1alpha1.TalosCluster{}, &ichorv1alpha1.TalosClusterList{})
+			metav1.AddToGroupVersion(scheme, ichorv1alpha1.GroupVersion)
+
+			writes := 0
+			count := func() { writes++ }
+			k := fake.NewClientBuilder().WithScheme(scheme).
+				WithObjects(slices.Concat(uiObjects(), []client.Object{cluster, inst}, tc.extra)...).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Create: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.CreateOption) error {
+						count()
+						return c.Create(ctx, o, opts...)
+					},
+					Update: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.UpdateOption) error {
+						count()
+						return c.Update(ctx, o, opts...)
+					},
+					Patch: func(ctx context.Context, c client.WithWatch, o client.Object, p client.Patch, opts ...client.PatchOption) error {
+						count()
+						return c.Patch(ctx, o, p, opts...)
+					},
+					Delete: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.DeleteOption) error {
+						count()
+						return c.Delete(ctx, o, opts...)
+					},
+					SubResource: func(c client.WithWatch, s string) client.SubResourceClient { count(); return c.SubResource(s) },
+				}).Build()
+
+			started := false
+			err := upgradeWithSignIn(context.Background(), k, strings.NewReader(""), io.Discard, initOptions{}, true,
+				func() error { return preflightIchorUpgrade(context.Background(), k, tc.target) },
+				func() error { started = true; return nil })
+
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want a refusal containing %q, got %v", tc.want, err)
+			}
+
+			if started || writes != 0 {
+				t.Errorf("the refusal came after a write: started=%v, writes=%d", started, writes)
+			}
+
+			if args := uiDeploymentArgs(t, k); slices.Contains(args, argUsersEnabled) {
+				t.Errorf("sign-in was switched on: %v", args)
+			}
+		})
 	}
 }

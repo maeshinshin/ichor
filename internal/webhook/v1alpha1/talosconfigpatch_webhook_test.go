@@ -257,3 +257,36 @@ func TestTalosConfigPatchRefusesNewDocumentsAndAllowsClearingThem(t *testing.T) 
 		t.Error("an update that sets spec.config and adds spec.documents was allowed")
 	}
 }
+
+// An update that sets or changes spec.config while the stored spec.documents stays would make the renderer drop every
+// setting of spec.documents (it renders spec.config alone once that is set): it is refused unless it clears them too.
+func TestTalosConfigPatchRefusesConfigBesideStoredDocuments(t *testing.T) {
+	ctx := context.Background()
+	v := dryRenderValidator(t)
+
+	stored := configPatch("old", nil)
+	stored.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
+		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"kernel.pid_max": "1"}},
+	}}
+
+	added := &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"vm.swappiness": "1"}}}
+
+	partial := stored.DeepCopy()
+	partial.Spec.Config = added
+
+	if _, err := v.ValidateUpdate(ctx, stored, partial); err == nil || !strings.Contains(err.Error(), "ichor migrate patches") {
+		t.Errorf("an update that sets spec.config beside stored spec.documents: want a refusal naming the migration, got %v", err)
+	}
+
+	cleared := partial.DeepCopy()
+	cleared.Spec.Documents = nil
+
+	if _, err := v.ValidateUpdate(ctx, stored, cleared); err != nil {
+		t.Errorf("an update that sets spec.config and clears spec.documents was refused: %v", err)
+	}
+
+	// spec.config already stored beside spec.documents: an update that leaves it alone is not refused.
+	if _, err := v.ValidateUpdate(ctx, partial, partial.DeepCopy()); err != nil {
+		t.Errorf("an update that changes neither was refused: %v", err)
+	}
+}

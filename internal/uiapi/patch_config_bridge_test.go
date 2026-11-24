@@ -2,16 +2,24 @@ package uiapi
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -212,5 +220,116 @@ func TestPatchFromAnOlderClientIsRefused(t *testing.T) {
 		if err := applyPatchSpec(&spec, wire); err == nil || !strings.Contains(err.Error(), "config is required") {
 			t.Errorf("%s: want a refusal naming config, got %v", name, err)
 		}
+	}
+}
+
+// A patch stored by v0.2 holds spec.documents and no spec.config. The editor reads it as the converted config, and a
+// save writes that config and clears spec.documents, so the render is the same plus what the user added.
+func TestUnmigratedPatchIsEditedAsItsConvertedConfig(t *testing.T) {
+	stored := &ichorv1alpha1.TalosConfigPatch{
+		Name: "p", Namespace: "ns",
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "c"},
+			Layer:      layerCluster,
+			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
+				Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
+			}},
+		},
+	}
+
+	before, err := stored.Spec.EffectiveDocuments(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wire, err := patchToPB(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(wire.GetConfig(), "net.ipv4.ip_forward") {
+		t.Fatalf("the editor shows %s, not the settings of spec.documents", wire.GetConfig())
+	}
+
+	// Saved untouched: spec.documents is gone and the render is unchanged.
+	saved := stored.Spec.DeepCopy()
+	if err := applyPatchSpec(saved, wire); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(saved.Documents) != 0 {
+		t.Errorf("the save left spec.documents: %+v", saved.Documents)
+	}
+
+	after, err := saved.EffectiveDocuments(true)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("the render changed on a save that added nothing: %v\n%+v\n%+v", err, before, after)
+	}
+
+	// Saved with one more setting: everything that was rendered still is.
+	var cfg ichorconfig.Config
+	if err := json.Unmarshal([]byte(wire.GetConfig()), &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.Machine.Sysctls["vm.swappiness"] = "1"
+
+	raw, _ := json.Marshal(&cfg)
+	wire.Config = string(raw)
+
+	edited := stored.Spec.DeepCopy()
+	if err := applyPatchSpec(edited, wire); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := edited.EffectiveDocuments(true)
+	if err != nil || len(edited.Documents) != 0 {
+		t.Fatalf("%v, documents %+v", err, edited.Documents)
+	}
+
+	if s := string(mustJSON(got)); !strings.Contains(s, "net.ipv4.ip_forward") || !strings.Contains(s, "vm.swappiness") {
+		t.Errorf("the render lost a setting: %s", s)
+	}
+}
+
+// A patch whose documents do not convert stays as stored when the editor shows it, so a save (the CLI's apply, or the
+// UI) that sets spec.config reaches the webhook with spec.documents unchanged, and the user is told what to do.
+func TestSavingConfigOverUnconvertibleDocumentsIsRefusedWithTheWayOut(t *testing.T) {
+	stored := &ichorv1alpha1.TalosConfigPatch{
+		Name: "p", Namespace: testNS,
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "c"},
+			Layer:      layerCluster,
+			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: &typedconfig.Config{
+				ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
+			}}},
+		},
+	}
+
+	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(stored.DeepCopy()).Build()
+	validator := &webhookv1alpha1.TalosConfigPatchCustomValidator{Client: base}
+
+	// The API server runs the webhook on the update; this stands in for it.
+	c := interceptor.NewClient(base, interceptor.Funcs{
+		Update: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.UpdateOption) error {
+			if _, err := validator.ValidateUpdate(context.Background(), stored, obj.(*ichorv1alpha1.TalosConfigPatch)); err != nil {
+				e := apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosconfigpatches"}, "p", nil)
+				e.ErrStatus.Message = "admission webhook denied the request: " + err.Error()
+
+				return e
+			}
+
+			return nil
+		},
+	})
+
+	wire := &pb.Patch{
+		Ref: objectRef(testNS, "p"), Cluster: objectRef(testNS, "c"), Layer: pb.ConfigLayer_CONFIG_LAYER_CLUSTER,
+		Config: `{"machine":{"sysctls":{"vm.swappiness":"1"}}}`,
+	}
+
+	_, err := (&Server{Client: c}).UpdatePatch(context.Background(), connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire}))
+	if err == nil || !strings.Contains(err.Error(), "ichor migrate patches") {
+		t.Fatalf("want the refusal naming ichor migrate patches, got %v", err)
 	}
 }

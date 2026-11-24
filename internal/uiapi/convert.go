@@ -302,7 +302,7 @@ func configFromPB(raw string) (*ichorconfig.Config, error) {
 // patchToPB converts a TalosConfigPatch to the wire Patch message
 // PatchService's read methods return.
 func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
-	config, err := configToPB(p.Spec.Config)
+	config, err := configToPB(storedConfig(&p.Spec))
 	if err != nil {
 		return nil, fmt.Errorf("patch %q: %w", p.Name, err)
 	}
@@ -316,6 +316,19 @@ func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
 		Config:    config,
 		CreatedAt: createdAtToPB(p.CreationTimestamp),
 	}, nil
+}
+
+// storedConfig is what the renderer uses of a patch as a config: spec.config, or, for a patch stored by v0.2 and not
+// migrated, its spec.documents converted. nil when it has neither, or when its documents do not convert (the webhook
+// then refuses a save, so the editor cannot drop them).
+func storedConfig(s *ichorv1alpha1.TalosConfigPatchSpec) *ichorconfig.Config {
+	if s.Config == nil && len(s.Documents) > 0 {
+		if c, err := ichorv1alpha1.ConfigFromDocuments(s.Documents); err == nil {
+			return c
+		}
+	}
+
+	return s.Config
 }
 
 // applyPatchSpec fills spec from the wire Patch CreatePatch/UpdatePatch
@@ -345,6 +358,12 @@ func applyPatchSpec(spec *ichorv1alpha1.TalosConfigPatchSpec, p *pb.Patch) error
 	spec.Layer = layer
 	spec.Priority = p.GetPriority()
 	spec.Target = targetFromPB(p.GetTarget())
+	// What the editor showed of spec.documents is in config now, so they go; documents that did not convert stay, and
+	// the webhook refuses the save.
+	if storedConfig(spec) != nil {
+		spec.Documents = nil
+	}
+
 	spec.Config = config
 
 	return nil

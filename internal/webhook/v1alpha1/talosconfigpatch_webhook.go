@@ -193,5 +193,12 @@ func checkDocuments(oldObj, newObj *ichorv1alpha1.TalosConfigPatch) error {
 			"(a stored patch is converted by ichor migrate patches)")
 	}
 
+	// The renderer uses spec.documents only while spec.config is empty, so a new spec.config beside the stored
+	// documents would silently drop every setting they hold.
+	if newObj.Spec.Config != nil && !apiequality.Semantic.DeepEqual(oldObj.Spec.Config, newObj.Spec.Config) {
+		return fmt.Errorf("this patch still stores spec.documents, which the renderer ignores once spec.config is set: " +
+			"run ichor migrate patches first, or clear spec.documents in the same update")
+	}
+
 	return nil
 }

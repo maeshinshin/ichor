@@ -37,23 +37,23 @@ func readyNode(name string, ready corev1.ConditionStatus) *corev1.Node {
 	}
 }
 
-// Bootstrap creates ichor-system, installs the release for the cluster and waits for the nodes;
+// Bootstrap creates the record namespace (here tenant), installs the release for the cluster and waits for the nodes;
 // a second run upgrades instead of installing again.
 func TestBootstrap_InstallsThenWaitsForNodes(t *testing.T) {
 	cfg := fakeConfig()
 	kube := kubefakeclient.NewSimpleClientset(readyNode("a", corev1.ConditionTrue))
 	cluster := &ichorv1alpha1.TalosCluster{}
 
-	res, err := bootstrap(t.Context(), kube, cfg, cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
+	res, err := bootstrap(t.Context(), kube, cfg, "tenant", cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
 	if err != nil || !res.Adopted {
 		t.Fatalf("first run: %+v, %v; want a fresh install", res, err)
 	}
 
-	if _, err := kube.CoreV1().Namespaces().Get(t.Context(), RecordNamespace, metav1.GetOptions{}); err != nil {
-		t.Errorf("namespace %s not created: %v", RecordNamespace, err)
+	if _, err := kube.CoreV1().Namespaces().Get(t.Context(), "tenant", metav1.GetOptions{}); err != nil {
+		t.Errorf("namespace %s not created: %v", "tenant", err)
 	}
 
-	res, err = bootstrap(t.Context(), kube, cfg, cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
+	res, err = bootstrap(t.Context(), kube, cfg, "tenant", cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
 	if err != nil || res.Adopted || res.Release.Version != 2 {
 		t.Fatalf("second run: %+v, %v; want an upgrade to revision 2", res, err)
 	}
@@ -63,7 +63,7 @@ func TestBootstrap_NodeNeverReadyNamesIt(t *testing.T) {
 	kube := kubefakeclient.NewSimpleClientset(readyNode("a", corev1.ConditionTrue),
 		readyNode("stuck", corev1.ConditionFalse))
 
-	_, err := bootstrap(t.Context(), kube, fakeConfig(), &ichorv1alpha1.TalosCluster{}, cni.KubeProxyEnabled,
+	_, err := bootstrap(t.Context(), kube, fakeConfig(), "tenant", &ichorv1alpha1.TalosCluster{}, cni.KubeProxyEnabled,
 		50*time.Millisecond, 5*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "stuck") {
 		t.Fatalf("err = %v, want one naming the NotReady node", err)
@@ -78,7 +78,7 @@ func TestBootstrap_OperatorFollowsTheNodesThatExist(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{}
 	cluster.Spec.ControlPlane.Count = 3
 
-	_, err := bootstrap(t.Context(), kube, cfg, cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
+	_, err := bootstrap(t.Context(), kube, cfg, "tenant", cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}

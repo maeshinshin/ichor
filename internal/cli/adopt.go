@@ -243,7 +243,12 @@ clusters keep the old CAs, but never starts one.`,
 			Tunnel:       adoptTunnel,
 			CiliumValues: ciliumValues,
 			BootstrapCilium: func(ctx context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
-				_, err := cilium.Bootstrap(ctx, restCfg, c, mode, cilium.DefaultApplyTimeout)
+				ns, err := controllerNamespace(ctx, k8sClient)
+				if err != nil {
+					return err
+				}
+
+				_, err = cilium.Bootstrap(ctx, restCfg, ns, c, mode, cilium.DefaultApplyTimeout)
 
 				return err
 			},

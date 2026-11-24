@@ -48,10 +48,11 @@ func newBootstrapRun(t *testing.T, objs ...client.Object) *bootstrapRun {
 	r := &bootstrapRun{stderr: &bytes.Buffer{}}
 	r.deps = cniBootstrapDeps{
 		Target:    fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build(),
+		Namespace: ichorControllerNamespace,
 		KubeProxy: kubeProxyReplaced,
 		Stdin:     strings.NewReader("y\n"),
 		Stderr:    r.stderr,
-		Install: func(_ context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
+		Install: func(_ context.Context, _ string, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
 			r.calls = append(r.calls, bootstrapCall{cluster: c.DeepCopy(), mode: mode})
 
 			return nil
@@ -192,5 +193,28 @@ func TestAdopt_AfterBootstrapCiliumIsIchorsAndNotTakenOver(t *testing.T) {
 
 	if err := f.deps.Target.Get(ctx, client.ObjectKeyFromObject(record), &corev1.Secret{}); err != nil {
 		t.Errorf("Ichor's release record was touched: %v", err)
+	}
+}
+
+// Ichor to be installed in "tenant": the release record bootstrap leaves is there, so a rerun
+// recognises it as Ichor's own and upgrades it, and the install is told where to write it.
+func TestCNIBootstrap_RecordGoesToTheChosenNamespace(t *testing.T) {
+	r := newBootstrapRun(t, append(noCNINodes(), testDS("cilium", ciliumImage), helmRecord(helmControllerNamespace))...)
+	r.deps.Namespace = helmControllerNamespace
+
+	var got string
+
+	r.deps.Install = func(_ context.Context, ns string, _ *ichorv1alpha1.TalosCluster, _ cni.KubeProxyMode) error {
+		got = ns
+
+		return nil
+	}
+
+	if err := runCNIBootstrap(context.Background(), r.deps); err != nil {
+		t.Fatalf("%v\n%s", err, r.stderr)
+	}
+
+	if got != helmControllerNamespace || !strings.Contains(r.stderr.String(), "record in "+helmControllerNamespace) {
+		t.Fatalf("namespace %q, plan:\n%s", got, r.stderr)
 	}
 }

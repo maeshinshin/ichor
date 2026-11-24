@@ -41,7 +41,7 @@ var bootstrapCniCmd = &cobra.Command{
 	Short: "Install Ichor's Cilium on a cluster with no CNI, before helm install ichor",
 	Long: `bootstrap cni is the first step of the Helm path on a cluster with no CNI: such a
 cluster cannot run any pod, so Ichor's chart cannot start. bootstrap installs Ichor's pinned Cilium
-as Ichor's own Helm release (release cilium in kube-system, its record in ichor-system) with the
+as Ichor's own Helm release (release cilium in kube-system, its record in the namespace Ichor will be installed in: --ichor-namespace, default ichor-system) with the
 operator's kubeconfig, and waits for every node to be Ready. Then run helm install ichor, then
 ichor adopt, which recognises this Cilium as Ichor's and does not take it over.
 
@@ -78,10 +78,10 @@ It shows what it will do and asks for confirmation unless --yes. Running it agai
 		}
 
 		return runCNIBootstrap(cmd.Context(), cniBootstrapDeps{
-			Target: target, KubeProxy: o.KubeProxy, Tunnel: o.Tunnel, Values: user,
+			Target: target, Namespace: apiOpts.IchorNamespace, KubeProxy: o.KubeProxy, Tunnel: o.Tunnel, Values: user,
 			Stdin: cmd.InOrStdin(), Stderr: cmd.ErrOrStderr(),
-			Install: func(ctx context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
-				_, err := cilium.Bootstrap(ctx, rc, c, mode, cilium.DefaultApplyTimeout)
+			Install: func(ctx context.Context, ns string, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
+				_, err := cilium.Bootstrap(ctx, rc, ns, c, mode, cilium.DefaultApplyTimeout)
 
 				return err
 			},
@@ -90,14 +90,16 @@ It shows what it will do and asks for confirmation unless --yes. Running it agai
 }
 
 type cniBootstrapDeps struct {
-	Target    client.Reader
+	Target client.Reader
+	// Namespace is where Ichor will be installed: Cilium's release record goes there (--ichor-namespace).
+	Namespace string
 	KubeProxy string
 	Tunnel    string
 	Values    map[string]any
 	Stdin     io.Reader
 	Stderr    io.Writer
 	// Install is cilium.Bootstrap with the operator's kubeconfig.
-	Install func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error
+	Install func(ctx context.Context, namespace string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error
 }
 
 // bootstrapCluster is the TalosCluster-shaped input of the effective values: what adopt writes for
@@ -134,7 +136,7 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 		return fmt.Errorf("bootstrap cni: %w", err)
 	}
 
-	facts, err := gatherK8sFacts(ctx, d.Target, ichorControllerNamespace) // shortcut: no management client here, so the default namespace; drop when bootstrap cni learns the controller's
+	facts, err := gatherK8sFacts(ctx, d.Target, d.Namespace)
 	if err != nil {
 		return fmt.Errorf("bootstrap cni: inspecting the CNI: %w", err)
 	}
@@ -159,13 +161,13 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 
 	plan := fmt.Sprintf("Install Cilium %s as Ichor's Helm release (release cilium in kube-system, record in %s), "+
 		"tunnel %s, kube-proxy %s, KubePrism on 7445 assumed, and wait for every node to be Ready.\n",
-		cilium.ChartVersion, cilium.RecordNamespace, cmp.Or(d.Tunnel, "the default"), d.KubeProxy)
+		cilium.ChartVersion, d.Namespace, cmp.Or(d.Tunnel, "the default"), d.KubeProxy)
 
 	if err := confirmPlan(d.Stdin, d.Stderr, "bootstrap cni", plan); err != nil {
 		return err
 	}
 
-	if err := d.Install(ctx, cluster, cni.KubeProxyMode(d.KubeProxy)); err != nil {
+	if err := d.Install(ctx, d.Namespace, cluster, cni.KubeProxyMode(d.KubeProxy)); err != nil {
 		return fmt.Errorf("bootstrap cni: installing Cilium: %w; run it again to continue (the install is safe to repeat)", err)
 	}
 

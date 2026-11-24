@@ -40,9 +40,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
-// RecordNamespace is where Ichor keeps the Helm release record of Cilium (ichor-system).
-const RecordNamespace = "ichor-system"
-
 // nodePollInterval is how often Bootstrap looks at the nodes while it waits for them to be Ready.
 const nodePollInterval = 5 * time.Second
 
@@ -64,11 +61,11 @@ func ApplyForCluster(
 }
 
 // Bootstrap installs Ichor's Cilium on a cluster that has no CNI, from the operator's machine: it creates
-// ichor-system for the release record, applies the release for
+// the namespace (the controller's, recordNS) for the release record, applies the release for
 // cluster, and waits, bounded by timeout, for the DaemonSet (Helm's own wait) and then every node to
 // be Ready. It is safe to run again: Apply upgrades an existing release.
 func Bootstrap(
-	ctx context.Context, rc *rest.Config, cluster *ichorv1alpha1.TalosCluster,
+	ctx context.Context, rc *rest.Config, recordNS string, cluster *ichorv1alpha1.TalosCluster,
 	mode cni.KubeProxyMode, timeout time.Duration,
 ) (ApplyResult, error) {
 	kube, err := kubernetes.NewForConfig(rc)
@@ -76,23 +73,24 @@ func Bootstrap(
 		return ApplyResult{}, fmt.Errorf("cilium: building a Kubernetes client: %w", err)
 	}
 
-	cfg, err := NewHelmConfig(rc, RecordNamespace, func(string, ...any) {})
+	cfg, err := NewHelmConfig(rc, recordNS, func(string, ...any) {})
 	if err != nil {
 		return ApplyResult{}, err
 	}
 
-	return bootstrap(ctx, kube, cfg, cluster, mode, timeout, nodePollInterval)
+	return bootstrap(ctx, kube, cfg, recordNS, cluster, mode, timeout, nodePollInterval)
 }
 
 func bootstrap(
-	ctx context.Context, kube kubernetes.Interface, cfg *action.Configuration, cluster *ichorv1alpha1.TalosCluster,
+	ctx context.Context, kube kubernetes.Interface, cfg *action.Configuration, recordNS string,
+	cluster *ichorv1alpha1.TalosCluster,
 	mode cni.KubeProxyMode, timeout, interval time.Duration,
 ) (ApplyResult, error) {
-	ns := &corev1.Namespace{Name: RecordNamespace}
+	ns := &corev1.Namespace{Name: recordNS}
 
 	_, err := kube.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return ApplyResult{}, fmt.Errorf("cilium: creating namespace %s: %w", RecordNamespace, err)
+		return ApplyResult{}, fmt.Errorf("cilium: creating namespace %s: %w", recordNS, err)
 	}
 
 	existing, err := kube.CoreV1().Nodes().List(ctx, metav1.ListOptions{})

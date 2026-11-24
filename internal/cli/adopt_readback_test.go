@@ -184,7 +184,7 @@ func roundTrip(t *testing.T, v map[string]any) map[string]any {
 // it back, not treat it as a foreign Helm release.
 func TestAdopt_IchorCiliumRecordInControllerNamespace(t *testing.T) {
 	dep := controllerDeployment(true)
-	dep.Namespace = "tenant"
+	dep.Namespace = helmControllerNamespace
 
 	deployed, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, ciliumTunnelVxlan, 0)
 	if err != nil {
@@ -196,7 +196,7 @@ func TestAdopt_IchorCiliumRecordInControllerNamespace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec := helmRecord("tenant")
+	rec := helmRecord(helmControllerNamespace)
 	rec.Data = map[string][]byte{helmReleaseKey: []byte(base64.StdEncoding.EncodeToString(raw))}
 
 	scheme := newTestScheme(t)

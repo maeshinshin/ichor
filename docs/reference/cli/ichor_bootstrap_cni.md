@@ -11,7 +11,7 @@ Install Ichor's Cilium on a cluster with no CNI, before helm install ichor
 
 bootstrap cni is the first step of the Helm path on a cluster with no CNI: such a
 cluster cannot run any pod, so Ichor's chart cannot start. bootstrap installs Ichor's pinned Cilium
-as Ichor's own Helm release (release cilium in kube-system, its record in ichor-system) with the
+as Ichor's own Helm release (release cilium in kube-system, its record in the namespace Ichor will be installed in: --ichor-namespace, default ichor-system) with the
 operator's kubeconfig, and waits for every node to be Ready. Then run helm install ichor, then
 ichor adopt, which recognises this Cilium as Ichor's and does not take it over.
 

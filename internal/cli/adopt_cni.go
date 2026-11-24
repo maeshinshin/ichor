@@ -48,7 +48,7 @@ const (
 type cniProvenance string
 
 const (
-	// provenanceIchor: Ichor's own Helm release (record in ichor-system). Nothing to take over.
+	// provenanceIchor: Ichor's own Helm release (record in the controller's namespace). Nothing to take over.
 	provenanceIchor cniProvenance = "ichor"
 	// provenanceHelm: a Helm release record exists outside ichor-system (helm, cilium-cli).
 	provenanceHelm cniProvenance = "helm"

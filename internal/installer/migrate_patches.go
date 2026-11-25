@@ -279,3 +279,17 @@ func normalized(m map[string]any) map[string]any {
 
 	return out
 }
+
+// MigrateAllPatches is what the chart's post-upgrade hook runs (cmd/migrate_patches.go). A patch left as it is stays
+// readable through spec.documents and carries Migrated=False, so only a failure to list is an error: a patch that
+// cannot move would otherwise fail every later `helm upgrade` after the chart is already in place.
+func MigrateAllPatches(ctx context.Context, c client.Client, log io.Writer) error {
+	res, err := MigratePatches(ctx, c, "", log)
+	if err != nil {
+		return err
+	}
+
+	logf(log, "migrated %d TalosConfigPatches; %d left as they are", len(res.Migrated), len(res.Failed))
+
+	return nil
+}

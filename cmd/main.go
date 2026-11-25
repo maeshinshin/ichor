@@ -140,6 +140,10 @@ func must(err error, msg string, kv ...any) {
 
 // nolint:gocyclo
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == migratePatchesArg {
+		os.Exit(runMigratePatches())
+	}
+
 	ns := os.Getenv("POD_NAMESPACE")
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string

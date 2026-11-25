@@ -310,3 +310,25 @@ func TestMigratePatchesNamesAnUnreadableCluster(t *testing.T) {
 		t.Errorf("want ClusterUnreadable carrying the error, got %+v", p.Status.Conditions)
 	}
 }
+
+// The post-upgrade hook's entry point migrates a stored v0.2 patch, in a namespace of its own, and a patch it cannot move
+// is not an error.
+func TestMigrateAllPatchesMigratesAStoredPatchAndToleratesOneLeftAsIs(t *testing.T) {
+	ok, bad := storedPatch("ok", certSANDocs), storedPatch("bad", noPlaceDocs)
+	ok.SetNamespace("other")
+	bad.SetNamespace("other")
+
+	c := migrationClient(ok, bad)
+
+	if err := MigrateAllPatches(context.Background(), c, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+
+	if p := getPatchIn(t, c, "other", "ok"); len(p.Spec.Documents) != 0 || p.Spec.Config == nil {
+		t.Errorf("want ok migrated, got %+v", p.Spec)
+	}
+
+	if p := getPatchIn(t, c, "other", "bad"); len(p.Spec.Documents) == 0 {
+		t.Errorf("want bad left as stored, got %+v", p.Spec)
+	}
+}

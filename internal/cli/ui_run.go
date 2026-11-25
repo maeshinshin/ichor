@@ -17,7 +17,9 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -33,6 +35,10 @@ import (
 // that a rollout's new pod is picked up quickly. A var, not a const, so
 // tests can shrink it instead of running at wall-clock speed.
 var uiPollInterval = 2 * time.Second
+
+// uiReforwardDelay is the pause before re-forwarding once a tunnel that had been ready is lost.
+// shortcut: fixed, not exponential; make it grow if a flapping tunnel is ever seen hammering the API.
+var uiReforwardDelay = time.Second
 
 // uiOptions is uiCmd's flags, kept as its own type so a test can build one
 // without going through cobra.
@@ -165,6 +171,7 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 	h := newHuman(deps.Stderr)
 	url := fmt.Sprintf("%s://localhost:%d/", scheme, localPort)
 	opened := false
+	everReady := false
 	lastPod := ""
 
 	for {
@@ -204,6 +211,8 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 			}
 		}
 
+		everReady = everReady || isReady
+
 		if isReady && reforwarded {
 			h.Note(h.Mark(markOK) + " re-established the port-forward -> pod/" + pod.Name)
 		}
@@ -234,10 +243,20 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 			return nil
 		}
 
+		// client-go returns at once on a listen or upgrade error without closing ready: retrying cannot help.
+		if !everReady {
+			return fmt.Errorf("ui: the port-forward to pod/%s never started (%w); is local port %d in use? do you have the pods/portforward permission?",
+				pod.Name, cmp.Or(err, errors.New("it ended before it was ready")), localPort)
+		}
+
 		if err != nil {
 			h.Note(fmt.Sprintf("%s lost the port-forward to pod/%s (%v); looking for another pod", h.Mark(markWarning), pod.Name, err))
 		} else {
 			h.Note(fmt.Sprintf("%s the port-forward to pod/%s ended; looking for another pod", h.Mark(markWarning), pod.Name))
+		}
+
+		if err := sleepCtx(ctx, uiReforwardDelay); err != nil {
+			return nil
 		}
 	}
 }

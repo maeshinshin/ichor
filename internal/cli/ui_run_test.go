@@ -314,3 +314,40 @@ func TestRunUI_ErrorsWhenServiceMissing(t *testing.T) {
 		t.Fatal("expected an error for a missing Service, got nil")
 	}
 }
+
+// TestRunUI_FailsWhenTheForwardNeverStarts: client-go's ForwardPorts returns at once, without closing ready,
+// when the local port is taken or pods/portforward is forbidden. runUI must give up, not loop.
+func TestRunUI_FailsWhenTheForwardNeverStarts(t *testing.T) {
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiTestService(), uiTestPod(uiTestPodA)).Build()
+
+	var (
+		mu    sync.Mutex
+		calls int
+	)
+
+	deps := uiDeps{
+		K8s: k8sClient,
+		Forward: func(context.Context, *corev1.Pod, int32, int32, chan struct{}) error {
+			mu.Lock()
+			calls++
+			mu.Unlock()
+
+			return errors.New("unable to listen on port 8080: address already in use")
+		},
+		OpenBrowser: func(string) error { return nil },
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &bytes.Buffer{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := runUI(ctx, uiOptions{Namespace: uiTestNamespace}, deps)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if err == nil || ctx.Err() != nil || calls > 3 || !strings.Contains(err.Error(), "pods/portforward") {
+		t.Fatalf("runUI = %v after %d forward attempts (ctx: %v), want an error with a hint within 3 attempts", err, calls, ctx.Err())
+	}
+}

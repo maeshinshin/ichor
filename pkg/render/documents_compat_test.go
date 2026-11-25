@@ -99,6 +99,17 @@ func TestStoredV1Alpha1SettingsRenderLikeTheirSpecConfig(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			stored := storedDocumentsPatch(t, `[{"kind":"Config","config":{"version":"v1alpha1",`+c.stored[1:]+`}]`)
 
+			// An older contract has no KubeAPIServerConfig or CoreDNS document: the stored patch renders as v0.2 did.
+			for _, contract := range []string{"v1.13", "v1.12"} {
+				cl := testCluster("false")
+				cl.Spec.VersionContract = contract
+
+				if _, _, err := Render(cl, testMachine("cp1", "controlplane", nil), testBundle(t),
+					[]ichorv1alpha1.TalosConfigPatch{stored}, nil); err != nil {
+					t.Errorf("contract %s: Render: %v", contract, err)
+				}
+			}
+
 			want := ichorconfig.Config{}
 			if err := json.Unmarshal([]byte(c.config), &want); err != nil {
 				t.Fatal(err)
@@ -148,8 +159,13 @@ func TestStoredPatchWithAnUnplacedSettingStillRendersTheRest(t *testing.T) {
 		t.Fatal("the setting without a place was carried")
 	}
 
-	out := mustRender(t, testCluster("false"), testMachine("cp1", "controlplane", nil), testBundle(t),
-		[]ichorv1alpha1.TalosConfigPatch{p})
+	for _, contract := range []string{"v1.14", "v1.13", "v1.12"} {
+		cl := testCluster("false")
+		cl.Spec.VersionContract = contract
 
-	requireAll(t, out, "san.example", "https://x.example/y.yaml")
+		out := mustRender(t, cl, testMachine("cp1", "controlplane", nil), testBundle(t),
+			[]ichorv1alpha1.TalosConfigPatch{p})
+
+		requireAll(t, out, "san.example", "https://x.example/y.yaml")
+	}
 }

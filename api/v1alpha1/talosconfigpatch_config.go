@@ -52,10 +52,16 @@ func (s *TalosConfigPatchSpec) EffectiveDocuments(multidoc bool) ([]TalosConfigP
 	cfg := s.Config
 
 	if cfg == nil && len(s.Documents) > 0 {
-		// A patch stored by Ichor v0.2 and not migrated yet. When spec.config has a place for every setting it is
-		// converted like spec.config, so the render does not change when it is migrated. Otherwise the documents
-		// render as stored, with the settings Talos 1.14 moved lifted into their own documents (the v1alpha1 spelling
-		// conflicts with them): a setting is never dropped (the migration lists the patch).
+		// A patch stored by Ichor v0.2 and not migrated yet. A machine without the Talos 1.14 documents gets them
+		// as stored, as v0.2 rendered them (the v1alpha1 spelling is the only one it has). Otherwise, when
+		// spec.config has a place for every setting it is converted like spec.config, so the render does not change
+		// when it is migrated; if not, the documents render as stored, with the settings Talos 1.14 moved lifted into
+		// their own documents (the v1alpha1 spelling conflicts with them): a setting is never dropped (the
+		// migration lists the patch).
+		if !multidoc {
+			return slices.Clone(s.Documents), nil
+		}
+
 		var err error
 		if cfg, err = ConfigFromDocuments(s.Documents); err != nil {
 			if lifted, lerr := liftV1Alpha1(s.Documents); lerr == nil {

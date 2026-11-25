@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
@@ -64,6 +65,8 @@ type fakeNodeTalosClient struct {
 	// ends on its own -- the shape StreamNodeLogs' graceful-shutdown test
 	// needs to have something to interrupt.
 	block bool
+	// afterCancel makes StreamLogs keep calling back for a while once its context ended.
+	afterCancel bool
 
 	// gotService records the last service StreamLogs was called with, so a
 	// test can assert the request's service field reached NodeTalosClient
@@ -136,6 +139,18 @@ func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, si
 		}
 	}
 
+	if f.afterCancel {
+		<-ctx.Done()
+
+		// A real log stream can deliver a line already in flight after its context ended.
+		for range 20 {
+			_ = onLine(LogLine{Message: "late", Seen: time.Now()})
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		return ctx.Err()
+	}
+
 	if f.block {
 		<-ctx.Done()
 
@@ -176,6 +191,41 @@ func newTestNodeServerFn(dial func(*TalosIdentity) (NodeTalosClient, error), dra
 	client := ichorv1alpha1connect.NewNodeServiceClient(http.DefaultClient, srv.URL)
 
 	return client, srv.Close
+}
+
+// afterReturnConn counts the Sends that arrive once its handler has returned, which an HTTP/2 server
+// turns into a panic on a goroutine nothing recovers.
+type afterReturnConn struct {
+	connect.StreamingHandlerConn
+	returned *atomic.Bool
+	late     *atomic.Int32
+}
+
+func (c afterReturnConn) Send(m any) error {
+	if c.returned.Load() {
+		c.late.Add(1)
+	}
+
+	return c.StreamingHandlerConn.Send(m)
+}
+
+type streamWatch struct {
+	returned *atomic.Bool
+	late     *atomic.Int32
+}
+
+func (streamWatch) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc { return next }
+
+func (streamWatch) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+
+func (w streamWatch) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		defer w.returned.Store(true)
+
+		return next(ctx, afterReturnConn{conn, w.returned, w.late})
+	}
 }
 
 var _ = Describe("NodeService", func() {
@@ -464,5 +514,53 @@ var _ = Describe("NodeService", func() {
 
 		Expect(stream.Err()).To(HaveOccurred())
 		Expect(connect.CodeOf(stream.Err())).To(Equal(connect.CodeUnavailable))
+	})
+
+	It("sends nothing once a drained log stream's handler has returned", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-drain-late"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		fake := &fakeNodeTalosClient{afterCancel: true, lines: []LogLine{{Message: "first", Seen: time.Now()}}}
+		draining := make(chan struct{})
+
+		var (
+			returned atomic.Bool
+			late     atomic.Int32
+		)
+
+		s := &Server{
+			Client: k8sClient, ControllerNamespace: testNamespace, Draining: draining,
+			NodeTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *TalosIdentity) (NodeTalosClient, error) {
+				return fake, nil
+			},
+		}
+		watch := connect.WithInterceptors(streamWatch{&returned, &late})
+		mux := http.NewServeMux()
+		mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(s, watch))
+
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+
+		client := ichorv1alpha1connect.NewNodeServiceClient(http.DefaultClient, srv.URL)
+
+		streamCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			close(draining)
+		}()
+
+		stream, err := client.StreamNodeLogs(streamCtx, connect.NewRequest(&pb.StreamNodeLogsRequest{
+			Machines: []*pb.ObjectRef{objectRef(m.Namespace, m.Name)},
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		for stream.Receive() { //nolint:revive // reading to the end
+		}
+
+		time.Sleep(500 * time.Millisecond) // the late callbacks' window
+
+		Expect(late.Load()).To(BeZero(), "a goroutine wrote to the stream after the handler returned")
 	})
 })

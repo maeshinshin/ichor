@@ -220,6 +220,9 @@ func (s *Server) StreamNodeLogs(
 		return stream.Send(resp)
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	g, gctx := errgroup.WithContext(ctx)
 
 	for _, ref := range refs {
@@ -247,6 +250,11 @@ func (s *Server) StreamNodeLogs(
 	case err := <-done:
 		return err
 	case <-s.Draining:
+		// Wait for the senders: one that calls stream.Send after this handler returned panics the HTTP/2
+		// server on a goroutine nothing recovers.
+		cancel()
+		_ = g.Wait()
+
 		return connect.NewError(connect.CodeUnavailable,
 			errors.New("ichor-ui is shutting down; reconnect with the latest resume_token to continue"))
 	}

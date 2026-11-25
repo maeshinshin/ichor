@@ -262,7 +262,7 @@ var _ = Describe("TalosOperation node actions", func() {
 
 			n := f.kube.node(worker3)
 			n.Spec.Unschedulable = true
-			n.Annotations = map[string]string{cordonedByIchorAnnotation: "true", drainStartedAnnotation: "true"}
+			n.Annotations = map[string]string{cordonedByIchorAnnotation: "op-a", drainStartedAnnotation: "op-a"}
 			_, err := f.kube.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(setEvacuationCondition(ctx, k8sClient, f.machines[worker3], metav1.ConditionTrue, "Evacuating", "evacuating")).To(Succeed())

@@ -76,6 +76,20 @@ var _ = Describe("The objects of ichor create etcd-backup", func() {
 		Expect(got.Data).To(HaveKey("sessionToken"))
 	})
 
+	It("refuses a second backup on the same endpoint, bucket and prefix: retention would prune the other's snapshots", func() {
+		first := newObjects("eb-first")
+		Expect(asUser(creator).Create(ctx, first.Backup())).To(Succeed())
+		DeferCleanup(func() { forceDelete(first.Backup()) })
+
+		second := newObjects("eb-second")
+		Expect(asUser(creator).Create(ctx, second.Backup())).To(MatchError(ContainSubstring("already writes")))
+
+		other := newObjects("eb-other-prefix")
+		other.Prefix += "-daily"
+		Expect(asUser(creator).Create(ctx, other.Backup())).To(Succeed())
+		DeferCleanup(func() { forceDelete(other.Backup()) })
+	})
+
 	It("needs the secret-references verb: an operator with only create is refused", func() {
 		bindRole("ebcreate-operator", "ebcreate-operator", rbacv1.PolicyRule{
 			APIGroups: []string{ichorGroup}, Resources: []string{ebResource}, Verbs: []string{verbGet, verbCreate},

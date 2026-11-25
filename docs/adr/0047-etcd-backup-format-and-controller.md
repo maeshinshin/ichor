@@ -117,3 +117,7 @@ Retention counts the snapshot just uploaded toward `keepLast` and never deletes 
 ## Amendment (2026-11-16): `--recover-cluster` and the live restore are `ichor restore cluster` and `ichor restore etcd`
 
 The sentence "Restore (live and `--recover-cluster`) is separate" names two commands that the verb-first command surface renamed: the full-loss recovery is `ichor restore cluster`, the live restore is `ichor restore etcd`. That the restore is separate from the stored format is unchanged.
+
+## Amendment (2026-11-26): one prefix has one TalosEtcdBackup, and the webhook enforces it
+
+"Use one prefix per cluster" was advice. The object key `<prefix>/etcd-<UTC>.snapshot.age` names no writer, and retention lists the whole prefix, so an hourly and a daily backup on one prefix deleted each other's snapshots. Naming the writer in the key, or reading it from object metadata, would change what restore lists (`ParseObjectName`, `Store.List`, snapshots already stored) or cost a stat per object. So the admission webhook now refuses, on create only, a `TalosEtcdBackup` whose `spec.destination.s3` endpoint, bucket and prefix (leading and trailing slashes ignored) another `TalosEtcdBackup` already uses, in any namespace. Backups that already share a prefix keep working; give a second schedule its own prefix.

@@ -237,6 +237,7 @@ var _ = Describe("Secret-references gate", func() {
 			Expect(err.Error()).To(ContainSubstring("talosetcdbackups/secret-references"))
 
 			b := newBackup("s3-x")
+			b.Spec.Destination.S3.Prefix = "another-prefix"
 			Expect(asUser(admin).Create(ctx, b)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, b)).To(Succeed())
 		})

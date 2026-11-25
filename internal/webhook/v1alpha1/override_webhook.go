@@ -517,7 +517,46 @@ func (h *OverrideHandler) handleEtcdBackup(ctx context.Context, req admission.Re
 		return *resp
 	}
 
+	if req.Operation == opCreate {
+		if resp := h.refuseSharedBackupPrefix(ctx, req); resp != nil {
+			return *resp
+		}
+	}
+
 	return admission.Allowed("")
+}
+
+// refuseSharedBackupPrefix denies a create whose endpoint, bucket and prefix another TalosEtcdBackup already
+// writes. Retention prunes by prefix and the object key names no writer, so two backups on one prefix would
+// delete each other's snapshots (ADR 0047). Create only: backups that already share a prefix keep working.
+// shortcut: compares the strings as written, so two spellings of one endpoint pass; drop when snapshots carry a writer.
+func (h *OverrideHandler) refuseSharedBackupPrefix(ctx context.Context, req admission.Request) *admission.Response {
+	var nb ichorv1alpha1.TalosEtcdBackup
+	if err := json.Unmarshal(req.Object.Raw, &nb); err != nil {
+		r := admission.Errored(http.StatusBadRequest, fmt.Errorf("decoding the backup: %w", err))
+
+		return &r
+	}
+
+	var all ichorv1alpha1.TalosEtcdBackupList
+	if err := h.Client.List(ctx, &all); err != nil {
+		r := admission.Errored(http.StatusInternalServerError, fmt.Errorf("listing the backups: %w", err))
+
+		return &r
+	}
+
+	n := nb.Spec.Destination.S3
+	for i := range all.Items {
+		o := all.Items[i].Spec.Destination.S3
+		if o.Endpoint == n.Endpoint && o.Bucket == n.Bucket && strings.Trim(o.Prefix, "/") == strings.Trim(n.Prefix, "/") {
+			r := admission.Denied(fmt.Sprintf("TalosEtcdBackup %s/%s already writes to bucket %q prefix %q: a second backup on one prefix "+
+				"would prune its snapshots; use another spec.destination.s3.prefix", all.Items[i].Namespace, all.Items[i].Name, n.Bucket, n.Prefix))
+
+			return &r
+		}
+	}
+
+	return nil
 }
 
 // gateSecretReferences returns a denial (or an error) unless changed is empty or the requesting

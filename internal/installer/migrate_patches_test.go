@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -186,5 +188,75 @@ func TestMigratePatchesSecondRunOnAnUnmigratablePatchWritesNothing(t *testing.T)
 	conds, _, _ = unstructured.NestedSlice(u.Object, "status", "conditions")
 	if got := conds[0].(map[string]any)["lastTransitionTime"]; got != aged {
 		t.Errorf("lastTransitionTime was reset to %v", got)
+	}
+}
+
+func storedCluster(name, contract string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		kAPIVersion: ichorAPIVersion, kKind: "TalosCluster",
+		kMetadata: map[string]any{kName: name, kNamespace: kDefault},
+		kSpec:     map[string]any{"versionContract": contract},
+	}}
+}
+
+func migratedMessage(p *ichorv1alpha1.TalosConfigPatch, status string) string {
+	for _, k := range p.Status.Conditions {
+		if k.Type == MigratedCondition && string(k.Status) == status {
+			return k.Message
+		}
+	}
+
+	return ""
+}
+
+// A patch of a cluster on a Talos version without the KubeAPIServerConfig document would render nothing if it were
+// migrated: it stays as stored with Migrated=False naming the cluster and the setting.
+func TestMigratePatchesLeavesAPatchItsClusterCannotTake(t *testing.T) {
+	c := migrationClient(storedPatch("p", certSANDocs), storedCluster("c", "v1.13"))
+
+	res, err := MigratePatches(context.Background(), c, "", io.Discard)
+	if err != nil || len(res.Migrated) != 0 || len(res.Failed) != 1 {
+		t.Fatalf("want one failure, got %+v, %v", res, err)
+	}
+
+	p := getPatch(t, c, "p")
+	if len(p.Spec.Documents) != 1 || p.Spec.Config != nil {
+		t.Fatalf("the patch was changed: %+v", p.Spec)
+	}
+
+	msg := migratedMessage(p, "False")
+	if !strings.Contains(msg, "cluster c") || !strings.Contains(msg, "certExtraSANs") {
+		t.Errorf("want Migrated=False naming the cluster and the setting, got %+v", p.Status.Conditions)
+	}
+}
+
+// A webhook refusal of one patch's migration leaves that patch as stored and the others are still migrated.
+func TestMigratePatchesOneRefusedPatchDoesNotStopTheOthers(t *testing.T) {
+	b := fake.NewClientBuilder().WithStatusSubresource(storedPatch("s", nil)).
+		WithObjects(storedPatch("a", certSANDocs), storedPatch("b", certSANDocs)).
+		WithInterceptorFuncs(interceptor.Funcs{Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if obj.GetName() == "a" && obj.GetObjectKind().GroupVersionKind().Kind == kTalosConfigPatch {
+				if u, ok := obj.(*unstructured.Unstructured); ok {
+					if _, has, _ := unstructured.NestedMap(u.Object, "spec", "config"); has {
+						return errors.New("admission webhook refused")
+					}
+				}
+			}
+
+			return cl.Patch(ctx, obj, patch, opts...)
+		}})
+	c := b.Build()
+
+	res, err := MigratePatches(context.Background(), c, "", io.Discard)
+	if err != nil || len(res.Migrated) != 1 || len(res.Failed) != 1 {
+		t.Fatalf("want one migrated and one failed, got %+v, %v", res, err)
+	}
+
+	if a := getPatch(t, c, "a"); a.Spec.Config != nil || !strings.Contains(migratedMessage(a, "False"), "refused") {
+		t.Errorf("a: want it left as stored with Migrated=False, got %+v %+v", a.Spec, a.Status.Conditions)
+	}
+
+	if b := getPatch(t, c, "b"); b.Spec.Config == nil || len(b.Spec.Documents) != 0 {
+		t.Errorf("b: want it migrated, got %+v", b.Spec)
 	}
 }

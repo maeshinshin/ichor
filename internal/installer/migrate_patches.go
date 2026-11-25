@@ -25,9 +25,13 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 // MigratedCondition is the status condition a patch that could not be migrated carries (False, naming each setting
@@ -71,11 +75,15 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 		}
 
 		cfg, err := configOfDocuments(raw)
+		if err == nil {
+			err = checkClusterContract(ctx, c, p, cfg)
+		}
+
 		if err != nil {
 			res.Failed = append(res.Failed, key+": "+err.Error())
 			logf(log, "TalosConfigPatch %s is left as it is: %v", key, err)
 
-			if serr := setMigrated(ctx, c, p, false, err.Error()); serr != nil {
+			if serr := setMigrated(ctx, c, p, false, "NotMigrated", err.Error()); serr != nil {
 				logf(log, "could not set its Migrated condition: %v", serr)
 			}
 
@@ -89,18 +97,61 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 			return res, err
 		}
 
+		// A refusal of one patch (the webhook) leaves that patch as stored; the others are still migrated.
 		if err := c.Patch(ctx, p, client.MergeFrom(orig)); err != nil {
-			return res, fmt.Errorf("migrating TalosConfigPatch %s: %w", key, err)
+			err = fmt.Errorf("migrating TalosConfigPatch %s: %w", key, err)
+			res.Failed = append(res.Failed, key+": "+err.Error())
+			logf(log, "%v", err)
+
+			// The patch object holds the failed edit; the condition is written on the stored one.
+			if serr := setMigrated(ctx, c, orig, false, "NotMigrated", err.Error()); serr != nil {
+				logf(log, "could not set its Migrated condition: %v", serr)
+			}
+
+			continue
 		}
 
 		res.Migrated = append(res.Migrated, key)
 		logf(log, "TalosConfigPatch %s: spec.documents moved to spec.config", key)
 
 		// Best effort: the patch is migrated whether or not its condition is written.
-		_ = setMigrated(ctx, c, p, true, "spec.documents was moved to spec.config")
+		_ = setMigrated(ctx, c, p, true, "Migrated", "spec.documents was moved to spec.config")
 	}
 
 	return res, nil
+}
+
+// checkClusterContract refuses a spec.config the cluster of the patch cannot render: a setting its Talos version has
+// no document for would make every node of the cluster fail to render. A cluster that is not there is not checked.
+func checkClusterContract(ctx context.Context, c client.Client, p *unstructured.Unstructured, cfg map[string]any) error {
+	cl := &unstructured.Unstructured{}
+	cl.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
+	cl.SetKind("TalosCluster")
+
+	name, _, _ := unstructured.NestedString(p.Object, "spec", "clusterRef", "name")
+	if err := c.Get(ctx, types.NamespacedName{Namespace: p.GetNamespace(), Name: name}, cl); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	vc, _, _ := unstructured.NestedString(cl.Object, "spec", "versionContract")
+
+	contract, err := coreconfig.ParseContractFromVersion(vc)
+	if err != nil {
+		return fmt.Errorf("cluster %s: parsing versionContract %q: %w", name, vc, err)
+	}
+
+	b, _ := json.Marshal(cfg)
+	typed := &ichorconfig.Config{}
+
+	if err := json.Unmarshal(b, typed); err != nil {
+		return err
+	}
+
+	if _, err := ichorv1alpha1.ConvertConfig(typed, contract.MultidocKubernetesConfigSupported()); err != nil {
+		return fmt.Errorf("cluster %s (versionContract %s) cannot take the migrated spec.config: %w; the patch keeps rendering from spec.documents", name, vc, err)
+	}
+
+	return nil
 }
 
 // configOfDocuments is spec.documents as the JSON of a spec.config.
@@ -129,10 +180,10 @@ func configOfDocuments(raw []any) (map[string]any, error) {
 	return out, json.Unmarshal(b, &out)
 }
 
-func setMigrated(ctx context.Context, c client.Client, p *unstructured.Unstructured, ok bool, msg string) error {
-	status, reason := "False", "NoPlaceInSpecConfig"
+func setMigrated(ctx context.Context, c client.Client, p *unstructured.Unstructured, ok bool, reason, msg string) error {
+	status := "False"
 	if ok {
-		status, reason = "True", "Migrated"
+		status = "True"
 	}
 
 	orig := p.DeepCopy()

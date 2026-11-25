@@ -63,4 +63,4 @@ The controller applies a change that needs no reboot by itself. `ichor rollout c
 |---|---|---|
 | Moves | An installer-made Ichor | A Helm-made Ichor |
 | Sign-in | Set up for you, after the checks | Set in the chart values first |
-| Patch migration | Last step | Not run: run `ichor migrate patches` yourself |
+| Patch migration | Last step | A post-upgrade hook Job |

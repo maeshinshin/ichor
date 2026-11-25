@@ -79,3 +79,12 @@ Decided by the coordinator on the maintainer's rule that no upgrade loses a sett
 **Migration.** `MigratePatches` converts the settings, then runs `ConvertConfig` for the contract of the patch's cluster. A cluster that cannot take the result leaves the patch as stored, with `Migrated=False` naming the cluster and the setting. A refusal of one patch's update (the webhook) marks that patch the same way and the run goes on with the others.
 
 **Merged duplicates.** Two `machine.network.extraHostEntries` of one address, and two `machine.kernel.modules` of one name, are valid in the `v1alpha1` document. The lift joins their `aliases` and `parameters` into one `StaticHostConfig` or `KernelModuleConfig`, in order and each item once.
+
+## Amendment (2026-11-26): the migration reaches every namespace and runs on `helm upgrade`
+
+Decided on the maintainer's rule that a v0.2 patch migrates on upgrade and no setting is lost. Two gaps in the **Migration** paragraph above:
+
+- The installer migrated only the patches of its own namespace, and read the `TalosCluster` of a patch in that namespace only, so a patch elsewhere got `ClusterUnreadable`. It now migrates every namespace. Its ClusterRole holds `list` and `patch` on `talosconfigpatches`, `patch` on their status and `list` on `talosclusters`, cluster-wide; the namespaced rules for the same verbs are gone.
+- `helm upgrade` ran nothing, and the guides told the user to run `ichor migrate patches`. The chart now has a `post-upgrade` hook Job, `ichor-migrate-patches`. It runs the controller image the chart already pins (`migrate-patches` as its argument, `installer.MigrateAllPatches`) under a ServiceAccount and ClusterRole created for the hook and deleted after it, holding exactly the four rules above. `helm install` never runs a `post-upgrade` hook. The controller process still never writes a `spec`: the Job is a separate identity, and the `ichor-controller-jobs` policy matches only the controller's own requests. With Cilium policies on, the chart adds a policy that lets the Job reach the API server.
+
+A patch left as stored (`Migrated=False`) does not fail the hook, because a failed hook would fail every later `helm upgrade` after the chart is in place; only a failure to list does. `ichor migrate patches` stays, for doing it again by hand. The hook's rules add 2,640 bytes to the Helm release record.

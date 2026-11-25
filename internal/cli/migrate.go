@@ -41,8 +41,8 @@ var migratePatchesCmd = &cobra.Command{
 	Short: "Move TalosConfigPatch spec.documents to spec.config",
 	Long: `Release 0.3 retired TalosConfigPatch spec.documents in favour of spec.config. A stored patch that still sets
 spec.documents keeps rendering as it did, so no node changes, and this command rewrites it: spec.config gets the same
-settings and spec.documents is cleared, in one update. ichor upgrade ichor does the same as its last step; run this
-after helm upgrade, which does not.
+settings and spec.documents is cleared, in one update. ichor upgrade ichor does the same as its last step, and helm
+upgrade does it in a post-upgrade hook Job; run this to do it again by hand.
 
 A patch with a setting spec.config has no place for is left as it is, listed with the setting, and gets the condition
 Migrated=False. Write those settings in spec.config by hand and clear spec.documents. Running the command again

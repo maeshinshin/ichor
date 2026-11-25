@@ -34,6 +34,8 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource/meta"
 	"github.com/cosi-project/runtime/pkg/state"
 	"github.com/cosi-project/runtime/pkg/state/impl/inmem"
+	talosmeta "github.com/siderolabs/talos/pkg/machinery/meta"
+	"github.com/siderolabs/talos/pkg/machinery/resources/containers"
 	"github.com/siderolabs/talos/pkg/machinery/resources/k8s"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
@@ -123,6 +125,18 @@ func newResourceState(t *testing.T, sensitive bool) state.State {
 
 	put(mf)
 
+	// META holds the machine token and state encryption passphrases; container specs hold user env.
+	for _, def := range []meta.ResourceDefinitionSpec{
+		runtime.MetaKeyExtension{}.ResourceDefinition(),
+		containers.ContainerSpecExtension{}.ResourceDefinition(),
+	} {
+		if sensitive {
+			def.Sensitivity = meta.Sensitive
+		}
+
+		put(def)
+	}
+
 	mustCreate := func(r resource.Resource) {
 		if err := st.Create(ctx, r); err != nil {
 			t.Fatal(err)
@@ -138,6 +152,14 @@ func newResourceState(t *testing.T, sensitive bool) state.State {
 	mustCreate(c)
 
 	mustCreate(secrets.NewAPI())
+
+	mk := runtime.NewMetaKey(runtime.NamespaceName, runtime.MetaKeyTagToID(talosmeta.UniqueMachineToken))
+	mk.TypedSpec().Value = diagSecret
+	mustCreate(mk)
+
+	cs := containers.NewContainerSpec(containers.NamespaceName, "ctr")
+	cs.TypedSpec().Environment = []string{"CLOUD_TOKEN=" + diagSecret}
+	mustCreate(cs)
 
 	m := k8s.NewManifest(k8s.ControlPlaneNamespaceName, "00-test")
 	m.TypedSpec().Items = []k8s.SingleManifest{{Object: map[string]any{

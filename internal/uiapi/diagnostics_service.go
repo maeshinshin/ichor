@@ -804,8 +804,9 @@ Per node: version.json, dmesg.log (kernel log, credential-shaped kernel argument
 services.yaml, logs/<service>.log (last 5000 lines of each Talos service), processes.json (names only, no
 command lines), mounts.json, memory.json, containers.json and resources/<namespace>/<type>.yaml (every
 Talos resource that Talos does not mark sensitive, except the machine configuration, the secrets
-namespace, the kernel command line, rendered Kubernetes manifests and static pods, the machine token and the
-process environment). collection-errors.txt lists what could not be read.
+namespace, the kernel command line, rendered Kubernetes manifests and static pods, the machine token, the
+process environment, META values, and container, control plane, etcd, probe and platform
+config that can hold env, args, URLs and keys). collection-errors.txt lists what could not be read.
 
 Not included: the machine configuration, certificates and keys, the secrets bundle, Kubernetes objects.
 

@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -243,6 +244,31 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 		Expect(rec.Events).To(Receive(And(
 			ContainSubstring("Warning "+reasonInstallerSignatureSkipped),
 			ContainSubstring("NOT checked"), ContainSubstring(testInstallerDigest))))
+	})
+
+	It("waits, not pauses, when the Job cache has not seen the Job just created", func() {
+		startUpgrade()
+
+		lagging := interceptor.NewClient(watchClient(), interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewNotFound(batchv1.Resource("jobs"), key.Name)
+				}
+
+				return c.Get(ctx, key, obj, opts...)
+			},
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(batchv1.Resource("jobs"), obj.GetName())
+				}
+
+				return c.Create(ctx, obj, opts...)
+			},
+		})
+
+		done, err := NewIchorUpgradeAdvancer(lagging, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)(ctx, nil, nil, op())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
 	})
 
 	It("still pauses when the tag does not resolve under skip", func() {

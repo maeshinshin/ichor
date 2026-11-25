@@ -292,7 +292,8 @@ func advanceInstallerJob(
 			return false, err
 		}
 
-		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst, img.Digest, cni, noPolicies))
+		// AlreadyExists: the cache has not seen the Job just created.
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, newInstallerJob(ns, name, op, inst, img.Digest, cni, noPolicies)))
 	case err != nil:
 		return false, err
 	}

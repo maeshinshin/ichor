@@ -60,10 +60,11 @@ export function Settings() {
     <div className="space-y-4">
       <PageTitle title={t('settings.title')} />
       <DeploymentCard res={res} />
-      <UsersCard res={res} onSaved={setRes} />
-      <DefaultsCard res={res} onSaved={setRes} />
-      <UpdatesCard res={res} onSaved={setRes} />
-      <AutoPatchCard res={res} onSaved={setRes} />
+      {/* Each card remounts, and so re-reads its form, when what it shows changes after a save or a reset. */}
+      <UsersCard key={USER_KEYS.map((k) => formOf(res)[k]).join('|')} res={res} onSaved={setRes} />
+      <DefaultsCard key={formOf(res).driftPolicy} res={res} onSaved={setRes} />
+      <UpdatesCard key={res.effective?.updateCheck?.value} res={res} onSaved={setRes} />
+      <AutoPatchCard key={JSON.stringify(autoPatchFormOf(res))} res={res} onSaved={setRes} />
     </div>
   )
 }
@@ -136,12 +137,14 @@ function ResetButton({ res, keys, busy, save }: { res: GetSettingsResponse; keys
   )
 }
 
+const USER_KEYS: (keyof Form)[] = ['tokenTtl', 'refreshLifetime']
+
 function UsersCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
   const start = formOf(res)
   const [form, setForm] = useState<Form>(start)
   const { busy, error, save } = useSave(onSaved)
   const locked = lockedReason(res) !== null
-  const changes = changesOf(start, form)
+  const changes = changesOf(start, form, USER_KEYS)
   const problem = usersProblem(form)
   const ui = res.uiEffective
 
@@ -227,7 +230,7 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
   const [form, setForm] = useState<Form>(start)
   const { busy, error, save } = useSave(onSaved)
   const locked = lockedReason(res) !== null
-  const changes = changesOf(start, form)
+  const changes = changesOf(start, form, ['driftPolicy'])
 
   return (
     <SectionCard title={t('settings.defaults')} description={t('settings.defaultsDesc')}>

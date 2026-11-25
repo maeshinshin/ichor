@@ -7,6 +7,7 @@ import {
   autoPatchSource,
   toggleComponent,
   changesOf,
+  type Form,
   durationOptions,
   formOf,
   lockedReason,
@@ -54,11 +55,28 @@ test('the source is spec only where the spec or the report says so', () => {
   assert.equal(sourceOf({ ...view, effective: undefined }, 'refreshLifetime'), 'deployment')
 })
 
+const USERS: (keyof Form)[] = ['tokenTtl', 'refreshLifetime']
+const DEFAULTS: (keyof Form)[] = ['driftPolicy']
+
 test('only changed fields are sent', () => {
   const before = formOf(view)
-  assert.deepEqual(changesOf(before, { ...before, tokenTtl: '15m' }), { tokenTtl: '15m' })
-  assert.deepEqual(changesOf(before, before), {})
-  assert.deepEqual(changesOf(before, { ...before, driftPolicy: 'warnOnly' }), { driftPolicy: 'warnOnly' })
+  assert.deepEqual(changesOf(before, { ...before, tokenTtl: '15m' }, USERS), { tokenTtl: '15m' })
+  assert.deepEqual(changesOf(before, before, USERS), {})
+  assert.deepEqual(changesOf(before, { ...before, driftPolicy: 'warnOnly' }, DEFAULTS), { driftPolicy: 'warnOnly' })
+})
+
+test('a card saves only what was changed in it, after another card saved', () => {
+  // The users card mounted with drift warnOnly; the defaults card then saved autoCorrect, so the new start has it.
+  const mounted: Form = { tokenTtl: '15m', refreshLifetime: '24h', driftPolicy: 'warnOnly' }
+  const start: Form = { ...mounted, driftPolicy: 'autoCorrect' }
+  assert.deepEqual(changesOf(start, { ...mounted, tokenTtl: '30m' }, USERS), { tokenTtl: '30m' })
+  assert.deepEqual(changesOf(start, { ...mounted, driftPolicy: 'warnOnly' }, USERS), {})
+})
+
+test('after a reset the other cards still send nothing of the reset one', () => {
+  const mounted: Form = { tokenTtl: '15m', refreshLifetime: '24h', driftPolicy: 'autoCorrect' }
+  const start: Form = { ...mounted, tokenTtl: '1h' } // users were reset to the deployment value
+  assert.deepEqual(changesOf(start, { ...mounted, driftPolicy: 'warnOnly' }, DEFAULTS), { driftPolicy: 'warnOnly' })
 })
 
 test('lifetimes are checked against the bounds', () => {

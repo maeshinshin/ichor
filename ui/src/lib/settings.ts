@@ -91,12 +91,11 @@ export function sourceOf(s: SettingsView, key: 'tokenTtl' | 'refreshLifetime' | 
   return v === 'spec' ? 'spec' : 'deployment'
 }
 
-// changesOf lists only the fields that differ from the form's starting point, in the shape UpdateSettings takes.
-export function changesOf(before: Form, after: Form): Fields {
+// changesOf lists only the fields of `keys` that differ from the form's starting point, in the shape UpdateSettings
+// takes. A card passes its own keys, so a field another card saved is never sent back from a stale form.
+export function changesOf(before: Form, after: Form, keys: (keyof Form)[]): Fields {
   const out: Fields = {}
-  if (before.tokenTtl !== after.tokenTtl) out.tokenTtl = after.tokenTtl
-  if (before.refreshLifetime !== after.refreshLifetime) out.refreshLifetime = after.refreshLifetime
-  if (before.driftPolicy !== after.driftPolicy) out.driftPolicy = after.driftPolicy
+  for (const k of keys) if (before[k] !== after[k]) out[k] = after[k]
   return out
 }
 

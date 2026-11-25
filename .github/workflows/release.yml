@@ -55,6 +55,12 @@ jobs:
       - name: Cache npm downloads
         uses: ./.github/actions/npm-cache
 
+      # Before anything is pushed: a tag with no notes must fail here, not in the cli job after publish.
+      - name: CHANGELOG.md has a section for the tag
+        run: |
+          awk -v h="## ${GITHUB_REF_NAME} " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md | grep -q . ||
+            { echo "CHANGELOG.md has no section for ${GITHUB_REF_NAME}" >&2; exit 1; }
+
       - name: Verify go.mod, go.sum and the module cache
         run: nix develop --command bash -c "go mod tidy -diff && go mod verify"
 

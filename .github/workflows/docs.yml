@@ -77,11 +77,17 @@ jobs:
       # ghcr (no release, a failed publish) is skipped. The index is written even when empty, so
       # `helm repo add` works before the first release.
       - name: Helm repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           nix develop --command bash -euo pipefail <<'EOF'
           mkdir -p site/dist-all/charts
           for tag in $(git tag -l "v*"); do
             [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+            # a chart can reach ghcr from a release that never finished; only a published release counts
+            [[ $(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null) == false ]] \
+              || { echo "::warning::$tag has no published GitHub release, left out of the Helm repository"; continue; }
             helm pull oci://ghcr.io/maeshinshin/charts/ichor --version "${tag#v}" -d site/dist-all/charts \
               || echo "::warning::no chart for $tag in ghcr, left out of the Helm repository"
           done

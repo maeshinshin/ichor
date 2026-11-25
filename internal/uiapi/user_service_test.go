@@ -522,6 +522,39 @@ func TestRevokeSessionsMovesNotBefore(t *testing.T) {
 	}
 }
 
+func TestRevokeSessionsKeepsAPasswordChangedMeanwhile(t *testing.T) {
+	s := userServer(t, true, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, false); err != nil {
+		t.Fatal(err)
+	}
+
+	const newPass = "A-brand-new-Passw0rd-xyz"
+
+	changed := false
+	s.Client = interceptor.NewClient(s.Client.(client.WithWatch), interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			err := c.Get(ctx, key, obj, opts...)
+			if _, isSecret := obj.(*corev1.Secret); isSecret && !changed { // a concurrent password change lands between the read and the write
+				changed = true
+				if err := s.setCredential(ctx, userAlice, newPass, false); err != nil {
+					t.Error(err)
+				}
+			}
+
+			return err
+		},
+	})
+
+	if _, err := s.RevokeSessions(ichorCtx("x"), connect.NewRequest(&pb.RevokeSessionsRequest{Name: userAlice})); err != nil {
+		t.Fatal(err)
+	}
+
+	cred, _ := readStored(t, s)
+	if !pwMatches(newPass, cred.Hash) {
+		t.Error("RevokeSessions put the old password hash back")
+	}
+}
+
 func TestKubeconfigHoldsPublicDataOnly(t *testing.T) {
 	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", "", []byte("CA-PEM"), userAlice, "https://ichor.example.com", "")
 	if err != nil {

@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
@@ -157,6 +158,58 @@ func (s *Server) writeCredential(ctx context.Context, name string, cred ichoraut
 
 	// The ServiceAccount's client on purpose: the caller holds no write on this Secret.
 	return s.Client.Patch(ctx, sec, client.RawPatch(types.MergePatchType, patch))
+}
+
+// updateCredential reads user name's entry, lets mutate change it and writes it back under an optimistic
+// lock, retrying on a conflict, so a concurrent password change is never reverted by a stale copy.
+// found is false when the user has no password yet; nothing is written then.
+func (s *Server) updateCredential(ctx context.Context, name string, mutate func(*ichorauth.Credential)) (cred ichorauth.Credential, found bool, err error) {
+	key := types.NamespacedName{Namespace: s.ControllerNamespace, Name: ichorauth.CredentialsSecretName}
+
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var sec corev1.Secret
+		if err := s.Client.Get(ctx, key, &sec); err != nil {
+			if apierrors.IsNotFound(err) {
+				found = false
+
+				return nil
+			}
+
+			return err
+		}
+
+		raw, ok := sec.Data[name]
+		if !ok {
+			found = false
+
+			return nil
+		}
+
+		parsed, err := ichorauth.ParseCredential(raw)
+		if err != nil {
+			return fmt.Errorf("credentials entry for %q is unreadable", name)
+		}
+
+		mutate(&parsed)
+
+		if raw, err = parsed.Marshal(); err != nil {
+			return err
+		}
+
+		updated := sec.DeepCopy()
+		updated.Data[name] = raw
+
+		// The ServiceAccount's client on purpose: the caller holds no write on this Secret.
+		if err := s.Client.Patch(ctx, updated, client.MergeFromWithOptions(&sec, client.MergeFromWithOptimisticLock{})); err != nil {
+			return err
+		}
+
+		cred, found = parsed, true
+
+		return nil
+	})
+
+	return cred, found, err
 }
 
 // setCredential hashes password and stores it for name with the given

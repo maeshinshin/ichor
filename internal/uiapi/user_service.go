@@ -396,20 +396,16 @@ func (s *Server) RevokeSessions(ctx context.Context, req *connect.Request[pb.Rev
 		return nil, err
 	}
 
-	cred, found, err := s.readCredential(ctx, u.Name)
+	cred, found, err := s.updateCredential(ctx, u.Name, func(c *ichorauth.Credential) {
+		c.NotBefore = s.now().UTC().Truncate(time.Second)
+		c.Families = nil // every refresh token dies with the sessions
+	})
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, errors.New("reading credentials failed"))
+		return nil, credentialWriteError(err)
 	}
 
 	if !found {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("this user has no password, so no sessions"))
-	}
-
-	cred.NotBefore = s.now().UTC().Truncate(time.Second)
-	cred.Families = nil // every refresh token dies with the sessions
-
-	if err := s.writeCredential(ctx, u.Name, cred); err != nil {
-		return nil, credentialWriteError(err)
 	}
 
 	return connect.NewResponse(&pb.RevokeSessionsResponse{NotBefore: timestamppb.New(cred.NotBefore)}), nil

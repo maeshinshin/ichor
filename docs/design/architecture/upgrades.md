@@ -5,7 +5,7 @@ sidebar_order: 17
 
 # Upgrades
 
-![How upgrades run. A Talos upgrade pre-checks, then upgrades control planes one at a time, each through the hook, the Upgrade API, a reboot and a verification, then workers within maxUnavailable. A Kubernetes upgrade runs three stages, control-plane components, kube-proxy and bootstrap manifests, then kubelets, each finished on every machine first. A failed step pauses the operation and releases the cluster lock; a transient error is retried after 1, 2, 4, 8 and 16 minutes, and anything else waits for a person to resume.](../../images/upgrades.light.drawio.svg)
+![How upgrades run. A Talos upgrade pre-checks, then upgrades control planes one at a time, each through the hook, the Upgrade API, a reboot and a verification, then workers within maxUnavailable. A Kubernetes upgrade runs four stages, API servers, control-plane components, kube-proxy and bootstrap manifests, then kubelets, each finished on every machine first. A failed step pauses the operation and releases the cluster lock; a transient error is retried after 1, 2, 4, 8 and 16 minutes, and anything else waits for a person to resume.](../../images/upgrades.light.drawio.svg)
 
 *Talos, Kubernetes and Ichor are upgraded by separate operations; a failed step pauses, and only a transient one retries itself.*
 
@@ -89,13 +89,14 @@ operation's spec update does.
 ## Kubernetes
 
 Change `spec.kubernetesVersion`: one minor at most, supported by the Talos and
-Cilium installed. Warn about removed APIs, pre-pull images, then three stages,
+Cilium installed. Warn about removed APIs, pre-pull images, then four stages,
 each finished on every machine first (no kubelet newer than an API server):
 
-1. Control-plane components, node by node, through machine config.
-2. kube-proxy and the bootstrap manifests (rollout check skipped when kube-proxy
+1. API servers, one control plane at a time.
+2. Control-plane components, node by node, through machine config.
+3. kube-proxy and the bootstrap manifests (rollout check skipped when kube-proxy
    is replaced).
-3. Kubelets, control planes first.
+4. Kubelets, control planes first.
 
 Intermediate configurations are renders with kubelet and kube-proxy pinned to the
 running version, never a write to `spec`. Several control planes behind one

@@ -45,7 +45,7 @@ Fields besides `spec.clusterRef`, `spec.paused` and `spec.maxUnavailable`:
 | Kind | What it does | Own fields |
 |---|---|---|
 | `talos` | Upgrades Talos (and the installer schematic) one node at a time, control planes first | the target is in the `TalosCluster` spec (`ichor upgrade talos`) |
-| `kubernetes` | Upgrades Kubernetes in three stages: control-plane components, kube-proxy, kubelets | the target is in the `TalosCluster` spec (`ichor upgrade kubernetes [VERSION]`; `--list` shows the versions the cluster can move to, `--max-unavailable`, `--follow`) |
+| `kubernetes` | Upgrades Kubernetes in four stages: API servers, control-plane components, kube-proxy, kubelets | the target is in the `TalosCluster` spec (`ichor upgrade kubernetes [VERSION]`; `--list` shows the versions the cluster can move to, `--max-unavailable`, `--follow`) |
 | `ichor` | Upgrades Ichor itself through an installer Job | |
 | `cni` | Moves Cilium to the chart this Ichor embeds, or switches the kube-proxy mode | `spec.cni.action`, `spec.cni.chartVersion` |
 | `config` | Rolls out configuration changes that need a reboot, a node at a time | |

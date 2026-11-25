@@ -142,7 +142,7 @@ func storedTalosCluster(name string, extra map[string]any) *unstructured.Unstruc
 
 	return &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: ichorAPIVersion,
-		kKind:       "TalosCluster",
+		kKind:       kTalosCluster,
 		kMetadata:   map[string]any{kName: name, kNamespace: kDefault},
 		kSpec:       spec,
 	}}

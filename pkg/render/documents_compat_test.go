@@ -100,7 +100,7 @@ func TestStoredV1Alpha1SettingsRenderLikeTheirSpecConfig(t *testing.T) {
 			stored := storedDocumentsPatch(t, `[{"kind":"Config","config":{"version":"v1alpha1",`+c.stored[1:]+`}]`)
 
 			// An older contract has no KubeAPIServerConfig or CoreDNS document: the stored patch renders as v0.2 did.
-			for _, contract := range []string{"v1.13", "v1.12"} {
+			for _, contract := range []string{contractV113, contractV112} {
 				cl := testCluster("false")
 				cl.Spec.VersionContract = contract
 
@@ -159,7 +159,7 @@ func TestStoredPatchWithAnUnplacedSettingStillRendersTheRest(t *testing.T) {
 		t.Fatal("the setting without a place was carried")
 	}
 
-	for _, contract := range []string{"v1.14", "v1.13", "v1.12"} {
+	for _, contract := range []string{versionContract, contractV113, contractV112} {
 		cl := testCluster("false")
 		cl.Spec.VersionContract = contract
 

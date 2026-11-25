@@ -92,7 +92,7 @@ func TestNormalizeLiftedSettingsKeepsTheSettingsOnAnError(t *testing.T) {
 				"machine": map[string]any{"time": map[string]any{"servers": []any{"ntp.example"}}},
 			}},
 			"TimeSyncConfig:": {root: "TimeSyncConfig", data: map[string]any{
-				"kind": "TimeSyncConfig", "ntp": map[string]any{"servers": []any{"other.example"}},
+				"ntp": map[string]any{"servers": []any{"other.example"}},
 			}},
 		}
 	}

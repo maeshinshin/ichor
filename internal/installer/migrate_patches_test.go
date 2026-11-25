@@ -193,7 +193,7 @@ func TestMigratePatchesSecondRunOnAnUnmigratablePatchWritesNothing(t *testing.T)
 
 func storedCluster(name, contract string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: ichorAPIVersion, kKind: "TalosCluster",
+		kAPIVersion: ichorAPIVersion, kKind: kTalosCluster,
 		kMetadata: map[string]any{kName: name, kNamespace: kDefault},
 		kSpec:     map[string]any{"versionContract": contract},
 	}}

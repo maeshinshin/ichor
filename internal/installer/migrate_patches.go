@@ -38,6 +38,8 @@ import (
 // spec.config has no place for) and a migrated one carries as True.
 const MigratedCondition = "Migrated"
 
+const kTalosCluster = "TalosCluster"
+
 // PatchMigration is what MigratePatches did.
 type PatchMigration struct {
 	Migrated []string // namespace/name of each patch rewritten to spec.config
@@ -126,7 +128,7 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 func checkClusterContract(ctx context.Context, c client.Client, p *unstructured.Unstructured, cfg map[string]any) error {
 	cl := &unstructured.Unstructured{}
 	cl.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
-	cl.SetKind("TalosCluster")
+	cl.SetKind(kTalosCluster)
 
 	name, _, _ := unstructured.NestedString(p.Object, "spec", "clusterRef", "name")
 	if err := c.Get(ctx, types.NamespacedName{Namespace: p.GetNamespace(), Name: name}, cl); err != nil {

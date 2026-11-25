@@ -37,7 +37,7 @@ func talosCluster(name string, enabled bool, url string) *unstructured.Unstructu
 
 	u := &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: ichorAPIVersion,
-		kKind:       "TalosCluster",
+		kKind:       kTalosCluster,
 		kMetadata:   map[string]any{kName: name},
 		kSpec: map[string]any{"authentication": map[string]any{issuerKey: map[string]any{
 			"enabled": enabled, "url": url,

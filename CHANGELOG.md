@@ -1,5 +1,88 @@
 # Changelog
 
+## v0.3.2 (2026-11-25)
+
+A patch release of fixes to v0.3.1: the support bundle leaves out more
+credential-carrying resources, the sign-in re-run finishes only a run that
+failed part-way, Ctrl-C ends a password prompt, the firewall follows the Cilium
+values, and `ichor adopt` reads WireGuard and the image overrides back. No CRD
+field is added or removed.
+
+### Upgrade notes
+
+- **`-n`/`--namespace` on `ichor init` and `ichor adopt` is deprecated.** Both use
+  the namespace of Ichor's controller and accept only that value; leave the flag
+  out. `ichor adopt` finds the namespace itself.
+- **The support bundle no longer holds some resources.** An earlier bundle
+  contained the rendered Kubernetes manifests (with the kubelet bootstrap token
+  Secret), the machine token, META values (which can hold a STATE encryption
+  passphrase), and the user's env and args from container, static pod and
+  control-plane config. If you shared one, rotate the kubelet bootstrap token,
+  the machine token and any STATE passphrase, and review any credential you put
+  in env or args.
+- **The firewall now opens the Cilium ports the effective values set.** A
+  `tunnelPort`, `clusterHealthPort` or WireGuard `encryption` in
+  `spec.cni.cilium.values` is opened on the nodes; before, the
+  firewall opened the default ports and `spec.security.wireGuard`.
+- **`ichor adopt` maps WireGuard back to `spec.security.wireGuard`.** Re-adopting a
+  cluster whose Cilium has the WireGuard encryption Ichor injects now sets the
+  typed field, and the `encryption` keys are no longer copied into
+  `spec.cni.cilium.values`.
+
+### Controller
+
+- A node reboot or shutdown action records that it started before its first
+  storage call or cordon, so a controller restart in between no longer hides
+  what to undo.
+- Deleting a node action uncordons the node only when that action started work
+  on it; a queued or refused action no longer uncordons a node another action
+  holds.
+- The firewall opens the Cilium tunnel, health and WireGuard ports from the
+  effective Cilium values (see the upgrade notes).
+
+### UI
+
+- The support bundle leaves out credential-carrying resource types, by type:
+  the rendered manifests and extra-manifest config, the machine token, META
+  values, the process environment, static pods, and the container, controller
+  manager, scheduler, etcd, bootstrap manifests, admission control, probe and
+  platform config. A test fails when a Talos update adds a resource type nobody
+  has reviewed.
+- A Settings card saves only its own fields and re-reads its form after any
+  save or reset, so one card no longer sends back a stale value of another.
+- An operation page keeps reading the operation for 30 seconds after a pause,
+  resume or approve, so a resumed operation leaves Failed.
+- The Cilium values save compares the stored user values, not the cluster's
+  `resourceVersion`, so a status write no longer refuses it. The typed text is
+  kept after a refusal. `GetCiliumValuesResponse.resource_version` is now a
+  digest of the stored user values.
+- Write actions a viewer cannot use are hidden: the create-storage dialog, the
+  operation controls and the CA rotation advice actions. The permissions
+  response gains `create_storages`, the `create` verb on `talosstorages`, which
+  only the admin role has.
+
+### CLI
+
+- Re-running `ichor adopt` or `ichor upgrade ichor` finishes a sign-in run only
+  when one failed part-way (no user holds the admin role, or the credentials
+  Secret is missing), and leaves sign-in off when the operator turned it off.
+- Ctrl-C ends the no-echo password and passphrase prompts and restores the
+  terminal.
+- `ichor adopt` reads the WireGuard encryption Ichor injects back to
+  `spec.security.wireGuard`, and leaves the image overrides of a recorded
+  patch out of the Cilium values.
+- `-n` on `ichor init` and `ichor adopt` is deprecated (see the upgrade notes).
+
+### Docs
+
+- Fixes to: the Kubernetes upgrade, which has four stages (API servers first),
+  the `TalosOperation` Kubernetes status description, the Rook Ceph guide (the
+  Pod Security exemption is rendered once `rook-ceph` is listed in
+  `spec.security.podSecurity.exemptNamespaces`), the load balancer guide (a
+  Gateway API set with any of its seven CRDs missing is refused), the adopt guide (`--version-contract`
+  does not apply to `--add-machine`; the namespace flag) and the security
+  concept (the roles a user may grant).
+
 ## v0.3.1 (2026-11-25)
 
 A patch release of fixes to v0.3.0: a rollout no longer takes down two control

@@ -21,4 +21,4 @@ package render
 // folds it into a machine's input hash, so a new Version reads as a desired-state change and
 // is applied, instead of being mistaken for drift when Ichor itself is upgraded.
 // TestRenderVersionMatchesOutput fails when the output changes without a bump.
-const Version = 1
+const Version = 2

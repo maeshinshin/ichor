@@ -28,6 +28,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"go.yaml.in/yaml/v4"
+	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -35,8 +36,8 @@ import (
 // pinnedVersion and pinnedFingerprint hold Version and the output fingerprint it was last bumped
 // for. They move together: a render change updates the fingerprint and bumps Version.
 const (
-	pinnedVersion     = 1
-	pinnedFingerprint = "sha256:9a0bcb94142e98af8ef70862ba685a6f2e4f2313b8cd9bd1b8be103ba1034114"
+	pinnedVersion     = 2
+	pinnedFingerprint = "sha256:989dc18b51afe0b65e5ca7a2bccf8d05bea819b473920feb11e7d273a3d547e4"
 )
 
 // leaves flattens a YAML stream into "doc<n>.path" -> value.
@@ -92,12 +93,18 @@ func renderFingerprint(t *testing.T) string {
 
 	for _, role := range []string{roleControlPlane, roleWorker} {
 		cluster := testCluster("false")
+		// A mirror with credentials, keyed by the endpoint host (a change to where the auth lands was once missed).
+		cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
+			Host: "docker.io", Endpoints: []string{"http://192.168.0.8:5000"},
+			AuthSecretRef: &corev1.LocalObjectReference{Name: "creds"},
+		}}
+		sys := &SystemInputs{RegistryAuth: map[string]RegistryAuth{"192.168.0.8:5000": {Password: "pw"}}}
 		m := testMachine("node-"+role, role, map[string]string{labelEnv: "fingerprint"})
 		m.Spec.Hostname = "node-" + role
 		patches := []ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")}
 
-		a := leaves(t, []byte(mustRender(t, cluster, m, testBundle(t), patches)))
-		b := leaves(t, []byte(mustRender(t, cluster, m, other, patches)))
+		a := leaves(t, []byte(mustRenderSys(t, cluster, m, testBundle(t), patches, sys)))
+		b := leaves(t, []byte(mustRenderSys(t, cluster, m, other, patches, sys)))
 
 		for k, v := range a {
 			if b[k] != v {

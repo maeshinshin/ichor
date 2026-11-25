@@ -69,7 +69,7 @@ func (n NewBackup) Validate() error {
 	}
 
 	if strings.HasPrefix(strings.ToLower(n.Endpoint), "http://") && !n.Insecure {
-		errs = append(errs, errors.New("endpoint is a plain http:// URL, which sends the access key id in clear; use https:// or pass --insecure"))
+		errs = append(errs, errors.New("endpoint is a plain http:// URL, which sends the access key id in clear; use https:// or pass --s3-insecure"))
 	}
 
 	if len(n.Bucket) < 3 {

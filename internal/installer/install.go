@@ -451,6 +451,9 @@ func adoptInitFields(ctx context.Context, c client.Client, u *unstructured.Unstr
 	return c.Patch(ctx, live, client.RawPatch(types.JSONPatchType, patch))
 }
 
+// uiImpersonateRole is internal/controller.ImpersonationRoleName: the controller owns its rules.
+const uiImpersonateRole = "ichor-ui-impersonate"
+
 // applyOne server-side applies u, except a Deployment, which is replaced whole. Apply merges
 // into fields other managers own (init's Update owns its probes and args), so a tcpSocket
 // probe applied over init's httpGet one is two handlers in one probe, which is invalid. The
@@ -459,6 +462,18 @@ func applyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured
 	if u.GetKind() != kindDeployment {
 		if err := adoptInitFields(ctx, c, u); err != nil {
 			return err
+		}
+
+		if u.GetKind() == kindClusterRole && u.GetName() == uiImpersonateRole {
+			// The manifest's `rules: []` would wipe the users rules the controller keeps (an atomic list,
+			// restored only on its next requeue). A live role keeps its rules; an absent one is created.
+			err := c.Get(ctx, client.ObjectKeyFromObject(u), u.DeepCopy())
+			if err == nil {
+				u = u.DeepCopy()
+				unstructured.RemoveNestedField(u.Object, "rules")
+			} else if !apierrors.IsNotFound(err) {
+				return err
+			}
 		}
 
 		return c.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldOwner), client.ForceOwnership)

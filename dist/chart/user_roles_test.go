@@ -190,7 +190,7 @@ func TestOverrideRole(t *testing.T) {
 	checkRBACRulesMatch(t, "ichor", "ClusterRole ichor-override-role", cfgRole, chartRole,
 		"config/rbac/override_role.yaml", "dist/chart/templates/rbac/ichor-override-role.yaml")
 
-	for _, res := range []string{resClusters, "talosconfigpatches", "talosmachines"} {
+	for _, res := range []string{resClusters, resPatches, "talosmachines"} {
 		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, verbOverride, ""}] {
 			t.Errorf("config/rbac/override_role.yaml does not grant override on %s", res)
 		}

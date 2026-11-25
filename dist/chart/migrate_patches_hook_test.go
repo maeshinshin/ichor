@@ -7,7 +7,9 @@ import (
 
 const (
 	migrateHookName = "ichor-migrate-patches"
-	pinnedImage     = "ghcr.io/maeshinshin/ichor-controller:v9.9.9@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	resPatches      = "talosconfigpatches"
+	pinnedImage     = "ghcr.io/maeshinshin/ichor-controller:v9.9.9@sha256:" +
+		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 )
 
 // TestMigratePatchesHook pins the automatic move of a v0.2 patch's spec.documents to spec.config on `helm upgrade`
@@ -33,7 +35,7 @@ func TestMigratePatchesHook(t *testing.T) {
 		}
 
 		if got := hookOf(doc); got != "post-upgrade" {
-			t.Errorf("%s %s: helm.sh/hook = %v, want post-upgrade (post-install would run on a fresh install)", d.kind, d.name, got)
+			t.Errorf("%s %s: helm.sh/hook = %v, want post-upgrade (post-install runs on a fresh install)", d.kind, d.name, got)
 		}
 	}
 
@@ -59,10 +61,10 @@ func TestMigratePatchesHook(t *testing.T) {
 	}
 
 	want := map[rbacTriple]bool{
-		{ichorGroup, "talosconfigpatches", verbList, ""}:         true,
-		{ichorGroup, "talosconfigpatches", verbPatch, ""}:        true,
-		{ichorGroup, "talosconfigpatches/status", verbPatch, ""}: true,
-		{ichorGroup, resClusters, verbList, ""}:                  true,
+		{ichorGroup, resPatches, verbList, ""}:              true,
+		{ichorGroup, resPatches, verbPatch, ""}:             true,
+		{ichorGroup, resPatches + "/status", verbPatch, ""}: true,
+		{ichorGroup, resClusters, verbList, ""}:             true,
 	}
 
 	got := rbacTriples(allRules(find(docs, kindClusterRole, migrateHookName)))

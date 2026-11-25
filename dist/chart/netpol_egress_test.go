@@ -45,7 +45,7 @@ func renderWithAPIs(t *testing.T, apis string, sets ...string) []map[string]any 
 
 func TestChartCiliumPoliciesAreOnWhereCiliumsAPIIsServed(t *testing.T) {
 	if got := findAll(renderWithAPIs(t, ciliumAPI), kindCNP); len(got) != 4 {
-		t.Errorf("API served, enabled unset: %d policies, want default-deny, controller, ui and the migrate-patches hook (installer is off)", len(got))
+		t.Errorf("API served, enabled unset: %d policies, want default-deny, controller, ui, hook (installer off)", len(got))
 	}
 
 	if got := findAll(renderWithAPIs(t, "v1"), kindCNP); len(got) != 0 {

@@ -51,6 +51,7 @@ const (
 	resourceTalosMachines      = "talosmachines"
 	resourceTalosOperations    = "talosoperations"
 	resourceTalosConfigPatches = "talosconfigpatches"
+	resourceTalosStorages      = "talosstorages"
 )
 
 // Caps, enforced here whatever the caller asks for.
@@ -236,6 +237,7 @@ func (s *Server) GetMyPermissions(
 		ask(&out.CreatePatches, "create", resourceTalosConfigPatches, "", "")
 		ask(&out.UpdatePatches, "update", resourceTalosConfigPatches, "", "")
 		ask(&out.DeletePatches, "delete", resourceTalosConfigPatches, "", "")
+		ask(&out.CreateStorages, "create", resourceTalosStorages, "", "")
 	}
 
 	// The Users page needs no cluster: IchorUsers live in the backend's own namespace.

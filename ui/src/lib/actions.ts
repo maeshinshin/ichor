@@ -23,6 +23,7 @@ export type ActionPermissions = {
   createPatches: boolean
   updatePatches: boolean
   deletePatches: boolean
+  createStorages: boolean
 }
 
 export function canListUsers(p: ActionPermissions | undefined): boolean {
@@ -59,6 +60,12 @@ export function clusterMenu(p: ActionPermissions | undefined): ClusterMenuItem[]
   if (p?.talosconfigReader) out.push('reader-talosconfig')
   if (mayStart(p, 'shutdown')) out.push('shutdown')
   return out
+}
+
+// mayControlOperation: pause, resume and approve update a talosoperation and delete removes it; the built-in roles
+// grant create, update and delete on talosoperations together, so the create flag stands for the three.
+export function mayControlOperation(p: ActionPermissions | undefined): boolean {
+  return p?.createOperations === true
 }
 
 // A pending machine: approving needs the approve verb and the write of the machine's spec; rejecting only the write.

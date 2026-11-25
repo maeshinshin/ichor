@@ -56,6 +56,7 @@ var _ = Describe("Action permissions", func() {
 			}, "start"),
 			rule([]string{"ichorinstallations/version"}, "update"),
 			rule([]string{resourceTalosMachines}, "delete", "override"),
+			rule([]string{resourceTalosStorages}, "create"),
 		}, operator...)
 
 		for user, rules := range map[string][]rbacv1.PolicyRule{actionsAdminUser: admin, actionsOperatorUser: operator, actionsViewerUser: {read}} {
@@ -95,10 +96,10 @@ var _ = Describe("Action permissions", func() {
 		d, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
 		defer closeFn()
 
-		type flags struct{ create, reset, shutdown, override, update, del, approve, createPatch, updatePatch, deletePatch bool }
+		type flags struct{ create, reset, shutdown, override, update, del, approve, createPatch, updatePatch, deletePatch, createStorage bool }
 
 		for user, want := range map[string]flags{
-			actionsAdminUser:    {true, true, true, true, true, true, true, true, true, true},
+			actionsAdminUser:    {true, true, true, true, true, true, true, true, true, true, true},
 			actionsOperatorUser: {create: true, update: true, approve: true, createPatch: true, updatePatch: true, deletePatch: true},
 			actionsViewerUser:   {},
 		} {
@@ -108,7 +109,7 @@ var _ = Describe("Action permissions", func() {
 			m := resp.Msg
 			Expect(flags{
 				m.GetCreateOperations(), m.GetStartNodeReset(), m.GetStartNodeShutdown(), m.GetOverrideMachines(), m.GetUpdateMachines(),
-				m.GetDeleteMachines(), m.GetApproveMachines(), m.GetCreatePatches(), m.GetUpdatePatches(), m.GetDeletePatches(),
+				m.GetDeleteMachines(), m.GetApproveMachines(), m.GetCreatePatches(), m.GetUpdatePatches(), m.GetDeletePatches(), m.GetCreateStorages(),
 			}).To(Equal(want), user)
 		}
 	})

@@ -172,13 +172,11 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
           <AlertTitle>{t('installDisk.waitingTitle')}</AlertTitle>
           <AlertDescription>
             <p>{t('installDisk.waitingBody')}</p>
-            <div class="mt-2">
-              <SetInstallDialog
-                machine={machine}
-                disks={node.disks}
-                onDone={loadMachine}
-              />
-            </div>
+            {perms?.updateMachines && (
+              <div class="mt-2">
+                <SetInstallDialog machine={machine} disks={node.disks} onDone={loadMachine} />
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}

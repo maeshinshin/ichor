@@ -21,6 +21,7 @@ export const viewer: ActionPermissions = {
   createPatches: false,
   updatePatches: false,
   deletePatches: false,
+  createStorages: false,
 }
 
 export const operator: ActionPermissions = {
@@ -38,6 +39,7 @@ export const operator: ActionPermissions = {
 
 export const admin: ActionPermissions = {
   ...operator,
+  createStorages: true,
   listUsers: true,
   startCaRotation: true,
   startKeyRotation: true,

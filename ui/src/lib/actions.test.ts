@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canListUsers, clusterMenu, mayApprove, mayReject, mayStart } from './actions.ts'
+import { canListUsers, clusterMenu, mayApprove, mayControlOperation, mayReject, mayStart } from './actions.ts'
 import { admin, operator, viewer } from './roles.testdata.ts'
 
 const none = viewer
@@ -56,4 +56,11 @@ test('a pending machine: a viewer does neither, an operator and an admin approve
   // The approve verb alone cannot write the machine.
   assert.equal(mayApprove({ ...none, approveMachines: true }), false)
   assert.equal(mayApprove({ ...none, updateMachines: true }), false)
+})
+
+test('an operation is controlled only with the operation rights', () => {
+  assert.equal(mayControlOperation(undefined), false)
+  assert.equal(mayControlOperation({ ...operator, createOperations: false }), false)
+  assert.equal(mayControlOperation(viewer), false)
+  assert.equal(mayControlOperation(operator), true)
 })

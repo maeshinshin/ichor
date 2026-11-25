@@ -129,8 +129,10 @@ type GetMyPermissionsResponse struct {
 	CreatePatches bool `protobuf:"varint,21,opt,name=create_patches,json=createPatches,proto3" json:"create_patches,omitempty"`
 	UpdatePatches bool `protobuf:"varint,22,opt,name=update_patches,json=updatePatches,proto3" json:"update_patches,omitempty"`
 	DeletePatches bool `protobuf:"varint,23,opt,name=delete_patches,json=deletePatches,proto3" json:"delete_patches,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// create_storages is the "create" verb on talosstorages (only the admin role has it).
+	CreateStorages bool `protobuf:"varint,24,opt,name=create_storages,json=createStorages,proto3" json:"create_storages,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetMyPermissionsResponse) Reset() {
@@ -320,6 +322,13 @@ func (x *GetMyPermissionsResponse) GetUpdatePatches() bool {
 func (x *GetMyPermissionsResponse) GetDeletePatches() bool {
 	if x != nil {
 		return x.DeletePatches
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetCreateStorages() bool {
+	if x != nil {
+		return x.CreateStorages
 	}
 	return false
 }
@@ -839,7 +848,7 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"\x83\x01\n" +
 	"\x17GetMyPermissionsRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x123\n" +
-	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xe1\a\n" +
+	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x8a\b\n" +
 	"\x18GetMyPermissionsResponse\x12%\n" +
 	"\x0esupport_bundle\x18\x01 \x01(\bR\rsupportBundle\x12#\n" +
 	"\retcd_snapshot\x18\x02 \x01(\bR\fetcdSnapshot\x12%\n" +
@@ -865,7 +874,8 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	"\x10approve_machines\x18\x14 \x01(\bR\x0fapproveMachines\x12%\n" +
 	"\x0ecreate_patches\x18\x15 \x01(\bR\rcreatePatches\x12%\n" +
 	"\x0eupdate_patches\x18\x16 \x01(\bR\rupdatePatches\x12%\n" +
-	"\x0edelete_patches\x18\x17 \x01(\bR\rdeletePatches\"\x82\x01\n" +
+	"\x0edelete_patches\x18\x17 \x01(\bR\rdeletePatches\x12'\n" +
+	"\x0fcreate_storages\x18\x18 \x01(\bR\x0ecreateStorages\"\x82\x01\n" +
 	" DownloadReaderTalosconfigRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12)\n" +
 	"\x10lifetime_seconds\x18\x02 \x01(\x03R\x0flifetimeSeconds\"v\n" +

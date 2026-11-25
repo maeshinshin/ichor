@@ -15,6 +15,7 @@ import type { Storage, StoragePreset } from '@/gen/ichor/v1alpha1/storage_pb'
 import { storageClient } from '@/lib/connect'
 import { t } from '@/lib/i18n'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useList } from '@/lib/useList'
 import { Link } from '@/router'
 import { useState } from 'preact/hooks'
@@ -24,6 +25,7 @@ import { useState } from 'preact/hooks'
 // (StorageService.CreateStorage). Edit and delete are not offered.
 export function StorageList() {
   const { cluster } = useCluster()
+  const perms = useMyPermissions(undefined, cluster?.ref)
   const [presets, setPresets] = useState<StoragePreset[]>([])
   const { items, error, reload } = useList(async () => {
     const res = await storageClient.listStorages({ cluster: cluster?.ref })
@@ -34,7 +36,7 @@ export function StorageList() {
   if (error) return <ErrorAlert {...error} />
   if (!items) return <PageSkeleton label={t('storage.loading')} />
 
-  const create = <CreateStorageDialog cluster={cluster?.ref} presets={presets} onDone={reload} />
+  const create = perms?.createStorages ? <CreateStorageDialog cluster={cluster?.ref} presets={presets} onDone={reload} /> : undefined
 
   return (
     <div>
@@ -42,7 +44,7 @@ export function StorageList() {
       {items.length === 0 ? (
         <div class="space-y-4">
           <EmptyNote icon={HardDriveIcon}>{t('storage.empty')}</EmptyNote>
-          <div class="flex justify-center">{create}</div>
+          {create && <div class="flex justify-center">{create}</div>}
         </div>
       ) : (
         <div class="space-y-6">

@@ -11,7 +11,7 @@ import { t } from '@/lib/i18n'
 // CARotationAdvice is the notice an adopted cluster carries: the
 // previous administrators' credentials stay valid until the CAs are rotated. It is advice only;
 // Dismiss writes an annotation on the TalosCluster and the controller clears the condition.
-export function CARotationAdvice({ cluster }: { cluster: ObjectRef }) {
+export function CARotationAdvice({ cluster, canDismiss }: { cluster: ObjectRef; canDismiss: boolean }) {
   const [dismissed, setDismissed] = useState(false)
   const { busy, error, run } = useAction()
 
@@ -28,11 +28,13 @@ export function CARotationAdvice({ cluster }: { cluster: ObjectRef }) {
         <InfoIcon />
         <AlertTitle>{t('caAdvice.title')}</AlertTitle>
         <AlertDescription>{t('caAdvice.text')}</AlertDescription>
-        <AlertAction>
-          <Button size="xs" variant="outline" disabled={busy} onClick={dismiss}>
-            {t('caAdvice.dismiss')}
-          </Button>
-        </AlertAction>
+        {canDismiss && (
+          <AlertAction>
+            <Button size="xs" variant="outline" disabled={busy} onClick={dismiss}>
+              {t('caAdvice.dismiss')}
+            </Button>
+          </AlertAction>
+        )}
       </Alert>
       {error && <ErrorAlert {...error} />}
     </>

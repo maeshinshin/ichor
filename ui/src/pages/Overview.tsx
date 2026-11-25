@@ -62,7 +62,7 @@ import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/lib/upgradeTargets'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
-import { clusterMenu, mayStart } from '@/lib/actions'
+import { clusterMenu, mayControlOperation, mayStart } from '@/lib/actions'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
@@ -258,7 +258,7 @@ function Home({
       </header>
       {opsError && <ErrorAlert {...opsError} />}
       <div class="space-y-4">
-        {cluster.conditions.some((c) => c.type === 'CARotationAdvised' && c.status === 'True') && <CARotationAdvice cluster={ref} />}
+        {cluster.conditions.some((c) => c.type === 'CARotationAdvised' && c.status === 'True') && <CARotationAdvice cluster={ref} canDismiss={perms?.clusterUpdate === true} />}
         {items.length > 0 && (
           <ul class="space-y-2">
             {items.map((a) => {
@@ -326,7 +326,7 @@ function Home({
                                 <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
                               </Button>
                             )}
-                            {perms?.createOperations && (
+                            {mayControlOperation(perms) && (
                               <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
                             )}
                           </AlertAction>

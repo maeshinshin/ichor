@@ -8,6 +8,9 @@ import { SectionCard } from '@/components/SectionCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ToneBadge } from '@/components/ToneBadge'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { mayControlOperation } from '@/lib/actions'
+import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { OperationControls } from '@/components/OperationControls'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
@@ -26,6 +29,8 @@ import { Link } from '@/router'
 export function OperationList() {
   const { items: ops, error, reload } = useList(async () => (await operationClient.listOperations({})).operations.slice().sort((a, b) => Number(b.createdAt?.seconds ?? 0n) - Number(a.createdAt?.seconds ?? 0n)), 5000)
   const [query, setQuery] = useState('')
+  const { cluster } = useCluster()
+  const mayControl = mayControlOperation(useMyPermissions(undefined, cluster?.ref))
 
   if (error) return <ErrorAlert {...error} />
   if (!ops) return <PageSkeleton label={t('ops.loading')} />
@@ -56,7 +61,7 @@ export function OperationList() {
             </TableHeader>
             <TableBody>
               {rows.map((op) => (
-                <OperationRow key={`${op.ref?.namespace}/${op.ref?.name}`} op={op} onChanged={reload} />
+                <OperationRow key={`${op.ref?.namespace}/${op.ref?.name}`} op={op} mayControl={mayControl} onChanged={reload} />
               ))}
             </TableBody>
           </Table>
@@ -66,7 +71,7 @@ export function OperationList() {
   )
 }
 
-function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void }) {
+function OperationRow({ op, mayControl, onChanged }: { op: Operation; mayControl: boolean; onChanged: () => void }) {
   const state = operationState(op.phase, op.failureReason, op.conditions)
   const { done, running } = progressCounts(op.machines)
 
@@ -93,7 +98,7 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
       </TableCell>
       <TableCell className="hidden sm:table-cell">{op.machines.length === 0 ? '–' : t('ops.progress', { done, running })}</TableCell>
       <TableCell>
-        <OperationControls op={op} onChanged={onChanged} onDeleted={onChanged} />
+        {mayControl && <OperationControls op={op} onChanged={onChanged} onDeleted={onChanged} />}
       </TableCell>
     </LinkRow>
   )

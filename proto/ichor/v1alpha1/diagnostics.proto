@@ -86,6 +86,8 @@ message GetMyPermissionsResponse {
   bool create_patches = 21;
   bool update_patches = 22;
   bool delete_patches = 23;
+  // create_storages is the "create" verb on talosstorages (only the admin role has it).
+  bool create_storages = 24;
 }
 
 message DownloadReaderTalosconfigRequest {

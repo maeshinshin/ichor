@@ -115,7 +115,7 @@ spec:
                   Default 15 minutes, at most 60.
                 type: string
                 x-kubernetes-validations:
-                - message: ttl must be between 1s and 60m
+                - message: ttl must be greater than 0s and at most 60m
                   rule: duration(self) > duration('0s') && duration(self) <= duration('60m')
             required:
             - address

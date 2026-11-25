@@ -38,8 +38,10 @@ import (
 // pinnedVersion and pinnedFingerprint hold Version and the output fingerprint it was last bumped
 // for. They move together: a render change updates the fingerprint and bumps Version.
 const (
+	kubeProxyReplaced = "replaced"
+
 	pinnedVersion     = 2
-	pinnedFingerprint = "sha256:6a2c70d35198067f560b518c4256a04c76b90bd5dbeee80fa0bf5b7b73f7ce36"
+	pinnedFingerprint = "sha256:fff373d29c8cec1c0f9513aabd030812955b9f01f534b3edeb8417a3dbbd3dda"
 )
 
 // leaves flattens a YAML stream into "doc<n>.path" -> value.
@@ -94,18 +96,19 @@ func fingerprintCluster() *ichorv1alpha1.TalosCluster {
 		Host: "docker.io", Endpoints: []string{"http://192.168.0.8:5000"},
 		AuthSecretRef: &corev1.LocalObjectReference{Name: "creds"},
 	}}
-	c.Spec.CNI.KubeProxy = "replaced"
-	c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{"tunnelPort":8473,"clusterHealthPort":4241}`)}}
+	c.Spec.CNI.KubeProxy = kubeProxyReplaced
+	ports := &apiextensionsv1.JSON{Raw: []byte(`{"tunnelPort":8473,"clusterHealthPort":4241}`)}
+	c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: ports}
 	c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{
 		PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
-			Enforce: "restricted", ExemptNamespaces: []string{"kube-system", "monitoring", "monitoring"},
+			Enforce: "baseline", ExemptNamespaces: []string{"kube-system", "observability", "observability"},
 		},
 		WireGuard: &ichorv1alpha1.TalosClusterWireGuard{Enabled: true},
 		Firewall: &ichorv1alpha1.TalosClusterFirewall{
 			Enabled: true, ControllerCIDRs: []string{"192.0.2.0/24"}, NodeCIDRs: []string{"10.0.0.0/24"},
-			TalosAPICIDRs: []string{"172.16.0.0/12"}, APIServerCIDRs: []string{"203.0.113.0/24"}, KubeSpan: true,
+			TalosAPICIDRs: []string{"172.20.0.0/14"}, APIServerCIDRs: []string{"198.51.100.0/24"}, KubeSpan: true,
 			Allow: []ichorv1alpha1.TalosClusterFirewallRule{
-				{Name: "ingress", Protocol: "tcp", Ports: []string{"80", "8000-8100"}, CIDRs: []string{"0.0.0.0/0"}},
+				{Name: "ingress", Protocol: "udp", Ports: []string{"80", "9000-9100"}, CIDRs: []string{"0.0.0.0/0"}},
 			},
 		},
 	}
@@ -138,7 +141,7 @@ func renderFingerprint(t *testing.T) string {
 	}
 
 	legacy := fingerprintCluster()
-	legacy.Spec.VersionContract = "v1.13"
+	legacy.Spec.VersionContract = contractV113
 	legacy.Spec.Security = nil // the hardening options need v1.14
 
 	cases := []struct {
@@ -151,7 +154,7 @@ func renderFingerprint(t *testing.T) string {
 			[]ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")}},
 		{"worker", roleWorker, fingerprintCluster(), testBundle(t), newBundle(versionContract, "1h"),
 			[]ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")}},
-		{"legacy-contract", roleControlPlane, legacy, newBundle("v1.13", "0h"), newBundle("v1.13", "1h"),
+		{"legacy-contract", roleControlPlane, legacy, newBundle(contractV113, "0h"), newBundle(contractV113, "1h"),
 			[]ichorv1alpha1.TalosConfigPatch{storedDocumentsPatch(t, timeServersDocument)}},
 	}
 

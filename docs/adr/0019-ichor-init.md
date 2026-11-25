@@ -215,3 +215,16 @@ bootstrap patch:
 `initRetryable` accepts: a NoMatch error (the CRD is not Established yet), a transient API error, and an
 admission-webhook failure. (`shortcut:` a fixed time window, not a watch on the CRD's `Established` condition;
 upgrade if a slower cluster ever needs longer than 3 minutes here.)
+
+## Amendment (2026-11-25): init and adopt no longer offer a namespace
+
+"One `--namespace`, not two" kept a flag whose only accepted value is the controller's namespace: `init` refuses any
+other, and `adopt` refuses any other than the one the installed controller runs in (`checkControllerNamespace`). A
+choice with one answer is not a choice. `init` and `adopt` now use the controller's namespace by themselves, and
+`-n/--namespace` on them is deprecated with cobra's `MarkDeprecated`, which also hides it from `--help` and the
+generated reference. A script that still passes it works when the value is the controller's namespace and fails with
+the same refusal as before when it differs, before anything is written. `adopt` without the flag takes the namespace
+of the installed controller (its Deployment or Helm release), else `ichor-system`. The `cluster.namespace` key of an
+init file is still read, under the same rule. The flag stays where a namespace is a real choice: every command that
+names a Ichor resource through the shared API flags (`get`, `describe`, `patch`, `backup`, `upgrade` and the like), and
+`migrate patches -n`.

@@ -30,19 +30,13 @@ sidebar_order: 1
   the controller.
 - **The secrets bundle**, as a file or recovered from a control plane (see
   [Plan and the secrets bundle](plan-and-secrets.md)).
-- **The namespace.** `--namespace` (`-n`, default `ichor-system`) can only be the
-  namespace the controller runs in, because it reads the bundle Secret from its
-  own namespace. Adopt checks this before it reads or writes anything and
-  refuses any other value, naming the right one.
-
-  > [!NOTE]
-  > When adopt cannot find the controller's Deployment or Helm release (an
-  > operator who may not list them cluster-wide), it cannot confirm the
-  > namespace: the default goes ahead and any other value is refused with "could
-  > not confirm". `--add-machine` makes no check: `--namespace` there is where
-  > the `TalosCluster` lives, and the bundle Secret is read from
-  > `--ichor-namespace` (default `ichor-system`), which needs the Role
-  > `ichor-bundle-secret-role` bound to you with a RoleBinding in that namespace.
+- **The namespace.** Adopt uses the namespace the controller runs in, because the
+  controller reads the bundle Secret from its own namespace; you do not pass one.
+  An old `--namespace` (`-n`) still works when it names that namespace; any other
+  value is refused before adopt reads or writes anything. `--add-machine` makes no
+  check: the `TalosCluster` is looked up in that namespace, and the bundle Secret is
+  read from the namespace the controller runs in (found automatically), which needs
+  the Role `ichor-bundle-secret-role` bound to you with a RoleBinding there.
 
 Adopt never applies anything to a node itself. The controller does, in the last
 phase, after a zero-drift check.

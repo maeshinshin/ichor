@@ -75,7 +75,7 @@ classes, creates a held TalosMachine and releases the hold after the zero-drift 
 A node of another Talos cluster is refused; "ichor reclaim node" resets it. The
 secrets bundle is read from the cluster's own Secret unless you pass one of the flags
 above, and --talosconfig may come from "ichor create credentials". Reading the Secret needs get on it
-in --ichor-namespace: bind the Role ichor-bundle-secret-role (chart value rbac.bundleSecret.names) with a
+in the namespace the controller runs in (found automatically): bind the Role ichor-bundle-secret-role (chart value rbac.bundleSecret.names) with a
 RoleBinding in that namespace; it grants get on the named Secrets and nothing else.
 
 adopt only reads the Talos nodes (using --talosconfig); it never applies
@@ -110,7 +110,6 @@ ichor adopt [flags]
       --installer-digest string           pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; for a cluster whose controller cannot reach the registry (a demo behind a mirror)
       --kube-api-server-url string        https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)
       --kube-api-tls-server-name string   tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
-  -n, --namespace string                  namespace the TalosCluster and its TalosMachines live in (default "ichor-system")
       --node string                       address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet
       --plan                              print the plan and write nothing
       --recover-from string               address of the control plane --recover-secrets reads the machine config from

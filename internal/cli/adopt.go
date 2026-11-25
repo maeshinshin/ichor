@@ -148,7 +148,7 @@ classes, creates a held TalosMachine and releases the hold after the zero-drift 
 A node of another Talos cluster is refused; "ichor reclaim node" resets it. The
 secrets bundle is read from the cluster's own Secret unless you pass one of the flags
 above, and --talosconfig may come from "ichor create credentials". Reading the Secret needs get on it
-in --ichor-namespace: bind the Role ichor-bundle-secret-role (chart value rbac.bundleSecret.names) with a
+in the namespace the controller runs in (found automatically): bind the Role ichor-bundle-secret-role (chart value rbac.bundleSecret.names) with a
 RoleBinding in that namespace; it grants get on the named Secrets and nothing else.
 
 adopt only reads the Talos nodes (using --talosconfig); it never applies
@@ -167,6 +167,8 @@ clusters keep the old CAs, but never starts one.`,
 		if err != nil {
 			return fmt.Errorf("adopt: building the Kubernetes client: %w", err)
 		}
+
+		adoptNamespace = adoptNamespaceOf(cmd.Context(), k8sClient, adoptNamespace)
 
 		dial := func(ctx context.Context, endpoint string) (talosConfigReader, error) {
 			return dialTalos(ctx, talosconfigPath, adoptContext, endpoint)
@@ -302,7 +304,8 @@ func init() {
 	rootCmd.AddCommand(adoptCmd)
 
 	adoptCmd.Flags().StringVar(&adoptCluster, flagCluster, "", "name of the TalosCluster to adopt (required)")
-	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", ichorControllerNamespace, "namespace the TalosCluster and its TalosMachines live in")
+	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", "", "namespace the TalosCluster and its TalosMachines live in")
+	_ = adoptCmd.Flags().MarkDeprecated("namespace", "adopt uses the namespace of Ichor's controller; the flag only accepts that value")
 	adoptCmd.Flags().StringVar(&adoptSecretsBundle, "secrets-bundle", "",
 		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)")
 	adoptCmd.Flags().BoolVar(&adoptRecover, "recover-secrets", false,

@@ -283,8 +283,20 @@ func checkControllerNamespace(ctx context.Context, c client.Reader, install *ado
 	}
 
 	return fmt.Errorf("adopt: --namespace %q is not %q, the namespace Ichor's controller runs in; the controller reads the secrets bundle "+
-		"Secret from its own namespace, so a bundle written to %q would never be found. Run adopt again with --namespace %s; nothing was written",
+		"Secret from its own namespace, so a bundle written to %q would never be found. Run adopt again without --namespace (it uses the controller's, %s); nothing was written",
 		namespace, want, namespace, want)
+}
+
+// adoptNamespaceOf is adopt's namespace: --namespace when given (checkControllerNamespace judges it), else
+// the installed controller's. A controller that cannot be listed leaves the documented default.
+func adoptNamespaceOf(ctx context.Context, c client.Reader, flag string) string {
+	if flag != "" {
+		return flag
+	}
+
+	ns, _ := controllerNamespace(ctx, c) //nolint:errcheck // an unlistable controller leaves the default
+
+	return ns
 }
 
 // semverOf is v with its leading "v" made certain, or "" when it is not a release version (a

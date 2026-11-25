@@ -51,7 +51,6 @@ var initConfigTemplate = `apiVersion: ichor.maesh.dev/v1alpha1
 kind: InitConfig
 cluster:
   name: demo                       # --cluster (required)
-  namespace: ichor-system          # -n/--namespace
   preset: single                   # --preset: single, compact-ha, standard or large
   endpoint:
     type: node                     # --endpoint-type: ` + endpointTypeNames(", ", " or ") + `

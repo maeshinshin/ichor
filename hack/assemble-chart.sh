@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # assemble-chart.sh CHART_DIR DEST: copy the chart to DEST/ichor with the files a published chart carries
-# (LICENSE and NOTICE, the source offer of ADR 0156; the chart holds no third-party code, so THIRD-PARTY-NOTICES
-# stays out, and it alone was 184 KB of the 1 MiB release record) and, when IMAGE_DIGESTS is set, the controller
+# (LICENSE and NOTICE, the source offer of ADR 0156; the chart carries no third-party Go modules or packages and its Talos-derived CRDs are covered by NOTICE, so
+# THIRD-PARTY-NOTICES stays out, and it alone was 184 KB of the 1 MiB release record) and, when IMAGE_DIGESTS is set, the controller
 # and ichor-ui images pinned by digest (the templates add no tag to a repository with an @). make helm-package packages the result and make
 # check-release-record measures it, so the gate sees what is shipped.
 set -euo pipefail

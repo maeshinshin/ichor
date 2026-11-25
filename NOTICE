@@ -45,6 +45,8 @@ at https://github.com/maeshinshin/ichor, at the Git tag that matches the
 version of the artifact (a release archive, a container image or the Helm
 chart) this NOTICE came with. The MPL-2.0 modules Ichor depends on are listed
 with their sources in THIRD-PARTY-NOTICES, which is in every release archive and
-in the repository at the same tag. The Helm chart holds no third-party code, so
-it carries LICENSE and this NOTICE and not THIRD-PARTY-NOTICES. The text of the
+in the repository at the same tag. The Helm chart carries no third-party Go
+modules or other bundled packages, and the Talos-derived CRDs it contains are the
+MPL-2.0 files named above, so it carries LICENSE and this NOTICE and not
+THIRD-PARTY-NOTICES. The text of the
 Mozilla Public License 2.0 is at https://mozilla.org/MPL/2.0/.

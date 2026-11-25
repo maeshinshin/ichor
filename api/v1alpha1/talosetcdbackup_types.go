@@ -35,6 +35,11 @@ const (
 	TalosEtcdBackupConditionStoreInCluster = "StoreInCluster"
 	TalosEtcdBackupReasonInCluster         = "InCluster"
 
+	// TalosEtcdBackupConditionSharedDestination is True (a warning) while another TalosEtcdBackup writes the
+	// same endpoint, bucket and prefix: retention prunes by prefix, so the backups prune each other's snapshots.
+	TalosEtcdBackupConditionSharedDestination = "SharedDestination"
+	TalosEtcdBackupReasonSharedPrefix         = "SharedPrefix"
+
 	TalosEtcdBackupReasonSucceeded = "Succeeded"
 	TalosEtcdBackupReasonFailed    = "Failed"
 	TalosEtcdBackupReasonStale     = "Stale"

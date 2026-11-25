@@ -126,3 +126,13 @@ func CredentialsSecret(namespace, name string, c S3Config) *corev1.Secret {
 
 	return &corev1.Secret{Name: name, Namespace: namespace, Type: corev1.SecretTypeOpaque, Data: data}
 }
+
+// SharesDestination reports that a and b are different backups writing the same endpoint, bucket and prefix
+// (leading and trailing slashes ignored). Retention prunes by prefix, so such backups prune each other's snapshots.
+// shortcut: compares the endpoint strings as written, so two spellings of one endpoint pass; drop when snapshots carry a writer.
+func SharesDestination(a, b *ichorv1alpha1.TalosEtcdBackup) bool {
+	x, y := a.Spec.Destination.S3, b.Spec.Destination.S3
+
+	return (a.Namespace != b.Namespace || a.Name != b.Name) && x.Endpoint == y.Endpoint && x.Bucket == y.Bucket &&
+		strings.Trim(x.Prefix, "/") == strings.Trim(y.Prefix, "/")
+}

@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/etcdbackup"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
@@ -529,7 +530,6 @@ func (h *OverrideHandler) handleEtcdBackup(ctx context.Context, req admission.Re
 // refuseSharedBackupPrefix denies a create whose endpoint, bucket and prefix another TalosEtcdBackup already
 // writes. Retention prunes by prefix and the object key names no writer, so two backups on one prefix would
 // delete each other's snapshots (ADR 0047). Create only: backups that already share a prefix keep working.
-// shortcut: compares the strings as written, so two spellings of one endpoint pass; drop when snapshots carry a writer.
 func (h *OverrideHandler) refuseSharedBackupPrefix(ctx context.Context, req admission.Request) *admission.Response {
 	var nb ichorv1alpha1.TalosEtcdBackup
 	if err := json.Unmarshal(req.Object.Raw, &nb); err != nil {
@@ -545,10 +545,9 @@ func (h *OverrideHandler) refuseSharedBackupPrefix(ctx context.Context, req admi
 		return &r
 	}
 
-	n := nb.Spec.Destination.S3
 	for i := range all.Items {
-		o := all.Items[i].Spec.Destination.S3
-		if o.Endpoint == n.Endpoint && o.Bucket == n.Bucket && strings.Trim(o.Prefix, "/") == strings.Trim(n.Prefix, "/") {
+		if etcdbackup.SharesDestination(&nb, &all.Items[i]) {
+			n := nb.Spec.Destination.S3
 			r := admission.Denied(fmt.Sprintf("TalosEtcdBackup %s/%s already writes to bucket %q prefix %q: a second backup on one prefix "+
 				"would prune its snapshots; use another spec.destination.s3.prefix", all.Items[i].Namespace, all.Items[i].Name, n.Bucket, n.Prefix))
 

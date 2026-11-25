@@ -614,6 +614,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		SnapshotClient:      controller.NewMachineryEtcdSnapshotClient,
 		SpoolDir:            backupSpoolDir,
+		Recorder:            mgr.GetEventRecorderFor("ichor-etcd-backup"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosetcdbackup")
 	ichorInstReconciler := &controller.IchorInstallationReconciler{
 		Client: mgr.GetClient(), DeployedBy: deployedBy, SettingsFallback: settingsFallback, SettingsReadOnly: settingsReadOnly,

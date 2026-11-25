@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,6 +33,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,6 +108,9 @@ type TalosEtcdBackupReconciler struct {
 
 	// Now is time.Now unless a test sets it.
 	Now func() time.Time
+
+	// Recorder emits the SharedDestination warning; nil emits none.
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list;watch
@@ -128,6 +133,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	r.noteStoreLocation(ctx, &bk)
+	r.noteSharedDestination(ctx, &bk)
 
 	if bk.Spec.Suspend {
 		return ctrl.Result{}, r.setReady(ctx, &bk, metav1.ConditionUnknown, ichorv1alpha1.TalosEtcdBackupReasonSuspended,
@@ -204,6 +210,45 @@ func (r *TalosEtcdBackupReconciler) noteStoreLocation(ctx context.Context, bk *i
 	}
 
 	apimeta.RemoveStatusCondition(&bk.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionStoreInCluster)
+}
+
+// noteSharedDestination sets the warning condition SharedDestination while another backup writes the same
+// endpoint, bucket and prefix, and removes it otherwise. The Warning Event is emitted when the condition appears.
+// The caller writes status in the same reconcile. Pruning is not changed.
+func (r *TalosEtcdBackupReconciler) noteSharedDestination(ctx context.Context, bk *ichorv1alpha1.TalosEtcdBackup) {
+	var all ichorv1alpha1.TalosEtcdBackupList
+	if err := r.List(ctx, &all); err != nil {
+		return
+	}
+
+	var others []string
+
+	for i := range all.Items {
+		if etcdbackup.SharesDestination(bk, &all.Items[i]) {
+			others = append(others, all.Items[i].Namespace+"/"+all.Items[i].Name)
+		}
+	}
+
+	if len(others) == 0 {
+		apimeta.RemoveStatusCondition(&bk.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionSharedDestination)
+
+		return
+	}
+
+	slices.Sort(others)
+
+	msg := "the same endpoint, bucket and prefix is written by " + strings.Join(others, ", ") +
+		"; retention prunes across them; give each its own prefix"
+	had := apimeta.IsStatusConditionTrue(bk.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionSharedDestination)
+
+	apimeta.SetStatusCondition(&bk.Status.Conditions, metav1.Condition{
+		Type: ichorv1alpha1.TalosEtcdBackupConditionSharedDestination, Status: metav1.ConditionTrue,
+		Reason: ichorv1alpha1.TalosEtcdBackupReasonSharedPrefix, Message: msg, ObservedGeneration: bk.Generation,
+	})
+
+	if !had && r.Recorder != nil {
+		r.Recorder.Event(bk, corev1.EventTypeWarning, ichorv1alpha1.TalosEtcdBackupReasonSharedPrefix, msg)
+	}
 }
 
 // consumeBackupNow reports whether a backup-now request (BackupNowAnnotation) newer than

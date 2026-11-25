@@ -38,6 +38,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -482,6 +483,39 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 
 		_, got = f.reconcile(got)
 		Expect(apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionStoreInCluster)).To(BeNil())
+	})
+
+	It("warns both backups with SharedDestination when they write one prefix, and does not change pruning", func() {
+		f := newBackupFixture()
+		f.addControlPlane("81", 2)
+
+		rec := record.NewFakeRecorder(10)
+		f.r.Recorder = rec
+
+		own := func(b *ichorv1alpha1.TalosEtcdBackup) { b.Spec.Destination.S3.Prefix = "shared-destination" }
+		a := f.newBackup(own)
+		b := f.newBackup(own)
+
+		_, gotA := f.reconcile(a)
+		_, gotB := f.reconcile(b)
+
+		for _, got := range []*ichorv1alpha1.TalosEtcdBackup{gotA, gotB} {
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionSharedDestination)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+			Expect(cond.Message).To(ContainSubstring("retention prunes across them; give each its own prefix"))
+		}
+
+		Expect(apimeta.FindStatusCondition(gotA.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionSharedDestination).Message).To(ContainSubstring(b.Name))
+		Expect(rec.Events).To(HaveLen(2))
+
+		_, _ = f.reconcile(a)
+		Expect(rec.Events).To(HaveLen(2), "the event is emitted once per backup")
+
+		Expect(k8sClient.Delete(ctx, b)).To(Succeed())
+
+		_, gotA = f.reconcile(a)
+		Expect(apimeta.FindStatusCondition(gotA.Status.Conditions, ichorv1alpha1.TalosEtcdBackupConditionSharedDestination)).To(BeNil())
 	})
 
 	It("fails clearly when the credentials Secret is missing or incomplete", func() {

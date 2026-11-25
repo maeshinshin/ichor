@@ -157,7 +157,7 @@ func (p *AutoPatcher) Pass(ctx context.Context) error {
 		return fmt.Errorf("listing the clusters: %w", err)
 	}
 
-	ichorUpgrading := inst.Status.InstalledVersion != "" && inst.Status.InstalledVersion != inst.Spec.Version
+	ichorUpgrading := inst.Upgrading()
 
 	for i := range clusters.Items {
 		if err := p.passCluster(ctx, &inst, &clusters.Items[i], ops.Items, eff.AutoPatch.V, ichorUpgrading); err != nil {

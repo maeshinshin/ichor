@@ -122,7 +122,7 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 	}
 
 	info.Server = &versionServer{InstalledVersion: inst.Status.InstalledVersion}
-	if inst.Spec.Version != inst.Status.InstalledVersion {
+	if inst.Upgrading() {
 		info.Server.SpecVersion = inst.Spec.Version
 	}
 

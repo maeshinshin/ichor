@@ -122,3 +122,23 @@ func TestVersionClientFlagDoesNotTouchTheCluster(t *testing.T) {
 		t.Fatalf("stdout = %q, stderr = %q", out.String(), errOut.String())
 	}
 }
+
+func TestVersionOnAHelmInstallIsNeverUpgrading(t *testing.T) {
+	scheme, err := cliScheme()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version: "v0.2.9", Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm},
+		},
+		Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.3.2"},
+	}).Build()
+
+	info, _ := collectVersion(context.Background(), c, testCLIVersion)
+	if out := renderVersion(t, info, outputYAML); strings.Contains(out, "specVersion") {
+		t.Fatalf("output = %q", out)
+	}
+}

@@ -481,3 +481,9 @@ const ReasonManagedByHelm = "ManagedByHelm"
 func (i *IchorInstallation) HelmManaged() bool {
 	return i != nil && i.Spec.Deployment != nil && i.Spec.Deployment.Manager == IchorManagerHelm
 }
+
+// Upgrading reports that an Ichor upgrade is under way: the installed version differs from spec.version.
+// A Helm install never is, because Helm moves it and spec.version only records the version at creation.
+func (i *IchorInstallation) Upgrading() bool {
+	return !i.HelmManaged() && i.Status.InstalledVersion != "" && i.Status.InstalledVersion != i.Spec.Version
+}

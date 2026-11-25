@@ -130,6 +130,20 @@ var _ = Describe("AutoPatcher", Ordered, func() {
 		Expect(operations()).To(HaveLen(1), "an unfinished operation holds the cluster")
 	})
 
+	It("is not held back by an Ichor upgrade on a Helm install, where spec.version never moves", func() {
+		i := inst()
+		i.Spec.Version = "v0.3.0"
+		i.Spec.Deployment = &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm}
+		Expect(k8sClient.Update(ctx, i)).To(Succeed())
+
+		i = inst()
+		i.Status.InstalledVersion = "v0.3.2"
+		Expect(k8sClient.Status().Update(ctx, i)).To(Succeed())
+
+		pass()
+		Expect(operations()).To(HaveLen(1))
+	})
+
 	It("starts nothing while the setting is off, outside the window, or with a machine not Ready", func() {
 		enabled = false
 		pass()

@@ -34,7 +34,7 @@ The order is Talos, Cilium, Kubernetes, one component per decision. Kubernetes c
 Every guard is a field of the pure function `autopatch.Decide`:
 
 1. the setting is on, and not halted;
-2. no Ichor upgrade is in progress (`status.installedVersion` is `spec.version`);
+2. no Ichor upgrade is in progress (`status.installedVersion` is `spec.version`; a Helm-managed install is never upgrading, because Helm moves it and `spec.version` stays at the version it was created with: `IchorInstallation.Upgrading()`);
 3. now (UTC) is inside the window;
 4. the release lists exist and are younger than 48 hours (the check runs every six hours, so older means it is failing or off);
 5. no TalosOperation of the cluster is unfinished (running, paused or pending; a node shutdown resting in `ShutDown` does not count), and the cluster lock (the Lease of ADR 0043) is not held;
@@ -84,3 +84,7 @@ The target of a Talos or Kubernetes upgrade is `TalosCluster.spec.talosVersion` 
 ## Amendment 2026-11-04: Cilium has no automatic patch
 
 ADR 0115, amendment 2026-11-04 (3), removed the Cilium patches that run on the embedded chart, so there is nothing for the patcher to apply for Cilium: `autopatch.Candidate("cilium", ...)` returns nothing and `Cluster.CiliumChart` is gone. `cilium` remains an accepted value of `components` (stored settings and the chart defaults keep working) and selects no operation. The patcher's order is Talos, then Kubernetes. A Cilium patch reaches a cluster with an Ichor release; the chart upgrade stays a manual operation.
+
+## Amendment 2026-11-26: a Helm install is never upgrading
+
+Guard 2 compared `status.installedVersion` with `spec.version`. Under Helm `spec.version` is written once by `Seed` and never moves, so after the first `helm upgrade` the two differ for good and the patcher skipped every pass without recording it. `IchorInstallation.Upgrading()` now answers false for `spec.deployment.manager: helm`; the patcher and `ichor version` use it.

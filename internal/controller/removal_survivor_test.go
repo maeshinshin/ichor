@@ -1,7 +1,8 @@
 package controller
 
 import (
-	"sort"
+	"slices"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,7 +24,7 @@ var _ = Describe("removing an etcd member when the first sibling is unreachable"
 			cps[i] = newTestControlPlane(cluster.Name, string(rune('1'+i)))
 		}
 
-		sort.Slice(cps, func(i, j int) bool { return cps[i].Name < cps[j].Name })
+		slices.SortFunc(cps, func(a, b *ichorv1alpha1.TalosMachine) int { return strings.Compare(a.Name, b.Name) })
 		setHostname(cps[3], host)
 
 		byName := map[string]*fakeTalosClient{}

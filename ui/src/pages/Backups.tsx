@@ -12,7 +12,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { RestoreDialog } from '@/components/RestoreDialog'
 import { BackupNow } from '@/components/BackupNow'
 import type { EtcdBackup } from '@/gen/ichor/v1alpha1/operation_pb'
-import { destinationLabel, exampleBackupYaml, newestSnapshot, totalBytes } from '@/lib/backups'
+import { destinationLabel, exampleBackupYaml, lastErrorTitle, newestSnapshot, totalBytes } from '@/lib/backups'
 import { operationClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
@@ -153,7 +153,7 @@ export function Backups() {
               b.lastError ? (
                 <Alert key={b.ref?.name} variant="destructive">
                   <TriangleAlertIcon />
-                  <AlertTitle>{t('backups.lastError')}</AlertTitle>
+                  <AlertTitle>{lastErrorTitle(b)}</AlertTitle>
                   <AlertDescription className="break-words">{b.lastError}</AlertDescription>
                 </Alert>
               ) : null,

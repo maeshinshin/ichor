@@ -1,4 +1,5 @@
 // Pure helpers for the Backups page.
+import { t } from './i18n.ts'
 
 type SnapshotLike = { name: string; time?: { seconds: bigint }; size: bigint }
 
@@ -58,4 +59,9 @@ export function backNowBlock(b: BackupLike): 'backups.nowSuspended' | 'backups.n
   if (b.suspended) return 'backups.nowSuspended'
   if (b.manualBackupPending) return 'backups.nowPending'
   return undefined
+}
+
+// lastErrorTitle is the title of a backup's error alert; the page can list several backups, so it names this one.
+export function lastErrorTitle(b: { ref?: { name: string } }): string {
+  return t('backups.lastError', { name: b.ref?.name ?? '' })
 }

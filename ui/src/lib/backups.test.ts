@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { backNowBlock, destinationLabel, exampleBackupYaml, newestSnapshot, totalBytes } from './backups.ts'
+import { backNowBlock, destinationLabel, exampleBackupYaml, lastErrorTitle, newestSnapshot, totalBytes } from './backups.ts'
 
 const snap = (name: string, seconds?: bigint, size = 1n) => ({ name, time: seconds === undefined ? undefined : { seconds }, size })
 
@@ -29,4 +29,9 @@ test('backNowBlock refuses a suspended backup and a waiting request', () => {
   assert.equal(backNowBlock({ suspended: false, manualBackupPending: false }), undefined)
   assert.equal(backNowBlock({ suspended: true, manualBackupPending: false }), 'backups.nowSuspended')
   assert.equal(backNowBlock({ suspended: false, manualBackupPending: true }), 'backups.nowPending')
+})
+
+test('the error alert names the backup that failed', () => {
+  assert.match(lastErrorTitle({ ref: { name: 'nightly' } }), /nightly/)
+  assert.notEqual(lastErrorTitle({ ref: { name: 'a' } }), lastErrorTitle({ ref: { name: 'b' } }))
 })

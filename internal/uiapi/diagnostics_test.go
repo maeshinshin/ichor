@@ -91,6 +91,17 @@ func TestRedactKernelLog(t *testing.T) {
 	}
 }
 
+func TestRedactKernelLogFetchLine(t *testing.T) {
+	t.Parallel()
+
+	in := "[talos] fetching machine config from: \"https://x/cfg/" + diagSecret + "?token=" + diagSecret + "\"\n[1.0] ok"
+	out := string(redactKernelLog([]byte(in)))
+
+	if strings.Contains(out, diagSecret) || !strings.Contains(out, "[1.0] ok") {
+		t.Fatalf("want the URL masked and the rest kept: %s", out)
+	}
+}
+
 func newResourceState(t *testing.T, sensitive bool) state.State {
 	t.Helper()
 

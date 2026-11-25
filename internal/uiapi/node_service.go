@@ -201,9 +201,7 @@ func (s *Server) StreamNodeLogs(
 		mu.Lock()
 		defer mu.Unlock()
 
-		if service == "" { // the kernel log carries the boot command line, with its talos.config token
-			line.Message = string(redactKernelLog([]byte(line.Message)))
-		}
+		line.Message = string(redactKernelLog([]byte(line.Message))) // any source can log the talos.config URL
 
 		tok = tok.advance(namespacedName(ref).String(), line)
 

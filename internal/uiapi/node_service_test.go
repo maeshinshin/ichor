@@ -363,6 +363,34 @@ var _ = Describe("NodeService", func() {
 		Expect(connect.CodeOf(stream.Err())).To(Equal(connect.CodeInvalidArgument))
 	})
 
+	DescribeTable("masks a talos.config URL in every log source",
+		func(service string) {
+			cluster := newTestClusterWithBundle()
+			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-logurl"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+			fake := &fakeNodeTalosClient{lines: []LogLine{
+				{Seen: time.Now().Add(-time.Second), Message: "[talos] fetching machine config from: \"https://x?token=hunter2\""},
+			}}
+			client, closeFn := newTestNodeServer(fake, nil)
+			defer closeFn()
+
+			stream, err := client.StreamNodeLogs(ctx, connect.NewRequest(&pb.StreamNodeLogsRequest{
+				Machines: []*pb.ObjectRef{objectRef(m.Namespace, m.Name)}, Service: service,
+			}))
+			Expect(err).NotTo(HaveOccurred())
+
+			n := 0
+			for stream.Receive() {
+				n++
+				Expect(stream.Msg().GetMessage()).NotTo(ContainSubstring("hunter2"))
+			}
+			Expect(stream.Err()).NotTo(HaveOccurred())
+			Expect(n).To(Equal(1))
+		},
+		Entry("the kernel log", ""),
+		Entry("machined", "machined"),
+	)
+
 	It("refuses log streams past the concurrency limit and frees the slots on release", func() {
 		s := &Server{}
 

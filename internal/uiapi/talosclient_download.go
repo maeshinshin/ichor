@@ -25,6 +25,7 @@ import (
 	"io"
 	"maps"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -431,16 +432,23 @@ func (t *machineryDownloadClient) dmesg(ctx context.Context) ([]byte, error) {
 	return redactKernelLog(raw), nil
 }
 
-// redactKernelLog masks credential-shaped arguments on the kernel's
-// "Command line:" and "Unknown kernel command line parameters" lines (talos.config=<url with a token>), the same rule
-// GetNodeTalosDetails applies to the arguments it shows.
+// configURLRE matches the URL Talos logs when it fetches its machine config ("fetching machine config
+// from: \"<url>\"") and a talos.config= argument: the whole URL goes, since its path can carry the token too.
+var configURLRE = regexp.MustCompile(`(?i)(machine config from:?\s*"?|talos\.config=)[^\s"]+`)
+
+// redactKernelLog masks credentials in a log of any source: the kernel's "Command line:" and "Unknown kernel
+// command line parameters" arguments (talos.config=<url with a token>), the same rule GetNodeTalosDetails applies
+// to the arguments it shows, and any talos.config URL, which machined logs too. The log stream and the support
+// bundle both use it.
 func redactKernelLog(raw []byte) []byte {
 	lines := strings.Split(string(raw), "\n")
 
 	for i, l := range lines {
 		if strings.Contains(strings.ToLower(l), "command line") {
-			lines[i] = strings.Join(redactKernelArgs(strings.Fields(l)), " ")
+			l = strings.Join(redactKernelArgs(strings.Fields(l)), " ")
 		}
+
+		lines[i] = configURLRE.ReplaceAllString(l, "${1}"+redactedValue)
 	}
 
 	return []byte(strings.Join(lines, "\n"))
@@ -489,7 +497,7 @@ func (t *machineryDownloadClient) serviceLogs(ctx context.Context, problems *[]s
 			*problems = append(*problems, "log of "+s.ID+": "+truncateText(err.Error(), 300))
 		}
 
-		out["logs/"+path.Base(s.ID)+".log"] = raw
+		out["logs/"+path.Base(s.ID)+".log"] = redactKernelLog(raw)
 	}
 
 	return out, nil

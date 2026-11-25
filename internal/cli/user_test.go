@@ -441,3 +441,31 @@ func TestBootstrapUserRefusals(t *testing.T) {
 		t.Errorf("a refused user left a CR behind: %v %d", err, len(list.Items))
 	}
 }
+
+// TestReadUnlessCancelled_ReturnsTheContextErrorWhileTheReadIsBlocked: a pipe that never answers stands in for the
+// terminal (a pty is impractical here); a cancelled context ends the wait within a second and restores the terminal.
+func TestReadUnlessCancelled_ReturnsTheContextErrorWhileTheReadIsBlocked(t *testing.T) {
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = pw.Close(); _ = pr.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	restored := false
+
+	go func() { time.Sleep(50 * time.Millisecond); cancel() }()
+
+	start := time.Now()
+	_, err = readUnlessCancelled(ctx, func() ([]byte, error) {
+		b := make([]byte, 1)
+		_, err := pr.Read(b)
+
+		return b, err
+	}, func() { restored = true })
+
+	if !errors.Is(err, context.Canceled) || time.Since(start) > time.Second || !restored {
+		t.Fatalf("err = %v after %v, restored = %v, want context.Canceled within 1s and a restore", err, time.Since(start), restored)
+	}
+}

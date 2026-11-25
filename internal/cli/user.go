@@ -360,6 +360,11 @@ func printGeneratedPassword(errw io.Writer, name, password string) {
 	_, _ = fmt.Fprintln(errw, generatedPasswordLine(name, password))
 }
 
+// promptCtx is the root command's context: Ctrl-C cancels it (signal.NotifyContext in Execute).
+// shortcut: a package variable, not a parameter, so the three prompt sites need no new argument; drop
+// when readBundlePassphrase gets the command's context.
+var promptCtx = context.Background()
+
 // readPasswordFn reads a line without echo from the terminal; a test replaces it.
 var readPasswordFn = func(prompt string, errw io.Writer) (string, error) {
 	fd := int(os.Stdin.Fd()) //nolint:gosec // a file descriptor fits an int
@@ -370,10 +375,42 @@ var readPasswordFn = func(prompt string, errw io.Writer) (string, error) {
 
 	_, _ = fmt.Fprint(errw, prompt)
 
-	b, err := term.ReadPassword(fd)
+	state, _ := term.GetState(fd)
+
+	b, err := readUnlessCancelled(promptCtx, func() ([]byte, error) { return term.ReadPassword(fd) }, func() {
+		if state != nil {
+			_ = term.Restore(fd, state)
+		}
+	})
 	_, _ = fmt.Fprintln(errw)
 
 	return string(b), err
+}
+
+// readUnlessCancelled runs read and returns ctx's error as soon as ctx is done. term.ReadPassword keeps ISIG
+// on, so Ctrl-C raises SIGINT, which the root context swallows, and the read would stay blocked. The abandoned
+// read ends with the process; restore puts the terminal back, as the read's own deferred reset has not run.
+func readUnlessCancelled(ctx context.Context, read func() ([]byte, error), restore func()) ([]byte, error) {
+	type result struct {
+		b   []byte
+		err error
+	}
+
+	done := make(chan result, 1)
+
+	go func() {
+		b, err := read()
+		done <- result{b, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		restore()
+
+		return nil, ctx.Err()
+	case r := <-done:
+		return r.b, r.err
+	}
 }
 
 // resolvePassword returns the password to set, or "" to have one generated. It

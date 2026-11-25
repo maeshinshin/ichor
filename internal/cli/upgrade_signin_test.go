@@ -419,8 +419,8 @@ func signedInUI(t *testing.T, k client.Client) {
 
 func aliceAdmin() []client.Object {
 	return []client.Object{
-		&ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: "alice", Spec: ichorv1alpha1.IchorUserSpec{Roles: []string{ichorauth.RoleAdmin}}},
-		&corev1.Secret{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName, Data: map[string][]byte{"alice": []byte("{}")}},
+		&ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: testUserAlice, Spec: ichorv1alpha1.IchorUserSpec{Roles: []string{ichorauth.RoleAdmin}}},
+		&corev1.Secret{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName, Data: map[string][]byte{testUserAlice: []byte("{}")}},
 	}
 }
 

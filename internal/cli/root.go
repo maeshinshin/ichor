@@ -82,6 +82,7 @@ func Execute() {
 
 	// Ctrl-C ends a prompt with an error, so the deferred cleanups of the command run.
 	rootCmd.SetContext(ctx)
+	promptCtx = ctx
 	rootCmd.SetIn(interruptible(ctx, os.Stdin))
 
 	cmd, err := executeRoot(os.Stderr)

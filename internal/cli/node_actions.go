@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
@@ -259,11 +261,29 @@ func confirmPrompt(machine, asked string) string {
 	return "Type " + confirmWhat(machine, asked) + " to confirm: "
 }
 
+// lineReaders keeps one bufio.Reader per input, so a second prompt on piped stdin sees the line the first
+// reader would otherwise have buffered away.
+var lineReaders sync.Map
+
+func lineReader(r io.Reader) *bufio.Reader {
+	if br, ok := r.(*bufio.Reader); ok {
+		return br
+	}
+
+	if t := reflect.TypeOf(r); t == nil || !t.Comparable() {
+		return bufio.NewReader(r)
+	}
+
+	br, _ := lineReaders.LoadOrStore(r, bufio.NewReader(r))
+
+	return br.(*bufio.Reader)
+}
+
 // readLine prompts and returns the trimmed answer.
 func readLine(r io.Reader, w io.Writer, prompt string) (string, error) {
 	_, _ = fmt.Fprint(w, prompt)
 
-	line, err := bufio.NewReader(r).ReadString('\n')
+	line, err := lineReader(r).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return "", err
 	}

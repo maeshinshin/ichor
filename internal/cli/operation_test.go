@@ -485,3 +485,14 @@ func TestApproveOperationRefusesAnOperationAPersonPaused(t *testing.T) {
 		t.Error("a refused approve cleared spec.paused")
 	}
 }
+
+// Piped answers arrive in one read: both prompts of one command must see their own line.
+func TestConfirmReadsOneLinePerPromptFromPipedStdin(t *testing.T) {
+	in := strings.NewReader("y\ny\n")
+
+	for i := range 2 {
+		if ok, err := confirm(in, &bytes.Buffer{}, "? "); err != nil || !ok {
+			t.Fatalf("prompt %d: ok=%v err=%v", i+1, ok, err)
+		}
+	}
+}

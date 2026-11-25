@@ -50,7 +50,7 @@ func allFlagNames(c *cobra.Command, into map[string]bool) {
 // of some command; a user who follows the message must not meet "unknown flag".
 func TestErrorMessagesNameFlagsThatExist(t *testing.T) {
 	// create-namespace is helm's, named in the install command a message shows.
-	known := map[string]bool{"help": true, "create-namespace": true}
+	known := map[string]bool{"create-namespace": true}
 	allFlagNames(rootCmd, known)
 
 	files, err := filepath.Glob("*.go")

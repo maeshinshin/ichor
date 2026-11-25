@@ -210,26 +210,14 @@ func TestBuildInitPlan_RejectsUnschedulableWithNoWorkers(t *testing.T) {
 	}
 }
 
-// TestBuildInitPlan_NonControllerNamespaceWarnsButSucceeds proves
-// the namespace decision is enforced as a warning, not a
-// rejection: --namespace can still differ from ichorControllerNamespace,
-// but the operator is told why that is almost always wrong.
-func TestBuildInitPlan_NonControllerNamespaceWarnsButSucceeds(t *testing.T) {
+// TestBuildInitPlan_NonControllerNamespaceIsRefused: the controller reads the bundle Secret only in its own namespace,
+// so init refuses another --namespace before it writes anything.
+func TestBuildInitPlan_NonControllerNamespaceIsRefused(t *testing.T) {
 	in := validInitPlanInput()
 	in.Namespace = testNamespace
 
-	var warn bytes.Buffer
-
-	cluster, err := buildInitPlan(in, &warn)
-	if err != nil {
-		t.Fatalf("buildInitPlan: %v", err)
-	}
-
-	if cluster.Namespace != testNamespace {
-		t.Fatalf("cluster.Namespace = %q, want default", cluster.Namespace)
-	}
-
-	if !strings.Contains(warn.String(), ichorControllerNamespace) {
-		t.Fatalf("expected a warning naming %q, got: %s", ichorControllerNamespace, warn.String())
+	_, err := buildInitPlan(in, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "nothing was written") || !strings.Contains(err.Error(), ichorControllerNamespace) {
+		t.Fatalf("buildInitPlan err = %v, want a refusal naming %q", err, ichorControllerNamespace)
 	}
 }

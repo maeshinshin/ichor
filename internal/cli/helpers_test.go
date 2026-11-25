@@ -280,7 +280,7 @@ func validInitOptions() initOptions {
 	return initOptions{
 		BundlePlaintext:   true,
 		Cluster:           testInitClusterName,
-		Namespace:         testNamespace,
+		Namespace:         ichorControllerNamespace,
 		Preset:            defaultPreset,
 		CNIPreset:         testCNICilium,
 		EndpointType:      testEndpointTypeVIP,

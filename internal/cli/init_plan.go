@@ -51,7 +51,7 @@ const defaultPreset = "standard"
 // into the release's namespace, so a Helm install may use another.
 // The controller resolves the bundle Secret in that namespace, not the
 // TalosCluster's; adopt asks the cluster (ichorPresence.Namespace)
-// before it writes one. init still warns on any other value.
+// before it writes one. init refuses any other value.
 const ichorControllerNamespace = "ichor-system"
 
 // schedulableTrue and schedulableFalse are TalosClusterControlPlane.
@@ -262,13 +262,10 @@ func secretsRefName(cluster string) string {
 // render against and create, with controlPlane.count/schedulable derived
 // from --preset (architecture.md's "Nodes": "the topology preset that
 // carries the intent is a flag on ichor init, not a field;
-// init sets it from the preset"). It writes a warning (never an error) to
-// warn when the endpoint type is not "vip" or the namespace is not
-// ichorControllerNamespace, per architecture.md's "Design" ("a VIP is
-// recommended... because changing the endpoint later means re-issuing
-// certificates") (the fixed controller namespace) --
-// recommended, not required, so this never rejects a valid-but-unusual
-// choice on its own.
+// init sets it from the preset"). A namespace other than ichorControllerNamespace is an error. An
+// endpoint type other than "vip" only writes a warning to warn: a VIP is recommended, because changing
+// the endpoint later means re-issuing certificates, but not required, so this never rejects a
+// valid-but-unusual choice on its own.
 //
 // Of step 2's named disk roles, only "system" (the install disk) is set
 // here -- it is folded into the Config patch alongside the
@@ -348,10 +345,11 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, err
 	}
 
+	// The controller reads the bundle Secret only from its own namespace (ADR 0011, 0019) and the upgrade's
+	// migrations cover only that namespace, so a cluster created elsewhere would never come up.
 	if in.Namespace != ichorControllerNamespace {
-		_, _ = fmt.Fprintf(warn,
-			"warning: --namespace %q is not %q: Ichor's controller always runs in %q, "+
-				"so a Secret or CR created elsewhere is not visible to it\n",
+		return nil, fmt.Errorf("init: --namespace %q is not %q: Ichor's controller always runs in %q and reads the secrets bundle "+
+			"Secret only there, so a cluster created elsewhere would never be reconciled; nothing was written",
 			in.Namespace, ichorControllerNamespace, ichorControllerNamespace)
 	}
 

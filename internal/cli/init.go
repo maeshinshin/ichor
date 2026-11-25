@@ -318,7 +318,7 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.StringVar(&o.Cluster, flagCluster, "", "name of the TalosCluster to create (required)")
 	flags.StringVarP(&o.Namespace, "namespace", "n", ichorControllerNamespace,
 		"namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; "+
-			"Ichor's own install manifest always deploys its controller to \""+ichorControllerNamespace+"\"")
+			"it must be \""+ichorControllerNamespace+"\", where Ichor's own install manifest deploys its controller (any other is refused)")
 	flags.StringVar(&o.Preset, "preset", defaultPreset,
 		"topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), "+
 			"standard (3 control planes + workers added later, tainted; recommended), or "+

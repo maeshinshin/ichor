@@ -80,12 +80,12 @@ func TestRunInit_Success(t *testing.T) {
 	}
 
 	var cluster ichorv1alpha1.TalosCluster
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testInitClusterName}, &cluster); err != nil {
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testInitClusterName}, &cluster); err != nil {
 		t.Fatalf("getting created TalosCluster: %v", err)
 	}
 
 	var machine ichorv1alpha1.TalosMachine
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testInitMachineUUID}, &machine); err != nil {
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testInitMachineUUID}, &machine); err != nil {
 		t.Fatalf("getting created TalosMachine: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestRunInit_Success(t *testing.T) {
 	}
 
 	var secret corev1.Secret
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: cluster.Spec.SecretsRef.Name}, &secret); err != nil {
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: cluster.Spec.SecretsRef.Name}, &secret); err != nil {
 		t.Fatalf("getting created secrets bundle Secret: %v", err)
 	}
 
@@ -444,7 +444,7 @@ func TestRunInit_SecondRunRefusesBeforeNodeWrite(t *testing.T) {
 	t.Setenv("KUBECONFIG", kubeconfig)
 
 	bundle := &corev1.Secret{}
-	bundle.Name, bundle.Namespace = secretsRefName(testInitClusterName), testNamespace
+	bundle.Name, bundle.Namespace = secretsRefName(testInitClusterName), ichorControllerNamespace
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(bundle).Build()
 	deps, maint, boot := newFakeInitDeps(t, k8sClient)
 

@@ -55,12 +55,15 @@ func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
 	}
 	small, big := opts(rpcMaxBytes), opts(rpcMaxBytesUpload)
 
+	// The streaming services (logs, downloads): a client that stops reading must not hold a slot for good.
+	withWriteDeadline := func(path string, h http.Handler) (string, http.Handler) { return path, uiapi.WithWriteDeadline(h) }
+
 	mux.Handle(ichorv1alpha1connect.NewClusterServiceHandler(s, small))
 	mux.Handle(ichorv1alpha1connect.NewMachineServiceHandler(s, small))
-	mux.Handle(ichorv1alpha1connect.NewNodeServiceHandler(s, small))
+	mux.Handle(withWriteDeadline(ichorv1alpha1connect.NewNodeServiceHandler(s, small)))
 	mux.Handle(ichorv1alpha1connect.NewPatchServiceHandler(s, big))
 	mux.Handle(ichorv1alpha1connect.NewOperationServiceHandler(s, small))
-	mux.Handle(ichorv1alpha1connect.NewDiagnosticsServiceHandler(s, small))
+	mux.Handle(withWriteDeadline(ichorv1alpha1connect.NewDiagnosticsServiceHandler(s, small)))
 	mux.Handle(ichorv1alpha1connect.NewUserServiceHandler(s, small))
 	mux.Handle(ichorv1alpha1connect.NewCniServiceHandler(s, big))
 	mux.Handle(ichorv1alpha1connect.NewReclaimServiceHandler(s, big))

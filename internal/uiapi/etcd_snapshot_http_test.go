@@ -24,8 +24,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -91,6 +93,47 @@ func drain(r io.Reader) (n int64, peakGrowth uint64, err error) {
 	}
 }
 
+const formName = "name"
+
+// stuckWriter is a client that stopped reading: Write blocks until the write deadline the handler set has
+// passed (for ever when it set none, until stop is closed).
+type stuckWriter struct {
+	header   http.Header
+	stop     chan struct{}
+	mu       sync.Mutex
+	deadline time.Time
+}
+
+func (w *stuckWriter) Header() http.Header { return w.header }
+func (w *stuckWriter) WriteHeader(int)     {}
+func (w *stuckWriter) SetWriteDeadline(t time.Time) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.deadline = t
+
+	return nil
+}
+
+func (w *stuckWriter) Write([]byte) (int, error) {
+	w.mu.Lock()
+	d := w.deadline
+	w.mu.Unlock()
+
+	if d.IsZero() {
+		<-w.stop
+
+		return 0, errors.New("stopped")
+	}
+
+	select {
+	case <-time.After(time.Until(d)):
+		return 0, os.ErrDeadlineExceeded
+	case <-w.stop:
+		return 0, errors.New("stopped")
+	}
+}
+
 var _ = Describe("EtcdSnapshotHandler", func() {
 	var (
 		cp      *ichorv1alpha1.TalosMachine
@@ -101,7 +144,7 @@ var _ = Describe("EtcdSnapshotHandler", func() {
 	)
 
 	post := func(token string) (*http.Response, error) {
-		form := url.Values{"authorization": {token}, "namespace": {cp.Namespace}, "name": {cp.Name}}
+		form := url.Values{"authorization": {token}, "namespace": {cp.Namespace}, formName: {cp.Name}}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, httpSrv.URL+EtcdSnapshotPath, strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -232,6 +275,42 @@ var _ = Describe("EtcdSnapshotHandler", func() {
 		n, _, err := drain(resp.Body)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(n).To(BeEquivalentTo(30 << 10))
+	})
+
+	It("frees its download slot when the client stops reading", func() {
+		old := etcdSnapshotIdle
+		etcdSnapshotIdle = 100 * time.Millisecond
+
+		DeferCleanup(func() { etcdSnapshotIdle = old })
+
+		fake.stream = &generated{left: 1 << 20}
+
+		authenticate := func(context.Context, string) (Identity, error) { return Identity{User: diagAdminUser}, nil }
+		h := srv.EtcdSnapshotHandler(authenticate, log.New(GinkgoWriter, "", 0))
+
+		w := &stuckWriter{header: http.Header{}, stop: make(chan struct{})}
+		DeferCleanup(func() { close(w.stop) })
+
+		form := url.Values{"authorization": {"admin"}, "namespace": {cp.Namespace}, formName: {cp.Name}}
+		r := httptest.NewRequestWithContext(ctx, http.MethodPost, EtcdSnapshotPath, strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		returned := make(chan struct{})
+
+		go func() {
+			defer close(returned)
+			defer func() { _ = recover() }() // the handler aborts the response with http.ErrAbortHandler
+
+			h.ServeHTTP(w, r)
+		}()
+
+		Eventually(returned, 5*time.Second).Should(BeClosed(), "the handler stayed blocked on a client that stopped reading")
+
+		for range maxConcurrentDownloads {
+			release, err := srv.acquireDownloadSlot()
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(release)
+		}
 	})
 
 	It("cuts a stalled stream after the idle period", func() {

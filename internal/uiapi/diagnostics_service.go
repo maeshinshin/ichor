@@ -75,7 +75,8 @@ const (
 
 // The caps as the handlers read them, variables so a test can lower them.
 var (
-	// etcdSnapshotIdle ends a snapshot when no byte has moved for this long, however large the file is.
+	// etcdSnapshotIdle ends a snapshot when no byte has moved for this long, however large the file is, and
+	// is the deadline of every response write (deadlineWriter), so a client that stops reading frees its slot.
 	// There is no overall ceiling: the sign-in's end (AuthInterceptor, EtcdSnapshotHandler) and the drain
 	// already bound a download, and the idle period bounds a stuck one.
 	etcdSnapshotIdle = 5 * time.Minute

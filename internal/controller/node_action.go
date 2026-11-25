@@ -336,6 +336,14 @@ func (n *nodeRun) controlPlaneGuard(ctx context.Context, doing string) (only boo
 // evacuate runs the storage hook before a node is taken away. done is false while replicas still
 // move, and res is then the pending status to return.
 func (n *nodeRun) evacuate(ctx context.Context, node, purpose string) (res ctrl.Result, done bool, err error) {
+	// Write the intent before the first storage call or cordon, so a controller killed in between leaves the
+	// record that lets a delete undo what this operation started (nodeActionStarted).
+	if n.op.Status.Node == nil {
+		if res, err := n.pendingStatus(ctx, fmt.Sprintf("preparing node %q: moving storage replicas and draining it", node)); err != nil {
+			return res, false, err
+		}
+	}
+
 	progress, err := evacuateMachine(ctx, n.r.Client, n.r.Evacuator, n.cluster, n.m, node, purpose)
 	if err != nil {
 		return ctrl.Result{}, false, err

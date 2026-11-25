@@ -492,6 +492,7 @@ try {
       await shot(`${tag}-highlight`)
 
       // Versions: versions.json, the redirects, the switcher, the banners and a per-version search.
+      // The banner is the first child of the article; a callout in the page body is also role=alert and is not a banner.
       const vs = await (await fetch(origin + root + 'versions.json')).json()
       const latest = vs.find((v) => v.isLatest)
       check(vs[0]?.name === 'next' && vs[0].isNext && vs.filter((v) => v.isLatest).length === 1, `${tag}: versions.json lists next and exactly one latest (${vs.map((v) => v.name)})`)
@@ -519,7 +520,7 @@ try {
       const inMenu = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-radio-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
       const switcher = `[...document.querySelectorAll('button[aria-label="Documentation version"]')].find((b) => b.getClientRects().length)`
       await open(at.gettingStarted)
-      check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('Unreleased (main)')`), `${tag}: next shows the "Unreleased (main)" banner`)
+      check(await ev(`document.querySelector('article > div:first-child [role=alert]')?.textContent.includes('Unreleased (main)')`), `${tag}: next shows the "Unreleased (main)" banner`)
       await mouse(switcher)
       check(await until(`!!${inMenu('v')}`, 'the version menu'), `${tag}: the version switcher opens`)
       check(await ev(`!!${inMenu('next (main)')} && !!${inMenu(`${latest.name} (latest)`)}`), `${tag}: the switcher lists next (main) and ${latest.name} (latest)`)
@@ -528,7 +529,7 @@ try {
       await until(`location.pathname === '${root}${latest.path}${at.gettingStarted}'`, 'the same page in the release')
       check(await ev(`location.pathname`) === `${root}${latest.path}${at.gettingStarted}`, `${tag}: switching keeps the page path when it exists in ${latest.name}`)
       await ready()
-      check(!(await ev(`!!document.querySelector('article [role=alert]')`)), `${tag}: the newest release has no banner`)
+      check(!(await ev(`!!document.querySelector('article > div:first-child [role=alert]')`)), `${tag}: the newest release has no banner`)
       await open(at.architecture)
       const there = (await fetch(origin + root + latest.path + at.architecture, { method: 'HEAD' })).ok
       await mouse(switcher)
@@ -545,13 +546,13 @@ try {
       fakeNewer.on = true // a release newer than this build exists: the old-version banner
       await go(`${origin}${root}${latest.path}${at.gettingStarted}`)
       await ready()
-      await until(`!!document.querySelector('article [role=alert]')`, 'the old-version banner')
-      const banner = await ev(`document.querySelector('article [role=alert]')?.textContent`)
+      await until(`!!document.querySelector('article > div:first-child [role=alert]')`, 'the old-version banner')
+      const banner = await ev(`document.querySelector('article > div:first-child [role=alert]')?.textContent`)
       check(banner?.includes(`You are viewing the docs for ${latest.name}`) && banner.includes('The latest is v9.9.9'), `${tag}: an old version warns "${banner}"`)
       await shot(`${tag}-old-version-banner`)
       await open(at.gettingStarted)
-      await until(`document.querySelector('article [role=alert]')?.textContent.includes('v9.9.9')`, 'the latest release in the next banner')
-      check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('The latest release is v9.9.9')`), `${tag}: next's banner names the latest release`)
+      await until(`document.querySelector('article > div:first-child [role=alert]')?.textContent.includes('v9.9.9')`, 'the latest release in the next banner')
+      check(await ev(`document.querySelector('article > div:first-child [role=alert]')?.textContent.includes('The latest release is v9.9.9')`), `${tag}: next's banner names the latest release`)
       fakeNewer.on = false
 
       if (!mobile) {

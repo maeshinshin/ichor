@@ -11,6 +11,7 @@ import {
   pauseAction,
   planCounts,
   planSteps,
+  nextPollMs,
   pollIntervalMs,
   progressCounts,
   targetError,
@@ -137,4 +138,11 @@ test('an operation waits for approval only while paused with the AwaitingApprova
   assert.equal(awaitingApproval('Paused', '', [{ type: 'Paused', reason: 'OperatorPaused' }]), false)
   assert.equal(awaitingApproval('InProgress', '', waiting), false)
   assert.equal(awaitingApproval('Paused', ''), false)
+})
+
+test('a failed operation is read again for a while after a control action, and not otherwise', () => {
+  assert.equal(nextPollMs('failed', null), null)
+  assert.equal(nextPollMs('failed', 1000), 3000)
+  assert.equal(nextPollMs('failed', 31_000), null)
+  assert.equal(nextPollMs('running', null), 3000)
 })

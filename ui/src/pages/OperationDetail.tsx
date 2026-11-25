@@ -24,7 +24,8 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
 import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
-import { awaitingApproval, caStageProgress, keyStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
+import { mayControlOperation } from '@/lib/actions'
+import { awaitingApproval, caStageProgress, keyStageProgress, kubernetesStageProgress, nextPollMs, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
@@ -46,8 +47,15 @@ export function OperationDetail({ name }: { name: string }) {
   const [eventsError, setEventsError] = useState<ErrorShape | null>(null)
   const [warningsOnly, setWarningsOnly] = useState(false)
   const [now, setNow] = useState(() => new Date())
-  const perms = useMyPermissions(undefined, op?.kind === OperationKind.CA_ROTATION ? op.cluster : undefined)
+  const perms = useMyPermissions(undefined, op?.cluster)
 
+  // A control action restarts the poll: its answer carries the old status, and a failed page has stopped polling.
+  const [changedAt, setChangedAt] = useState<number | null>(null)
+  function changed(next: Operation) {
+    setOp(next)
+    setChangedAt(Date.now())
+  }
+  useEffect(() => setOp(null), [namespace, name])
   useEffect(() => {
     if (!namespace) return
     let cancelled = false
@@ -59,7 +67,7 @@ export function OperationDetail({ name }: { name: string }) {
         if (cancelled) return
         setOp(res.operation ?? null)
         setError(null)
-        const next = res.operation ? pollIntervalMs(operationState(res.operation.phase, res.operation.failureReason, res.operation.conditions)) : null
+        const next = res.operation ? nextPollMs(operationState(res.operation.phase, res.operation.failureReason, res.operation.conditions), changedAt === null ? null : Date.now() - changedAt) : null
         if (next !== null) timer = setTimeout(load, next)
       } catch (err) {
         if (cancelled) return
@@ -68,13 +76,12 @@ export function OperationDetail({ name }: { name: string }) {
       }
     }
 
-    setOp(null)
     load()
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [namespace, name])
+  }, [namespace, name, changedAt])
 
   // The activity log refreshes every 5 s while the operation can still change, and once more when it stops.
   const active = op !== null && pollIntervalMs(operationState(op.phase, op.failureReason, op.conditions)) !== null
@@ -149,7 +156,7 @@ export function OperationDetail({ name }: { name: string }) {
             )}
           </>
         }
-        actions={<OperationControls op={op} onChanged={setOp} onDeleted={() => navigate('/operations')} />}
+        actions={mayControlOperation(perms) ? <OperationControls op={op} onChanged={changed} onDeleted={() => navigate('/operations')} /> : undefined}
       />
       <div class="space-y-4">
         <Card size="sm">

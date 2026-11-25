@@ -45,6 +45,17 @@ export function pollIntervalMs(state: OpState): number | null {
   }
 }
 
+// CONTROL_GRACE_MS is how long a stopped operation keeps being read after a pause, resume or approve: the
+// answer to the action carries the old status, and the controller needs a moment to move it.
+export const CONTROL_GRACE_MS = 30_000
+
+// nextPollMs is pollIntervalMs, except that a done or failed operation is still read for CONTROL_GRACE_MS after
+// a control action (sinceChangeMs, null when there was none).
+export function nextPollMs(state: OpState, sinceChangeMs: number | null): number | null {
+  const next = pollIntervalMs(state)
+  return next === null && sinceChangeMs !== null && sinceChangeMs < CONTROL_GRACE_MS ? 3_000 : next
+}
+
 export function progressCounts(machines: readonly { phase: string }[]): { done: number; running: number } {
   let done = 0
   let running = 0

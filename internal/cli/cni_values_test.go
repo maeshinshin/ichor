@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -68,7 +69,7 @@ func TestCniValuesSetWithoutTheAdminRightRefusesBeforeAskingAnything(t *testing.
 
 	var errw bytes.Buffer
 
-	err := runCniValuesSet(context.Background(), c, in, &bytes.Buffer{}, &errw, "", cniTestValues)
+	err := runCniValuesSet(context.Background(), c, in, &bytes.Buffer{}, &errw, "", cniTestValues, "")
 	if err == nil || !strings.Contains(err.Error(), "talosclusters/cilium-values") || !strings.Contains(err.Error(), "ichor-admin") {
 		t.Fatalf("want a refusal naming talosclusters/cilium-values and ichor-admin, got %v", err)
 	}
@@ -97,7 +98,7 @@ func TestCniValuesSetValidatesShowsTheDiffAndWrites(t *testing.T) {
 	c, k8s := cniTestClient(t, true)
 
 	var out, errw bytes.Buffer
-	if err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &out, &errw, "", cniTestValues); err != nil {
+	if err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &out, &errw, "", cniTestValues, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -120,7 +121,7 @@ func TestCniValuesSetPrintsEveryProblemAndWritesNothing(t *testing.T) {
 
 	var errw bytes.Buffer
 
-	err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "", "ipam:\n  mode: x\ntunnelProtocol: vxlan\n")
+	err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "", "ipam:\n  mode: x\ntunnelProtocol: vxlan\n", "")
 	if err == nil || !strings.Contains(err.Error(), "2 problem(s)") {
 		t.Fatalf("want 2 problems, got %v", err)
 	}
@@ -139,7 +140,7 @@ func TestCniValuesSetPrintsEveryProblemAndWritesNothing(t *testing.T) {
 func TestCniValuesSetDeclinedWritesNothing(t *testing.T) {
 	c, k8s := cniTestClient(t, false)
 
-	err := runCniValuesSet(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{}, "", cniTestValues)
+	err := runCniValuesSet(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{}, "", cniTestValues, "")
 	if err == nil || !strings.Contains(err.Error(), "aborted") || cniStoredValues(t, k8s) != "" {
 		t.Fatalf("want aborted and nothing written, got %v / %q", err, cniStoredValues(t, k8s))
 	}
@@ -208,5 +209,35 @@ func TestCniUpgradeRefusedWhenNoUpgradeIsOffered(t *testing.T) {
 	err := runCniUpgrade(context.Background(), c, &bytes.Buffer{}, "")
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("want FailedPrecondition, got %v", err)
+	}
+}
+
+func TestCniValuesEditRefusesWhenTheValuesChangedWhileTheEditorWasOpen(t *testing.T) {
+	c, k8s := cniTestClient(t, true)
+
+	// A concurrent writer changes the stored layer while the editor is open.
+	const other = `{"debug":{"enabled":false}}`
+
+	concurrent := func(path string) error {
+		var cl ichorv1alpha1.TalosCluster
+		if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: opTestCluster}, &cl); err != nil {
+			return err
+		}
+
+		cl.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{"debug":{"enabled":false}}`)}}
+		if err := k8s.Update(context.Background(), &cl); err != nil {
+			return err
+		}
+
+		return os.WriteFile(path, []byte(cniTestValues), 0o600)
+	}
+
+	err := runCniValuesEdit(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "", concurrent)
+	if connect.CodeOf(err) != connect.CodeAborted {
+		t.Fatalf("err = %v, want Aborted", err)
+	}
+
+	if got := cniStoredValues(t, k8s); got != other {
+		t.Fatalf("the other write was overwritten: %q", got)
 	}
 }

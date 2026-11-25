@@ -70,7 +70,7 @@ func TestCniValuesSetAndDiffPrintHumanOrMachineOutput(t *testing.T) {
 	outputFormat = outputHuman
 
 	var out, errw bytes.Buffer
-	if err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &out, &errw, "", cniTestValues); err != nil {
+	if err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &out, &errw, "", cniTestValues, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -95,7 +95,7 @@ func TestCniValuesSetAndDiffPrintHumanOrMachineOutput(t *testing.T) {
 
 	out.Reset()
 
-	if err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &out, &errw, "", cniTestValues); err != nil || !strings.Contains(out.String(), "effectiveYaml") {
+	if err := runCniValuesSet(context.Background(), c, strings.NewReader(""), &out, &errw, "", cniTestValues, ""); err != nil || !strings.Contains(out.String(), "effectiveYaml") {
 		t.Errorf("-o yaml set: %q, %v", out.String(), err)
 	}
 }

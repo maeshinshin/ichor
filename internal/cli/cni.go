@@ -171,7 +171,7 @@ var applyCniValuesCmd = &cobra.Command{
 		}
 
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runCniValuesSet(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), cniCluster, text)
+			return runCniValuesSet(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), cniCluster, text, "")
 		})
 	},
 }
@@ -340,8 +340,9 @@ func cniMayEdit(cur *pb.GetCiliumValuesResponse) error {
 		ichorv1alpha1.CiliumValuesVerb, ichorv1alpha1.CiliumValuesSubresource)
 }
 
-// runCniValuesSet validates text, shows the diff, asks (unless --yes) and writes it.
-func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, cluster, text string) error {
+// runCniValuesSet validates text, shows the diff, asks (unless --yes) and writes it. A non-empty base makes the
+// server refuse (Aborted, "reload to see the new version") when the values changed since it was read.
+func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, cluster, text, base string) error {
 	ref, err := resolveCluster(ctx, c, cluster)
 	if err != nil {
 		return err
@@ -371,7 +372,7 @@ func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw
 		return err
 	}
 
-	resp, err := c.Cni.SetCiliumValues(ctx, connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: ref, UserYaml: text}))
+	resp, err := c.Cni.SetCiliumValues(ctx, connect.NewRequest(&pb.SetCiliumValuesRequest{Cluster: ref, UserYaml: text, BaseResourceVersion: base}))
 	if err != nil {
 		return err
 	}
@@ -447,7 +448,7 @@ func runCniValuesEdit(
 		return nil
 	}
 
-	return runCniValuesSet(ctx, c, in, out, errw, cluster, text)
+	return runCniValuesSet(ctx, c, in, out, errw, cluster, text, cur.Msg.GetResourceVersion())
 }
 
 // runCniUpgrade starts the Cilium upgrade to the chart this Ichor embeds.

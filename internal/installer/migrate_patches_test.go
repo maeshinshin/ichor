@@ -128,6 +128,10 @@ func TestMigratePatchesLeavesAPatchWhoseSettingHasNoPlace(t *testing.T) {
 		}
 	}
 
+	if r := migratedReason(p); r != "NoPlaceInSpecConfig" {
+		t.Errorf("want reason NoPlaceInSpecConfig (shipped in v0.3.0), got %q", r)
+	}
+
 	if !strings.Contains(cond, "extraManifests") {
 		t.Errorf("want Migrated=False naming extraManifests, got conditions %+v", p.Status.Conditions)
 	}
@@ -199,6 +203,16 @@ func storedCluster(name, contract string) *unstructured.Unstructured {
 	}}
 }
 
+func migratedReason(p *ichorv1alpha1.TalosConfigPatch) string {
+	for _, k := range p.Status.Conditions {
+		if k.Type == MigratedCondition && k.Status == "False" {
+			return k.Reason
+		}
+	}
+
+	return ""
+}
+
 func migratedMessage(p *ichorv1alpha1.TalosConfigPatch, status string) string {
 	for _, k := range p.Status.Conditions {
 		if k.Type == MigratedCondition && string(k.Status) == status {
@@ -222,6 +236,10 @@ func TestMigratePatchesLeavesAPatchItsClusterCannotTake(t *testing.T) {
 	p := getPatch(t, c, "p")
 	if len(p.Spec.Documents) != 1 || p.Spec.Config != nil {
 		t.Fatalf("the patch was changed: %+v", p.Spec)
+	}
+
+	if r := migratedReason(p); r != "ClusterCannotTake" {
+		t.Errorf("want reason ClusterCannotTake, got %q", r)
 	}
 
 	msg := migratedMessage(p, "False")
@@ -250,6 +268,10 @@ func TestMigratePatchesOneRefusedPatchDoesNotStopTheOthers(t *testing.T) {
 	res, err := MigratePatches(context.Background(), c, "", io.Discard)
 	if err != nil || len(res.Migrated) != 1 || len(res.Failed) != 1 {
 		t.Fatalf("want one migrated and one failed, got %+v, %v", res, err)
+	}
+
+	if r := migratedReason(getPatch(t, c, "a")); r != "RefusedByWebhook" {
+		t.Errorf("want reason RefusedByWebhook, got %q", r)
 	}
 
 	if a := getPatch(t, c, "a"); a.Spec.Config != nil || !strings.Contains(migratedMessage(a, "False"), "refused") {

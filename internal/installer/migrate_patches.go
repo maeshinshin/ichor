@@ -40,6 +40,13 @@ const MigratedCondition = "Migrated"
 
 const kTalosCluster = "TalosCluster"
 
+// The reasons of a False Migrated condition. NoPlaceInSpecConfig shipped in v0.3.0 and keeps its name.
+const (
+	reasonNoPlace       = "NoPlaceInSpecConfig"
+	reasonClusterCannot = "ClusterCannotTake"
+	reasonWebhook       = "RefusedByWebhook"
+)
+
 // PatchMigration is what MigratePatches did.
 type PatchMigration struct {
 	Migrated []string // namespace/name of each patch rewritten to spec.config
@@ -76,16 +83,20 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 			continue
 		}
 
+		reason := reasonNoPlace
+
 		cfg, err := configOfDocuments(raw)
 		if err == nil {
-			err = checkClusterContract(ctx, c, p, cfg)
+			if err = checkClusterContract(ctx, c, p, cfg); err != nil {
+				reason = reasonClusterCannot
+			}
 		}
 
 		if err != nil {
 			res.Failed = append(res.Failed, key+": "+err.Error())
 			logf(log, "TalosConfigPatch %s is left as it is: %v", key, err)
 
-			if serr := setMigrated(ctx, c, p, false, "NotMigrated", err.Error()); serr != nil {
+			if serr := setMigrated(ctx, c, p, false, reason, err.Error()); serr != nil {
 				logf(log, "could not set its Migrated condition: %v", serr)
 			}
 
@@ -106,7 +117,7 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 			logf(log, "%v", err)
 
 			// The patch object holds the failed edit; the condition is written on the stored one.
-			if serr := setMigrated(ctx, c, orig, false, "NotMigrated", err.Error()); serr != nil {
+			if serr := setMigrated(ctx, c, orig, false, reasonWebhook, err.Error()); serr != nil {
 				logf(log, "could not set its Migrated condition: %v", serr)
 			}
 

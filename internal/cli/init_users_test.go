@@ -171,7 +171,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 	}
 
 	var cluster ichorv1alpha1.TalosCluster
-	if err := k.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testInitClusterName}, &cluster); err != nil {
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testInitClusterName}, &cluster); err != nil {
 		t.Fatal(err)
 	}
 
@@ -347,7 +347,7 @@ func TestRunInit_NoFlagsTurnsSignInOnAtTheDefaultIssuer(t *testing.T) {
 	}
 
 	var cluster ichorv1alpha1.TalosCluster
-	if err := k.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testInitClusterName}, &cluster); err != nil {
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testInitClusterName}, &cluster); err != nil {
 		t.Fatal(err)
 	}
 

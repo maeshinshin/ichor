@@ -74,7 +74,7 @@ func initWithLinks(
 	}
 
 	err = runInit(context.Background(), opts, deps)
-	_ = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: testInitMachineUUID}, &machine)
+	_ = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testInitMachineUUID}, &machine)
 
 	var list ichorv1alpha1.TalosConfigPatchList
 

@@ -65,9 +65,9 @@ func TestRunInit_DefaultOutputIsOneLinePerCreatedObject(t *testing.T) {
 
 	// The created objects are progress, on stderr; stdout is for -o only.
 	for _, want := range []string{
-		"created TalosCluster " + testNamespace + "/" + testInitClusterName,
-		"created TalosMachine " + testNamespace + "/" + testInitMachineUUID,
-		"created TalosConfigPatch " + testNamespace + "/",
+		"created TalosCluster " + ichorControllerNamespace + "/" + testInitClusterName,
+		"created TalosMachine " + ichorControllerNamespace + "/" + testInitMachineUUID,
+		"created TalosConfigPatch " + ichorControllerNamespace + "/",
 	} {
 		if !strings.Contains(progress, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, progress)

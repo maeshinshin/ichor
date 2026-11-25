@@ -114,8 +114,9 @@ check-claims: ## Fail when a Markdown file or Go comment states that something w
 	go test -count=1 ./internal/tools/claimcheck/
 
 .PHONY: check-release-record
-check-release-record: ## Fail when the chart's Helm release record exceeds the 1,048,576 bytes a Secret holds; prints the size and headroom (internal/tools/releaserecord).
-	go run ./internal/tools/releaserecord
+check-release-record: ## Fail when the packaged chart's (hack/assemble-chart.sh, as make helm-package builds it) Helm release record exceeds the 1,048,576 bytes a Secret holds; prints the size and headroom (internal/tools/releaserecord).
+	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && hack/assemble-chart.sh $(HELM_CHART_DIR) "$$work" && \
+	go run ./internal/tools/releaserecord "$$work/ichor"
 
 .PHONY: renovate-validate
 renovate-validate: ## Validate renovate.json with the Renovate config validator at the pinned version (renovate@44.198.3, strict); needs the npm registry on first run. Not part of lint: CI does not run it.
@@ -527,16 +528,7 @@ CHART_DIST ?= bin/chart
 
 .PHONY: helm-package
 helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSION and APP_VERSION. IMAGE_DIGESTS pins the default controller and ichor-ui images by digest.
-	@# With digests the default repositories become <repo>:<tag>@<digest> (the templates add no tag to a repository with an @), in a temp copy.
-	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r $(HELM_CHART_DIR) "$$work/ichor" && cp LICENSE NOTICE "$$work/ichor/" && \
-	if [ -n "$(IMAGE_DIGESTS)" ]; then \
-	  for n in ichor-controller ichor-ui; do \
-	    pin=$$(hack/pin-image.sh "$(IMAGE_DIGESTS)" $$n ghcr.io/maeshinshin/$$n:$(APP_VERSION)) && \
-	    sed -i "s|^\( *repository: \)ghcr.io/maeshinshin/$$n\$$|\1$$pin|" "$$work/ichor/values.yaml" && \
-	    grep -qF "$$pin" "$$work/ichor/values.yaml" || { echo "helm-package: the chart has no default $$n image to pin" >&2; exit 1; }; \
-	  done; \
-	fi && \
-	cp THIRD-PARTY-NOTICES "$$work/ichor/" && \
+	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && IMAGE_DIGESTS="$(IMAGE_DIGESTS)" APP_VERSION="$(APP_VERSION)" hack/assemble-chart.sh $(HELM_CHART_DIR) "$$work" && \
 	$(HELM) package "$$work/ichor" --version $(CHART_VERSION) --app-version $(APP_VERSION) --destination $(CHART_DIST)
 
 

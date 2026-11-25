@@ -6,7 +6,11 @@ import (
 )
 
 func main() {
-	size, err := measure("dist/chart")
+	dir := "dist/chart"
+	if len(os.Args) > 1 {
+		dir = os.Args[1]
+	}
+	size, err := measure(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "releaserecord:", err)
 		os.Exit(1)

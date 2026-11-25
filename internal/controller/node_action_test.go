@@ -28,7 +28,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ktesting "k8s.io/client-go/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -282,6 +284,42 @@ var _ = Describe("TalosOperation node actions", func() {
 
 			Expect(f.unschedulable(worker3)).To(BeTrue(), "the cordon is operation A's, not the deleted one's")
 			Expect(evacuator.endCalls).To(BeZero(), "operation A's storage evacuation goes on")
+		})
+
+		It("undoes what it started when the controller fails between the drain's first write and the cordon", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+
+			patches := 0
+			f.kube.PrependReactor("patch", "nodes", func(ktesting.Action) (bool, runtime.Object, error) {
+				// The first patch marks the node, the second cordons it and the third is the failed step's own
+				// undo: all three fail the controller's work after the first, as a kill would.
+				patches++
+				if patches == 2 || patches == 3 {
+					return true, nil, errors.New("the controller was killed")
+				}
+
+				return false, nil, nil
+			})
+
+			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+			_, err := reconcileOperation(f.r, op)
+			Expect(err).To(HaveOccurred())
+			Expect(f.kube.node(hostW1).Annotations).To(HaveKey(cordonedByIchorAnnotation), "the drain had begun")
+
+			Expect(k8sClient.Delete(ctx, fetchOperation(op))).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				_, rerr := reconcileOperation(f.r, op)
+				g.Expect(rerr).NotTo(HaveOccurred())
+
+				var gone ichorv1alpha1.TalosOperation
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(op), &gone)).To(MatchError(apierrors.IsNotFound, "the operation is gone"))
+			}).Should(Succeed())
+
+			node := f.kube.node(hostW1)
+			Expect(node.Spec.Unschedulable).To(BeFalse())
+			Expect(node.Annotations).NotTo(HaveKey(cordonedByIchorAnnotation))
+			Expect(node.Annotations).NotTo(HaveKey(drainStartedAnnotation))
 		})
 
 		It("a node that is away while rebooting is waited for, and a restarted controller does not reboot it again", func() {

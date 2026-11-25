@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # assemble-chart.sh CHART_DIR DEST: copy the chart to DEST/ichor with the files a published chart carries
-# (LICENSE, NOTICE, THIRD-PARTY-NOTICES) and, when IMAGE_DIGESTS is set, the controller and ichor-ui images pinned by
-# digest (the templates add no tag to a repository with an @). make helm-package packages the result and make
+# (LICENSE and NOTICE, the source offer of ADR 0156; the chart holds no third-party code, so THIRD-PARTY-NOTICES
+# stays out, and it alone was 184 KB of the 1 MiB release record) and, when IMAGE_DIGESTS is set, the controller
+# and ichor-ui images pinned by digest (the templates add no tag to a repository with an @). make helm-package packages the result and make
 # check-release-record measures it, so the gate sees what is shipped.
 set -euo pipefail
 
 [ $# -eq 2 ] || { echo "usage: assemble-chart.sh CHART_DIR DEST" >&2; exit 2; }
 src=$1 dest=$2/ichor
 cp -r "$src" "$dest"
-cp LICENSE NOTICE THIRD-PARTY-NOTICES "$dest/"
+cp LICENSE NOTICE "$dest/"
 [ -z "${IMAGE_DIGESTS:-}" ] && exit 0
 for n in ichor-controller ichor-ui; do
   pin=$(hack/pin-image.sh "$IMAGE_DIGESTS" "$n" "ghcr.io/maeshinshin/$n:${APP_VERSION}")

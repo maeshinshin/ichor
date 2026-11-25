@@ -37,6 +37,8 @@ type ReadBack struct {
 	ControlPlanes int
 	// User are the values beyond Ichor's own layers (spec.cni.cilium.values); empty when none.
 	User map[string]any
+	// WireGuard and NodeEncryption are spec.security.wireGuard, read from the encryption keys Ichor injects from it.
+	WireGuard, NodeEncryption bool
 	// Pending is true when the record is pending-install/upgrade/rollback: an operation was killed.
 	Pending bool
 }
@@ -74,7 +76,32 @@ func ReadBackRelease(rel *release.Release) (ReadBack, error) {
 		return ReadBack{}, err
 	}
 
-	rb.User = subtract(UserValues(cfg), defaults)
+	user := UserValues(cfg)
+
+	// The keys Ichor injects from typed fields are not the user's: spec.security.wireGuard (marked by
+	// rollOutCiliumPods) and the image overrides of a recorded patch (re-derived from status; a pinned
+	// image would stop a chart bump from moving Cilium).
+	if on, _ := user["rollOutCiliumPods"].(bool); on {
+		en, _ := values.Get(user, "encryption.enabled")
+		ty, _ := values.Get(user, "encryption.type")
+
+		if en == true && ty == "wireguard" {
+			ne, _ := values.Get(user, "encryption.nodeEncryption")
+			rb.WireGuard, rb.NodeEncryption = true, ne == true
+
+			for _, k := range []string{"encryption.enabled", "encryption.type", "encryption.nodeEncryption", "rollOutCiliumPods"} {
+				values.Delete(user, k)
+			}
+		}
+	}
+
+	for _, path := range imageOverridePaths {
+		values.Delete(user, path)
+	}
+
+	pruneEmptyMaps(user)
+
+	rb.User = subtract(user, defaults)
 
 	return rb, nil
 }

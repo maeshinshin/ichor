@@ -23,6 +23,8 @@ import (
 
 	"helm.sh/helm/v3/pkg/release"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
@@ -82,5 +84,35 @@ func TestReadBackRelease_ReproducesTheDeployedValues(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestReadBackRelease_TypedInjectionsAreNotUserValues: what Ichor injects from spec.security.wireGuard and
+// from a recorded image override is not read back as the user's values.
+func TestReadBackRelease_TypedInjectionsAreNotUserValues(t *testing.T) {
+	c := &ichorv1alpha1.TalosCluster{}
+	c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{
+		WireGuard: &ichorv1alpha1.TalosClusterWireGuard{Enabled: true, NodeEncryption: true},
+	}
+	c.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{ImageOverride: &ichorv1alpha1.TalosCiliumImageOverride{
+		Version: "v99.0.0", Images: map[string]string{ImageAgent: "quay.io/cilium/cilium@sha256:abc"},
+	}}
+
+	eff, err := EffectiveValuesForNodes(c, cni.KubeProxyEnabled, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rb, err := ReadBackRelease(&release.Release{Config: asRecord(t, eff)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rb.User) != 0 {
+		t.Fatalf("typed injections read back as user values: %v", rb.User)
+	}
+
+	if !rb.WireGuard || !rb.NodeEncryption {
+		t.Fatalf("wireGuard not mapped back: %+v", rb)
 	}
 }

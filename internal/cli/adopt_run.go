@@ -839,6 +839,14 @@ func (st *adoptState) mapRunningCilium(k8s *k8sFacts) error {
 	if rb := st.readBack; rb != nil {
 		st.cluster.Spec.CNI.Tunnel = rb.Tunnel
 
+		if rb.WireGuard {
+			if st.cluster.Spec.Security == nil {
+				st.cluster.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{}
+			}
+
+			st.cluster.Spec.Security.WireGuard = &ichorv1alpha1.TalosClusterWireGuard{Enabled: true, NodeEncryption: rb.NodeEncryption}
+		}
+
 		if len(rb.User) == 0 {
 			return nil
 		}

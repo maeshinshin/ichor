@@ -27,6 +27,7 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource/meta"
 	"github.com/cosi-project/runtime/pkg/state"
 	"github.com/cosi-project/runtime/pkg/state/impl/inmem"
+	"github.com/siderolabs/talos/pkg/machinery/resources/k8s"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	"github.com/siderolabs/talos/pkg/machinery/resources/secrets"
@@ -107,6 +108,14 @@ func newResourceState(t *testing.T, sensitive bool) state.State {
 	put(runtime.KernelCmdlineExtension{}.ResourceDefinition())
 	put(secrets.APIExtension{}.ResourceDefinition())
 
+	// Talos fills Manifests with a bootstrap token Secret and does not mark the type sensitive.
+	mf := k8s.ManifestExtension{}.ResourceDefinition()
+	if sensitive {
+		mf.Sensitivity = meta.Sensitive
+	}
+
+	put(mf)
+
 	mustCreate := func(r resource.Resource) {
 		if err := st.Create(ctx, r); err != nil {
 			t.Fatal(err)
@@ -122,6 +131,14 @@ func newResourceState(t *testing.T, sensitive bool) state.State {
 	mustCreate(c)
 
 	mustCreate(secrets.NewAPI())
+
+	m := k8s.NewManifest(k8s.ControlPlaneNamespaceName, "00-test")
+	m.TypedSpec().Items = []k8s.SingleManifest{{Object: map[string]any{
+		"kind":       "Secret",
+		"metadata":   map[string]any{"name": "bootstrap-token-abc"},
+		"stringData": map[string]any{"token-secret": diagSecret},
+	}}}
+	mustCreate(m)
 
 	return st
 }

@@ -35,6 +35,8 @@ import (
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	"github.com/siderolabs/talos/pkg/machinery/resources/k8s"
+	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	yaml "go.yaml.in/yaml/v4"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -119,7 +121,14 @@ const (
 // excludedNamespaces and excludedTypes are COSI resources never written, on top
 // of everything Talos itself marks sensitive: the secrets namespace holds
 // certificates and keys, the config namespace holds the machine configuration,
-// and the kernel command line can carry talos.config=<url with a token>.
+// and the kernel command line can carry talos.config=<url with a token>. The
+// types below are not marked sensitive by Talos (v1.14.5) but carry credentials or
+// Kubernetes objects: the rendered manifests include the kubelet bootstrap token
+// Secret and the user's inline manifests, the extra-manifest config holds
+// request headers, the unique machine token is a credential, the environment can
+// carry proxy credentials, and static pods are Pods with their env and args.
+// shortcut: a deny-list, because an allow-list of the ~160 diagnostic types
+// would drop new Talos types from every bundle; revisit when Talos marks these.
 // configNamespace is the COSI namespace of the machine configuration.
 const configNamespace = "config"
 
@@ -128,6 +137,11 @@ var (
 	excludedTypes      = map[resource.Type]bool{
 		"KernelCmdlines.runtime.talos.dev": true,
 		"MachineConfigs.config.talos.dev":  true,
+		k8s.ManifestType:                   true,
+		k8s.ExtraManifestsConfigType:       true,
+		runtime.UniqueMachineTokenType:     true,
+		runtime.EnvironmentType:            true,
+		k8s.StaticPodType:                  true,
 	}
 )
 

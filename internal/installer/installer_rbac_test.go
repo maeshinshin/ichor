@@ -29,11 +29,11 @@ var installerCalls = []struct {
 	{false, "", resConfigMaps, verbCreate},                               // prune.go inventory, snapshot.go
 	{false, "", resConfigMaps, verbDelete},                               // prune.go inventory, snapshot.go
 	{false, "", resConfigMaps, verbList},                                 // snapshot.go
-	{false, groupIchor, "talosclusters", verbList},                       // customize.go withIssuerURL, migrate_patches.go checkClusterContract
-	{false, groupIchor, resPatches, verbList},                            // migrate_patches.go
-	{false, groupIchor, resPatches, verbPatch},                           // migrate_patches.go
-	{false, groupIchor, "talosconfigpatches/status", verbPatch},          // migrate_patches.go setMigrated
+	{false, groupIchor, "talosclusters", verbList},                       // customize.go withIssuerURL
+	{true, groupIchor, resPatches, verbPatch},                            // migrate_patches.go, every namespace
+	{true, groupIchor, "talosconfigpatches/status", verbPatch},           // migrate_patches.go setMigrated, every namespace
 	{true, groupIchor, resPatches, verbList},                             // retired_stored.go, every namespace
+	{true, groupIchor, "talosclusters", verbList},                        // migrate_patches.go checkClusterContract, every namespace
 	{true, "apiextensions.k8s.io", "customresourcedefinitions", verbGet}, // install.go, crdcheck.go
 	{true, "rbac.authorization.k8s.io", "clusterroles", verbGet},         // prune.go renamedObjects
 }

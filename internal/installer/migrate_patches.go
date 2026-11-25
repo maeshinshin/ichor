@@ -147,7 +147,7 @@ func (e *unreadableError) Unwrap() error { return e.error }
 // checkClusterContract refuses a spec.config the cluster of the patch cannot render: a setting its Talos version has
 // no document for would make every node of the cluster fail to render. A cluster that is not there is not checked.
 func checkClusterContract(ctx context.Context, c client.Client, p *unstructured.Unstructured, cfg map[string]any) error {
-	// A list, not a get: the installer's Role grants talosclusters only `list`.
+	// A list, not a get: the installer's roles grant talosclusters only `list`.
 	cls := &unstructured.UnstructuredList{}
 	cls.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
 	cls.SetKind(kTalosCluster + "List")

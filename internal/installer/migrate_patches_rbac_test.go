@@ -16,8 +16,21 @@ import (
 // MigratePatches is the installer's last step, so it runs under the Role and ClusterRole of the release being installed
 // as the RBAC stage applied them. Fake clients and an admin client cannot see a verb the Role lacks.
 func TestMigratePatchesUnderTheInstallerRole(t *testing.T) {
+	migrateUnderTheInstallerRole(t, "")
+}
+
+// A patch and its cluster in a namespace the installer has no Role in: the cluster-wide list on both kinds reaches them.
+func TestMigratePatchesInAnotherNamespaceUnderTheInstallerRole(t *testing.T) {
+	migrateUnderTheInstallerRole(t, "other")
+}
+
+// otherNS, when set, is a namespace of its own for the patch and its cluster, and MigratePatches is given no namespace.
+func migrateUnderTheInstallerRole(t *testing.T, otherNS string) {
+	t.Helper()
+
 	ctx := context.Background()
 	f := newFixture(t)
+	objNS, listNS := f.ns, f.ns
 
 	installOldCRD(t, loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml"))
 	installOldCRD(t, loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml"))
@@ -28,12 +41,19 @@ func TestMigratePatchesUnderTheInstallerRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if otherNS != "" {
+		objNS, listNS = otherNS+"-"+f.ns, ""
+		ns := untyped("v1", "Namespace")
+		ns.SetName(objNS)
+		createIn(t, admin, ns)
+	}
+
 	patch := storedPatch("p", certSANDocs)
-	patch.SetNamespace(f.ns)
+	patch.SetNamespace(objNS)
 	createIn(t, admin, patch)
 
 	cl := storedCluster("c", "v1.14")
-	cl.SetNamespace(f.ns)
+	cl.SetNamespace(objNS)
 	// shortcut: only what the CRD requires; the installer reads versionContract and nothing else.
 	cl.Object["spec"] = map[string]any{
 		kVersionContract: "v1.14", "talosVersion": "v1.14.0", "kubernetesVersion": "v1.36.0",
@@ -68,12 +88,12 @@ func TestMigratePatchesUnderTheInstallerRole(t *testing.T) {
 		t.Fatalf("the installer role never became effective: %v", err)
 	}
 
-	res, err := MigratePatches(ctx, c, f.ns, io.Discard)
+	res, err := MigratePatches(ctx, c, listNS, io.Discard)
 	if err != nil || len(res.Migrated) != 1 || len(res.Failed) != 0 {
 		t.Fatalf("want one patch migrated, got %+v, %v", res, err)
 	}
 
-	p := getPatchIn(t, admin, f.ns, "p")
+	p := getPatchIn(t, admin, objNS, "p")
 	if len(p.Spec.Documents) != 0 || p.Spec.Config == nil || migratedMessage(p, "True") == "" {
 		t.Errorf("want Migrated=True and spec.config set, got %+v", p)
 	}

@@ -186,12 +186,28 @@ rules:
   - ichorinstallations
   verbs:
   - get
-# The refusal that reads every stored TalosConfigPatch (installer.CheckStoredRetiredFields) before the CRD that prunes a
-# retired field goes in: read only, and cluster-wide because a patch may sit in any namespace.
+# Every stored TalosConfigPatch, because a patch may sit in any namespace: the refusal that reads them
+# (installer.CheckStoredRetiredFields) before the CRD that prunes a retired field goes in, and the last step of a run, which
+# moves each from the deprecated spec.documents to spec.config (migrate_patches.go) and records the Migrated condition.
 - apiGroups:
   - ichor.maesh.dev
   resources:
   - talosconfigpatches
+  verbs:
+  - list
+  - patch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches/status
+  verbs:
+  - patch
+# The migration of every TalosConfigPatch (migrate_patches.go) reads the TalosCluster each patch names, and a patch may sit
+# in any namespace: read only.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
   verbs:
   - list
 ---
@@ -256,21 +272,6 @@ rules:
   - talosclusters
   verbs:
   - list
-# The last step of a run moves each TalosConfigPatch of this namespace from the deprecated spec.documents to
-# spec.config (migrate_patches.go) and records the Migrated condition.
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosconfigpatches
-  verbs:
-  - list
-  - patch
-- apiGroups:
-  - ichor.maesh.dev
-  resources:
-  - talosconfigpatches/status
-  verbs:
-  - patch
 - apiGroups:
   # The Cilium policies of config/cilium-network-policy, applied only when Cilium's CRD exists.
   - cilium.io

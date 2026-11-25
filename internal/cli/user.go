@@ -232,6 +232,7 @@ func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 	req := &pb.UpdateUserRequest{
 		Name: name, DisplayName: cur.Msg.GetUser().GetDisplayName(), Email: cur.Msg.GetUser().GetEmail(),
 		Roles: cur.Msg.GetUser().GetRoles(), Disabled: cur.Msg.GetUser().GetDisabled(),
+		BaseResourceVersion: cur.Msg.GetUser().GetResourceVersion(),
 	}
 
 	fl := cmd.Flags()

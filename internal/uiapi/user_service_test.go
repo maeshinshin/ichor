@@ -712,3 +712,35 @@ func TestMustChangeUserOnlyReachesWhoAmIAndChangeOwnPassword(t *testing.T) {
 		t.Errorf("still blocked after the change: %v", err)
 	}
 }
+
+func TestUpdateUserRefusesAStaleBase(t *testing.T) {
+	s := userServer(t, true, newUser(userRoot, false, adminRole), newUser(userAlice, false, "viewer"))
+	ctx := ichorCtx("x")
+
+	got, err := s.GetUser(ctx, connect.NewRequest(&pb.GetUserRequest{Name: userAlice}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stale := got.Msg.GetUser().GetResourceVersion()
+	if stale == "" {
+		t.Fatal("GetUser must carry the resource version")
+	}
+
+	// Another admin disables alice.
+	if _, err := s.UpdateUser(ctx, connect.NewRequest(&pb.UpdateUserRequest{Name: userAlice, Roles: []string{"viewer"}, Disabled: true})); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.UpdateUser(ctx, connect.NewRequest(&pb.UpdateUserRequest{
+		Name: userAlice, Roles: []string{"viewer"}, DisplayName: "new", BaseResourceVersion: stale,
+	}))
+	if connect.CodeOf(err) != connect.CodeAborted {
+		t.Fatalf("a stale base: %v", err)
+	}
+
+	after, _ := s.GetUser(ctx, connect.NewRequest(&pb.GetUserRequest{Name: userAlice}))
+	if !after.Msg.GetUser().GetDisabled() {
+		t.Fatal("the stale update re-enabled a disabled user")
+	}
+}

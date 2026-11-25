@@ -39,11 +39,14 @@ type User struct {
 	Roles       []string `protobuf:"bytes,4,rep,name=roles,proto3" json:"roles,omitempty"`
 	Disabled    bool     `protobuf:"varint,5,opt,name=disabled,proto3" json:"disabled,omitempty"`
 	// password_set mirrors the PasswordSet condition.
-	PasswordSet   bool                   `protobuf:"varint,6,opt,name=password_set,json=passwordSet,proto3" json:"password_set,omitempty"`
-	Conditions    []*Condition           `protobuf:"bytes,7,rep,name=conditions,proto3" json:"conditions,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PasswordSet bool                   `protobuf:"varint,6,opt,name=password_set,json=passwordSet,proto3" json:"password_set,omitempty"`
+	Conditions  []*Condition           `protobuf:"bytes,7,rep,name=conditions,proto3" json:"conditions,omitempty"`
+	CreatedAt   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// resource_version is the object's metadata.resourceVersion at the read; send it back as
+	// UpdateUserRequest.base_resource_version.
+	ResourceVersion string `protobuf:"bytes,9,opt,name=resource_version,json=resourceVersion,proto3" json:"resource_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *User) Reset() {
@@ -130,6 +133,13 @@ func (x *User) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *User) GetResourceVersion() string {
+	if x != nil {
+		return x.ResourceVersion
+	}
+	return ""
 }
 
 type ListUsersRequest struct {
@@ -413,14 +423,17 @@ func (x *CreateUserResponse) GetUser() *User {
 }
 
 type UpdateUserRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	Roles         []string               `protobuf:"bytes,4,rep,name=roles,proto3" json:"roles,omitempty"`
-	Disabled      bool                   `protobuf:"varint,5,opt,name=disabled,proto3" json:"disabled,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	DisplayName string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Email       string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	Roles       []string               `protobuf:"bytes,4,rep,name=roles,proto3" json:"roles,omitempty"`
+	Disabled    bool                   `protobuf:"varint,5,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	// base_resource_version is the User.resource_version the client's copy was read at. When set and the stored
+	// user has moved on, the write is refused with ABORTED; empty writes without the check.
+	BaseResourceVersion string `protobuf:"bytes,6,opt,name=base_resource_version,json=baseResourceVersion,proto3" json:"base_resource_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *UpdateUserRequest) Reset() {
@@ -486,6 +499,13 @@ func (x *UpdateUserRequest) GetDisabled() bool {
 		return x.Disabled
 	}
 	return false
+}
+
+func (x *UpdateUserRequest) GetBaseResourceVersion() string {
+	if x != nil {
+		return x.BaseResourceVersion
+	}
+	return ""
 }
 
 type UpdateUserResponse struct {
@@ -1108,7 +1128,7 @@ var File_ichor_v1alpha1_user_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_user_proto_rawDesc = "" +
 	"\n" +
-	"\x19ichor/v1alpha1/user.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\x9e\x02\n" +
+	"\x19ichor/v1alpha1/user.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\xc9\x02\n" +
 	"\x04User\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
@@ -1120,7 +1140,8 @@ const file_ichor_v1alpha1_user_proto_rawDesc = "" +
 	"conditions\x18\a \x03(\v2\x19.ichor.v1alpha1.ConditionR\n" +
 	"conditions\x129\n" +
 	"\n" +
-	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x12\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12)\n" +
+	"\x10resource_version\x18\t \x01(\tR\x0fresourceVersion\"\x12\n" +
 	"\x10ListUsersRequest\"?\n" +
 	"\x11ListUsersResponse\x12*\n" +
 	"\x05users\x18\x01 \x03(\v2\x14.ichor.v1alpha1.UserR\x05users\"$\n" +
@@ -1134,13 +1155,14 @@ const file_ichor_v1alpha1_user_proto_rawDesc = "" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12\x14\n" +
 	"\x05roles\x18\x04 \x03(\tR\x05roles\">\n" +
 	"\x12CreateUserResponse\x12(\n" +
-	"\x04user\x18\x01 \x01(\v2\x14.ichor.v1alpha1.UserR\x04user\"\x92\x01\n" +
+	"\x04user\x18\x01 \x01(\v2\x14.ichor.v1alpha1.UserR\x04user\"\xc6\x01\n" +
 	"\x11UpdateUserRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12\x14\n" +
 	"\x05roles\x18\x04 \x03(\tR\x05roles\x12\x1a\n" +
-	"\bdisabled\x18\x05 \x01(\bR\bdisabled\">\n" +
+	"\bdisabled\x18\x05 \x01(\bR\bdisabled\x122\n" +
+	"\x15base_resource_version\x18\x06 \x01(\tR\x13baseResourceVersion\">\n" +
 	"\x12UpdateUserResponse\x12(\n" +
 	"\x04user\x18\x01 \x01(\v2\x14.ichor.v1alpha1.UserR\x04user\"'\n" +
 	"\x11DeleteUserRequest\x12\x12\n" +

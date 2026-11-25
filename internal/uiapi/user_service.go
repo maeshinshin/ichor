@@ -103,9 +103,10 @@ func userToPB(u *ichorv1alpha1.IchorUser) *pb.User {
 	return &pb.User{
 		Name: u.Name, DisplayName: u.Spec.DisplayName, Email: u.Spec.Email,
 		Roles: u.Spec.Roles, Disabled: u.Spec.Disabled,
-		PasswordSet: meta.IsStatusConditionTrue(u.Status.Conditions, condPasswordSet),
-		Conditions:  conditions(u.Status.Conditions),
-		CreatedAt:   createdAtToPB(u.CreationTimestamp),
+		PasswordSet:     meta.IsStatusConditionTrue(u.Status.Conditions, condPasswordSet),
+		Conditions:      conditions(u.Status.Conditions),
+		CreatedAt:       createdAtToPB(u.CreationTimestamp),
+		ResourceVersion: u.ResourceVersion,
 	}
 }
 
@@ -245,6 +246,10 @@ func (s *Server) UpdateUser(ctx context.Context, req *connect.Request[pb.UpdateU
 
 	u, err := s.getUser(ctx, m.GetName())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := checkBase(m.GetBaseResourceVersion(), u.ResourceVersion, "user", u.Name); err != nil {
 		return nil, err
 	}
 

@@ -180,7 +180,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
         <div class="mb-2 flex items-center gap-2">
           <div class="w-48">
             <Select value={source} onValueChange={setSource}>
-              <SelectTrigger className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
+              <SelectTrigger aria-label={t('node.logSource')} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -892,6 +892,23 @@ func (r *TalosOperationReconciler) nodeFinalizerStep(ctx context.Context, op *ic
 	return false, nil
 }
 
+// nodeActionStarted reports whether op's own status shows it began work on its machine: a drain or evacuation
+// wait (status.node), or a machine entry InProgress or with a boot ID. A queued or refused operation has none of
+// these, and the cordon on its node belongs to whichever operation holds the lock.
+func nodeActionStarted(op *ichorv1alpha1.TalosOperation) bool {
+	if op.Status.Node != nil {
+		return true
+	}
+
+	for _, ms := range op.Status.Machines {
+		if ms.Phase == ichorv1alpha1.TalosOperationMachinePhaseInProgress || ms.BootID != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // abandonNodeAction uncordons the target node, ends its storage evacuation and releases the cluster lock. Every
 // step is idempotent, so a failure is retried from the top.
 func (r *TalosOperationReconciler) abandonNodeAction(ctx context.Context, op *ichorv1alpha1.TalosOperation) error {
@@ -907,7 +924,9 @@ func (r *TalosOperationReconciler) abandonNodeAction(ctx context.Context, op *ic
 		return err
 	}
 
-	if err == nil {
+	// shortcut: the finalizer is added at the first reconcile, before the lock, so the uncordon is gated here
+	// on the operation's own status; drop this if the finalizer moves to after the lock is taken.
+	if err == nil && nodeActionStarted(op) {
 		// The node may be down, so it is named from the machine, not asked.
 		node, nerr := resolveNodeName(ctx, r.Client, nil, &m)
 		if nerr == nil {

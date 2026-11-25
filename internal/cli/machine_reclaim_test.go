@@ -56,7 +56,7 @@ type reclaimHarness struct {
 
 func newReclaimHarness(stdin string, known reclaim.Known) *reclaimHarness {
 	h := &reclaimHarness{node: &reclaimFakeNode{in: reclaim.Inspection{
-		Address: "10.0.0.5", UUID: testUUID, Hostname: "w1", ClusterName: "old", ClusterID: "cid", ClusterReachable: true,
+		Address: testEndpointAddr, UUID: testUUID, Hostname: "w1", ClusterName: "old", ClusterID: "cid", ClusterReachable: true,
 		Volumes: []reclaim.Volume{{Name: "data", Location: "/dev/sdb1", Size: 10, Encrypted: true}},
 	}}}
 
@@ -81,7 +81,7 @@ func newReclaimHarness(stdin string, known reclaim.Known) *reclaimHarness {
 func TestMachineReclaimTypedUUIDResets(t *testing.T) {
 	h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
 
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: time.Second, Cluster: "new"}); err != nil {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Wait: time.Second, Cluster: actionsNewCluster}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,7 +89,7 @@ func TestMachineReclaimTypedUUIDResets(t *testing.T) {
 		t.Fatalf("want one graceful reset, got %v", h.node.resets)
 	}
 
-	if len(h.registered) != 1 || h.registered[0] != "10.0.0.5" {
+	if len(h.registered) != 1 || h.registered[0] != testEndpointAddr {
 		t.Fatalf("want the address registered, got %v", h.registered)
 	}
 
@@ -117,7 +117,7 @@ func TestMachineReclaimNoWaitDoesNotClaimTheWipe(t *testing.T) {
 		return strings.ToLower(testUUID), nil
 	}
 
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: 0}); err != nil {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Wait: 0}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,7 +141,7 @@ func TestMachineReclaimYesDoesNotSatisfyConfirmation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := newReclaimHarness(stdin, reclaim.Known{})
 
-			if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: time.Second}); err == nil {
+			if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Wait: time.Second}); err == nil {
 				t.Fatal("want an error")
 			}
 
@@ -155,7 +155,7 @@ func TestMachineReclaimYesDoesNotSatisfyConfirmation(t *testing.T) {
 func TestMachineReclaimConfirmFlag(t *testing.T) {
 	h := newReclaimHarness("", reclaim.Known{})
 
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: strings.ToLower(testUUID), Wait: time.Second}); err != nil {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Confirm: strings.ToLower(testUUID), Wait: time.Second}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -167,7 +167,7 @@ func TestMachineReclaimConfirmFlag(t *testing.T) {
 func TestMachineReclaimRefusesIchorMachine(t *testing.T) {
 	h := newReclaimHarness("AAAA-1\n", reclaim.Known{MachineUUIDs: []string{strings.ToLower(testUUID)}})
 
-	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID})
+	err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Confirm: testUUID})
 	if err == nil || !strings.Contains(err.Error(), "already an Ichor node") {
 		t.Fatalf("err = %v", err)
 	}
@@ -187,17 +187,17 @@ func TestMachineReclaimQuorumNeedsForceAndClusterName(t *testing.T) {
 	}
 
 	h := mk()
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID}); err == nil || len(h.node.resets) != 0 {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Confirm: testUUID}); err == nil || len(h.node.resets) != 0 {
 		t.Fatalf("last control plane must be refused: %v", err)
 	}
 
 	h = mk()
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID, Force: true}); err == nil || len(h.node.resets) != 0 {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Confirm: testUUID, Force: true}); err == nil || len(h.node.resets) != 0 {
 		t.Fatalf("--force without the cluster name must not reset: %v", err)
 	}
 
 	h = mk()
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5",
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr,
 		reclaimFlags{Confirm: testUUID, Force: true, ConfirmCluster: "old"}); err != nil || len(h.node.resets) != 1 {
 		t.Fatalf("forced reset failed: %v %v", err, h.node.resets)
 	}
@@ -207,7 +207,7 @@ func TestMachineReclaimCannotVerifyIchorFleet(t *testing.T) {
 	h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
 	h.deps.Known = func(context.Context) (reclaim.Known, error) { return reclaim.Known{}, errors.New("no cluster") }
 
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{}); err == nil || len(h.node.resets) != 0 {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{}); err == nil || len(h.node.resets) != 0 {
 		t.Fatalf("must refuse when Ichor's machines cannot be listed: %v", err)
 	}
 }
@@ -216,7 +216,7 @@ func TestMachineReclaimAddressChangeGivesHint(t *testing.T) {
 	h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
 	h.deps.Probe = func(context.Context, string) (string, error) { return "", errors.New("no route") }
 
-	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: 20 * time.Millisecond, Cluster: "new"})
+	err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Wait: 20 * time.Millisecond, Cluster: actionsNewCluster})
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -238,7 +238,7 @@ func TestMachineReclaimEtcdDown(t *testing.T) {
 	}
 
 	h := mk()
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID, ForceUngraceful: true}); err != nil {
+	if err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Confirm: testUUID, ForceUngraceful: true}); err != nil {
 		t.Fatalf("%v\n%s", err, h.out.String())
 	}
 
@@ -254,7 +254,7 @@ func TestMachineReclaimEtcdDown(t *testing.T) {
 
 	h = mk()
 
-	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID})
+	err := runMachineReclaim(context.Background(), h.deps, testEndpointAddr, reclaimFlags{Confirm: testUUID})
 	if err == nil || !strings.Contains(err.Error(), "--force-ungraceful") || len(h.node.resets) != 0 {
 		t.Fatalf("err = %v, resets = %v", err, h.node.resets)
 	}
@@ -264,7 +264,7 @@ func TestMachineReclaimEtcdDown(t *testing.T) {
 // be updatable; any of them failing refuses before the node is touched, as does --wait 0, which never registers.
 func TestMachineReclaimClusterIsCheckedBeforeTheReset(t *testing.T) {
 	cluster := newTestCluster()
-	cluster.Namespace, cluster.Name = "ns", "new"
+	cluster.Namespace, cluster.Name = "ns", actionsNewCluster
 
 	for name, tc := range map[string]struct {
 		k       client.Client
@@ -272,18 +272,20 @@ func TestMachineReclaimClusterIsCheckedBeforeTheReset(t *testing.T) {
 		wait    time.Duration
 		want    string
 	}{
-		"missing cluster": {reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()), "10.0.0.5", time.Second, "getting TalosCluster ns/new"},
+		"missing cluster": {reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()), testEndpointAddr, time.Second, "getting TalosCluster ns/new"},
 		"not IPv4":        {reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()), "fd00::5", time.Second, "not an IPv4"},
-		"no update right": {reviewAs(false, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()), "10.0.0.5", time.Second, "may not update"},
-		"--wait 0":        {nil, "10.0.0.5", 0, "--wait 0"},
+		"no update right": {reviewAs(false, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()), testEndpointAddr, time.Second, "may not update"},
+		"--wait 0":        {nil, testEndpointAddr, 0, "--wait 0"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
 			if tc.k != nil {
-				h.deps.Check = func(ctx context.Context, a string) error { return checkRegisterTarget(ctx, tc.k, "ns", "new", a) }
+				h.deps.Check = func(ctx context.Context, a string) error {
+					return checkRegisterTarget(ctx, tc.k, "ns", actionsNewCluster, a)
+				}
 			}
 
-			err := runMachineReclaim(context.Background(), h.deps, tc.address, reclaimFlags{Wait: tc.wait, Cluster: "new"})
+			err := runMachineReclaim(context.Background(), h.deps, tc.address, reclaimFlags{Wait: tc.wait, Cluster: actionsNewCluster})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want one containing %q", err, tc.want)
 			}

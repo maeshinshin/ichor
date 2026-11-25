@@ -1,5 +1,122 @@
 # Changelog
 
+## v0.3.3 (2026-11-26)
+
+A patch release of fixes to v0.3.2: registry credentials reach the mirror, a Helm
+upgrade migrates TalosConfigPatches by itself, several settings the webhooks
+used to accept are now refused, two etcd backups no longer prune each other's
+snapshots unnoticed, and the Helm chart installs again. No CRD field is added
+or removed.
+
+### Upgrade notes
+
+- **The Helm chart installs again.** The chart overflowed the Helm release Secret
+  ("Secret ... Too long"), so Helm installs of 0.3.0 to 0.3.2 could not complete;
+  Helm users should install or upgrade to 0.3.3. The chart now carries `LICENSE`
+  and `NOTICE` but not `THIRD-PARTY-NOTICES`, which is in the release archives and
+  the repository; `NOTICE` says where to find it.
+- **The upgrade to v0.3.3 applies those configuration changes to each node
+  once.** A change that needs a reboot follows the usual rollout path.
+- **Registry credentials are keyed by the mirror's endpoint host.** Talos applies
+  auth per endpoint host, so a cluster with `spec.registries[].authSecretRef` and
+  `endpoints` pulled anonymously from the mirror. The credentials now go under
+  each endpoint's `host[:port]` in `machine.registries.config` (under `host`
+  only when the registry has no endpoints). An existing cluster sees that
+  subtree change on upgrade; it is a no-reboot change.
+- **A Helm upgrade runs a post-upgrade hook Job, `ichor-migrate-patches`.** It
+  has a ServiceAccount, a ClusterRole and a ClusterRoleBinding of the same name that
+  exist only while the hook runs (`talosconfigpatches` list and patch,
+  `talosconfigpatches/status` patch, `talosclusters` list). A failed Job stays so
+  its log can be read. A cluster that blocks Job creation or RBAC objects during an
+  upgrade needs to allow them.
+- **An invalid label selector is refused on edit.** A `TalosConfigPatch`
+  `spec.target.labelSelector` or a `TalosStorage` `spec.nodes` that does not parse
+  is refused when the object is created or updated, so fix one before editing
+  the object for any other reason. `TalosStorage` gains a validating webhook for this.
+- **An empty `spec.autoPatch.window` such as `02:00-02:00` is refused** on
+  `IchorInstallation` when the window is set or changed. A stored one is left
+  alone while something else is edited.
+- **Give each etcd backup its own prefix.** A second `TalosEtcdBackup` on an
+  endpoint, bucket and prefix another backup writes is refused at create, because
+  retention prunes by prefix and the backups would delete each other's snapshots.
+  Backups that already share a prefix keep working and get the `SharedDestination`
+  condition and a Warning Event; move one to another `spec.destination.s3.prefix`.
+
+### Controller
+
+- A config change that Ichor's own upgrade brings, such as registry credentials
+  keyed by the mirror host, Pod Security exemptions and firewall ports, is
+  applied after `ichor upgrade ichor`. Before, it was reported as `NodeDrifted`
+  and, under the default `warnOnly`, was not applied. The render version is
+  now 2, so the controller reads such a change as a desired-state change.
+- A discovery probe that began while a machine was pending no longer replaces its
+  maintenance fingerprint, disks, links or address after the machine is approved.
+  The approval is checked on the fresh copy before the write.
+- Removing an etcd member asks the other approved control planes in name order
+  until one answers, instead of trying the first only. When none answers the
+  error names each one and why it failed.
+- After `helm upgrade`, auto-patch is no longer treated as an Ichor upgrade in
+  progress. A Helm install is never upgrading, because Helm moves it and
+  `spec.version` only records the version at creation. `ichor version` reports
+  the same.
+- A `TalosEtcdBackup` sets the `SharedDestination` condition (reason
+  `SharedPrefix`) and emits a Warning Event while another backup writes the same
+  endpoint, bucket and prefix. Pruning is not changed.
+
+### UI
+
+- A node log stream and the support bundle mask a `talos.config` URL in every
+  log line, whatever the source, including machined's "fetching machine config"
+  line. Before, only the kernel log was masked in a stream, and the bundle's logs
+  were not.
+- Saving a user from a copy another admin has since changed is refused, and the
+  dialog asks for a reload. `User.resource_version` and
+  `UpdateUserRequest.base_resource_version` carry the check; an empty base
+  writes without it.
+- Overview and Add node show the error when the machine list fails, instead of
+  an empty cluster.
+- The log source select on a node has an accessible name.
+- The Backups error alert names the backup that failed.
+
+### Config
+
+- `spec.security.podSecurity.exemptNamespaces` no longer renders `kube-system`
+  (Talos exempts it already) or a repeated name, either of which
+  kube-apiserver refuses to start on. A name that is not a valid namespace name
+  is refused.
+- `machine.registries.config` carries the credentials under each mirror
+  endpoint's host (see the upgrade notes).
+
+### Webhooks
+
+- A `TalosConfigPatch` with a label selector that does not parse is refused,
+  as is a `TalosStorage` whose `spec.nodes` does not.
+- An `IchorInstallation` with an empty auto-patch window is refused.
+- A `MachineReclaim`'s confirmed-by annotation cannot be changed once
+  `confirmUUID` is set.
+- A `TalosEtcdBackup` create on a destination another backup writes is refused
+  (see the upgrade notes).
+
+### CLI
+
+- The patch migration at the end of `ichor upgrade ichor` covers the
+  TalosConfigPatches of every namespace, and reads each patch's `TalosCluster`
+  in its own namespace, so a patch outside `ichor-system` no longer gets
+  `ClusterUnreadable`.
+- `ichor edit user` sends the user's resource version, so an edit of a user
+  another admin changed in the meantime is refused, as in the UI.
+- A Helm upgrade migrates TalosConfigPatches by itself through the hook Job, so
+  `ichor migrate patches` is no longer a required step; it stays for doing it
+  again by hand.
+
+### Docs
+
+- The upgrade guides and the `ichor migrate patches` reference say a Helm
+  upgrade migrates TalosConfigPatches by itself.
+- The `MachineReclaim` `ttl` message states the rule it checks: greater than 0s
+  and at most 60m.
+- The registry auth ADR states that credentials are keyed by the endpoint host.
+
 ## v0.3.2 (2026-11-25)
 
 A patch release of fixes to v0.3.1: the support bundle leaves out more

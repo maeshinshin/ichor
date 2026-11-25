@@ -471,6 +471,7 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vtaloscredentialrequest-v1alpha1.kb.io": {opCreate},
 				// A patch is dry-rendered against the machines it selects.
 				"vtalosconfigpatch-v1alpha1.kb.io":  {opCreate, opUpdate},
+				"vtalosstorage-v1alpha1.kb.io":      {opCreate, opUpdate},
 				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate, opDelete},
 				"vtaloscluster-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete},
 				// The role-grant and last-admin rules hold for kubectl too.

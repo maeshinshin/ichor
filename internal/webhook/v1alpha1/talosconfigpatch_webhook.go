@@ -63,6 +63,10 @@ type TalosConfigPatchCustomValidator struct {
 
 // ValidateCreate implements admission.Validator.
 func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+	if err := checkPatchSelector(obj); err != nil {
+		return nil, err
+	}
+
 	if err := checkDocuments(nil, obj); err != nil {
 		return nil, err
 	}
@@ -91,6 +95,10 @@ func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichor
 func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
 	if !newObj.DeletionTimestamp.IsZero() {
 		return nil, nil // a finalizer removal must not be refused
+	}
+
+	if err := checkPatchSelector(newObj); err != nil {
+		return nil, err
 	}
 
 	if err := checkDocuments(oldObj, newObj); err != nil {
@@ -201,4 +209,15 @@ func checkDocuments(oldObj, newObj *ichorv1alpha1.TalosConfigPatch) error {
 	}
 
 	return nil
+}
+
+// checkPatchSelector refuses a labelSelector the renderer cannot parse: the CRD types the operator as a plain
+// string, and one bad selector would fail the render of every machine in the cluster. It runs before the dry
+// render, which skips a patch with no config, no cluster or no approved machine.
+func checkPatchSelector(p *ichorv1alpha1.TalosConfigPatch) error {
+	if p.Spec.Target == nil {
+		return nil
+	}
+
+	return checkLabelSelector("spec.target.labelSelector", p.Spec.Target.LabelSelector)
 }

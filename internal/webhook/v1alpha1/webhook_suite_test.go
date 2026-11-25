@@ -139,6 +139,9 @@ var _ = BeforeSuite(func() {
 	err = SetupIchorUserWebhookWithManager(mgr, []string{testControllerUser})
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupTalosStorageWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

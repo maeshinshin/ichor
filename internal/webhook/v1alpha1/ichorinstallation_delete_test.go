@@ -26,3 +26,29 @@ func TestIchorInstallationDeleteNeedsTheAllowDeleteAnnotation(t *testing.T) {
 		t.Fatalf("deleting with the annotation was refused: %v", err)
 	}
 }
+
+// A window of equal start and end passes the CRD pattern but is empty, and would switch automatic patching off.
+func TestIchorInstallationRefusesAnEmptyAutoPatchWindow(t *testing.T) {
+	t.Parallel()
+
+	v := &IchorInstallationCustomValidator{}
+	ctx := context.Background()
+	withWindow := func(w string) *ichorv1alpha1.IchorInstallation {
+		return &ichorv1alpha1.IchorInstallation{
+			Name: ichorv1alpha1.IchorInstallationName,
+			Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.4.0", AutoPatch: &ichorv1alpha1.IchorAutoPatchSettings{Window: w}},
+		}
+	}
+
+	if _, err := v.ValidateUpdate(ctx, withWindow("01:00-02:00"), withWindow("02:00-02:00")); err == nil {
+		t.Error("update to 02:00-02:00 admitted")
+	}
+
+	if _, err := v.ValidateCreate(ctx, withWindow("02:00-02:00")); err == nil {
+		t.Error("create with 02:00-02:00 admitted")
+	}
+
+	if _, err := v.ValidateUpdate(ctx, withWindow("01:00-02:00"), withWindow("22:00-02:00")); err != nil {
+		t.Errorf("a wrapping window is refused: %v", err)
+	}
+}

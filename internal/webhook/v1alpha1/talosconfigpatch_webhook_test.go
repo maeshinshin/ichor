@@ -290,3 +290,22 @@ func TestTalosConfigPatchRefusesConfigBesideStoredDocuments(t *testing.T) {
 		t.Errorf("an update that changes neither was refused: %v", err)
 	}
 }
+
+func TestTalosConfigPatchRefusesAnInvalidSelector(t *testing.T) {
+	ctx := context.Background()
+	// No cluster exists, so the dry render would return early: the selector check must not depend on it.
+	v := &TalosConfigPatchCustomValidator{Client: fake.NewClientBuilder().WithScheme(schemeOf(t, corev1.AddToScheme)).Build()}
+
+	for name, sel := range badSelectors() {
+		p := configPatch("sel", nil)
+		p.Spec.Layer, p.Spec.Target = "selector", &ichorv1alpha1.TalosConfigPatchTarget{LabelSelector: sel}
+
+		if _, err := v.ValidateCreate(ctx, p); err == nil {
+			t.Errorf("%s: create admitted", name)
+		}
+
+		if _, err := v.ValidateUpdate(ctx, configPatch("sel", nil), p); err == nil {
+			t.Errorf("%s: update admitted", name)
+		}
+	}
+}

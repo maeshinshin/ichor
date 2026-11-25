@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
@@ -82,6 +83,10 @@ func (v *IchorInstallationCustomValidator) ValidateCreate(ctx context.Context, o
 		return nil, err
 	}
 
+	if err := checkAutoPatchWindow(obj); err != nil {
+		return nil, err
+	}
+
 	return deprecatedReclaim(obj), version.CheckSemver(obj.Spec.Version)
 }
 
@@ -92,6 +97,13 @@ func (v *IchorInstallationCustomValidator) ValidateUpdate(ctx context.Context, o
 
 	if err := v.Settings.check(ctx, oldObj, newObj); err != nil {
 		return nil, err
+	}
+
+	// Only a changed window is checked, so a stored one can still be left alone while something else is edited.
+	if windowOf(oldObj) != windowOf(newObj) {
+		if err := checkAutoPatchWindow(newObj); err != nil {
+			return nil, err
+		}
 	}
 
 	if oldObj.Spec.Version == newObj.Spec.Version {
@@ -114,4 +126,24 @@ func deprecatedReclaim(obj *ichorv1alpha1.IchorInstallation) admission.Warnings 
 	}
 
 	return admission.Warnings{"spec.reclaim.enabled is deprecated and ignored: who may reset and add a node is decided by RBAC alone (the reclaim verb on machinereclaims)"}
+}
+
+func windowOf(obj *ichorv1alpha1.IchorInstallation) string {
+	if obj.Spec.AutoPatch == nil {
+		return ""
+	}
+
+	return obj.Spec.AutoPatch.Window
+}
+
+// checkAutoPatchWindow runs the parser the CLI and the UI use: the CRD pattern accepts 02:00-02:00, an empty window
+// that would keep automatic patching from ever starting.
+func checkAutoPatchWindow(obj *ichorv1alpha1.IchorInstallation) error {
+	if w := windowOf(obj); w != "" {
+		if _, _, err := settings.ParseWindow(w); err != nil {
+			return fmt.Errorf("spec.autoPatch.window: %w", err)
+		}
+	}
+
+	return nil
 }

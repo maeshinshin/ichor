@@ -7,6 +7,7 @@
   (dict "name" "vauthentication" "path" "override" "ops" (list "CREATE" "UPDATE") "res" (list "talosclusters"))
   (dict "name" "vtaloscluster" "path" "taloscluster" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosclusters"))
   (dict "name" "vtalosconfigpatch" "path" "talosconfigpatch" "ops" (list "CREATE" "UPDATE") "res" (list "talosconfigpatches"))
+  (dict "name" "vtalosstorage" "path" "talosstorage" "ops" (list "CREATE" "UPDATE") "res" (list "talosstorages"))
   (dict "name" "vtalosmachine" "path" "talosmachine" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosmachines"))
   (dict "name" "vmachinereclaim" "path" "machinereclaim" "ops" (list "CREATE" "UPDATE") "res" (list "machinereclaims"))
   (dict "name" "vichoruser" "path" "ichoruser" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "ichorusers"))

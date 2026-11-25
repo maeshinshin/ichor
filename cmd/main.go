@@ -389,6 +389,7 @@ func main() {
 			}
 			must(webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr, settingsReader), "Failed to create webhook", "webhook", "TalosCluster")
 			must(webhookv1alpha1.SetupTalosConfigPatchWebhookWithManager(mgr, ns), "Failed to create webhook", "webhook", "TalosConfigPatch")
+			must(webhookv1alpha1.SetupTalosStorageWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosStorage")
 			must(webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosMachine")
 			// ICHOR_OVERRIDE_EXEMPT_USERS adds exact usernames (comma separated) to the
 			// built-in list.

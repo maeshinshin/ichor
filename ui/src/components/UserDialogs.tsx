@@ -12,6 +12,8 @@ import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { minPasswordLength, passwordOk, roleNames, toggleRole, userError, userNameOk } from '@/lib/users'
+import { ChangedAlert } from '@/components/ChangedAlert'
+import { isChanged, withBase } from '@/lib/baseVersion'
 import { useAction } from '@/hooks/use-action'
 import { t } from '@/lib/i18n'
 
@@ -201,14 +203,15 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
   const [roles, setRoles] = useState<string[]>(user.roles)
   const [disabled, setDisabled] = useState(user.disabled)
   const { busy, error, run } = useAction(userError)
+  const [changed, setChanged] = useState(false)
 
   const submit = () =>
     run(async () => {
-      await userClient.updateUser({ name: user.name, displayName, email, roles, disabled })
+      await userClient.updateUser(withBase({ name: user.name, displayName, email, roles, disabled }, user.resourceVersion))
       notifyDone(t('users.updated', { name: user.name }))
       onOpenChange(false)
       onDone()
-    })
+    }, (err) => setChanged(isChanged(err)))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -225,7 +228,8 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
             <FieldLabel htmlFor="edit-disabled">{t('users.disabled')}</FieldLabel>
             <FieldDescription>{t('users.disabledHint')}</FieldDescription>
           </Field>
-          {error && <ErrorAlert {...error} />}
+          {error && changed && <ChangedAlert detail={error.detail} onReload={() => { onOpenChange(false); onDone() }} />}
+          {error && !changed && <ErrorAlert {...error} />}
         </FieldGroup>
         </div>
         <DialogFooter>

@@ -32,6 +32,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/nethelpers"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 // Ports the firewall opens besides Talos's own (constants.*Port): Cilium's tunnel and health
@@ -54,9 +56,40 @@ func FirewallEnabled(c *ichorv1alpha1.TalosCluster) bool {
 	return c.Spec.Security != nil && c.Spec.Security.Firewall != nil && c.Spec.Security.Firewall.Enabled
 }
 
-// WireGuardEnabled reports spec.security.wireGuard.enabled.
-func WireGuardEnabled(c *ichorv1alpha1.TalosCluster) bool {
-	return c.Spec.Security != nil && c.Spec.Security.WireGuard != nil && c.Spec.Security.WireGuard.Enabled
+type ciliumPortSet struct {
+	tunnel, health uint16
+	wireGuard      bool
+}
+
+// ciliumPorts reads the ports the firewall opens off the effective Cilium values, the same ones the Helm
+// release is applied with, so a tunnelPort, clusterHealthPort or encryption the user's values set is opened.
+func ciliumPorts(c *ichorv1alpha1.TalosCluster) (ciliumPortSet, error) {
+	vals, err := cilium.EffectiveValuesForNodes(c, "", 0)
+	if err != nil {
+		return ciliumPortSet{}, fmt.Errorf("render: firewall: %w", err)
+	}
+
+	p := ciliumPortSet{tunnel: portCiliumVXLAN, health: portCiliumHealth}
+	if c.Spec.CNI.Tunnel == "geneve" {
+		p.tunnel = portCiliumGeneve
+	}
+
+	port := func(path string, def uint16) uint16 {
+		v, _ := values.Get(vals, path)
+		if n, err := strconv.ParseUint(fmt.Sprint(v), 10, 16); err == nil && n > 0 {
+			return uint16(n)
+		}
+
+		return def
+	}
+
+	p.tunnel, p.health = port("tunnelPort", p.tunnel), port("clusterHealthPort", p.health)
+
+	en, _ := values.Get(vals, "encryption.enabled")
+	ty, _ := values.Get(vals, "encryption.type")
+	p.wireGuard = en == true && ty == "wireguard"
+
+	return p, nil
 }
 
 // parsePrefixes parses CIDRs, masked to their network address; what names the field in an error.
@@ -191,9 +224,9 @@ func firewallPlan(c *ichorv1alpha1.TalosCluster, machineType machine.Type) ([]fw
 		cps = nodes
 	}
 
-	tunnel := uint16(portCiliumVXLAN)
-	if c.Spec.CNI.Tunnel == "geneve" {
-		tunnel = portCiliumGeneve
+	cp, err := ciliumPorts(c)
+	if err != nil {
+		return nil, err
 	}
 
 	tcp, udp := nethelpers.ProtocolTCP, nethelpers.ProtocolUDP
@@ -202,8 +235,8 @@ func firewallPlan(c *ichorv1alpha1.TalosCluster, machineType machine.Type) ([]fw
 	rules := []fwRule{
 		{"apid", tcp, network.PortRanges{single(constants.ApidPort)}, concat(controller, talosAPI, cps)},
 		{"kubelet", tcp, network.PortRanges{single(constants.KubeletPort)}, concat(cps, podNet)},
-		{"cilium-tunnel", udp, network.PortRanges{single(tunnel)}, nodes},
-		{"cilium-health", tcp, network.PortRanges{single(portCiliumHealth)}, nodes},
+		{"cilium-tunnel", udp, network.PortRanges{single(cp.tunnel)}, nodes},
+		{"cilium-health", tcp, network.PortRanges{single(cp.health)}, nodes},
 	}
 
 	if isCP {
@@ -215,7 +248,7 @@ func firewallPlan(c *ichorv1alpha1.TalosCluster, machineType machine.Type) ([]fw
 		)
 	}
 
-	if WireGuardEnabled(c) {
+	if cp.wireGuard {
 		rules = append(rules, fwRule{"cilium-wireguard", udp, network.PortRanges{single(portCiliumWireGuard)}, nodes})
 	}
 

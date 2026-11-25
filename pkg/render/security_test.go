@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
@@ -140,6 +142,18 @@ func TestFirewall(t *testing.T) {
 		c.Spec.CNI.Tunnel = "geneve"
 
 		requireAll(t, ruleDoc(mustRender(t, c, worker, bundle, nil), "ichor-fw-cilium-tunnel"), "6081")
+	})
+
+	t.Run("the user's Cilium values move the tunnel and health ports and turn WireGuard on", func(t *testing.T) {
+		c := fwCluster(nil)
+		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{
+			Raw: []byte(`{"tunnelPort": 8473, "clusterHealthPort": 4250, "encryption": {"enabled": true, "type": "wireguard"}}`),
+		}}
+		out := mustRender(t, c, worker, bundle, nil)
+
+		requireAll(t, ruleDoc(out, "ichor-fw-cilium-tunnel"), "8473")
+		requireAll(t, ruleDoc(out, "ichor-fw-cilium-health"), "4250")
+		requireAll(t, ruleDoc(out, "ichor-fw-cilium-wireguard"), "51871")
 	})
 
 	t.Run("control planes narrow etcd and kubelet", func(t *testing.T) {

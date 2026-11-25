@@ -24,6 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -254,5 +257,40 @@ func TestMachineReclaimEtcdDown(t *testing.T) {
 	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID})
 	if err == nil || !strings.Contains(err.Error(), "--force-ungraceful") || len(h.node.resets) != 0 {
 		t.Fatalf("err = %v, resets = %v", err, h.node.resets)
+	}
+}
+
+// TestMachineReclaimClusterIsCheckedBeforeTheReset: --cluster names a TalosCluster that must exist, take the address and
+// be updatable; any of them failing refuses before the node is touched, as does --wait 0, which never registers.
+func TestMachineReclaimClusterIsCheckedBeforeTheReset(t *testing.T) {
+	cluster := newTestCluster()
+	cluster.Namespace, cluster.Name = "ns", "new"
+
+	for name, tc := range map[string]struct {
+		k       client.Client
+		address string
+		wait    time.Duration
+		want    string
+	}{
+		"missing cluster": {reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()), "10.0.0.5", time.Second, "getting TalosCluster ns/new"},
+		"not IPv4":        {reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()), "fd00::5", time.Second, "not an IPv4"},
+		"no update right": {reviewAs(false, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()), "10.0.0.5", time.Second, "may not update"},
+		"--wait 0":        {nil, "10.0.0.5", 0, "--wait 0"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
+			if tc.k != nil {
+				h.deps.Check = func(ctx context.Context, a string) error { return checkRegisterTarget(ctx, tc.k, "ns", "new", a) }
+			}
+
+			err := runMachineReclaim(context.Background(), h.deps, tc.address, reclaimFlags{Wait: tc.wait, Cluster: "new"})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want one containing %q", err, tc.want)
+			}
+
+			if len(h.node.resets) != 0 {
+				t.Errorf("the node was reset before the refusal: %v", h.node.resets)
+			}
+		})
 	}
 }

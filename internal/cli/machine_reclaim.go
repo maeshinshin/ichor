@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	authzv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -115,6 +116,9 @@ and disks on that same node (Event MaintenanceIdentityRefreshed); approve it aft
 			Register: func(ctx context.Context, address string) error {
 				return registerDiscoveryAddress(ctx, k8s, apiOpts.Namespace, f.Cluster, address)
 			},
+			Check: func(ctx context.Context, address string) error {
+				return checkRegisterTarget(ctx, k8s, apiOpts.Namespace, f.Cluster, address)
+			},
 			In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), Poll: 5 * time.Second,
 		}
 
@@ -161,12 +165,27 @@ type reclaimDeps struct {
 	Known      func(ctx context.Context) (reclaim.Known, error)
 	Probe      func(ctx context.Context, address string) (string, error)
 	Register   func(ctx context.Context, address string) error
-	In         io.Reader
-	Out        io.Writer
-	Poll       time.Duration
+	// Check is what --cluster needs, asked before the reset: the cluster exists, the address fits, the update is allowed.
+	Check func(ctx context.Context, address string) error
+	In    io.Reader
+	Out   io.Writer
+	Poll  time.Duration
 }
 
 func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f reclaimFlags) error {
+	if f.Cluster != "" {
+		// The registration follows the probe, which --wait 0 never makes.
+		if f.Wait <= 0 {
+			return errors.New("reclaim node: --cluster registers the node once it answers in maintenance mode, so it cannot be used with --wait 0")
+		}
+
+		if d.Check != nil {
+			if err := d.Check(ctx, reclaim.HostOnly(address)); err != nil {
+				return fmt.Errorf("reclaim node: --cluster %s: %w (nothing was reset)", f.Cluster, err)
+			}
+		}
+	}
+
 	known, err := d.Known(ctx)
 	if err != nil {
 		return fmt.Errorf("reclaim node: cannot tell which nodes Ichor manages, so cannot rule out reclaiming one: %w", err)
@@ -309,6 +328,32 @@ func readTypedLine(r *bufio.Reader) (string, error) {
 	}
 
 	return strings.TrimSpace(s), nil
+}
+
+// checkRegisterTarget is everything registerDiscoveryAddress needs, read before the node is wiped: an IPv4 address,
+// the TalosCluster, and the right to update it.
+func checkRegisterTarget(ctx context.Context, c client.Client, namespace, name, address string) error {
+	if a, err := netip.ParseAddr(address); err != nil || !a.Is4() {
+		return fmt.Errorf("%q is not an IPv4 address, which spec.discovery.addresses needs", address)
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &cluster); err != nil {
+		return fmt.Errorf("getting TalosCluster %s/%s: %w", namespace, name, err)
+	}
+
+	ssar := &authzv1.SelfSubjectAccessReview{Spec: authzv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authzv1.ResourceAttributes{
+		Namespace: namespace, Verb: "update", Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters", Name: name,
+	}}}
+	if err := c.Create(ctx, ssar); err != nil {
+		return fmt.Errorf("checking the right to update TalosCluster %s/%s: %w", namespace, name, err)
+	}
+
+	if !ssar.Status.Allowed {
+		return fmt.Errorf("you may not update TalosCluster %s/%s", namespace, name)
+	}
+
+	return nil
 }
 
 // registerDiscoveryAddress appends address to the cluster's spec.discovery.addresses

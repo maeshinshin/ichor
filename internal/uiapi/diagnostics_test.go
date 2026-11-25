@@ -18,8 +18,15 @@ package uiapi
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -189,5 +196,129 @@ func TestTalosRolePerScope(t *testing.T) {
 		if got := roles.Strings(); len(got) != 1 || got[0] != role {
 			t.Errorf("%s: role %v, want %s", scope, got, role)
 		}
+	}
+}
+
+// machineryResourceTypes reads the resource definitions of the Talos machinery
+// module at the go.mod version from source: the COSI registry is only filled on a
+// node, so the module's ResourceDefinitionSpec literals are the offline list.
+func machineryResourceTypes(t *testing.T) (nonSensitive []string) {
+	t.Helper()
+
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/siderolabs/talos/pkg/machinery").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	root := filepath.Join(strings.TrimSpace(string(out)), "resources")
+	fset := token.NewFileSet()
+
+	err = filepath.WalkDir(root, func(dir string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return err
+		}
+
+		names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil {
+			return err
+		}
+
+		var files []*ast.File
+
+		for _, name := range names {
+			if strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+
+			f, err := parser.ParseFile(fset, name, nil, 0)
+			if err != nil {
+				return err
+			}
+
+			files = append(files, f)
+		}
+
+		{
+			consts := map[string]string{}
+
+			for _, f := range files {
+				ast.Inspect(f, func(n ast.Node) bool {
+					if vs, ok := n.(*ast.ValueSpec); ok && len(vs.Values) == len(vs.Names) {
+						for i, name := range vs.Names {
+							if call, ok := vs.Values[i].(*ast.CallExpr); ok && len(call.Args) == 1 {
+								if lit, ok := call.Args[0].(*ast.BasicLit); ok {
+									consts[name.Name], _ = strconv.Unquote(lit.Value)
+								}
+							}
+						}
+					}
+
+					return true
+				})
+			}
+
+			for _, f := range files {
+				ast.Inspect(f, func(n ast.Node) bool {
+					cl, ok := n.(*ast.CompositeLit)
+					if !ok {
+						return true
+					}
+
+					if sel, ok := cl.Type.(*ast.SelectorExpr); !ok || sel.Sel.Name != "ResourceDefinitionSpec" {
+						return true
+					}
+
+					typ, sensitive := "", false
+
+					for _, e := range cl.Elts {
+						kv := e.(*ast.KeyValueExpr)
+
+						switch kv.Key.(*ast.Ident).Name {
+						case "Type":
+							if id, ok := kv.Value.(*ast.Ident); ok {
+								typ = consts[id.Name]
+							}
+						case "Sensitivity":
+							sel, ok := kv.Value.(*ast.SelectorExpr)
+							sensitive = ok && sel.Sel.Name == "Sensitive"
+						}
+					}
+
+					if typ == "" {
+						t.Errorf("%s: a resource definition whose Type is not a local constant; teach the test to read it", fset.Position(cl.Pos()))
+					} else if !sensitive {
+						nonSensitive = append(nonSensitive, typ)
+					}
+
+					return true
+				})
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return nonSensitive
+}
+
+func TestReviewedBundleTypesCoverTalos(t *testing.T) {
+	t.Parallel()
+
+	got := machineryResourceTypes(t)
+	if len(got) < 100 {
+		t.Fatalf("found only %d resource types, the source reader is broken", len(got))
+	}
+
+	for _, typ := range got {
+		if _, ok := reviewedBundleTypes[typ]; !ok {
+			t.Errorf("new Talos resource type %s: review it for secrets and add it to reviewedBundleTypes", typ)
+		}
+	}
+
+	if !excludedTypes[k8s.ManifestType] {
+		t.Errorf("%s must be excluded", k8s.ManifestType)
 	}
 }

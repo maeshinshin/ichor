@@ -35,8 +35,6 @@ import (
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
-	"github.com/siderolabs/talos/pkg/machinery/resources/k8s"
-	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	yaml "go.yaml.in/yaml/v4"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -121,28 +119,197 @@ const (
 // excludedNamespaces and excludedTypes are COSI resources never written, on top
 // of everything Talos itself marks sensitive: the secrets namespace holds
 // certificates and keys, the config namespace holds the machine configuration,
-// and the kernel command line can carry talos.config=<url with a token>. The
-// types below are not marked sensitive by Talos (v1.14.5) but carry credentials or
-// Kubernetes objects: the rendered manifests include the kubelet bootstrap token
-// Secret and the user's inline manifests, the extra-manifest config holds
-// request headers, the unique machine token is a credential, the environment can
-// carry proxy credentials, and static pods are Pods with their env and args.
-// shortcut: a deny-list, because an allow-list of the ~160 diagnostic types
-// would drop new Talos types from every bundle; revisit when Talos marks these.
+// and the kernel command line can carry talos.config=<url with a token>.
 // configNamespace is the COSI namespace of the machine configuration.
 const configNamespace = "config"
 
+// reviewedBundleTypes lists every resource type Talos v1.14.5 does not mark
+// sensitive, each reviewed for secret material: true is written to the bundle,
+// false is left out (it carries credentials or Kubernetes objects: the rendered
+// manifests hold the kubelet bootstrap token Secret and inline manifests, the
+// extra-manifest config holds request headers, the machine token is a credential,
+// the environment can carry proxy credentials, static pods are Pods with env and
+// args). TestReviewedBundleTypesCoverTalos fails when a Talos bump adds a type
+// that is not listed, so someone reviews it. A type not listed is still written.
+var reviewedBundleTypes = map[resource.Type]bool{
+	"APIServiceConfigs.runtime.talos.dev":              true,
+	"AcquireConfigSpecs.v1alpha1.talos.dev":            true,
+	"AcquireConfigStatuses.v1alpha1.talos.dev":         true,
+	"AddressSpecs.net.talos.dev":                       true,
+	"AddressStatuses.net.talos.dev":                    true,
+	"AdjtimeStatuses.v1alpha1.talos.dev":               true,
+	"AdmissionControlConfigs.kubernetes.talos.dev":     true,
+	"Affiliates.cluster.talos.dev":                     true,
+	"BGPInstanceConfigs.net.talos.dev":                 true,
+	"BGPPeerStatuses.net.talos.dev":                    true,
+	"BaseRuntimeSpecConfigs.cri.talos.dev":             true,
+	"BlockDevices.block.talos.dev":                     true,
+	"BlockSymlinks.block.talos.dev":                    true,
+	"BootIDs.runtime.talos.dev":                        true,
+	"BootedEntries.talos.dev":                          true,
+	"BootstrapManifestsConfigs.kubernetes.talos.dev":   true,
+	"CPUCores.hardware.talos.dev":                      true,
+	"CPUStats.perf.talos.dev":                          true,
+	"ConfigStatuses.kubernetes.talos.dev":              true,
+	"ContainerImageStatuses.containers.talos.dev":      true,
+	"ContainerInstanceSpecs.containers.talos.dev":      true,
+	"ContainerInstanceStatuses.containers.talos.dev":   true,
+	"ContainerLifecycles.containers.talos.dev":         true,
+	"ContainerMountStatuses.containers.talos.dev":      true,
+	"ContainerSpecs.containers.talos.dev":              true,
+	"ControllerManagerConfigs.kubernetes.talos.dev":    true,
+	"DNSResolveCaches.net.talos.dev":                   true,
+	"DNSUpstreams.net.talos.dev":                       true,
+	"DevicesStatuses.runtime.talos.dev":                true,
+	"Diagnostics.runtime.talos.dev":                    true,
+	"DiscoveredVolumes.block.talos.dev":                true,
+	"DiscoveredVolumesStatuses.block.talos.dev":        true,
+	"DiscoveryRefreshRequests.block.talos.dev":         true,
+	"DiscoveryRefreshStatuses.block.talos.dev":         true,
+	"Disks.block.talos.dev":                            true,
+	"Endpoints.kubernetes.talos.dev":                   true,
+	"Environments.runtime.talos.dev":                   false,
+	"EtcFileStatuses.files.talos.dev":                  true,
+	"EtcdConfigs.etcd.talos.dev":                       true,
+	"EtcdMembers.etcd.talos.dev":                       true,
+	"EtcdSpecs.etcd.talos.dev":                         true,
+	"EthernetSpecs.net.talos.dev":                      true,
+	"EthernetStatuses.net.talos.dev":                   true,
+	"EventSinkConfigs.runtime.talos.dev":               true,
+	"ExtensionServiceConfigStatuses.runtime.talos.dev": true,
+	"ExtensionStatuses.runtime.talos.dev":              true,
+	"ExtraManifestsConfigs.kubernetes.talos.dev":       false,
+	"FSScrubSchedules.block.talos.dev":                 true,
+	"FSScrubStatuses.block.talos.dev":                  true,
+	"HardwareAddresses.net.talos.dev":                  true,
+	"HostDNSConfigs.net.talos.dev":                     true,
+	"HostnameSpecs.net.talos.dev":                      true,
+	"HostnameStatuses.net.talos.dev":                   true,
+	"Identities.cluster.talos.dev":                     true,
+	"ImageCacheConfigs.cri.talos.dev":                  true,
+	"ImageFactorySchematics.runtime.talos.dev":         true,
+	"ImageVerificationRules.security.talos.dev":        true,
+	"Infos.cluster.talos.dev":                          true,
+	"KernelCmdlines.runtime.talos.dev":                 false,
+	"KernelModuleSpecs.runtime.talos.dev":              true,
+	"KernelModuleStatuses.runtime.talos.dev":           true,
+	"KernelParamDefaultSpecs.runtime.talos.dev":        true,
+	"KernelParamSpecs.runtime.talos.dev":               true,
+	"KernelParamStatuses.runtime.talos.dev":            true,
+	"KmsgLogConfigs.runtime.talos.dev":                 true,
+	"KubePrismConfigs.kubernetes.talos.dev":            true,
+	"KubePrismEndpoints.kubernetes.talos.dev":          true,
+	"KubePrismStatuses.kubernetes.talos.dev":           true,
+	"KubeSpanEndpoints.kubespan.talos.dev":             true,
+	"KubeSpanPeerSpecs.kubespan.talos.dev":             true,
+	"KubeSpanPeerStatuses.kubespan.talos.dev":          true,
+	"KubeletKubeconfigs.kubernetes.talos.dev":          true,
+	"KubeletLifecycles.kubernetes.talos.dev":           true,
+	"KubeletStatuses.kubernetes.talos.dev":             true,
+	"KubernetesAccessConfigs.cluster.talos.dev":        true,
+	"LVMLogicalVolumeSpecs.storage.talos.dev":          true,
+	"LVMLogicalVolumeStatuses.storage.talos.dev":       true,
+	"LVMPhysicalVolumeSpecs.storage.talos.dev":         true,
+	"LVMPhysicalVolumeStatuses.storage.talos.dev":      true,
+	"LVMRefreshRequests.storage.talos.dev":             true,
+	"LVMValidationErrors.storage.talos.dev":            true,
+	"LVMVolumeGroupSpecs.storage.talos.dev":            true,
+	"LVMVolumeGroupStatuses.storage.talos.dev":         true,
+	"LinkAliasSpecs.net.talos.dev":                     true,
+	"LinkRefreshes.net.talos.dev":                      true,
+	"LinkStatuses.net.talos.dev":                       true,
+	"LoadedKernelModules.runtime.talos.dev":            true,
+	"MDArraySpecs.storage.talos.dev":                   true,
+	"MDArrayStatuses.storage.talos.dev":                true,
+	"MDRefreshRequests.storage.talos.dev":              true,
+	"MachineResetSignals.runtime.talos.dev":            true,
+	"MachineStatuses.runtime.talos.dev":                true,
+	"MachineTypes.config.talos.dev":                    true,
+	"MaintenanceServiceConfigs.runtime.talos.dev":      true,
+	"MaintenanceServiceRequests.runtime.talos.dev":     true,
+	"ManifestStatuses.kubernetes.talos.dev":            true,
+	"Manifests.kubernetes.talos.dev":                   false,
+	"Members.cluster.talos.dev":                        true,
+	"MemoryModules.hardware.talos.dev":                 true,
+	"MemoryStats.perf.talos.dev":                       true,
+	"MetaKeys.runtime.talos.dev":                       true,
+	"MetaLoads.runtime.talos.dev":                      true,
+	"MountRequests.block.talos.dev":                    true,
+	"MountStatuses.block.talos.dev":                    true,
+	"MountStatuses.runtime.talos.dev":                  true,
+	"NTPStatuses.v1alpha1.talos.dev":                   true,
+	"NetworkStatuses.net.talos.dev":                    true,
+	"NfTablesChains.net.talos.dev":                     true,
+	"NodeAddressFilters.net.talos.dev":                 true,
+	"NodeAddressSortAlgorithms.net.talos.dev":          true,
+	"NodeAddresses.net.talos.dev":                      true,
+	"NodeIPConfigs.kubernetes.talos.dev":               true,
+	"NodeIPs.kubernetes.talos.dev":                     true,
+	"NodeStatuses.kubernetes.talos.dev":                true,
+	"Nodenames.kubernetes.talos.dev":                   true,
+	"PCIDevices.hardware.talos.dev":                    true,
+	"PCIDriverRebindConfigs.runtime.talos.dev":         true,
+	"PCIDriverRebindStatuses.runtime.talos.dev":        true,
+	"PCRStatuses.hardware.talos.dev":                   true,
+	"PKIStatuses.etcd.talos.dev":                       true,
+	"PlatformConfigs.net.talos.dev":                    true,
+	"PlatformMetadatas.talos.dev":                      true,
+	"ProbeSpecs.net.talos.dev":                         true,
+	"ProbeStatuses.net.talos.dev":                      true,
+	"Processors.hardware.talos.dev":                    true,
+	"RebootRequests.runtime.talos.dev":                 true,
+	"ResolverSpecs.net.talos.dev":                      true,
+	"ResolverStatuses.net.talos.dev":                   true,
+	"RouteSpecs.net.talos.dev":                         true,
+	"RouteStatuses.net.talos.dev":                      true,
+	"RoutingRuleSpecs.net.talos.dev":                   true,
+	"RoutingRuleStatuses.net.talos.dev":                true,
+	"SBOMItems.talos.dev":                              true,
+	"SchedulerConfigs.kubernetes.talos.dev":            true,
+	"SeccompProfiles.cri.talos.dev":                    true,
+	"SecretStatuses.kubernetes.talos.dev":              true,
+	"SecurityStates.talos.dev":                         true,
+	"ServicePIDs.runtime.talos.dev":                    true,
+	"Services.v1alpha1.talos.dev":                      true,
+	"SiderolinkStatuses.siderolink.talos.dev":          true,
+	"StaticHosts.net.talos.dev":                        true,
+	"StaticPodServerStatuses.kubernetes.talos.dev":     true,
+	"StaticPodStatuses.kubernetes.talos.dev":           true,
+	"StaticPods.kubernetes.talos.dev":                  false,
+	"SwapStatuses.block.talos.dev":                     true,
+	"SystemDisks.block.talos.dev":                      true,
+	"SystemInformations.hardware.talos.dev":            true,
+	"TUFTrustedRoots.security.talos.dev":               true,
+	"TimeServerSpecs.net.talos.dev":                    true,
+	"TimeServerStatuses.net.talos.dev":                 true,
+	"TimeStatuses.v1alpha1.talos.dev":                  true,
+	"UnattendedInstallStatuses.runtime.talos.dev":      true,
+	"UniqueMachineTokens.runtime.talos.dev":            false,
+	"UserDiskConfigStatuses.block.talos.dev":           true,
+	"Versions.runtime.talos.dev":                       true,
+	"VolumeLifecycles.block.talos.dev":                 true,
+	"VolumeMountRequests.block.talos.dev":              true,
+	"VolumeMountStatuses.block.talos.dev":              true,
+	"VolumeStatuses.block.talos.dev":                   true,
+	"VolumeTrimSchedules.block.talos.dev":              true,
+	"WatchdogTimerConfigs.runtime.talos.dev":           true,
+	"WatchdogTimerStatuses.runtime.talos.dev":          true,
+	"ZswapStatuses.block.talos.dev":                    true,
+}
+
 var (
 	excludedNamespaces = map[resource.Namespace]bool{"secrets": true, configNamespace: true}
-	excludedTypes      = map[resource.Type]bool{
-		"KernelCmdlines.runtime.talos.dev": true,
-		"MachineConfigs.config.talos.dev":  true,
-		k8s.ManifestType:                   true,
-		k8s.ExtraManifestsConfigType:       true,
-		runtime.UniqueMachineTokenType:     true,
-		runtime.EnvironmentType:            true,
-		k8s.StaticPodType:                  true,
-	}
+	excludedTypes      = func() map[resource.Type]bool {
+		m := map[resource.Type]bool{"MachineConfigs.config.talos.dev": true}
+
+		for t, included := range reviewedBundleTypes {
+			if !included {
+				m[t] = true
+			}
+		}
+
+		return m
+	}()
 )
 
 func (t *machineryDownloadClient) CollectSupport(

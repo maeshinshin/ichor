@@ -25,6 +25,7 @@ package controller
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -37,6 +38,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const (
@@ -202,23 +204,30 @@ func (r *TalosOperationReconciler) removeBundleKey(ctx context.Context, cluster 
 	return r.Update(ctx, &secret)
 }
 
-// undoEtcdReboot uncordons the control plane a ca-rotation was rebooting, so an abandoned rotation does not
-// leave it unschedulable. The node is named by the machine (the node may be down, so it is not asked).
+// undoEtcdReboot uncordons the control planes a ca-rotation drained, so an abandoned rotation does not leave
+// one unschedulable. The drain runs before status.etcdRebooting is written, so the field is not the record:
+// every approved control plane is asked, and uncordon is a no-op on one Ichor did not cordon. The node is
+// named by the machine (the node may be down, so it is not asked).
 func (r *TalosOperationReconciler) undoEtcdReboot(ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster) error {
-	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation || op.Status.CARotation == nil || op.Status.CARotation.EtcdRebooting == "" {
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation {
 		return nil
-	}
-
-	var m ichorv1alpha1.TalosMachine
-
-	err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Status.CARotation.EtcdRebooting}, &m)
-	if err != nil {
-		return client.IgnoreNotFound(err)
 	}
 
 	run := &caRun{r: r, op: op, cluster: cluster}
 
-	return run.uncordon(ctx, &m, nodeNameFromMachine(&m))
+	list, err := deleteguard.ApprovedMachines(ctx, readerOrClient(r.APIReader, r.Client),
+		cluster.Namespace, cluster.Name, deleteguard.MachineFilter{Role: roleControlPlane})
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for i := range list {
+		errs = append(errs, run.uncordon(ctx, &list[i], nodeNameFromMachine(&list[i])))
+	}
+
+	return errors.Join(errs...)
 }
 
 // nodeNameFromMachine is the Kubernetes node name the machine's spec or last read gives, without asking the node.

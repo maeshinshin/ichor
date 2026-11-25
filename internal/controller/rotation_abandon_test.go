@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -160,6 +161,41 @@ var _ = Describe("Deleting a rotation operation", func() {
 			node, err = kc.CoreV1().Nodes().Get(ctx, rotCPNode, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(node.Spec.Unschedulable).To(BeFalse(), "the node accepts pods again")
+		})
+
+		It("uncordons the control plane a PodDisruptionBudget is holding in the drain when it is abandoned", func() {
+			shortenDrain(200 * time.Millisecond)
+
+			f := newCARotFixtureCPs(1)
+			f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
+
+			cp := f.machines[0]
+			f.world.nodeNames[cp.Name] = rotCPNode
+			f.world.frozenBoot[cp.Name] = true
+
+			cp.Status.NodeName = rotCPNode
+			Expect(k8sClient.Status().Update(ctx, cp)).To(Succeed())
+
+			kc := newDrainFake(func() int { return 0 }, drainTestNode(rotCPNode, false), drainTestNode("spare", false),
+				drainTestPod("db", rotCPNode, "StatefulSet", false))
+			kc.blocked["db"] = true
+			f.kube = kc
+
+			op := f.newOp()
+			for range 12 {
+				op = f.step(op)
+			}
+
+			Expect(op.Status.CARotation.EtcdRebooting).To(BeEmpty(), "the drain has not finished, so no reboot is recorded")
+			Expect(kc.node(rotCPNode).Spec.Unschedulable).To(BeTrue())
+
+			Expect(k8sClient.Delete(ctx, op)).To(Succeed())
+			reconcileUntilGone(f.newReconciler, op, 6)
+
+			node := kc.node(rotCPNode)
+			Expect(node.Spec.Unschedulable).To(BeFalse(), "the node accepts pods again")
+			Expect(node.Annotations).NotTo(HaveKey(cordonedByIchorAnnotation))
+			Expect(node.Annotations).NotTo(HaveKey(drainStartedAnnotation))
 		})
 
 		It("keeps a rotation that is past the point of no return, says so, and releases it only when it is done", func() {

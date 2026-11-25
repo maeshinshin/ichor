@@ -49,24 +49,11 @@ func (r *TalosMachineReconciler) deadEtcdMember(
 		return "its etcd member name is unknown (set spec.hostname)", false
 	}
 
-	survivor, err := r.findEtcdSurvivor(ctx, m)
+	_, members, survivor, done, err := r.etcdViaSurvivor(ctx, cluster, m, bundle)
 	if err != nil {
-		return "no other control plane to read etcd through", false
+		return fmt.Sprintf("no control plane could be asked to read etcd: %v", err), false
 	}
-
-	sCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
-	defer cancel()
-
-	sc, err := r.TalosClient(sCtx, cluster, survivor, bundle)
-	if err != nil {
-		return fmt.Sprintf("control plane %q could not be dialed to read etcd", survivor.Name), false
-	}
-	defer closeTalosClient(sc)
-
-	members, err := sc.EtcdMemberList(sCtx)
-	if err != nil {
-		return fmt.Sprintf("control plane %q could not list the etcd members", survivor.Name), false
-	}
+	defer done()
 
 	if !etcdMemberPresent(members, nodeName) {
 		// Gone from etcd already: either this removal took it out on an earlier round (it recorded

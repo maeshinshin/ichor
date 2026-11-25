@@ -68,7 +68,7 @@ func (r *TalosMachineReconciler) reprovisioned(
 // the maintenance API with the approved identity, so its etcd data is gone. The member is removed through another
 // approved control
 // plane, the same call a dead-member removal makes, and etcd refuses it without a quorum; the caller
-// holds the cluster lock. shortcut: only the first other control plane is asked.
+// holds the cluster lock.
 func (r *TalosMachineReconciler) removeStaleEtcdMember(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (reason, message string) {
@@ -86,25 +86,15 @@ func (r *TalosMachineReconciler) removeStaleEtcdMember(
 		return blocked("the secrets bundle is unavailable, so etcd cannot be asked whether the member still exists")
 	}
 
-	survivor, err := r.findEtcdSurvivor(ctx, m)
+	sc, members, survivor, done, err := r.etcdViaSurvivor(ctx, cluster, m, bundle)
 	if err != nil {
 		return blocked(fmt.Sprintf("%v. If this was the cluster's only control plane its etcd data is gone: recover the cluster "+
 			"from a backup with `ichor restore cluster`", err))
 	}
+	defer done()
 
 	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
 	defer cancel()
-
-	sc, err := r.TalosClient(ctx, cluster, survivor, bundle)
-	if err != nil {
-		return blocked(fmt.Sprintf("dialling the control plane %q to read etcd failed", survivor.Name))
-	}
-	defer closeTalosClient(sc)
-
-	members, err := sc.EtcdMemberList(ctx)
-	if err != nil {
-		return blocked(fmt.Sprintf("listing the etcd members from %q failed: %s", survivor.Name, shortError(err)))
-	}
 
 	id, found := etcdMemberID(members, name)
 	if !found {

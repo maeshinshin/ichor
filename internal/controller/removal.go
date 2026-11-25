@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -751,56 +752,89 @@ func (r *TalosMachineReconciler) trySelfLeave(
 	return self.EtcdLeaveCluster(selfCtx) == nil
 }
 
-// removeEtcdMemberFromSurvivor is removeEtcdMember's fallback: dial another approved control plane of the
-// cluster and remove m by ID from its view of etcd. No survivor to find or dial is an error:
-// reconcileRemoval holds the finalizer and retries rather than treating it as "already removed".
+// removeEtcdMemberFromSurvivor is removeEtcdMember's fallback: ask the other approved control planes of the
+// cluster, in order, until one answers, and remove m by ID from its view of etcd. No survivor to find or
+// dial is an error: reconcileRemoval holds the finalizer and retries rather than treating it as "already removed".
 func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string, bundle *secrets.Bundle,
 ) error {
-	survivor, err := r.findEtcdSurvivor(ctx, m)
+	sc, members, _, done, err := r.etcdViaSurvivor(ctx, cluster, m, bundle)
 	if err != nil {
-		return err
+		return fmt.Errorf("removing %q from etcd: %w", m.Name, err)
 	}
-
-	survivorCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
-	defer cancel()
-
-	sc, err := r.TalosClient(survivorCtx, cluster, survivor, bundle)
-	if err != nil {
-		return fmt.Errorf("dialing a surviving control plane to remove %q from etcd: %w", m.Name, err)
-	}
-	defer closeTalosClient(sc)
-
-	members, err := sc.EtcdMemberList(survivorCtx)
-	if err != nil {
-		return fmt.Errorf("listing etcd members from a surviving control plane: %w", err)
-	}
+	defer done()
 
 	id, found := etcdMemberID(members, nodeName)
 	if !found {
 		return nil // already gone
 	}
 
-	return sc.EtcdRemoveMemberByID(survivorCtx, id)
+	rmCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+	defer cancel()
+
+	return sc.EtcdRemoveMemberByID(rmCtx, id)
 }
 
-// findEtcdSurvivor finds another approved control plane of m's cluster to dial for EtcdRemoveMemberByID.
+// etcdViaSurvivor dials the other approved control planes of m's cluster in name order and returns the
+// client and etcd member list of the first that answers, with that control plane and a func that releases
+// the client. When none answers the error names every one tried and why it failed.
+func (r *TalosMachineReconciler) etcdViaSurvivor(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) (sc TalosClient, members []EtcdMember, via *ichorv1alpha1.TalosMachine, done func(), err error) {
+	siblings, err := r.etcdSurvivors(ctx, m)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	var failed []string
+
+	for i := range siblings {
+		s := &siblings[i]
+
+		dialCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
+
+		c, derr := r.TalosClient(dialCtx, cluster, s, bundle)
+		if derr == nil {
+			ms, lerr := c.EtcdMemberList(dialCtx)
+			if lerr == nil {
+				cancel()
+
+				return c, ms, s, func() { closeTalosClient(c) }, nil
+			}
+
+			closeTalosClient(c)
+
+			derr = fmt.Errorf("listing etcd members: %w", lerr)
+		}
+
+		cancel()
+
+		failed = append(failed, fmt.Sprintf("%s (%s)", s.Name, shortError(derr)))
+	}
+
+	return nil, nil, nil, nil, fmt.Errorf("none of the other control planes answered: %s", strings.Join(failed, ", "))
+}
+
+// etcdSurvivors lists the other approved control planes of m's cluster, in name order, to dial for etcd.
 // It reads through r.APIReader like deleteguard.CountApprovedControlPlanes: a cached read could still show
 // a sibling that started its own removal moments ago.
-func (r *TalosMachineReconciler) findEtcdSurvivor(
+func (r *TalosMachineReconciler) etcdSurvivors(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine,
-) (*ichorv1alpha1.TalosMachine, error) {
+) ([]ichorv1alpha1.TalosMachine, error) {
 	siblings, err := deleteguard.ApprovedMachines(ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name,
 		deleteguard.MachineFilter{Role: roleControlPlane})
 	if err != nil {
 		return nil, err
 	}
 
-	if i := slices.IndexFunc(siblings, func(s ichorv1alpha1.TalosMachine) bool { return s.Name != m.Name }); i >= 0 {
-		return &siblings[i], nil
+	siblings = slices.DeleteFunc(siblings, func(s ichorv1alpha1.TalosMachine) bool { return s.Name == m.Name })
+	if len(siblings) == 0 {
+		return nil, fmt.Errorf("no surviving control plane found to remove %q from etcd", m.Name)
 	}
 
-	return nil, fmt.Errorf("no surviving control plane found to remove %q from etcd", m.Name)
+	slices.SortFunc(siblings, func(a, b ichorv1alpha1.TalosMachine) int { return strings.Compare(a.Name, b.Name) })
+
+	return siblings, nil
 }
 
 // etcdMemberPresent reports whether hostname appears in members.

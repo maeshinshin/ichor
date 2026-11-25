@@ -22,8 +22,9 @@ sidebar_order: 1
   A node added with `--add-machine` to an already adopted cluster needs only
   v1.12 or later: sign-in and the issuer exist already and `--add-machine`
   takes none of the sign-in flags. The contract is probed from the running
-  version down to v1.12; an older one is refused by name (`--version-contract`
-  names one instead). Either refusal comes before anything is written.
+  version down to v1.12; an older one is refused by name.
+  `--version-contract` does not apply to `--add-machine`. Either refusal comes
+  before anything is written.
 - **Credentials.** Your `talosconfig` (`--talosconfig`, `$TALOSCONFIG` or
   `~/.talos/config`) and a kubeconfig (`--kubeconfig`, `$KUBECONFIG` or
   `~/.kube/config`). Adopt reads nodes with the talosconfig and never sends it to

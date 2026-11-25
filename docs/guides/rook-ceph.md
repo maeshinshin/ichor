@@ -11,7 +11,7 @@ Ceph and the choice of disks stay with you.
 |---|---|
 | Renders `TalosStorage` `rook-v1` as a node that leaves its disks alone ([Storage](../design/architecture/storage.md)) | Install Rook, the operator, the CSI drivers, the `CephCluster`, pools or the StorageClass |
 | Renders a labelled raw partition from a `TalosConfigPatch` (option B) | Choose which devices become OSDs |
-| Exempts `rook-ceph` from Pod Security | Run `ceph osd out`, wait for `active+clean`, or purge an OSD |
+| Renders the Pod Security exemption once you list `rook-ceph` in `spec.security.podSecurity.exemptNamespaces` ([below](#keep-the-namespace-out-of-pod-security)) | Run `ceph osd out`, wait for `active+clean`, or purge an OSD |
 | Gates node drains through Rook's disruption budgets ([Drains](#drains)) | Clean a disk a previous system left behind |
 
 `rook-v1` needs no Talos system extension, so it makes no Image Factory call

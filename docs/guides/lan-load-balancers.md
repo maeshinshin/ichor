@@ -97,8 +97,8 @@ exist (naming missing ones).
 3. Set `gatewayAPI.enabled: true`. `ichor apply cni-values -f FILE` replaces your
    whole values layer, so start from `ichor get cni-values`.
 
-Ichor checks only the `gateways` CRD's release (v1.6.1 or newer, and it must
-record one); a missing other CRD passes and Cilium fails later. With `TLSRoute`
+Ichor refuses a set with any of the seven missing (naming them), and checks the
+`gateways` CRD's release: v1.6.1 or newer, and it must record one. With `TLSRoute`
 objects at `v1alpha2`, use the experimental `TLSRoute` CRD, or they become
 unreadable. Ichor never deletes or upgrades CRDs it did not install.
 

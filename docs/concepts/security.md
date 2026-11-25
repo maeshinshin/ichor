@@ -65,8 +65,8 @@ whether the caller holds one.
 | `download` on `talosclusters/credentials` | The new kubeconfig and talosconfig of a CA rotation | admin |
 | `download` on `talosclusters/talosconfig-reader` | A one-hour `os:reader` talosconfig for `talosctl` | operator, admin |
 
-A requester grants an Ichor user only roles below their own (an admin may grant
-any); the last admin cannot be deleted, disabled or demoted. The `IchorUser`
+A requester grants an Ichor user only roles they hold themselves (an admin may
+grant any); the last admin cannot be deleted, disabled or demoted. The `IchorUser`
 webhook holds that rule.
 
 `ichor-bundle-secret-role` is bound to nobody by default. It grants `get` on the

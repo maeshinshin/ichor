@@ -26,9 +26,11 @@ import (
 	"testing"
 	"time"
 
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -37,7 +39,7 @@ import (
 // for. They move together: a render change updates the fingerprint and bumps Version.
 const (
 	pinnedVersion     = 2
-	pinnedFingerprint = "sha256:989dc18b51afe0b65e5ca7a2bccf8d05bea819b473920feb11e7d273a3d547e4"
+	pinnedFingerprint = "sha256:747b832a4330f08219bd628460f0ba5c07279e7a097ae185a8eab1e1e7594df0"
 )
 
 // leaves flattens a YAML stream into "doc<n>.path" -> value.
@@ -78,40 +80,97 @@ func leaves(t *testing.T, raw []byte) map[string]string {
 	}
 }
 
+// fingerprintCluster sets one field per input-dependent branch of the renderer, so a change to any
+// of them moves the fingerprint. Feature -> field:
+//   - registry mirror auth keyed by endpoint host: Spec.Registries + SystemInputs.RegistryAuth
+//   - pod security exemptions (dedupe, kube-system): Spec.Security.PodSecurity.ExemptNamespaces
+//   - firewall rules, extra sources, kubespan, allow rule: Spec.Security.Firewall
+//   - firewall ports from the effective Cilium values: Spec.CNI.Cilium.Values tunnelPort and clusterHealthPort
+//   - Cilium WireGuard port: Spec.Security.WireGuard
+//   - kube-proxy replaced: Spec.CNI.KubeProxy
+func fingerprintCluster() *ichorv1alpha1.TalosCluster {
+	c := testCluster("false")
+	c.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
+		Host: "docker.io", Endpoints: []string{"http://192.168.0.8:5000"},
+		AuthSecretRef: &corev1.LocalObjectReference{Name: "creds"},
+	}}
+	c.Spec.CNI.KubeProxy = "replaced"
+	c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(`{"tunnelPort":8473,"clusterHealthPort":4241}`)}}
+	c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{
+		PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
+			Enforce: "restricted", ExemptNamespaces: []string{"kube-system", "monitoring", "monitoring"},
+		},
+		WireGuard: &ichorv1alpha1.TalosClusterWireGuard{Enabled: true},
+		Firewall: &ichorv1alpha1.TalosClusterFirewall{
+			Enabled: true, ControllerCIDRs: []string{"192.0.2.0/24"}, NodeCIDRs: []string{"10.0.0.0/24"},
+			TalosAPICIDRs: []string{"172.16.0.0/12"}, APIServerCIDRs: []string{"203.0.113.0/24"}, KubeSpan: true,
+			Allow: []ichorv1alpha1.TalosClusterFirewallRule{
+				{Name: "ingress", Protocol: "tcp", Ports: []string{"80", "8000-8100"}, CIDRs: []string{"0.0.0.0/0"}},
+			},
+		},
+	}
+
+	return c
+}
+
 // renderFingerprint renders the same inputs under two different secrets bundles and hashes every
 // key path, keeping a value only where both renders agree -- so secret material drops out and
-// anything Ichor itself decides stays in.
+// anything Ichor itself decides stays in. Each role renders fingerprintCluster on the current
+// contract; a third render uses the v1.13 contract with a stored time-servers document, which
+// takes the branches a contract without the Talos 1.14 documents takes.
 func renderFingerprint(t *testing.T) string {
 	t.Helper()
 
-	other, err := secrets.NewBundle(secrets.NewFixedClock(time.Now().Add(time.Hour)), testContract(t))
-	if err != nil {
-		t.Fatalf("NewBundle: %v", err)
+	newBundle := func(contract, shift string) *secrets.Bundle {
+		vc, err := coreconfig.ParseContractFromVersion(contract)
+		if err != nil {
+			t.Fatalf("ParseContractFromVersion: %v", err)
+		}
+
+		d, _ := time.ParseDuration(shift)
+
+		b, err := secrets.NewBundle(secrets.NewFixedClock(time.Now().Add(d)), vc)
+		if err != nil {
+			t.Fatalf("NewBundle: %v", err)
+		}
+
+		return b
+	}
+
+	legacy := fingerprintCluster()
+	legacy.Spec.VersionContract = "v1.13"
+	legacy.Spec.Security = nil // the hardening options need v1.14
+
+	cases := []struct {
+		name, role string
+		cluster    *ichorv1alpha1.TalosCluster
+		a, b       *secrets.Bundle
+		patches    []ichorv1alpha1.TalosConfigPatch
+	}{
+		{"cp", roleControlPlane, fingerprintCluster(), testBundle(t), newBundle(versionContract, "1h"),
+			[]ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")}},
+		{"worker", roleWorker, fingerprintCluster(), testBundle(t), newBundle(versionContract, "1h"),
+			[]ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")}},
+		{"legacy-contract", roleControlPlane, legacy, newBundle("v1.13", "0h"), newBundle("v1.13", "1h"),
+			[]ichorv1alpha1.TalosConfigPatch{storedDocumentsPatch(t, timeServersDocument)}},
 	}
 
 	var lines []string
 
-	for _, role := range []string{roleControlPlane, roleWorker} {
-		cluster := testCluster("false")
-		// A mirror with credentials, keyed by the endpoint host (a change to where the auth lands was once missed).
-		cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
-			Host: "docker.io", Endpoints: []string{"http://192.168.0.8:5000"},
-			AuthSecretRef: &corev1.LocalObjectReference{Name: "creds"},
-		}}
+	for _, tc := range cases {
+		m := testMachine("node-"+tc.role, tc.role, map[string]string{labelEnv: "fingerprint"})
+		m.Spec.Hostname = "node-" + tc.role
 		sys := &SystemInputs{RegistryAuth: map[string]RegistryAuth{"192.168.0.8:5000": {Password: "pw"}}}
-		m := testMachine("node-"+role, role, map[string]string{labelEnv: "fingerprint"})
-		m.Spec.Hostname = "node-" + role
-		patches := []ichorv1alpha1.TalosConfigPatch{sysctlPatch("p", layerCluster, 0, nil, "1")}
 
-		a := leaves(t, []byte(mustRenderSys(t, cluster, m, testBundle(t), patches, sys)))
-		b := leaves(t, []byte(mustRenderSys(t, cluster, m, other, patches, sys)))
+		a := leaves(t, []byte(mustRenderSys(t, tc.cluster, m, tc.a, tc.patches, sys)))
+		b := leaves(t, []byte(mustRenderSys(t, tc.cluster, m, tc.b, tc.patches, sys)))
 
 		for k, v := range a {
 			if b[k] != v {
 				v = "<varies>"
 			}
 
-			lines = append(lines, role+":"+k+"="+v)
+			lines = append(lines, tc.name+":"+k+"="+v)
 		}
 	}
 

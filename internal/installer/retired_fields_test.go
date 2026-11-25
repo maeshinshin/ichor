@@ -134,7 +134,7 @@ func storedTalosCluster(name string, extra map[string]any) *unstructured.Unstruc
 		kEndpoint:           map[string]any{kType: "vip", kAddress: "10.0.0.1"},
 		"talosVersion":      "v1.14.3",
 		"kubernetesVersion": "v1.36.0",
-		"versionContract":   "v1.14",
+		kVersionContract:    "v1.14",
 		"secretsRef":        map[string]any{kName: "secrets"},
 		"controlPlane":      map[string]any{"count": int64(3), "schedulable": "true"},
 	}

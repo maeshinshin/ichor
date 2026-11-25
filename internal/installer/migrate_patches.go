@@ -19,13 +19,13 @@ package installer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -44,6 +44,7 @@ const kTalosCluster = "TalosCluster"
 const (
 	reasonNoPlace       = "NoPlaceInSpecConfig"
 	reasonClusterCannot = "ClusterCannotTake"
+	reasonUnreadable    = "ClusterUnreadable"
 	reasonWebhook       = "RefusedByWebhook"
 )
 
@@ -89,6 +90,10 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 		if err == nil {
 			if err = checkClusterContract(ctx, c, p, cfg); err != nil {
 				reason = reasonClusterCannot
+
+				if _, ok := errors.AsType[*unreadableError](err); ok {
+					reason = reasonUnreadable
+				}
 			}
 		}
 
@@ -134,16 +139,35 @@ func MigratePatches(ctx context.Context, c client.Client, namespace string, log 
 	return res, nil
 }
 
+// unreadableError: the cluster of a patch could not be read, which says nothing about what it can take.
+type unreadableError struct{ error }
+
+func (e *unreadableError) Unwrap() error { return e.error }
+
 // checkClusterContract refuses a spec.config the cluster of the patch cannot render: a setting its Talos version has
 // no document for would make every node of the cluster fail to render. A cluster that is not there is not checked.
 func checkClusterContract(ctx context.Context, c client.Client, p *unstructured.Unstructured, cfg map[string]any) error {
-	cl := &unstructured.Unstructured{}
-	cl.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
-	cl.SetKind(kTalosCluster)
+	// A list, not a get: the installer's Role grants talosclusters only `list`.
+	cls := &unstructured.UnstructuredList{}
+	cls.SetAPIVersion(ichorv1alpha1.GroupVersion.String())
+	cls.SetKind(kTalosCluster + "List")
+
+	if err := c.List(ctx, cls, client.InNamespace(p.GetNamespace())); err != nil {
+		return &unreadableError{fmt.Errorf("reading the TalosClusters of %s: %w", p.GetNamespace(), err)}
+	}
 
 	name, _, _ := unstructured.NestedString(p.Object, "spec", "clusterRef", "name")
-	if err := c.Get(ctx, types.NamespacedName{Namespace: p.GetNamespace(), Name: name}, cl); err != nil {
-		return client.IgnoreNotFound(err)
+
+	var cl *unstructured.Unstructured
+
+	for i := range cls.Items {
+		if cls.Items[i].GetName() == name {
+			cl = &cls.Items[i]
+		}
+	}
+
+	if cl == nil {
+		return nil
 	}
 
 	vc, _, _ := unstructured.NestedString(cl.Object, "spec", "versionContract")

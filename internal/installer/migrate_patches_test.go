@@ -37,11 +37,17 @@ func migrationClient(objs ...*unstructured.Unstructured) client.Client {
 func getPatch(t *testing.T, c client.Client, name string) *ichorv1alpha1.TalosConfigPatch {
 	t.Helper()
 
+	return getPatchIn(t, c, kDefault, name)
+}
+
+func getPatchIn(t *testing.T, c client.Client, ns, name string) *ichorv1alpha1.TalosConfigPatch {
+	t.Helper()
+
 	u := &unstructured.Unstructured{}
 	u.SetAPIVersion(ichorAPIVersion)
 	u.SetKind(kTalosConfigPatch)
 
-	if err := c.Get(context.Background(), types.NamespacedName{Namespace: kDefault, Name: name}, u); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: name}, u); err != nil {
 		t.Fatal(err)
 	}
 
@@ -199,7 +205,7 @@ func storedCluster(name, contract string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
 		kAPIVersion: ichorAPIVersion, kKind: kTalosCluster,
 		kMetadata: map[string]any{kName: name, kNamespace: kDefault},
-		kSpec:     map[string]any{"versionContract": contract},
+		kSpec:     map[string]any{kVersionContract: contract},
 	}}
 }
 
@@ -280,5 +286,27 @@ func TestMigratePatchesOneRefusedPatchDoesNotStopTheOthers(t *testing.T) {
 
 	if b := getPatch(t, c, "b"); b.Spec.Config == nil || len(b.Spec.Documents) != 0 {
 		t.Errorf("b: want it migrated, got %+v", b.Spec)
+	}
+}
+
+// A cluster that cannot be read says nothing about what it can take: the patch gets its own reason, not ClusterCannotTake.
+func TestMigratePatchesNamesAnUnreadableCluster(t *testing.T) {
+	b := fake.NewClientBuilder().WithStatusSubresource(storedPatch("s", nil)).WithObjects(storedPatch("p", certSANDocs)).
+		WithInterceptorFuncs(interceptor.Funcs{List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+			if list.GetObjectKind().GroupVersionKind().Kind == kTalosCluster+"List" {
+				return errors.New("forbidden")
+			}
+
+			return cl.List(ctx, list, opts...)
+		}})
+	c := b.Build()
+
+	if res, err := MigratePatches(context.Background(), c, "", io.Discard); err != nil || len(res.Failed) != 1 {
+		t.Fatalf("want one failure, got %+v, %v", res, err)
+	}
+
+	p := getPatch(t, c, "p")
+	if r := migratedReason(p); r != "ClusterUnreadable" || !strings.Contains(migratedMessage(p, "False"), "forbidden") {
+		t.Errorf("want ClusterUnreadable carrying the error, got %+v", p.Status.Conditions)
 	}
 }

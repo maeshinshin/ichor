@@ -66,7 +66,7 @@ func (r *TalosMachineReconciler) followNodeAddress(
 		return false, nil
 	}
 
-	if err := recordObservedEndpoint(ctx, readerOrClient(r.APIReader, r.Client), r.Client, m, address); err != nil {
+	if err := recordObservedEndpoint(ctx, readerOrClient(r.APIReader, r.Client), r.Client, m, address, nil); err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
 		}

@@ -81,7 +81,8 @@ func setMachineCondition(
 }
 
 // recordMaintenanceFingerprint pins the maintenance certificate fingerprint a discovery saw on m. It is a no-op for
-// an empty or unchanged fingerprint.
+// an empty or unchanged fingerprint, and writes nothing once the machine is approved: the check runs on the
+// fresh copy, so a probe that began while it was pending cannot replace the pin an approval trusts.
 func recordMaintenanceFingerprint(
 	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, fingerprint string,
 ) error {
@@ -90,7 +91,9 @@ func recordMaintenanceFingerprint(
 	}
 
 	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
-		fresh.Status.MaintenanceFingerprint = fingerprint
+		if !fresh.Spec.IsApproved() {
+			fresh.Status.MaintenanceFingerprint = fingerprint
+		}
 	})
 }
 
@@ -104,17 +107,25 @@ func recordDiscoveredHardware(
 	}
 
 	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
-		fresh.Status.DiscoveredDisks = inv.Disks
-		fresh.Status.DiscoveredLinks = inv.Links
+		if !fresh.Spec.IsApproved() {
+			fresh.Status.DiscoveredDisks = inv.Disks
+			fresh.Status.DiscoveredLinks = inv.Links
+		}
 	})
 }
 
 // recordObservedEndpoint stores the address m answers at in its status (never in spec: the
-// controller does not mutate spec) and persists it.
+// controller does not mutate spec) and persists it. A non-nil allow is checked on the fresh copy and
+// writes nothing when it says no.
 func recordObservedEndpoint(
 	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, address string,
+	allow func(*ichorv1alpha1.TalosMachine) bool,
 ) error {
 	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
+		if allow != nil && !allow(fresh) {
+			return
+		}
+
 		fresh.Status.ObservedEndpoint = address
 		fresh.Status.ObservedEndpointFor = fresh.Spec.Endpoint
 	})

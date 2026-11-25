@@ -203,7 +203,7 @@ func (r *DiscoveryReconciler) discover(
 		// status and dialed first, unless the machine is one whose address a
 		// self-reported identity must not move (followsDiscoveredAddress).
 		if existing.DialEndpoint() != endpoint && followsDiscoveredAddress(&existing) {
-			if err := recordObservedEndpoint(ctx, r.Client, r.Client, &existing, endpoint); err != nil {
+			if err := recordObservedEndpoint(ctx, r.Client, r.Client, &existing, endpoint, followsDiscoveredAddress); err != nil {
 				return nil, fmt.Errorf("recording %q's new address: %w", existing.Name, err)
 			}
 		}

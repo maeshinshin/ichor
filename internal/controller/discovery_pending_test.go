@@ -206,3 +206,59 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll pending machines", func() {
 		Consistently(recorder.Events).ShouldNot(Receive())
 	})
 })
+
+// A probe that started while a machine was pending must not write what it saw once the machine is approved:
+// provisioning trusts the pinned fingerprint and the address it follows.
+var _ = Describe("discovery status writes after approval", func() {
+	const oldFP = "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="
+
+	// approvedBehindStaleCopy returns a pending copy of a machine that is approved in the store.
+	approvedBehindStaleCopy := func(name string) *ichorv1alpha1.TalosMachine {
+		m := &ichorv1alpha1.TalosMachine{
+			Name: name, Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef:    corev1.LocalObjectReference{Name: "stale-cluster"},
+				Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: name, Serial: "S-" + name, MACAddresses: []string{testMAC}},
+				Endpoint:      "198.51.100.40:50000",
+				ApprovalState: ichorv1alpha1.MachineApprovalStatePending,
+			},
+		}
+		Expect(k8sClient.Create(ctx, m)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, m) })
+
+		m.Status.MaintenanceFingerprint = oldFP
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+		stale := m.DeepCopy()
+
+		fresh := getMachine(tmNamespace, name)
+		fresh.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
+		Expect(k8sClient.Update(ctx, fresh)).To(Succeed())
+
+		return stale
+	}
+
+	It("leaves the pinned fingerprint and the hardware lists alone", func() {
+		stale := approvedBehindStaleCopy("stale-pin")
+		mc := &fakeMaintenanceClient{fingerprint: "F2", inventory: Inventory{
+			Disks: []ichorv1alpha1.TalosMachineDiscoveredDisk{{Serial: "D", DevPath: "/dev/vdb", SizeBytes: 1}},
+		}}
+
+		(&DiscoveryReconciler{Client: k8sClient}).refreshUnapproved(ctx, mc, stale)
+
+		got := getMachine(tmNamespace, "stale-pin")
+		Expect(got.Status.MaintenanceFingerprint).To(Equal(oldFP))
+		Expect(got.Status.DiscoveredDisks).To(BeEmpty())
+	})
+
+	It("leaves the observed endpoint alone once the machine no longer follows the discovered address", func() {
+		stale := approvedBehindStaleCopy("stale-endpoint")
+		fresh := getMachine(tmNamespace, "stale-endpoint")
+		fresh.Status.AppliedConfigHash = "sha256:applied"
+		Expect(k8sClient.Status().Update(ctx, fresh)).To(Succeed())
+
+		Expect(recordObservedEndpoint(ctx, k8sClient, k8sClient, stale, "198.51.100.99:50000", followsDiscoveredAddress)).To(Succeed())
+
+		Expect(getMachine(tmNamespace, "stale-endpoint").Status.ObservedEndpoint).To(BeEmpty())
+	})
+})

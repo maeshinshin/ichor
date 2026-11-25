@@ -180,7 +180,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	// the user exists and nothing else could show it.
 	var adminPassword string
 
-	defer func() { initEpilogue(steps, opts, adminPassword, err == nil) }()
+	var rolledOut bool
+
+	defer func() { initEpilogue(steps, opts, adminPassword, err == nil, rolledOut) }()
 
 	steps.Header("Ichor init · "+opts.Cluster, initSummary(opts))
 
@@ -346,11 +348,30 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
+	rolledOut, err = initFinish(ctx, k8sClient, created, cluster, deps)
+
+	return err
+}
+
+// initFinish is the end of init, once everything is installed: the Cilium hand-over, ichor-ui, and the
+// authentication rollout that leaves the control plane Ready. It reports whether that rollout completed.
+func initFinish(
+	ctx context.Context, k8sClient client.Client, created bool, cluster *ichorv1alpha1.TalosCluster, deps initDeps,
+) (bool, error) {
 	if err := waitForCiliumHandover(ctx, k8sClient, created, cluster, deps); err != nil {
-		return err
+		return false, err
 	}
 
-	return waitForUIReady(ctx, k8sClient, deps)
+	if err := waitForUIReady(ctx, k8sClient, deps); err != nil {
+		return false, err
+	}
+
+	// Without a controller (a dev build) nothing renders the config or runs the operation.
+	if !created {
+		return false, nil
+	}
+
+	return rollOutAuthentication(ctx, k8sClient, cluster, deps)
 }
 
 // alreadyInitialised is the refusal for a cluster whose bundle Secret exists. Both init checks for it use this,

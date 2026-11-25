@@ -17,7 +17,7 @@ sidebar_order: 1
 
 - An https URL that browsers and the `ichor` CLI can reach. `https://localhost:8443` works through `ichor ui`'s port-forward; any other address is yours to provide.
 - A Talos v1.14 contract or later: older ones cannot carry the issuer configuration.
-- A rollout to the control planes with `ichor rollout config`: the kube-apiserver reads its login settings from the machine config.
+- A rollout to the control planes with `ichor rollout config`: the kube-apiserver reads its login settings from the machine config. `ichor init` runs it for you and waits.
 
 ## On a new cluster
 
@@ -84,4 +84,5 @@ Talos restarts the kube-apiserver on each change (tens of seconds of `/readyz`
 down per control plane), without a reboot. Machines report
 `APIServerRestartRequired` until `ichor rollout config` (or Apply in the UI
 Overview) rolls it out one control plane at a time, no drain, waiting for
-`/readyz`. With one control plane the API is down while it restarts.
+`/readyz`. `ichor init` starts that rollout itself before it finishes, so a new
+cluster ends Ready; `adopt` leaves the moment to you. With one control plane the API is down while it restarts.

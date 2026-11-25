@@ -369,7 +369,7 @@ func uiReachNotice(uiURL string) string {
 // (the steps that follow the sign-in, and the generated
 // password, once, verbatim), then the commands to run next. A failed run prints no total and no
 // next steps, but still the password: by then the user exists and nothing else could show it.
-func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
+func initEpilogue(p *progress, opts initOptions, password string, ok, rolledOut bool) {
 	if opts.DryRun {
 		return // a dry run has nothing to hand over
 	}
@@ -384,7 +384,9 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 		p.Warn(uiReachNotice(opts.UIURL))
 	}
 
-	p.Warn(authRolloutNotice)
+	if !rolledOut {
+		p.Warn(authRolloutNotice)
+	}
 
 	if password != "" {
 		printGeneratedPassword(p, opts.AdminUser, password)

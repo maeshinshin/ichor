@@ -108,6 +108,9 @@ new cluster:
      objects the CNI needs, and the IchorInstallation.
   6. Waits for the controller to hand Cilium over to Ichor's Helm release
      (TalosCluster CNIHandover).
+  7. Starts the config operation that gives kube-apiserver its sign-in
+     configuration and waits for it, so the cluster ends Ready. On one control
+     plane the Kubernetes API is down for a few minutes while it restarts.
 
 With --endpoint-type vip the endpoint address is a shared IP that Ichor puts on
 every control plane, on its primary link: init takes that link from the node

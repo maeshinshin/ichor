@@ -71,3 +71,11 @@ Decided by the maintainer: the retirement of `TalosConfigPatch.spec.documents` a
 **Not restored.** `TalosCluster.spec.cni.custom.documents` stays retired: it cannot be stored (the webhook has refused it since v0.1.0), and restoring it would take 392,672 bytes of the Helm release record.
 
 **Consequence.** The record grows by the schema of `spec.documents`, to 967,784 of 1,048,576 bytes.
+
+## Amendment (2026-11-25): a machine on an older contract renders the stored documents as they are
+
+Decided by the coordinator on the maintainer's rule that no upgrade loses a setting. The **Render** paragraph of the amendment above holds for a machine that takes the Talos 1.14 Kubernetes documents (`EffectiveDocuments(true)`). On a cluster whose version contract is v1.13 or v1.12, `EffectiveDocuments(false)` returns the stored documents unchanged, as v0.2.4 rendered them: converting through `ConfigFromDocuments` turned `cluster.apiServer.certSANs` and `cluster.coreDNS.disabled` into settings that contract has no document for and the render refused, and the lift left a `KubeAPIServerConfig` that Talos rejects beside the `v1alpha1` one.
+
+**Migration.** `MigratePatches` converts the settings, then runs `ConvertConfig` for the contract of the patch's cluster. A cluster that cannot take the result leaves the patch as stored, with `Migrated=False` naming the cluster and the setting. A refusal of one patch's update (the webhook) marks that patch the same way and the run goes on with the others.
+
+**Merged duplicates.** Two `machine.network.extraHostEntries` of one address, and two `machine.kernel.modules` of one name, are valid in the `v1alpha1` document. The lift joins their `aliases` and `parameters` into one `StaticHostConfig` or `KernelModuleConfig`, in order and each item once.

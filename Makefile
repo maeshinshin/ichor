@@ -115,7 +115,10 @@ check-claims: ## Fail when a Markdown file or Go comment states that something w
 
 .PHONY: check-release-record
 check-release-record: ## Fail when the packaged chart's (hack/assemble-chart.sh, as make helm-package builds it) Helm release record exceeds the 1,048,576 bytes a Secret holds; prints the size and headroom (internal/tools/releaserecord).
-	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && hack/assemble-chart.sh $(HELM_CHART_DIR) "$$work" && \
+	@# The release packages with the image digests pinned, which adds bytes to values.yaml, so the gate pins placeholder digests of the same length.
+	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && \
+	for n in ichor-controller ichor-ui; do echo "ghcr.io/maeshinshin/$$n@sha256:$$(printf '%064d' 0)" >> "$$work/digests.txt"; done && \
+	IMAGE_DIGESTS="$$work/digests.txt" APP_VERSION="$(APP_VERSION)" hack/assemble-chart.sh $(HELM_CHART_DIR) "$$work" && \
 	go run ./internal/tools/releaserecord "$$work/ichor"
 
 .PHONY: renovate-validate

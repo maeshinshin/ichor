@@ -28,9 +28,13 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -276,6 +280,34 @@ var _ = Describe("TalosOperation shutdown", func() {
 		f.fakes[f.workers[0].Name].shutdownErr = nil
 		f.reconcile(op)
 		Expect(f.fakes[f.workers[0].Name].shutdownCalls).To(HaveLen(2))
+	})
+
+	It("asks a machine again after the un-record of a refused stop hit a conflict", func() {
+		f := newShutdownFixture()
+		b := f.workers[1]
+		f.fakes[b.Name].shutdownErr = errors.New("rpc failed")
+
+		updates := 0
+		f.r.Client = interceptor.NewClient(watchClient(), interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				if _, ok := obj.(*ichorv1alpha1.TalosOperation); ok {
+					updates++
+					if updates == 2 {
+						return apierrors.NewConflict(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosoperations"}, obj.GetName(), errors.New("paused meanwhile"))
+					}
+				}
+
+				return c.SubResource(sub).Update(ctx, obj, opts...)
+			},
+		})
+
+		op := f.newOp(ichorv1alpha1.TalosOperationKindShutdown)
+		_, err := reconcileOperation(f.r, op)
+		Expect(err).To(HaveOccurred())
+
+		f.fakes[b.Name].shutdownErr = nil
+		f.reconcile(op)
+		Expect(f.fakes[b.Name].shutdownCalls).To(HaveLen(2), "the refused machine was asked again")
 	})
 
 	It("refuses every other disruptive operation until the machines are back, then lets them through", func() {

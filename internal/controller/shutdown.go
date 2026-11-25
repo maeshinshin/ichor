@@ -51,6 +51,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -338,13 +339,24 @@ func (r *TalosOperationReconciler) requestStop(
 		cancel()
 
 		if err != nil {
-			for _, unsent := range targets[i:] {
-				op.Status.Machines = slices.DeleteFunc(op.Status.Machines, func(rec ichorv1alpha1.TalosOperationMachineStatus) bool {
-					return rec.Name == unsent.m.Name
-				})
-			}
+			// A conflict (a pause written meanwhile) must not lose the un-record: re-read the op and drop the records again.
+			uerr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				for _, unsent := range targets[i:] {
+					op.Status.Machines = slices.DeleteFunc(op.Status.Machines, func(rec ichorv1alpha1.TalosOperationMachineStatus) bool {
+						return rec.Name == unsent.m.Name
+					})
+				}
 
-			if uerr := r.Status().Update(ctx, op); uerr != nil {
+				uerr := r.Status().Update(ctx, op)
+				if apierrors.IsConflict(uerr) {
+					if gerr := readerOrClient(r.APIReader, r.Client).Get(ctx, client.ObjectKeyFromObject(op), op); gerr != nil {
+						return gerr
+					}
+				}
+
+				return uerr
+			})
+			if uerr != nil {
 				return errors.Join(err, uerr)
 			}
 

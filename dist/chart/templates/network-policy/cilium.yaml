@@ -254,6 +254,20 @@ spec:
   egress:
   {{- include "ichor.cnp.apiserver" . | nindent 2 }}
 {{- end }}
+{{- if .Values.manager.enabled }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  {{- include "ichor.cnp.meta" (dict "suffix" "migrate-patches" "ctx" $) | nindent 2 }}
+spec:
+  description: The post-upgrade Job that migrates TalosConfigPatches. It talks to the API server and nothing else.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: ichor-migrate-patches
+  egress:
+  {{- include "ichor.cnp.apiserver" . | nindent 2 }}
+{{- end }}
 # No policy for the Cilium Helm Job: it runs on the host network in kube-system, which CiliumNetworkPolicy
 # does not govern.
 {{- end }}

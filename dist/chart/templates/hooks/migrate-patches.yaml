@@ -1,0 +1,115 @@
+{{- if .Values.manager.enabled }}
+# Moves every TalosConfigPatch from the retired spec.documents to spec.config after `helm upgrade` (ADR 0152). A
+# post-upgrade hook: `helm install` has nothing to migrate and never runs it. The controller never writes a spec, so
+# the Job runs the controller image's migrate-patches argument under a ServiceAccount of its own, which exists only
+# while the hook runs. The installer path (`ichor upgrade ichor`) does the same as its last step and does not need this.
+# The Job is not one of the controller's Jobs: the ichor-controller-jobs policy matches the controller's identity only.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-migrate-patches
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-migrate-patches
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+rules:
+# installer.MigratePatches: every patch, the TalosCluster each names, and the Migrated condition.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches
+  verbs:
+  - list
+  - patch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosconfigpatches/status
+  verbs:
+  - patch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-migrate-patches
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-migrate-patches
+subjects:
+- kind: ServiceAccount
+  name: ichor-migrate-patches
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-migrate-patches
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "0"
+    # A failed Job stays, so its log can be read.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ichor-migrate-patches
+    spec:
+      restartPolicy: Never
+      serviceAccountName: ichor-migrate-patches
+      {{- with .Values.manager.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.manager.podSecurityContext | nindent 8 }}
+      containers:
+      - name: migrate
+        image: "{{ .Values.manager.image.repository }}{{- if not (contains "@" .Values.manager.image.repository) }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}{{- end }}"
+        {{- with .Values.manager.image.pullPolicy }}
+        imagePullPolicy: {{ . }}
+        {{- end }}
+        args:
+        - migrate-patches
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          {{- toYaml .Values.manager.securityContext | nindent 10 }}
+{{- end }}

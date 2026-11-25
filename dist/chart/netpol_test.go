@@ -68,6 +68,9 @@ func TestChartCiliumPoliciesEqualTheKustomizeOnes(t *testing.T) {
 	fromChart := cnpSpecs(t, renderChartWithValues(t, "ichor", netpolAllOn...), "ichor-")
 	fromConfig := cnpSpecs(t, loadYAMLDocs(t, netpolConfigPath), "")
 
+	// Only the chart has the post-upgrade hook; the installer migrates the patches itself.
+	delete(fromChart, "migrate-patches")
+
 	want := []string{"controller-manager", "default-deny", "installer", "ui"}
 	for _, name := range want {
 		if fromChart[name] == nil || fromConfig[name] == nil {

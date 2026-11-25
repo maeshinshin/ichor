@@ -133,7 +133,7 @@ must_have pkg/cni/cilium/values.go "ChartVersion = \"$new\""
 # The docs are every file under docs/ that TestDocsStateThePinnedVersions scans (not adr, design, reference).
 # shortcut: a file-wide grep, so a prose line that names the old version for another reason is moved too; narrow it then.
 # shellcheck disable=SC2046
-for f in README.md $(grep -rlF --include='*.md' -- "$old" docs --exclude-dir=adr --exclude-dir=design --exclude-dir=reference) \
+for f in README.md $(grep -rlF --include='*.md' --exclude-dir=adr --exclude-dir=design --exclude-dir=reference -e "$old" docs) \
 	test/e2e/foreign/cilium_test.go test/internal/foreign/foreign.go; do
 	for _ in 1 2; do
 		subst "$f" "s/\([^0-9.]\|^\)$oldre\([^0-9]\|\$\)/\1$new\2/g"

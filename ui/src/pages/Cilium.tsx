@@ -45,6 +45,8 @@ export function Cilium() {
   const ref = cluster?.ref
   const unmanaged = !!cluster && isCniUnmanaged(cluster.cniPreset)
   const [version, setVersion] = useState(0)
+  // applied remounts the editor after a save; a reload after a refused save only re-reads, so the user's text stays.
+  const [applied, setApplied] = useState(0)
   // An unmanaged cluster has no values to read; the server would refuse the call.
   const { data, error } = useLoad(ref && !unmanaged ? () => cniClient.getCiliumValues({ cluster: ref }) : undefined, [ref?.namespace, ref?.name, version])
   const perms = useMyPermissions(undefined, ref)
@@ -105,7 +107,17 @@ export function Cilium() {
         </CardContent>
       </Card>
       <OwnedKeys owned={data.owned} />
-      <UserValues key={version} cluster={ref} data={data} editable={editable && data.canEdit} onApplied={() => setVersion(version + 1)} />
+      <UserValues
+        key={applied}
+        cluster={ref}
+        data={data}
+        editable={editable && data.canEdit}
+        onApplied={() => {
+          setApplied(applied + 1)
+          setVersion(version + 1)
+        }}
+        onReload={() => setVersion(version + 1)}
+      />
       <CiliumUpgrade cluster={ref} chart={data.availableChartVersion} editable={editable} />
     </div>
   )
@@ -166,11 +178,13 @@ function UserValues({
   data,
   editable,
   onApplied,
+  onReload,
 }: {
   cluster: ObjectRef
   data: GetCiliumValuesResponse
   editable: boolean
   onApplied: () => void
+  onReload: () => void
 }) {
   const [text, setText] = useState(data.userYaml)
   const [reviewed, setReviewed] = useState<Reviewed | null>(null)
@@ -259,7 +273,14 @@ function UserValues({
           </div>
         </>
       )}
-      {!confirm && error && changed && <ChangedAlert detail={error.detail} onReload={onApplied} />}
+      {!confirm && error && changed && <ChangedAlert
+          detail={error.detail}
+          onReload={() => {
+            setError(null)
+            setChanged(false)
+            onReload()
+          }}
+        />}
       {!confirm && error && !changed && <ErrorAlert {...error} />}
       {stale && (
         <Alert>

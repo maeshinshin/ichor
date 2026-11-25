@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,6 +89,12 @@ func parseUserYAML(text string) (map[string]any, error) {
 	}
 
 	return user, nil
+}
+
+// userValuesBase is what GetCiliumValues hands out as resource_version: a digest of the stored user layer, so
+// the controller's status writes and unrelated spec changes do not move it, only a change to what the page edits.
+func userValuesBase(userYAML string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(userYAML)))
 }
 
 func toYAML(m map[string]any) (string, error) {
@@ -214,7 +221,7 @@ func (s *Server) GetCiliumValues(
 		effective = nil
 	}
 
-	resp := &pb.GetCiliumValuesResponse{ResourceVersion: v.cluster.ResourceVersion}
+	resp := &pb.GetCiliumValuesResponse{}
 	if resp.DefaultsYaml, err = toYAML(defaults); err != nil {
 		return nil, err
 	}
@@ -222,6 +229,8 @@ func (s *Server) GetCiliumValues(
 	if resp.UserYaml, err = toYAML(v.user); err != nil {
 		return nil, err
 	}
+
+	resp.ResourceVersion = userValuesBase(resp.UserYaml)
 
 	if resp.EffectiveYaml, err = toYAML(effective); err != nil {
 		return nil, err
@@ -330,7 +339,12 @@ func (s *Server) SetCiliumValues(
 		return nil, err
 	}
 
-	if err := checkBase(req.Msg.GetBaseResourceVersion(), v.cluster.ResourceVersion, "cluster", namespacedName(ref).String()); err != nil {
+	stored, err := toYAML(v.user)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := checkBase(req.Msg.GetBaseResourceVersion(), userValuesBase(stored), "cluster", namespacedName(ref).String()); err != nil {
 		return nil, err
 	}
 

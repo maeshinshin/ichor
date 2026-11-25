@@ -126,6 +126,30 @@ var _ = Describe("CniService", func() {
 		return err
 	}
 
+	It("accepts a write after the controller wrote the cluster's status, and still refuses one after a change to the values", func() {
+		opened, err := s.GetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+		Expect(err).NotTo(HaveOccurred())
+
+		var live ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &live)).To(Succeed())
+		patch := client.MergeFrom(live.DeepCopy())
+		live.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{AppliedValuesHash: "applied-by-the-controller"}
+		Expect(k8sClient.Status().Patch(ctx, &live, patch)).To(Succeed())
+
+		_, err = s.SetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
+			Cluster: ref, UserYaml: cniDebugOn, BaseResourceVersion: opened.Msg.GetResourceVersion(),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		// opened is now older than the stored values, so a second save from it is refused.
+		_, err = s.SetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
+			Cluster: ref, UserYaml: "", BaseResourceVersion: opened.Msg.GetResourceVersion(),
+		}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeAborted))
+
+		Expect(set(cniAdminUser, "")).To(Succeed())
+	})
+
 	It("refuses a write made from values another write has since replaced, and an empty base still writes", func() {
 		opened, err := s.GetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
 		Expect(err).NotTo(HaveOccurred())

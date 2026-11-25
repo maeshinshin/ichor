@@ -156,8 +156,8 @@ type GetCiliumValuesResponse struct {
 	// can_edit is whether the caller may change the user layer: the verb update on
 	// talosclusters/cilium-values, which ichor-admin holds.
 	CanEdit bool `protobuf:"varint,7,opt,name=can_edit,json=canEdit,proto3" json:"can_edit,omitempty"`
-	// resource_version is the TalosCluster's metadata.resourceVersion at the read; send it back as
-	// SetCiliumValuesRequest.base_resource_version.
+	// resource_version is a digest of the stored user layer at the read, not the TalosCluster's metadata.resourceVersion
+	// (which moves on every status write); send it back as SetCiliumValuesRequest.base_resource_version.
 	ResourceVersion string `protobuf:"bytes,8,opt,name=resource_version,json=resourceVersion,proto3" json:"resource_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -461,7 +461,7 @@ type SetCiliumValuesRequest struct {
 	// user_yaml is the new user layer; empty clears it.
 	UserYaml string `protobuf:"bytes,2,opt,name=user_yaml,json=userYaml,proto3" json:"user_yaml,omitempty"`
 	// base_resource_version is the GetCiliumValuesResponse.resource_version the client's copy was read at. When set
-	// and the stored cluster has moved on, the write is refused with ABORTED; empty writes without the check.
+	// and the stored user layer has changed since, the write is refused with ABORTED; empty writes without the check.
 	BaseResourceVersion string `protobuf:"bytes,3,opt,name=base_resource_version,json=baseResourceVersion,proto3" json:"base_resource_version,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache

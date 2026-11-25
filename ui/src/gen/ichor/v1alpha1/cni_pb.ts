@@ -130,8 +130,8 @@ export type GetCiliumValuesResponse = Message<"ichor.v1alpha1.GetCiliumValuesRes
   canEdit: boolean;
 
   /**
-   * resource_version is the TalosCluster's metadata.resourceVersion at the read; send it back as
-   * SetCiliumValuesRequest.base_resource_version.
+   * resource_version is a digest of the stored user layer at the read, not the TalosCluster's metadata.resourceVersion
+   * (which moves on every status write); send it back as SetCiliumValuesRequest.base_resource_version.
    *
    * @generated from field: string resource_version = 8;
    */
@@ -255,7 +255,7 @@ export type SetCiliumValuesRequest = Message<"ichor.v1alpha1.SetCiliumValuesRequ
 
   /**
    * base_resource_version is the GetCiliumValuesResponse.resource_version the client's copy was read at. When set
-   * and the stored cluster has moved on, the write is refused with ABORTED; empty writes without the check.
+   * and the stored user layer has changed since, the write is refused with ABORTED; empty writes without the check.
    *
    * @generated from field: string base_resource_version = 3;
    */

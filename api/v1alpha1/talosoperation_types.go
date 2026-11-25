@@ -673,7 +673,7 @@ type TalosOperationStatus struct {
 	// +optional
 	EtcdRestore *TalosOperationEtcdRestoreStatus `json:"etcdRestore,omitempty"`
 
-	// kubernetes is the kubernetes kind's state machine: which of the three stages the machines
+	// kubernetes is the kubernetes kind's state machine: which of the four stages the machines
 	// are being taken through.
 	// +optional
 	Kubernetes *TalosOperationKubernetesStatus `json:"kubernetes,omitempty"`

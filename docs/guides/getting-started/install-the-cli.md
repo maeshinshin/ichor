@@ -42,10 +42,9 @@ ichor version --client
 
 The checksums file is signed keyless with
 [cosign](https://docs.sigstore.dev/cosign/system_config/installation/). Checking
-the signature is optional. It needs cosign 2.4.2 or later, which reads the
-`.sigstore.json` bundle (2.4.2 added detection of the protobuf bundle). Older
-versions fail with `bundle does not contain cert for verification, please provide
-public key`.
+the signature is optional. It needs cosign 2.6.1 or later to read the
+`.sigstore.json` bundle; 2.4.1 fails with `bundle does not contain cert for
+verification, please provide public key`.
 
 ```sh
 curl -fsSLO "${BASE}/ichor_${VERSION}_checksums.txt.sigstore.json"

@@ -50,12 +50,14 @@ ichor describe config NODE      # the rendered config, each value tagged with it
 
 ## Layers
 
-`spec.layer` is one of these; `spec.priority` (default 0) orders patches inside a layer.
+`clusterRef` and `layer` are required. `spec.layer` is one of these; `spec.priority`
+(default 0) orders patches inside a layer. `target` must match the layer: absent for
+`cluster`, exactly one of its fields otherwise.
 
 | Layer | `spec.target` |
 |---|---|
 | `cluster` | none |
-| `role` | `role` |
+| `role` | `role`: `controlplane` or `worker` |
 | `selector` | `labelSelector` (matches `spec.nodeLabels`) |
 | `machine` | `machineRef` (one TalosMachine) |
 

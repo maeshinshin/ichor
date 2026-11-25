@@ -1,5 +1,115 @@
 # Changelog
 
+## v0.3.1 (2026-11-25)
+
+A patch release of fixes to v0.3.0: a rollout no longer takes down two control
+planes, a pause or a failed step no longer leaves a node cordoned, the v0.2
+`spec.documents` migration respects what a cluster can take, `ichor init` ends
+with a Ready cluster, and the docs gain a guide to patching Talos config and one
+to upgrading Talos and Kubernetes. No CRD field is added or removed.
+
+### Upgrade notes
+
+- **The Job image comes from the `IchorInstallation` only, and the controller
+  creates no Job without one.** The chart's `admission.jobImageRepository` rule
+  is removed. The value is still accepted, so an existing values file installs, and
+  nothing reads it. The controller's Jobs (the installer and the Cilium Helm run)
+  follow `IchorInstallation.spec.installerRepository` and wait for the object to
+  exist; a mirror is set there, not in the chart. The controller creates the
+  `IchorInstallation` on every install, so no action is needed unless you
+  deleted it.
+- **`ichor init --namespace` other than `ichor-system` is refused before
+  any write.** The controller runs in `ichor-system`; leave the flag out.
+- A script that sends `ichor apply -f` a manifest with `metadata.resourceVersion`
+  now gets a refusal when the object has changed since, as the UI does for a
+  patch or the Cilium values. Remove the field to apply without the check.
+
+### Controller
+
+- A rollout finishes a machine already in progress before it starts another, so
+  it no longer takes down two control planes at once. Workers in progress count
+  against `maxUnavailable` first.
+- A pause (a spec write while a pass runs) or a failed step no longer loses a
+  machine's in-progress mark, so no node is left cordoned.
+- Deleting a node reboot or shutdown action while it drains uncordons the node,
+  ends its storage evacuation and releases the cluster lock.
+- Abandoning a CA rotation mid-drain uncordons every control plane Ichor
+  cordoned.
+- A refused shutdown stop is retried after a write conflict.
+- The Ichor upgrade no longer pauses on an "already exists" error when the Job
+  cache lags behind its own create.
+- The warning about a skipped installer signature is emitted once, not on each
+  pass.
+
+### Config
+
+- A v0.2 `spec.documents` patch on a cluster whose contract lacks the Talos v1.14
+  documents (v1.13 and v1.12) renders as stored, as in v0.2.4, instead of being
+  converted.
+- The migration checks the cluster's contract, reading each patch's
+  `TalosCluster` with the access the installer has. A patch whose `spec.config`
+  the cluster cannot render stays as stored and keeps rendering from
+  `spec.documents`, with `Migrated=False` and the reason `ClusterCannotTake`. A
+  cluster that cannot be read gives the reason `ClusterUnreadable` instead.
+- A patch the webhook refuses during the migration stays as stored, with
+  `Migrated=False` and the reason `RefusedByWebhook`; the other patches are
+  still migrated.
+- When a `v1alpha1` document is lifted, `extraHostEntries` of the same IP join
+  their hostnames and kernel modules of the same name join their parameters,
+  each value once.
+- The config diff moves the Talos v1.14 settings on copies, so a failed lift
+  leaves the settings as they were.
+
+### UI
+
+- A patch or Cilium values save made from a stale copy is refused with a prompt
+  to reload. `UpdatePatch` and `SetCiliumValues` take a `base_resource_version`,
+  and the reads return the `resource_version`. `ichor apply -f` honours
+  `metadata.resourceVersion` the same way.
+- A download or log stream whose client stops reading frees its slot: each
+  response write has a 5-minute write deadline.
+- `RevokeSessions` and `ChangeOwnPassword` write under an optimistic lock, so
+  neither restores an old password hash or overwrites a concurrent password
+  change.
+- A drain while log streams are open no longer crashes ichor-ui: the handler waits
+  for its senders before it returns.
+
+### Install
+
+- `ichor upgrade ichor` keeps the live rules of the `ichor-ui-impersonate`
+  ClusterRole, so sign-in is no longer lost for up to two minutes, until the controller
+  restores them.
+- The chart's `admission.jobImageRepository` rule is removed (see the upgrade
+  notes). With no `IchorInstallation`, the Job admission policy denies the
+  controller's Jobs.
+
+### CLI
+
+- `ichor init` rolls out the sign-in authentication config and waits for it
+  before it finishes, so a new cluster ends Ready. On one control plane the
+  Kubernetes API is down for a few minutes during it.
+- Re-running `ichor adopt` creates the administrator it is missing.
+- Re-running `ichor upgrade ichor` finishes a sign-in step that part-failed, and
+  checks the authentication right before it writes.
+- Ctrl-C at a prompt runs the cleanups, so the bundle is removed.
+- `ichor reclaim node --talosconfig --cluster` checks the cluster
+  before the wipe, and refuses `--wait 0` together with `--cluster`.
+- `ichor init --namespace` other than `ichor-system` is refused before any
+  write.
+- The `ichor delete node` and `ichor restore etcd` examples include
+  `--override`.
+- The error for a plain `http` S3 endpoint names `--s3-insecure`.
+
+### Docs
+
+- New guides: Patch Talos config, and Upgrade Talos and Kubernetes.
+- Fixes to: Replace a control plane (`delete node` needs `--override`), the
+  upgrade guides (when the controller applies a change by itself), the etcd
+  backup namespace and restore requirements, the README install `mkdir`, the
+  cosign minimum version (2.6.1), and the example outputs.
+- The getting-started and build-from-source guides ask for at least 3 GiB of
+  memory on a control plane.
+
 ## v0.3.0 (2026-11-24)
 
 The command line is verb first, which breaks every script that calls it, and a

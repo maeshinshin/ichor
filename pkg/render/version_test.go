@@ -39,7 +39,7 @@ import (
 // for. They move together: a render change updates the fingerprint and bumps Version.
 const (
 	pinnedVersion     = 2
-	pinnedFingerprint = "sha256:747b832a4330f08219bd628460f0ba5c07279e7a097ae185a8eab1e1e7594df0"
+	pinnedFingerprint = "sha256:6a2c70d35198067f560b518c4256a04c76b90bd5dbeee80fa0bf5b7b73f7ce36"
 )
 
 // leaves flattens a YAML stream into "doc<n>.path" -> value.
@@ -160,7 +160,7 @@ func renderFingerprint(t *testing.T) string {
 	for _, tc := range cases {
 		m := testMachine("node-"+tc.role, tc.role, map[string]string{labelEnv: "fingerprint"})
 		m.Spec.Hostname = "node-" + tc.role
-		sys := &SystemInputs{RegistryAuth: map[string]RegistryAuth{"192.168.0.8:5000": {Password: "pw"}}}
+		sys := &SystemInputs{RegistryAuth: map[string]RegistryAuth{"docker.io": {Password: "pw"}}}
 
 		a := leaves(t, []byte(mustRenderSys(t, tc.cluster, m, tc.a, tc.patches, sys)))
 		b := leaves(t, []byte(mustRenderSys(t, tc.cluster, m, tc.b, tc.patches, sys)))

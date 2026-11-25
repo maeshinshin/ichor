@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -323,6 +324,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	requeue := false
 
+	type mark struct{ name, phase string }
+
+	var marks []mark
+
 	for _, m := range toAdvance {
 		renewUntil.Store(stepRenewUntil(&op, m).UnixNano())
 
@@ -348,6 +353,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		r.markMachine(&op, m.Name, phase)
+		marks = append(marks, mark{m.Name, phase})
 	}
 
 	result := ctrl.Result{}
@@ -355,8 +361,25 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		result.RequeueAfter = operationRequeueInterval
 	}
 
-	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
+	err = r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+	if apierrors.IsConflict(err) {
+		// A spec-only write (a pause from the UI) moved the resourceVersion under this pass. Status is the
+		// controller's alone, so re-apply this pass's marks on the live object instead of losing them.
+		var fresh ichorv1alpha1.TalosOperation
+		if gerr := readerOrClient(r.APIReader, r.Client).Get(ctx, client.ObjectKeyFromObject(&op), &fresh); gerr != nil {
+			return result, gerr
+		}
+
+		for _, mk := range marks {
+			r.markMachine(&fresh, mk.name, mk.phase)
+		}
+
+		err = r.setPhase(ctx, &fresh, ichorv1alpha1.TalosOperationPhaseInProgress,
+			reasonOperationAdvancing, advancingMessage(&fresh, len(toAdvance)))
+	}
+
+	return result, err
 }
 
 // retryFailedStep decides whether a paused, failed operation runs its step again now: a person's retry
@@ -955,11 +978,20 @@ func nextBatch(
 	maxUnavailable int32,
 ) []*ichorv1alpha1.TalosMachine {
 	if pending := pendingMachines(controlPlanes, recorded); len(pending) > 0 {
+		// A machine already InProgress is down or mid-step: it is finished before any other starts.
+		if started := inProgressFirst(pending, recorded); len(started) > 0 {
+			return started[:1]
+		}
+
 		return pending[:1]
 	}
 
 	if pending := pendingMachines(workers, recorded); len(pending) > 0 {
 		maxUnavailable = max(maxUnavailable, 1)
+		// InProgress workers count against maxUnavailable first; new ones fill the slots left.
+		pending = slices.SortedStableFunc(slices.Values(pending), func(a, b *ichorv1alpha1.TalosMachine) int {
+			return cmp.Compare(boolInt(!isInProgress(a, recorded)), boolInt(!isInProgress(b, recorded)))
+		})
 
 		return pending[:min(int32(len(pending)), maxUnavailable)]
 	}
@@ -969,6 +1001,24 @@ func nextBatch(
 	}
 
 	return nil
+}
+
+func isInProgress(m *ichorv1alpha1.TalosMachine, recorded []ichorv1alpha1.TalosOperationMachineStatus) bool {
+	return slices.ContainsFunc(recorded, func(rec ichorv1alpha1.TalosOperationMachineStatus) bool {
+		return rec.Name == m.Name && rec.Phase == ichorv1alpha1.TalosOperationMachinePhaseInProgress
+	})
+}
+
+func inProgressFirst(pending []*ichorv1alpha1.TalosMachine, recorded []ichorv1alpha1.TalosOperationMachineStatus) []*ichorv1alpha1.TalosMachine {
+	return slices.DeleteFunc(slices.Clone(pending), func(m *ichorv1alpha1.TalosMachine) bool { return !isInProgress(m, recorded) })
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+
+	return 0
 }
 
 // kubernetesBatch is nextBatch for a Kubernetes upgrade, which visits the machines four times: the control planes
@@ -1125,9 +1175,19 @@ func configSelection(
 
 	drop := func(m *ichorv1alpha1.TalosMachine) bool {
 		_, started := recorded(op, m.Name)
+		// The machine's own marker also says it started: a lost status write must not strand a rebooted node.
+		started = started || rolloutUnderway(m)
 
 		return !started && !upgrade.ConfigPending(m)
 	}
 
 	return slices.DeleteFunc(controlPlanes, drop), slices.DeleteFunc(workers, drop)
+}
+
+// rolloutUnderway reports whether m carries the ConfigRollout marker of a step that was begun and not yet
+// verified (reboot requested, or kube-apiserver restarting).
+func rolloutUnderway(m *ichorv1alpha1.TalosMachine) bool {
+	c := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout)
+
+	return c != nil && c.Status == metav1.ConditionTrue && (c.Reason == reasonRolloutRebooting || c.Reason == reasonRolloutRestarting)
 }

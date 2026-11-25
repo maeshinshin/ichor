@@ -17,13 +17,14 @@ limitations under the License.
 package render
 
 import (
-	"k8s.io/pod-security-admission/admission/api/load"
-	psavalidation "k8s.io/pod-security-admission/admission/api/validation"
 	"net/netip"
-	"sigs.k8s.io/yaml"
 	"slices"
 	"strings"
 	"testing"
+
+	"k8s.io/pod-security-admission/admission/api/load"
+	psavalidation "k8s.io/pod-security-admission/admission/api/validation"
+	"sigs.k8s.io/yaml"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
@@ -32,8 +33,10 @@ import (
 )
 
 const (
-	fwController = "192.168.10.0/24"
-	fwNodes      = "10.0.0.0/24"
+	podSecKubeSystem = "kube-system"
+	podSecOther      = "rook-ceph"
+	fwController     = "192.168.10.0/24"
+	fwNodes          = "10.0.0.0/24"
 )
 
 func secCluster(s *ichorv1alpha1.TalosClusterSecurity) *ichorv1alpha1.TalosCluster {
@@ -242,7 +245,7 @@ func TestPodSecurityAndAudit(t *testing.T) {
 	worker := testMachine("w", roleWorker, nil)
 
 	ps := secCluster(&ichorv1alpha1.TalosClusterSecurity{PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
-		Enforce: "restricted", ExemptNamespaces: []string{"rook-ceph", "monitoring"},
+		Enforce: "restricted", ExemptNamespaces: []string{podSecOther, "monitoring"},
 	}})
 
 	t.Run("pod security overrides only what is set and keeps kube-system", func(t *testing.T) {
@@ -394,7 +397,7 @@ func TestPodSecurityExemptionsAreValid(t *testing.T) {
 	bundle := testBundle(t)
 	cp := testMachine("cp", roleControlPlane, nil)
 
-	for _, ns := range [][]string{{"kube-system"}, {"rook-ceph", "kube-system", "rook-ceph"}} {
+	for _, ns := range [][]string{{podSecKubeSystem}, {podSecOther, podSecKubeSystem, podSecOther}} {
 		c := secCluster(&ichorv1alpha1.TalosClusterSecurity{PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
 			Enforce: "restricted", ExemptNamespaces: ns,
 		}})

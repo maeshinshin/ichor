@@ -34,6 +34,7 @@ const (
 	registryHost            = "registry.example.com"
 	registrySecretName      = "registry-creds"
 	registryMirrorEndpoint  = "https://mirror.example.com"
+	dockerIO                = "docker.io"
 )
 
 func registryCluster(entries ...ichorv1alpha1.TalosClusterRegistry) *ichorv1alpha1.TalosCluster {
@@ -282,15 +283,17 @@ func TestRenderRegistryAuthIsPerEndpoint(t *testing.T) {
 		want    string
 		wantNot string
 	}{
-		{"mirror endpoint", ichorv1alpha1.TalosClusterRegistry{Host: "docker.io", Endpoints: []string{"https://harbor.example.com"}},
+		{"mirror endpoint", ichorv1alpha1.TalosClusterRegistry{
+			Host: dockerIO, Endpoints: []string{"https://harbor.example.com"}},
 			"        harbor.example.com:\n", "        docker.io:\n"},
-		{"endpoint with port", ichorv1alpha1.TalosClusterRegistry{Host: "docker.io", Endpoints: []string{"https://harbor.example.com:5000/v2/"}},
+		{"endpoint with port", ichorv1alpha1.TalosClusterRegistry{
+			Host: dockerIO, Endpoints: []string{"https://harbor.example.com:5000/v2/"}},
 			"        harbor.example.com:5000:\n", "        harbor.example.com:\n"},
-		{"no endpoints", ichorv1alpha1.TalosClusterRegistry{Host: "docker.io"}, "        docker.io:\n", "harbor"},
+		{"no endpoints", ichorv1alpha1.TalosClusterRegistry{Host: dockerIO}, "        docker.io:\n", "harbor"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.reg.Username = "u"
-			auth := map[string]RegistryAuth{"docker.io": {Password: "p"}}
+			auth := map[string]RegistryAuth{dockerIO: {Password: "p"}}
 
 			out, _, err := Render(registryCluster(tc.reg), m, bundle, nil, &SystemInputs{RegistryAuth: auth})
 			if err != nil {

@@ -74,7 +74,8 @@ jobs:
           add-paths: |
             Makefile
             README.md
-            docs/guides
+            THIRD-PARTY-NOTICES
+            docs
             pkg/cni/cilium
             pkg/release/compat.go
             test/e2e/foreign/cilium_test.go

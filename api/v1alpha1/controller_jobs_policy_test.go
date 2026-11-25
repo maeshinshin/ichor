@@ -29,6 +29,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 	)
 
 	var admin, controller, other client.Client
+	var inst *IchorInstallation
 
 	hardened := func() *corev1.SecurityContext {
 		return &corev1.SecurityContext{
@@ -79,6 +80,12 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		}
 
 		installAdmissionPolicy(admin, "../../config/admission/controller-jobs-policy.yaml")
+
+		// The image policy denies every controller Job while there is no IchorInstallation.
+		inst = &IchorInstallation{Spec: IchorInstallationSpec{Version: "v0.0.1", InstallerRepository: installerRepo}}
+		inst.Name = IchorInstallationName
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), inst) })
 
 		controller = asUser(controllerUser)
 		other = asUser("system:serviceaccount:ichor-system:someone-else")
@@ -159,17 +166,10 @@ var _ = Describe("controller Job policy", Ordered, func() {
 	})
 
 	// The image follows IchorInstallation.spec (a mirror or private registry is a documented setting
-	// that needs ichorinstallations/version); without one the structural rules above still hold.
+	// that needs ichorinstallations/version); without one every controller Job is denied.
 	// Both Jobs run by digest (the Cilium Job since its amendment of 2026-11-05).
 	Context("with an IchorInstallation", func() {
-		var inst *IchorInstallation
-
 		BeforeAll(func() {
-			inst = &IchorInstallation{Spec: IchorInstallationSpec{Version: "v0.0.1", InstallerRepository: installerRepo}}
-			inst.Name = IchorInstallationName
-			Expect(k8sClient.Create(context.Background(), inst)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), inst) })
-
 			Eventually(func() error {
 				j := installer()
 				j.Spec.Template.Spec.Containers[0].Image = "evil.example/x@sha256:" + strings.Repeat("a", 64)

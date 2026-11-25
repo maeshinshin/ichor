@@ -7,10 +7,9 @@
 #
 # Two policies: the first is structural and needs no parameter; the second ties the image of both Jobs to
 # IchorInstallation.spec (installerRepository@digest; the setting that needs the
-# ichorinstallations/version right), and does nothing while there is no IchorInstallation.
+# ichorinstallations/version right), and denies every controller Job while there is no IchorInstallation.
 #
-# Hand-maintained, mirrored in dist/chart/templates/admission/ (the chart's copy adds
-# admission.jobImageRepository for an install without an IchorInstallation).
+# Hand-maintained, mirrored in dist/chart/templates/admission/.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -130,5 +129,5 @@ spec:
   policyName: ichor-controller-job-image
   paramRef:
     name: ichor
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   validationActions: ["Deny"]

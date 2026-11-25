@@ -83,6 +83,10 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 		inst = &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{
 			Version: "v0.0.7", InstallerRepository: "registry.example.org/ichor-installer",
 		}}
+		inst.Name = ichorv1alpha1.IchorInstallationName
+		// The image policy denies every controller Job while there is no IchorInstallation.
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, inst) })
 
 		// The policy is bound asynchronously: wait until it denies a Job under another ServiceAccount.
 		Eventually(func() error {

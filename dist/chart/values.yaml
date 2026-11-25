@@ -554,10 +554,9 @@ autoPatch:
 ##
 admission:
   enabled: true
-  ## The repository the controller's Jobs (the installer and the Cilium Helm run) may pull their
-  ## image from, when there is no IchorInstallation to say (a chart-only install). With
-  ## an IchorInstallation, the image must be its spec.installerRepository@digest instead.
-  ## Set it to your mirror if you mirror the installer image; empty turns this rule off.
+  ## Unused: accepted so an existing values file still installs. The Jobs' image is always the
+  ## IchorInstallation's spec.installerRepository@digest (the controller creates one on every install;
+  ## with none, the policy denies its Jobs). Set the mirror there.
   jobImageRepository: ghcr.io/maeshinshin/ichor-installer
 
 ## Prometheus ServiceMonitors for scraping the controller manager's and (when

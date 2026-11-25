@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
@@ -388,32 +387,18 @@ func TestAdvanceCNIHelmJobFailsFastWhenNoPodIsCreated(t *testing.T) {
 	}
 }
 
-// A Helm-installed Ichor has no IchorInstallation; the Cilium Helm Job then runs
-// the installer image of the controller's own version.
+// The Cilium Helm Job's image follows the IchorInstallation, and the admission policy denies every controller
+// Job without one. Before the controller has seeded it, no Job is attempted: the caller gets an error and retries.
 func TestInstallerSourceWithoutAnIchorInstallation(t *testing.T) {
 	ctx := context.Background()
 
-	got, err := installerSource(ctx, cniFakeClient(t))
-	if err != nil {
-		t.Fatalf("installerSource without an IchorInstallation: %v", err)
-	}
-
-	if got.Spec.InstallerRepository != defaultInstallerRepository || got.Spec.Version != version.Version {
-		t.Fatalf("stand-in = %+v; want the default repository at version %q", got.Spec, version.Version)
-	}
-
-	// The stand-in's tag is resolved and verified before the Job: the image is that digest.
-	images := &fakeInstallerImages{digest: testInstallerDigest}
-
-	img, err := cniJobImage(ctx, cniFakeClient(t), images, got, nil)
-	if err != nil || img != defaultInstallerRepository+"@"+testInstallerDigest ||
-		len(images.resolved) != 1 || images.resolved[0] != defaultInstallerRepository+":"+version.Version {
-		t.Fatalf("Job image = %q, %v (resolved %v)", img, err, images.resolved)
+	if got, err := installerSource(ctx, cniFakeClient(t)); !errors.Is(err, errInstallationPending) {
+		t.Fatalf("installerSource without an IchorInstallation = %+v, %v; want errInstallationPending", got, err)
 	}
 
 	real := cniTestInstallation()
 
-	got, err = installerSource(ctx, cniFakeClient(t, real))
+	got, err := installerSource(ctx, cniFakeClient(t, real))
 	if err != nil || got.Spec.Version != "v0.9.0" {
 		t.Fatalf("with an IchorInstallation = %+v, %v; want its own spec", got, err)
 	}

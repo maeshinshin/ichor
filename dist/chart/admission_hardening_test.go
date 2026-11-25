@@ -556,24 +556,22 @@ func cniHolds(held []any, group, res, verb, name string) bool {
 	return false
 }
 
-func policyValidations(policy map[string]any) (exprs []string, messages []string) {
+func policyValidations(policy map[string]any) (exprs []string) {
 	spec, _ := policy["spec"].(map[string]any)
 	list, _ := spec["validations"].([]any)
 
 	for _, v := range list {
 		vm, _ := v.(map[string]any)
 		e, _ := vm["expression"].(string)
-		m, _ := vm["message"].(string)
 		exprs = append(exprs, strings.Join(strings.Fields(e), " "))
-		messages = append(messages, m)
 	}
 
-	return exprs, messages
+	return exprs
 }
 
 // TestControllerJobsPolicyMirrorsConfig guards: the chart ships the same Job policies as
-// config/admission (the release namespace and the controller's ServiceAccount substituted), plus its
-// own image-repository rule, and nothing renders with admission.enabled=false.
+// config/admission (the release namespace and the controller's ServiceAccount substituted), and nothing renders
+// with admission.enabled=false.
 func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 	cfg := loadYAMLDocs(t, "../../config/admission/controller-jobs-policy.yaml")
 	docs := renderChart(t, "ichor")
@@ -586,16 +584,12 @@ func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 			t.Fatalf("policy %s: config=%v chart=%v", name, want != nil, got != nil)
 		}
 
-		wantExprs, _ := policyValidations(want)
-		gotExprs, gotMsgs := policyValidations(got)
+		wantExprs := policyValidations(want)
+		gotExprs := policyValidations(got)
 
 		var kept []string
 
-		for i, e := range gotExprs {
-			if strings.Contains(gotMsgs[i], "admission.jobImageRepository") {
-				continue
-			}
-
+		for _, e := range gotExprs {
 			e = strings.ReplaceAll(e, "'default'", "'ichor-system'")
 			kept = append(kept, strings.ReplaceAll(e, "system:serviceaccount:default:", "system:serviceaccount:ichor-system:"))
 		}
@@ -613,15 +607,6 @@ func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 	off := renderChartWithValues(t, "ichor", "admission.enabled=false")
 	if find(off, kindValidatingAdmissionPolicy, "ichor-controller-jobs") != nil {
 		t.Error("the Job policy renders with admission.enabled=false")
-	}
-
-	noRepo := renderChartWithValues(t, "ichor", "admission.jobImageRepository=")
-	_, msgs := policyValidations(find(noRepo, kindValidatingAdmissionPolicy, "ichor-controller-jobs"))
-
-	for _, m := range msgs {
-		if strings.Contains(m, "admission.jobImageRepository") {
-			t.Error("the image-repository rule renders with an empty admission.jobImageRepository")
-		}
 	}
 }
 

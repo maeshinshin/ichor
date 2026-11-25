@@ -22,6 +22,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,7 +40,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/cnifacts"
-	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -428,8 +428,8 @@ func cniJobImage(
 		return inst.Spec.InstallerRepository + "@" + rec.Digest, nil
 	}
 
-	// shortcut: a verified run is not recorded in status.installerImage (a Helm-only install has no
-	// IchorInstallation to record in); each new Job verifies again. Drop it if a verified run needs a trace.
+	// shortcut: a verified run is not recorded in status.installerImage (the installer run records it
+	// for its own Job); each new Job verifies again. Drop it if a verified run needs a trace.
 	img, err := pinInstallerImage(ctx, images, inst)
 	if err != nil {
 		return "", err
@@ -446,12 +446,12 @@ func cniJobImage(
 	return inst.Spec.InstallerRepository + "@" + img.Digest, nil
 }
 
-// defaultInstallerRepository is the API default of IchorInstallation.spec.installerRepository.
-const defaultInstallerRepository = "ghcr.io/maeshinshin/ichor-installer"
+// errInstallationPending is installerSource's answer while the IchorInstallation does not exist yet. The
+// controller seeds it in a runnable beside the reconcilers, and the admission policy denies every controller
+// Job without one, so no Job is attempted until it is there.
+var errInstallationPending = errors.New("the IchorInstallation does not exist yet; the Cilium Helm Job waits for it")
 
-// installerSource is the IchorInstallation whose installer image the Cilium Helm Job runs. A
-// Helm-installed Ichor has no such object, so the controller's own version and the
-// default repository stand in for it.
+// installerSource is the IchorInstallation whose installer image the Cilium Helm Job runs.
 func installerSource(ctx context.Context, r client.Reader) (*ichorv1alpha1.IchorInstallation, error) {
 	var inst ichorv1alpha1.IchorInstallation
 
@@ -461,9 +461,7 @@ func installerSource(ctx context.Context, r client.Reader) (*ichorv1alpha1.Ichor
 	case err == nil:
 		return &inst, nil
 	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
-		return &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{
-			Version: version.Version, InstallerRepository: defaultInstallerRepository,
-		}}, nil
+		return nil, errInstallationPending
 	default:
 		return nil, fmt.Errorf("reading IchorInstallation %q for the Cilium Helm Job: %w", ichorv1alpha1.IchorInstallationName, err)
 	}

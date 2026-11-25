@@ -105,8 +105,15 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 			return err
 		}
 
-		plan.users = !installer.ReadUISettings(ui, nil).UsersOn()
-		plan.switchUI = plan.users
+		plan.switchUI = !installer.ReadUISettings(ui, nil).UsersOn()
+
+		// A re-run of an adopt that stopped before the administrator was made finds users on already.
+		user, credential, err := adminState(ctx, deps.K8s, opts.AdminUser)
+		if err != nil {
+			return err
+		}
+
+		plan.users = plan.switchUI || !user || !credential
 	}
 
 	// The TLS and kubeconfig flags are applied by the users step; with users already on there is no such step,

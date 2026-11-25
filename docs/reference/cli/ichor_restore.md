@@ -14,7 +14,7 @@ ichor restore [command]
 ### Examples
 
 ```sh
-  ichor restore etcd --cluster prod --follow
+  ichor restore etcd --cluster prod --override --follow
   ichor restore cluster --cluster prod --node-endpoint 192.168.10.11:50000 --s3-endpoint https://s3.example.com --s3-bucket ichor-backups --s3-prefix prod
 ```
 

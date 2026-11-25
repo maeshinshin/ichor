@@ -33,13 +33,21 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 		return nil, nil, err
 	}
 
-	if installer.ReadUISettings(ui, nil).SignedIn {
-		if opts.UIURL != "" || opts.AdminUser != "" || opts.hasUIExtras() {
-			return nil, nil, errors.New("upgrade: this Ichor's ichor-ui already has sign-in on, so --ui-url, --admin-user, --ui-tls-* and " +
+	settings := installer.ReadUISettings(ui, nil)
+	switchUI := !settings.SignedIn
+	finishing := settings.UsersOn() // a re-run: a part-failed run switched ichor-ui first
+
+	if settings.SignedIn {
+		if opts.hasUIExtras() || (opts.UIURL != "" && opts.UIURL != settings.ExternalURL) || (!finishing && opts.AdminUser != "") {
+			return nil, nil, errors.New("upgrade: this Ichor's ichor-ui already has sign-in on, so --ui-url, --ui-tls-* and " +
 				"--kube-api-* have nothing to set up: leave them out")
 		}
 
-		return nil, nil, nil
+		if !finishing {
+			return nil, nil, nil // an external provider: nothing of ours to finish
+		}
+
+		opts.UIURL = settings.ExternalURL
 	}
 
 	// The users step does not depend on a cluster's contract; only the authenticator does, and it is
@@ -49,6 +57,17 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 	opts, err = prepareInitUsers("upgrade", opts)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	users := switchUI
+
+	if finishing {
+		user, credential, err := adminState(ctx, k, opts.AdminUser)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		users = !user || !credential
 	}
 
 	var list ichorv1alpha1.TalosClusterList
@@ -69,7 +88,11 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 		}
 	}
 
-	return &signInPlan{opts: opts, users: true, authenticator: len(clusters) > 0}, clusters, nil
+	if !switchUI && !users && len(clusters) == 0 {
+		return nil, nil, nil
+	}
+
+	return &signInPlan{opts: opts, users: users, switchUI: switchUI, authenticator: len(clusters) > 0}, clusters, nil
 }
 
 // ensureSignIn turns sign-in on for an ichor-ui that has none, after consent (--yes or an interactive yes),
@@ -81,7 +104,18 @@ func ensureSignIn(ctx context.Context, k client.Client, in io.Reader, errw io.Wr
 		return "", "", err
 	}
 
-	_, _ = fmt.Fprintf(errw, "upgrade: this ichor-ui has no sign-in, and the release being installed does not start without one. The upgrade will first %s\n", plan.describe())
+	why := "this ichor-ui has no sign-in, and the release being installed does not start without one"
+	if !plan.switchUI {
+		why = "an earlier run stopped before Ichor's sign-in was set up completely"
+	}
+
+	_, _ = fmt.Fprintf(errw, "upgrade: %s. The upgrade will first %s\n", why, plan.describe())
+
+	if len(clusters) > 0 {
+		if err := checkAuthenticationAccess(ctx, k); err != nil {
+			return "", "", err
+		}
+	}
 
 	if !assumeYes {
 		if err := confirmOrAbort(in, errw, "upgrade", "Turn sign-in on and then upgrade? [y/N]: ", "aborted, nothing was changed"); err != nil {
@@ -89,9 +123,11 @@ func ensureSignIn(ctx context.Context, k client.Client, in io.Reader, errw io.Wr
 		}
 	}
 
-	password, err = initUsers(ctx, plan.opts, k, errw)
-	if err != nil {
-		return plan.opts.AdminUser, password, err
+	if plan.users {
+		password, err = initUsers(ctx, plan.opts, k, errw)
+		if err != nil {
+			return plan.opts.AdminUser, password, err
+		}
 	}
 
 	for i := range clusters {

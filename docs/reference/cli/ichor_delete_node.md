@@ -30,7 +30,7 @@ ichor delete node NAME [flags]
 ### Examples
 
 ```sh
-  ichor delete node worker-3
+  ichor delete node worker-3 --override
   ichor delete node worker-3 --confirm worker-3 --wipe-mode system-disk --override
 ```
 

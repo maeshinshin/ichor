@@ -20,10 +20,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -533,4 +536,53 @@ func TestAdoptDiscoveredMachine(t *testing.T) {
 			t.Error("the stored machine of another node was approved")
 		}
 	})
+}
+
+// promptSignal closes prompted when the apply question is written.
+type promptSignal struct{ prompted chan struct{} }
+
+func (p promptSignal) Write(b []byte) (int, error) {
+	if strings.Contains(string(b), "Apply this configuration") {
+		select {
+		case <-p.prompted:
+		default:
+			close(p.prompted)
+		}
+	}
+
+	return len(b), nil
+}
+
+// TestRunInit_InterruptAtTheApplyPromptRemovesTheBundle: Ctrl-C while init waits at "Apply this configuration?" ends
+// the prompt with an error, so the deferred removal of the bundle runs and the next init is not refused.
+func TestRunInit_InterruptAtTheApplyPromptRemovesTheBundle(t *testing.T) {
+	home := withTempHome(t)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	deps, maint, _ := newFakeInitDeps(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build())
+	deps.AssumeYes = false
+	deps.Stderr = promptSignal{prompted: make(chan struct{})}
+
+	silent, _ := io.Pipe() // an operator who never answers
+	deps.Stdin = interruptible(ctx, silent)
+
+	go func() {
+		<-deps.Stderr.(promptSignal).prompted
+
+		_ = syscall.Kill(os.Getpid(), syscall.SIGINT)
+	}()
+
+	if err := runInit(ctx, validInitOptions(), deps); !errors.Is(err, context.Canceled) {
+		t.Fatalf("runInit err = %v, want context.Canceled", err)
+	}
+
+	if _, err := os.Stat(home + "/.ichor/clusters/" + testInitClusterName + "/secrets.yaml"); err == nil {
+		t.Error("the bundle was left behind after Ctrl-C at the prompt")
+	}
+
+	if maint.callCount != 0 {
+		t.Errorf("the node was sent the configuration: callCount=%d", maint.callCount)
+	}
 }

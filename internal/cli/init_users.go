@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/mod/semver"
 	appsv1 "k8s.io/api/apps/v1"
+	authzv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -234,6 +235,88 @@ func setClusterAuthentication(
 	return nil
 }
 
+// checkAuthenticationAccess asks, read-only, whether the caller may update talosclusters/authentication, the
+// right setClusterAuthentication needs, so a denial refuses before the first write.
+func checkAuthenticationAccess(ctx context.Context, k client.Client) error {
+	ssar := &authzv1.SelfSubjectAccessReview{Spec: authzv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authzv1.ResourceAttributes{
+		Namespace: ichorControllerNamespace, Verb: "update", Group: ichorv1alpha1.GroupVersion.Group,
+		Resource: "talosclusters", Subresource: "authentication",
+	}}}
+	if err := k.Create(ctx, ssar); err != nil {
+		return fmt.Errorf("sign-in: checking the right to set spec.authentication: %w", err)
+	}
+
+	if !ssar.Status.Allowed {
+		return errors.New("sign-in: you may not update talosclusters/authentication, which setting spec.authentication.ichor needs: " +
+			"ask for that right (nothing was changed)")
+	}
+
+	return nil
+}
+
+// adminState reports whether the IchorUser name and its entry in the credentials Secret exist.
+func adminState(ctx context.Context, k client.Reader, name string) (user, credential bool, err error) {
+	var u ichorv1alpha1.IchorUser
+
+	switch err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: name}, &u); {
+	case err == nil:
+		user = true
+	case !apierrors.IsNotFound(err):
+		return false, false, fmt.Errorf("sign-in: reading the IchorUser %q: %w", name, err)
+	}
+
+	var sec corev1.Secret
+
+	switch err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}, &sec); {
+	case err == nil:
+		credential = len(sec.Data[name]) > 0
+	case !apierrors.IsNotFound(err):
+		return false, false, fmt.Errorf("sign-in: reading the credentials Secret: %w", err)
+	}
+
+	return user, credential, nil
+}
+
+// ensureAdmin makes the first administrator whole and returns the generated password, or "" when the
+// administrator already has its password (a re-run after a part-failed run reuses it, never resets it).
+func ensureAdmin(ctx context.Context, k client.Client, name string, errw io.Writer) (string, error) {
+	user, credential, err := adminState(ctx, k, name)
+	if err != nil {
+		return "", err
+	}
+
+	if user && credential {
+		_, _ = fmt.Fprintf(errw, "sign-in: administrator %q exists already, so it is kept\n", name)
+
+		return "", nil
+	}
+
+	password, err := ichorauth.GeneratePassword()
+	if err != nil {
+		return "", fmt.Errorf("sign-in: generating the admin password: %w", err)
+	}
+
+	if user { // created by a run that stopped before storing its password
+		cred, err := ichorauth.NewCredential(password, true, time.Now())
+		if err != nil {
+			return "", fmt.Errorf("sign-in: hashing the admin password: %w", err)
+		}
+
+		if err := patchCredential(ctx, k, ichorControllerNamespace, name, cred); err != nil {
+			return "", fmt.Errorf("sign-in: storing the admin password: %w", err)
+		}
+
+		return password, nil
+	}
+
+	spec := userSpec{Name: name, DisplayName: name, Roles: []string{ichorauth.RoleAdmin}}
+	if err := createUserWithPassword(ctx, k, spec, password, time.Now(), errw); err != nil {
+		return "", fmt.Errorf("sign-in: creating the first admin: %w", err)
+	}
+
+	return password, nil
+}
+
 // initUsers runs the --ui-url half of init after Ichor is installed and before
 // the TalosCluster exists: credentials Secret, first admin (before the switch,
 // so nobody is locked out), then the switch. It returns the generated password.
@@ -256,14 +339,9 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 		return "", err
 	}
 
-	password, err = ichorauth.GeneratePassword()
+	password, err = ensureAdmin(ctx, k, opts.AdminUser, errw)
 	if err != nil {
-		return "", fmt.Errorf("sign-in: generating the admin password: %w", err)
-	}
-
-	spec := userSpec{Name: opts.AdminUser, DisplayName: opts.AdminUser, Roles: []string{ichorauth.RoleAdmin}}
-	if err := createUserWithPassword(ctx, k, spec, password, time.Now(), errw); err != nil {
-		return "", fmt.Errorf("sign-in: creating the first admin: %w", err)
+		return "", err
 	}
 
 	if err := targets.apply(ctx, k, errw); err != nil {

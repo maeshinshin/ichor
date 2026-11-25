@@ -94,7 +94,7 @@ func TestAdoptSignIn_FlagsThatWouldChangeNothingAreRefused(t *testing.T) {
 		want string
 	}{
 		"Helm-managed":     {[]client.Object{controllerDeployment(true)}, "ichorUI.users.kubeAPIServerURL"},
-		"users already on": {usersOn, "already has sign-in on"},
+		"users already on": {append(usersOn, finishedSignIn()...), "already has sign-in on"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := signInFlow(t)

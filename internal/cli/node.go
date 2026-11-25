@@ -21,9 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/signal"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"connectrpc.com/connect"
@@ -75,8 +73,7 @@ JSON object per line instead.`,
 			return err
 		}
 
-		ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-		defer cancel()
+		ctx := cmd.Context() // cancelled on SIGINT/SIGTERM by Execute
 
 		connectFn := func(ctx context.Context) (*apiClients, error) { return connectAPI(ctx, apiOpts, deps, true) }
 

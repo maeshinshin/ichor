@@ -9,6 +9,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authzv1 "k8s.io/api/authorization/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +53,12 @@ func signInOffCluster(t *testing.T, target []byte, liveProps []string, writes *i
 		WithObjects(slices.Concat(uiObjects(), []client.Object{cluster, inst, live[0]})...).
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.CreateOption) error {
+				if ssar, ok := o.(*authzv1.SelfSubjectAccessReview); ok {
+					ssar.Status.Allowed = true
+
+					return nil
+				}
+
 				job, ok := o.(*batchv1.Job)
 				if !ok {
 					count()
@@ -164,7 +171,7 @@ func TestSignInIsPendingExactlyWhenEnsureSignInWillAct(t *testing.T) {
 	on := uiObjects()
 	ui := on[0].(*appsv1.Deployment)
 	ui.Spec.Template.Spec.Containers[0].Args = append(ui.Spec.Template.Spec.Containers[0].Args, argUsersEnabled, "--external-url=https://ui.example")
-	signedIn := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(on...).Build()
+	signedIn := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(on, finishedSignIn()...)...).Build()
 
 	for name, tc := range map[string]struct {
 		k    client.Client

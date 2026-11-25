@@ -341,7 +341,7 @@ func init() {
 	rebootNodeCmd.Example = `  ichor reboot node worker-3
   ichor reboot node worker-3 --follow`
 	shutdownNodeCmd.Example = `  ichor shutdown node worker-3`
-	deleteNodeCmd.Example = `  ichor delete node worker-3
+	deleteNodeCmd.Example = `  ichor delete node worker-3 --override
   ichor delete node worker-3 --confirm worker-3 --wipe-mode system-disk --override`
 	restartServiceCmd.Example = `  ichor restart service worker-3 kubelet`
 	defragEtcdCmd.Example = `  ichor defrag etcd --node cp-2

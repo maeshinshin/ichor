@@ -178,7 +178,7 @@ var deleteCmd = &cobra.Command{
 	Annotations: groupingAnnotations(),
 	Short:       "Delete a node, patch, operation or user",
 	Example: `  ichor delete patch ingress-sysctls
-  ichor delete node worker-3 --confirm worker-3`,
+  ichor delete node worker-3 --confirm worker-3 --override`,
 }
 
 var rolloutCmd = &cobra.Command{

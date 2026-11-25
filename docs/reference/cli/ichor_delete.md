@@ -15,7 +15,7 @@ ichor delete [command]
 
 ```sh
   ichor delete patch ingress-sysctls
-  ichor delete node worker-3 --confirm worker-3
+  ichor delete node worker-3 --confirm worker-3 --override
 ```
 
 ### Options

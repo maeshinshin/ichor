@@ -11,13 +11,17 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 const argUsersEnabled = "--users-enabled=true"
@@ -32,7 +36,15 @@ func upgradeCluster(t *testing.T, contract string, extra ...client.Object) clien
 
 	objs := slices.Concat(uiObjects(), []client.Object{cluster}, extra)
 
-	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build()
+	return reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build())
+}
+
+// finishedSignIn is what a completed sign-in leaves besides ichor-ui: the first administrator and its password.
+func finishedSignIn() []client.Object {
+	return []client.Object{
+		&ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: defaultAdminUser},
+		&corev1.Secret{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName, Data: map[string][]byte{defaultAdminUser: []byte("{}")}},
+	}
 }
 
 func uiDeploymentArgs(t *testing.T, k client.Client) []string {
@@ -148,7 +160,8 @@ func TestUpgradeSignIn_LeavesWhatHasSignInAlone(t *testing.T) {
 
 	cluster := newTestCluster()
 	cluster.Namespace = ichorControllerNamespace
-	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(usersOn, cluster)...).Build()
+	cluster.Spec.Authentication = &ichorv1alpha1.TalosClusterAuthentication{Ichor: &ichorv1alpha1.TalosClusterIchorIssuer{Enabled: true, URL: testUIURL}}
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(usersOn, append(finishedSignIn(), cluster)...)...).Build()
 
 	var errw bytes.Buffer
 
@@ -157,7 +170,7 @@ func TestUpgradeSignIn_LeavesWhatHasSignInAlone(t *testing.T) {
 		t.Fatalf("ensureSignIn = %q %q %v with output %q, want nothing", user, password, err, errw.String())
 	}
 
-	if _, _, err := ensureSignIn(context.Background(), k, strings.NewReader(""), &errw, initOptions{UIURL: testUIURL}, true); err == nil ||
+	if _, _, err := ensureSignIn(context.Background(), k, strings.NewReader(""), &errw, initOptions{UIURL: "https://other.example.com"}, true); err == nil ||
 		!strings.Contains(err.Error(), "already has sign-in on") {
 		t.Errorf("--ui-url with sign-in on: %v", err)
 	}
@@ -267,5 +280,122 @@ func TestUpgradeIchorRefusesBeforeItWrites(t *testing.T) {
 				t.Errorf("sign-in was switched on: %v", args)
 			}
 		})
+	}
+}
+
+// failFirstPatchOfClusters refuses every TalosCluster patch while *failing is set.
+func failFirstPatchOfClusters(base client.WithWatch, failing *bool) client.Client {
+	return interceptor.NewClient(base, interceptor.Funcs{
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, p client.Patch, o ...client.PatchOption) error {
+			if _, ok := obj.(*ichorv1alpha1.TalosCluster); ok && *failing {
+				return apierrors.NewForbidden(schema.GroupResource{Resource: "talosclusters"}, obj.GetName(), nil)
+			}
+
+			return c.Patch(ctx, obj, p, o...)
+		},
+	})
+}
+
+// TestUpgradeSignIn_RerunAfterAFailedAuthenticatorSetsItOnEveryCluster: the first run switches ichor-ui and creates the
+// administrator, then the TalosCluster patch is refused. The re-run, with ichor-ui signed in, finishes the clusters
+// and keeps the administrator.
+func TestUpgradeSignIn_RerunAfterAFailedAuthenticatorSetsItOnEveryCluster(t *testing.T) {
+	second := newTestCluster()
+	second.Name, second.Namespace, second.Spec.VersionContract = "second", ichorControllerNamespace, testVersionContract
+
+	base := upgradeCluster(t, testVersionContract, second).(client.WithWatch)
+	failing := true
+	k := failFirstPatchOfClusters(base, &failing)
+
+	run := func() (string, error) {
+		var errw bytes.Buffer
+
+		err := upgradeWithSignIn(context.Background(), k, strings.NewReader(""), &errw, initOptions{}, true, func() error { return nil }, func() error { return nil })
+
+		return errw.String(), err
+	}
+
+	if _, err := run(); err == nil {
+		t.Fatal("the first run succeeded although the TalosCluster patch was refused")
+	}
+
+	failing = false
+
+	out, err := run()
+	if err != nil {
+		t.Fatalf("second run: %v\n%s", err, out)
+	}
+
+	if strings.Contains(out, "Password for admin") || strings.Contains(out, "already exists") {
+		t.Errorf("the second run made or refused an administrator:\n%s", out)
+	}
+
+	var list ichorv1alpha1.TalosClusterList
+	if err := base.List(context.Background(), &list); err != nil || len(list.Items) != 2 {
+		t.Fatalf("clusters: %v %d", err, len(list.Items))
+	}
+
+	for _, c := range list.Items {
+		if a := c.Spec.Authentication; a == nil || a.Ichor == nil || !a.Ichor.Enabled || a.Ichor.URL != defaultUIURL {
+			t.Errorf("cluster %s: spec.authentication = %+v, want the issuer %s", c.Name, a, defaultUIURL)
+		}
+	}
+}
+
+// TestUpgradeSignIn_RerunReusesAnAdministratorAFailedRunLeft: the first run creates the administrator and then fails
+// to switch ichor-ui; the re-run keeps that administrator instead of refusing it.
+func TestUpgradeSignIn_RerunReusesAnAdministratorAFailedRunLeft(t *testing.T) {
+	base := upgradeCluster(t, testVersionContract).(client.WithWatch)
+	failing := true
+	k := interceptor.NewClient(base, interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.UpdateOption) error {
+			if _, ok := obj.(*appsv1.Deployment); ok && failing {
+				return errors.New("the apiserver is gone")
+			}
+
+			return c.Update(ctx, obj, o...)
+		},
+	})
+
+	run := func() error {
+		return upgradeWithSignIn(context.Background(), k, strings.NewReader(""), io.Discard, initOptions{}, true, func() error { return nil }, func() error { return nil })
+	}
+
+	if err := run(); err == nil {
+		t.Fatal("the first run succeeded although ichor-ui could not be switched")
+	}
+
+	failing = false
+
+	if err := run(); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+
+	if args := uiDeploymentArgs(t, base); !slices.Contains(args, argUsersEnabled) {
+		t.Errorf("ichor-ui was not switched by the re-run: %v", args)
+	}
+}
+
+// TestUpgradeSignIn_RefusesBeforeAnyWriteWithoutTheAuthenticationRight: the read-only access check comes first.
+func TestUpgradeSignIn_RefusesBeforeAnyWriteWithoutTheAuthenticationRight(t *testing.T) {
+	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(slices.Concat(uiObjects(), []client.Object{func() client.Object {
+		c := newTestCluster()
+		c.Namespace, c.Spec.VersionContract = ichorControllerNamespace, testVersionContract
+
+		return c
+	}()})...).Build()
+
+	_, _, err := ensureSignIn(context.Background(), reviewAs(false, base), strings.NewReader(""), io.Discard, initOptions{}, true)
+	if err == nil || !strings.Contains(err.Error(), "talosclusters/authentication") {
+		t.Fatalf("err = %v, want a refusal naming talosclusters/authentication", err)
+	}
+
+	if args := uiDeploymentArgs(t, base); slices.Contains(args, argUsersEnabled) {
+		t.Errorf("ichor-ui was switched before the refusal: %v", args)
+	}
+
+	var users ichorv1alpha1.IchorUserList
+	if err := base.List(context.Background(), &users); err != nil || len(users.Items) != 0 {
+		t.Errorf("an administrator was created before the refusal: %v %v", err, users.Items)
 	}
 }

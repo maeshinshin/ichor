@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -34,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -366,5 +368,53 @@ func TestAdoptSignIn_IchorUIIsCreatedWithSignInOn(t *testing.T) {
 
 	if strings.Contains(f.env.stderr.String(), "switch ichor-ui") {
 		t.Errorf("adopt says it switches an ichor-ui it installed with sign-in:\n%s", f.env.stderr.String())
+	}
+}
+
+// TestAdoptSignIn_RerunAfterAStopBeforeTheAdministratorCreatesIt: the first run installs ichor-ui with sign-in on and
+// stops at the release of the holds; the re-run finds users on and still creates the administrator.
+func TestAdoptSignIn_RerunAfterAStopBeforeTheAdministratorCreatesIt(t *testing.T) {
+	f := signInFlow(t)
+	dial := f.deps.DialTalos
+	failing := true
+
+	f.deps.DialTalos = func(ctx context.Context, endpoint string) (talosConfigReader, error) {
+		var ms ichorv1alpha1.TalosMachineList
+
+		if err := f.env.k8s.List(ctx, &ms); err == nil && failing {
+			for _, m := range ms.Items {
+				if m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] == annotationTrue {
+					return nil, errors.New("the node does not answer")
+				}
+			}
+		}
+
+		return dial(ctx, endpoint)
+	}
+
+	if err := f.runSignIn(); err == nil {
+		t.Fatal("the first run did not stop at the release of the holds")
+	}
+
+	var u ichorv1alpha1.IchorUser
+
+	key := types.NamespacedName{Namespace: ichorControllerNamespace, Name: defaultAdminUser}
+	if err := f.env.k8s.Get(context.Background(), key, &u); err == nil {
+		t.Fatal("the administrator exists before the holds are released")
+	}
+
+	failing = false
+
+	if err := f.runSignIn(); err != nil {
+		t.Fatalf("second run: %v\n%s", err, f.env.stderr.String())
+	}
+
+	if err := f.env.k8s.Get(context.Background(), key, &u); err != nil {
+		t.Fatalf("no administrator after the re-run: %v", err)
+	}
+
+	var sec corev1.Secret
+	if err := f.env.k8s.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}, &sec); err != nil || len(sec.Data[defaultAdminUser]) == 0 {
+		t.Fatalf("no credentials for the administrator after the re-run: %v", err)
 	}
 }

@@ -17,9 +17,12 @@ limitations under the License.
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -74,12 +77,54 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.`,
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	// PersistentPostRun does not run after a failed command, and the notice should show then too.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Ctrl-C ends a prompt with an error, so the deferred cleanups of the command run.
+	rootCmd.SetContext(ctx)
+	rootCmd.SetIn(interruptible(ctx, os.Stdin))
+
 	cmd, err := executeRoot(os.Stderr)
 
 	printUpdateNotice(cmd)
 
 	if err != nil {
 		os.Exit(1)
+	}
+}
+
+// interruptible is r whose Read returns ctx's error as soon as ctx is done, also while r blocks. The read that
+// is left behind ends with the process.
+func interruptible(ctx context.Context, r io.Reader) io.Reader { return ctxReader{ctx, r} }
+
+type ctxReader struct {
+	ctx context.Context //nolint:containedctx // a reader has no other way to learn it was interrupted
+	r   io.Reader
+}
+
+func (c ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	type result struct {
+		n   int
+		err error
+	}
+
+	done := make(chan result, 1)
+	buf := make([]byte, len(p))
+
+	go func() {
+		n, err := c.r.Read(buf)
+		done <- result{n, err}
+	}()
+
+	select {
+	case <-c.ctx.Done():
+		return 0, c.ctx.Err()
+	case r := <-done:
+		return copy(p, buf[:r.n]), r.err
 	}
 }
 

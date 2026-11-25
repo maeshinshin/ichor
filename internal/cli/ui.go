@@ -19,9 +19,7 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os/signal"
 	"slices"
-	"syscall"
 
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
@@ -136,8 +134,7 @@ silently. Press Ctrl-C to stop.`,
 			Stderr:      cmd.ErrOrStderr(),
 		}
 
-		ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-		defer cancel()
+		ctx := cmd.Context() // cancelled on SIGINT/SIGTERM by Execute
 
 		return runUI(ctx, uiOpts, deps)
 	},

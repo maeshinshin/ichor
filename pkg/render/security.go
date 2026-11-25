@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	resblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/secureboot"
@@ -63,6 +65,14 @@ func ValidateSecurity(c *ichorv1alpha1.TalosCluster) error {
 
 	if s.Audit != nil && !contract.MultidocKubernetesConfigSupported() {
 		errs = append(errs, errors.New("spec.security.audit needs versionContract v1.14 or later"))
+	}
+
+	if s.PodSecurity != nil {
+		for _, n := range s.PodSecurity.ExemptNamespaces {
+			if msgs := validation.IsDNS1123Label(n); len(msgs) > 0 {
+				errs = append(errs, fmt.Errorf("spec.security.podSecurity.exemptNamespaces %q: %s", n, strings.Join(msgs, ", ")))
+			}
+		}
 	}
 
 	if err := validateKubeletServing(c); err != nil {
@@ -114,12 +124,18 @@ func injectPodSecurity(
 		obj["defaults"] = defaults
 	}
 
-	if len(ps.ExemptNamespaces) > 0 {
-		ns := make([]any, 0, len(ps.ExemptNamespaces))
-		for _, n := range slices.Sorted(slices.Values(ps.ExemptNamespaces)) {
+	// Talos's own document already exempts kube-system and the merge appends slices, so a repeat
+	// (also one within the list) would be a duplicate, which kube-apiserver refuses to start on.
+	// shortcut: kube-system is hard-coded as Talos's only default exemption; drop if Talos adds more.
+	var ns []any
+
+	for _, n := range slices.Compact(slices.Sorted(slices.Values(ps.ExemptNamespaces))) {
+		if n != "kube-system" {
 			ns = append(ns, n)
 		}
+	}
 
+	if len(ns) > 0 {
 		obj["exemptions"] = map[string]any{"namespaces": ns}
 	}
 

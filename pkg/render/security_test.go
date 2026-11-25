@@ -17,7 +17,10 @@ limitations under the License.
 package render
 
 import (
+	"k8s.io/pod-security-admission/admission/api/load"
+	psavalidation "k8s.io/pod-security-admission/admission/api/validation"
 	"net/netip"
+	"sigs.k8s.io/yaml"
 	"slices"
 	"strings"
 	"testing"
@@ -383,4 +386,51 @@ func TestFirewallFollowsTheLocalAPIServerPort(t *testing.T) {
 
 	requireAll(t, rule, "7443")
 	requireNone(t, rule, "6443")
+}
+
+// TestPodSecurityExemptionsAreValid renders the user's exemptions over Talos's own list and runs the
+// result through the validator kube-apiserver runs at start, which rejects duplicates and invalid names.
+func TestPodSecurityExemptionsAreValid(t *testing.T) {
+	bundle := testBundle(t)
+	cp := testMachine("cp", roleControlPlane, nil)
+
+	for _, ns := range [][]string{{"kube-system"}, {"rook-ceph", "kube-system", "rook-ceph"}} {
+		c := secCluster(&ichorv1alpha1.TalosClusterSecurity{PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
+			Enforce: "restricted", ExemptNamespaces: ns,
+		}})
+		doc := section(mustRender(t, c, cp, bundle, nil), "kind: KubeAdmissionControlConfig")
+
+		if n := strings.Count(doc, "- kube-system\n"); n != 1 {
+			t.Errorf("%v: kube-system appears %d times, want 1:\n%s", ns, n, doc)
+		}
+
+		var wrapper struct {
+			Configuration map[string]any `json:"configuration"`
+		}
+
+		if err := yaml.Unmarshal([]byte(doc), &wrapper); err != nil {
+			t.Fatal(err)
+		}
+
+		raw, err := yaml.Marshal(wrapper.Configuration)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		psc, err := load.LoadFromData(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if errs := psavalidation.ValidatePodSecurityConfiguration(psc); len(errs) > 0 {
+			t.Errorf("%v: upstream PodSecurity validation: %v", ns, errs)
+		}
+	}
+
+	bad := secCluster(&ichorv1alpha1.TalosClusterSecurity{PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
+		ExemptNamespaces: []string{"Bad_Name"},
+	}})
+	if err := ValidateSecurity(bad); err == nil || !strings.Contains(err.Error(), "Bad_Name") {
+		t.Errorf("ValidateSecurity must reject Bad_Name, got %v", err)
+	}
 }

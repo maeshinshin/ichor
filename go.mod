@@ -52,6 +52,7 @@ require (
 	k8s.io/kube-scheduler v0.36.6
 	k8s.io/kubectl v0.36.6
 	k8s.io/kubelet v0.36.6
+	k8s.io/pod-security-admission v0.36.6
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	oras.land/oras-go/v2 v2.7.0
 	sigs.k8s.io/controller-runtime v0.24.1

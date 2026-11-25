@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -275,6 +276,26 @@ func adminState(ctx context.Context, k client.Reader, name string) (user, creden
 	}
 
 	return user, credential, nil
+}
+
+// signInUnfinished is the evidence of a part-failed sign-in run on an ichor-ui that has users on: no IchorUser
+// holds the admin role at all (whatever its name), or the credentials Secret is missing.
+func signInUnfinished(ctx context.Context, k client.Reader) (bool, error) {
+	var users ichorv1alpha1.IchorUserList
+	if err := k.List(ctx, &users, client.InNamespace(ichorControllerNamespace)); err != nil {
+		return false, fmt.Errorf("sign-in: listing the IchorUsers: %w", err)
+	}
+
+	if !slices.ContainsFunc(users.Items, func(u ichorv1alpha1.IchorUser) bool { return slices.Contains(u.Spec.Roles, ichorauth.RoleAdmin) }) {
+		return true, nil
+	}
+
+	err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}, &corev1.Secret{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return false, fmt.Errorf("sign-in: reading the credentials Secret: %w", err)
+	}
+
+	return err != nil, nil
 }
 
 // ensureAdmin makes the first administrator whole and returns the generated password, or "" when the

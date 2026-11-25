@@ -42,7 +42,7 @@ func upgradeCluster(t *testing.T, contract string, extra ...client.Object) clien
 // finishedSignIn is what a completed sign-in leaves besides ichor-ui: the first administrator and its password.
 func finishedSignIn() []client.Object {
 	return []client.Object{
-		&ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: defaultAdminUser},
+		&ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: defaultAdminUser, Spec: ichorv1alpha1.IchorUserSpec{Roles: []string{ichorauth.RoleAdmin}}},
 		&corev1.Secret{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName, Data: map[string][]byte{defaultAdminUser: []byte("{}")}},
 	}
 }
@@ -397,5 +397,66 @@ func TestUpgradeSignIn_RefusesBeforeAnyWriteWithoutTheAuthenticationRight(t *tes
 	var users ichorv1alpha1.IchorUserList
 	if err := base.List(context.Background(), &users); err != nil || len(users.Items) != 0 {
 		t.Errorf("an administrator was created before the refusal: %v %v", err, users.Items)
+	}
+}
+
+// signedInUI turns the fake ichor-ui into an install that has sign-in on, with the operator's kube-api settings.
+func signedInUI(t *testing.T, k client.Client) {
+	t.Helper()
+
+	var dep appsv1.Deployment
+	if err := k.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: testPrefixedUIDeployment}, &dep); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &dep.Spec.Template.Spec.Containers[0]
+	c.Args = append(c.Args, argUsersEnabled, "--external-url="+defaultUIURL, "--kube-api-server-url=https://kube.example:6443")
+
+	if err := k.Update(context.Background(), &dep); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func aliceAdmin() []client.Object {
+	return []client.Object{
+		&ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: "alice", Spec: ichorv1alpha1.IchorUserSpec{Roles: []string{ichorauth.RoleAdmin}}},
+		&corev1.Secret{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName, Data: map[string][]byte{"alice": []byte("{}")}},
+	}
+}
+
+// TestUpgradeSignIn_AHealthyInstallWithAnotherAdminIsLeftAlone: a signed-in install whose administrator is not
+// called admin is not a part-failed run: no admin is made, ichor-ui keeps its kube-api settings, and a cluster whose
+// operator turned the issuer off stays off.
+func TestUpgradeSignIn_AHealthyInstallWithAnotherAdminIsLeftAlone(t *testing.T) {
+	off := newTestCluster()
+	off.Namespace, off.Spec.VersionContract = ichorControllerNamespace, testVersionContract
+	off.Spec.Authentication = &ichorv1alpha1.TalosClusterAuthentication{Ichor: &ichorv1alpha1.TalosClusterIchorIssuer{Enabled: false, URL: defaultUIURL}}
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(slices.Concat(uiObjects(), aliceAdmin(), []client.Object{off})...).Build()
+	signedInUI(t, k)
+
+	before := slices.Clone(uiDeploymentArgs(t, k))
+
+	plan, _, err := signInPlanFor(context.Background(), k, initOptions{})
+	if err != nil || plan != nil {
+		t.Fatalf("plan = %+v, err = %v, want none", plan, err)
+	}
+
+	if _, _, err := ensureSignIn(context.Background(), reviewAs(true, k), strings.NewReader(""), io.Discard, initOptions{}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	var users ichorv1alpha1.IchorUserList
+	if err := k.List(context.Background(), &users); err != nil || len(users.Items) != 1 {
+		t.Errorf("users = %v, err = %v, want only alice", users.Items, err)
+	}
+
+	if args := uiDeploymentArgs(t, k); !slices.Equal(args, before) || !slices.Contains(args, "--kube-api-server-url=https://kube.example:6443") {
+		t.Errorf("ichor-ui args = %v, want %v", args, before)
+	}
+
+	var c ichorv1alpha1.TalosCluster
+	if err := k.Get(context.Background(), client.ObjectKeyFromObject(off), &c); err != nil || c.Spec.Authentication.Ichor.Enabled {
+		t.Errorf("the issuer was turned back on: %v %+v", err, c.Spec.Authentication)
 	}
 }

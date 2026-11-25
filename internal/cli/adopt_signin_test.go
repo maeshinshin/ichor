@@ -418,3 +418,61 @@ func TestAdoptSignIn_RerunAfterAStopBeforeTheAdministratorCreatesIt(t *testing.T
 		t.Fatalf("no credentials for the administrator after the re-run: %v", err)
 	}
 }
+
+// TestAdoptSignIn_RerunOnAHealthyInstallWithAnotherAdminChangesNothing: adopt again on an install whose
+// administrator is not called admin makes no admin, keeps ichor-ui as it is, and leaves a disabled issuer disabled.
+func TestAdoptSignIn_RerunOnAHealthyInstallWithAnotherAdminChangesNothing(t *testing.T) {
+	f := signInFlow(t)
+	ctx := context.Background()
+
+	if err := f.runSignIn(); err != nil {
+		t.Fatalf("first run: %v\n%s", err, f.env.stderr.String())
+	}
+
+	if err := f.env.k8s.Delete(ctx, &ichorv1alpha1.IchorUser{Namespace: ichorControllerNamespace, Name: defaultAdminUser}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, o := range aliceAdmin() {
+		if sec, ok := o.(*corev1.Secret); ok {
+			if err := f.env.k8s.Delete(ctx, &corev1.Secret{Namespace: sec.Namespace, Name: sec.Name}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := f.env.k8s.Create(ctx, o); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	c := f.cluster(t)
+	c.Spec.Authentication.Ichor.Enabled = false
+
+	if err := f.env.k8s.Update(ctx, &c); err != nil {
+		t.Fatal(err)
+	}
+
+	before := slices.Clone(f.uiArgs(t))
+
+	f.env.stderr.Reset()
+
+	if err := f.runSignIn(); err != nil {
+		t.Fatalf("second run: %v\n%s", err, f.env.stderr.String())
+	}
+
+	if strings.Contains(f.env.stderr.String(), "must change it at the first sign-in") {
+		t.Errorf("a second administrator was made:\n%s", f.env.stderr.String())
+	}
+
+	if err := f.env.k8s.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: defaultAdminUser}, &ichorv1alpha1.IchorUser{}); err == nil {
+		t.Error("the default admin came back")
+	}
+
+	if !slices.Equal(f.uiArgs(t), before) {
+		t.Errorf("ichor-ui args changed: %v -> %v", before, f.uiArgs(t))
+	}
+
+	if a := f.cluster(t).Spec.Authentication; a == nil || a.Ichor == nil || a.Ichor.Enabled {
+		t.Errorf("spec.authentication = %+v, want the issuer left disabled", a)
+	}
+}

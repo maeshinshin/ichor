@@ -108,12 +108,13 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		plan.switchUI = !installer.ReadUISettings(ui, nil).UsersOn()
 
 		// A re-run of an adopt that stopped before the administrator was made finds users on already.
-		user, credential, err := adminState(ctx, deps.K8s, opts.AdminUser)
-		if err != nil {
-			return err
-		}
+		plan.users = plan.switchUI
 
-		plan.users = plan.switchUI || !user || !credential
+		if !plan.users {
+			if plan.users, err = signInUnfinished(ctx, deps.K8s); err != nil {
+				return err
+			}
+		}
 	}
 
 	// The TLS and kubeconfig flags are applied by the users step; with users already on there is no such step,
@@ -124,7 +125,7 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 	}
 
 	a := st.cluster.Spec.Authentication
-	plan.authenticator = a == nil || a.Ichor == nil || !a.Ichor.Enabled
+	plan.authenticator = a == nil || a.Ichor == nil // present with enabled: false is the operator's choice
 
 	if plan.users || plan.authenticator {
 		st.signIn = plan

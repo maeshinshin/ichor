@@ -35,7 +35,7 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 
 	settings := installer.ReadUISettings(ui, nil)
 	switchUI := !settings.SignedIn
-	finishing := settings.UsersOn() // a re-run: a part-failed run switched ichor-ui first
+	finishing := settings.UsersOn() // a re-run, or a healthy install: told apart below
 
 	if settings.SignedIn {
 		if opts.hasUIExtras() || (opts.UIURL != "" && opts.UIURL != settings.ExternalURL) || (!finishing && opts.AdminUser != "") {
@@ -62,12 +62,10 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 	users := switchUI
 
 	if finishing {
-		user, credential, err := adminState(ctx, k, opts.AdminUser)
+		users, err = signInUnfinished(ctx, k)
 		if err != nil {
 			return nil, nil, err
 		}
-
-		users = !user || !credential
 	}
 
 	var list ichorv1alpha1.TalosClusterList
@@ -78,8 +76,7 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 	var clusters []ichorv1alpha1.TalosCluster
 
 	for _, c := range list.Items {
-		a := c.Spec.Authentication
-		if a != nil && a.Ichor != nil && a.Ichor.Enabled {
+		if a := c.Spec.Authentication; a != nil && a.Ichor != nil { // enabled or deliberately off
 			continue
 		}
 

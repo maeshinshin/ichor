@@ -378,6 +378,11 @@ func recordInstallerImage(
 	orig := inst.DeepCopy()
 	now := metav1.Now()
 
+	// The Event is for a record that changed: a pass that finds the same record (the Job cache lags a Create) says nothing again.
+	prev := orig.Status.InstallerImage
+	changed := prev == nil || prev.Version != inst.Spec.Version || prev.Repository != inst.Spec.InstallerRepository ||
+		prev.Digest != img.Digest || prev.Verification != img.Verification
+
 	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
 		Version: inst.Spec.Version, Repository: inst.Spec.InstallerRepository, Digest: img.Digest,
 		Verification: img.Verification, Signer: img.Signer, ResolvedAt: &now,
@@ -399,7 +404,7 @@ func recordInstallerImage(
 		return fmt.Errorf("recording the installer image in IchorInstallation status: %w", err)
 	}
 
-	if img.Verification == ichorv1alpha1.InstallerImageSkipped && recorder != nil {
+	if changed && img.Verification == ichorv1alpha1.InstallerImageSkipped && recorder != nil {
 		recorder.Eventf(inst, corev1.EventTypeWarning, reasonInstallerSignatureSkipped,
 			"the signature of the installer image %s@%s for %s is NOT checked (spec.installerSignature.mode is skip)",
 			inst.Spec.InstallerRepository, img.Digest, inst.Spec.Version)

@@ -166,11 +166,11 @@ type TalosOperationReconciler struct {
 	launchTail func(*restoreJob)
 }
 
-// finalizerSteps runs the finalizer logic of the kinds that hold one: the two rotations and the etcd restore.
+// finalizerSteps runs the finalizer logic of the kinds that hold one: the two rotations, the etcd restore and a node reboot or shutdown.
 // handled is true when the reconcile has nothing more to do.
 func (r *TalosOperationReconciler) finalizerSteps(ctx context.Context, op *ichorv1alpha1.TalosOperation) (handled bool, err error) {
 	for _, step := range []func(context.Context, *ichorv1alpha1.TalosOperation) (bool, error){
-		r.caRotationFinalizerStep, r.keyRotationFinalizerStep, r.etcdRestoreFinalizerStep,
+		r.caRotationFinalizerStep, r.keyRotationFinalizerStep, r.etcdRestoreFinalizerStep, r.nodeFinalizerStep,
 	} {
 		if handled, err := step(ctx, op); handled || err != nil {
 			return handled, err
@@ -324,9 +324,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	requeue := false
 
-	type mark struct{ name, phase string }
-
-	var marks []mark
+	var marks []machineMark
 
 	for _, m := range toAdvance {
 		renewUntil.Store(stepRenewUntil(&op, m).UnixNano())
@@ -341,8 +339,18 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// Completed in op.Status.Machines above -- there is no
 			// automatic cluster-wide rollback.
 			r.markMachine(&op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
+			marks = append(marks, machineMark{m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress})
 
-			return r.pauseFailedStep(ctx, &op, m.Name, err, true, fmt.Sprintf("node %q: %v", m.Name, err))
+			var res ctrl.Result
+
+			stepErr := err
+			werr := r.writeKeepingMarks(ctx, &op, marks, func(o *ichorv1alpha1.TalosOperation) (perr error) {
+				res, perr = r.pauseFailedStep(ctx, o, m.Name, stepErr, true, fmt.Sprintf("node %q: %v", m.Name, stepErr))
+
+				return perr
+			})
+
+			return res, werr
 		}
 
 		phase := ichorv1alpha1.TalosOperationMachinePhaseInProgress
@@ -353,7 +361,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		r.markMachine(&op, m.Name, phase)
-		marks = append(marks, mark{m.Name, phase})
+		marks = append(marks, machineMark{m.Name, phase})
 	}
 
 	result := ctrl.Result{}
@@ -361,25 +369,38 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		result.RequeueAfter = operationRequeueInterval
 	}
 
-	err = r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
-		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
-	if apierrors.IsConflict(err) {
-		// A spec-only write (a pause from the UI) moved the resourceVersion under this pass. Status is the
-		// controller's alone, so re-apply this pass's marks on the live object instead of losing them.
-		var fresh ichorv1alpha1.TalosOperation
-		if gerr := readerOrClient(r.APIReader, r.Client).Get(ctx, client.ObjectKeyFromObject(&op), &fresh); gerr != nil {
-			return result, gerr
-		}
-
-		for _, mk := range marks {
-			r.markMachine(&fresh, mk.name, mk.phase)
-		}
-
-		err = r.setPhase(ctx, &fresh, ichorv1alpha1.TalosOperationPhaseInProgress,
-			reasonOperationAdvancing, advancingMessage(&fresh, len(toAdvance)))
-	}
+	err = r.writeKeepingMarks(ctx, &op, marks, func(o *ichorv1alpha1.TalosOperation) error {
+		return r.setPhase(ctx, o, ichorv1alpha1.TalosOperationPhaseInProgress,
+			reasonOperationAdvancing, advancingMessage(o, len(toAdvance)))
+	})
 
 	return result, err
+}
+
+// machineMark is one machine's phase as this pass set it in memory.
+type machineMark struct{ name, phase string }
+
+// writeKeepingMarks runs write on op. When a spec-only write (a pause from the UI) moved the resourceVersion
+// under this pass, it re-reads the operation and applies marks on the live object before writing again, so an
+// InProgress entry is not lost. Status is the controller's alone, so the live status is current.
+func (r *TalosOperationReconciler) writeKeepingMarks(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, marks []machineMark, write func(*ichorv1alpha1.TalosOperation) error,
+) error {
+	err := write(op)
+	if !apierrors.IsConflict(err) {
+		return err
+	}
+
+	var fresh ichorv1alpha1.TalosOperation
+	if gerr := readerOrClient(r.APIReader, r.Client).Get(ctx, client.ObjectKeyFromObject(op), &fresh); gerr != nil {
+		return gerr
+	}
+
+	for _, mk := range marks {
+		r.markMachine(&fresh, mk.name, mk.phase)
+	}
+
+	return write(&fresh)
 }
 
 // retryFailedStep decides whether a paused, failed operation runs its step again now: a person's retry

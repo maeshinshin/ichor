@@ -271,6 +271,39 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 		Expect(done).To(BeFalse())
 	})
 
+	It("warns once about a skipped signature when the Job cache lags across two passes", func() {
+		inst := startUpgrade()
+		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+
+		lagging := interceptor.NewClient(watchClient(), interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewNotFound(batchv1.Resource("jobs"), key.Name)
+				}
+
+				return c.Get(ctx, key, obj, opts...)
+			},
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(batchv1.Resource("jobs"), obj.GetName())
+				}
+
+				return c.Create(ctx, obj, opts...)
+			},
+		})
+
+		rec := record.NewFakeRecorder(5)
+		advance := NewIchorUpgradeAdvancer(lagging, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, rec)
+
+		for range 2 {
+			_, err := advance(ctx, nil, nil, op())
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Expect(rec.Events).To(HaveLen(1))
+	})
+
 	It("still pauses when the tag does not resolve under skip", func() {
 		inst := startUpgrade()
 		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}

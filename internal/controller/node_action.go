@@ -855,3 +855,68 @@ func (r *TalosOperationReconciler) setDeleteGuard(ctx context.Context, m *ichorv
 
 	return nil
 }
+
+// nodeActionFinalizer holds a node reboot or shutdown while it may have cordoned the node or started a storage
+// evacuation, so deleting the operation mid-drain cannot leave either behind.
+const nodeActionFinalizer = "ichor.maesh.dev/node-action"
+
+// nodeFinalizerStep adds the finalizer to a node reboot or shutdown and, once it is settled or deleted, undoes the
+// cordon and the storage evacuation (the same undo a rotation's abandon uses, caRun.uncordon), releases the cluster
+// lock and removes the finalizer. handled is true when the reconcile has nothing more to do.
+func (r *TalosOperationReconciler) nodeFinalizerStep(ctx context.Context, op *ichorv1alpha1.TalosOperation) (handled bool, err error) {
+	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindNode || op.Spec.Node == nil ||
+		(op.Spec.Node.Action != ichorv1alpha1.NodeActionReboot && op.Spec.Node.Action != ichorv1alpha1.NodeActionShutdown) {
+		return false, nil
+	}
+
+	deleting := !op.DeletionTimestamp.IsZero()
+	settled := op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted || op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown
+
+	switch {
+	case controllerutil.ContainsFinalizer(op, nodeActionFinalizer) && (deleting || settled):
+		if deleting && !settled {
+			if err := r.abandonNodeAction(ctx, op); err != nil {
+				return false, fmt.Errorf("abandoning the node operation %q: %w", op.Name, err)
+			}
+		}
+
+		controllerutil.RemoveFinalizer(op, nodeActionFinalizer)
+
+		return deleting, client.IgnoreNotFound(r.Update(ctx, op))
+	case !controllerutil.ContainsFinalizer(op, nodeActionFinalizer) && !deleting && !settled:
+		controllerutil.AddFinalizer(op, nodeActionFinalizer)
+
+		return false, r.Update(ctx, op)
+	}
+
+	return false, nil
+}
+
+// abandonNodeAction uncordons the target node, ends its storage evacuation and releases the cluster lock. Every
+// step is idempotent, so a failure is retried from the top.
+func (r *TalosOperationReconciler) abandonNodeAction(ctx context.Context, op *ichorv1alpha1.TalosOperation) error {
+	var cluster ichorv1alpha1.TalosCluster
+	if err := r.Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.ClusterRef.Name}, &cluster); err != nil {
+		return client.IgnoreNotFound(err) // the cluster is gone, and with it the lock
+	}
+
+	var m ichorv1alpha1.TalosMachine
+
+	err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.Node.MachineRef.Name}, &m)
+	if client.IgnoreNotFound(err) != nil {
+		return err
+	}
+
+	if err == nil {
+		// The node may be down, so it is named from the machine, not asked.
+		node, nerr := resolveNodeName(ctx, r.Client, nil, &m)
+		if nerr == nil {
+			if err := (&caRun{r: r, op: op, cluster: &cluster}).uncordon(ctx, &m, node); err != nil {
+				return err
+			}
+		}
+	}
+
+	return clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).
+		WithReader(r.APIReader).Release(ctx, operationLockIdentity(op))
+}

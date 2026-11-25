@@ -18,14 +18,17 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -131,5 +134,91 @@ var _ = Describe("TalosOperationReconciler pausing mid-step", func() {
 
 		got = reconcileFetch(r, op)
 		Expect(got.Status.Machines[0].Phase).To(Equal(ichorv1alpha1.TalosOperationMachinePhaseCompleted))
+	})
+})
+
+var _ = Describe("TalosOperationReconciler failing while paused", func() {
+	It("keeps the InProgress entry when a step fails while a spec write lands", func() {
+		cluster := newOpTestCluster()
+		cp := newOpTestMachine(cluster.Name, "controlplane", "failpause-cp")
+		op := newOpTestOperation(cluster.Name)
+
+		r, _ := newOpTestReconciler(nil)
+		r.Advance = func(_ context.Context, _ *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, _ *ichorv1alpha1.TalosOperation) (bool, error) {
+			var live ichorv1alpha1.TalosOperation
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Name}, &live)).To(Succeed())
+			live.Spec.Paused = true
+			Expect(k8sClient.Update(ctx, &live)).To(Succeed())
+
+			return false, errors.New("boom")
+		}
+
+		got := reconcileFetch(r, op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.Machines).To(ConsistOf(HaveField("Name", cp.Name)))
+		Expect(got.Status.Machines[0].Phase).To(Equal(ichorv1alpha1.TalosOperationMachinePhaseInProgress))
+	})
+})
+
+var _ = Describe("a config rollout paused after its reboot was requested", func() {
+	It("resumes the rebooted node, uncordons it and completes", func() {
+		f, m := newRolloutNode("node-pause-resume", true)
+		m.Status.RebootPaths = []string{"machine.install"}
+		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+		ready := corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}
+		// A second schedulable node, or the drain is skipped as pointless.
+		kube := kubefake.NewClientset(
+			&corev1.Node{Name: "node-pause-resume", Status: ready},
+			&corev1.Node{Name: "node-pause-other", Status: ready},
+		)
+
+		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
+		adv := newRolloutAdvancer(fake)
+		adv.Kube = kube
+
+		op := newOpTestOperationOfKind(f.cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
+		r, _ := newOpTestReconciler(nil)
+		r.Advance = adv.Advance
+
+		got := reconcileFetch(r, op)
+		Expect(fake.rebootCalls).To(Equal(1))
+		Expect(got.Status.Machines).To(ConsistOf(HaveField("Phase", ichorv1alpha1.TalosOperationMachinePhaseInProgress)))
+
+		node, err := kube.CoreV1().Nodes().Get(ctx, "node-pause-resume", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(node.Spec.Unschedulable).To(BeTrue(), "Ichor cordoned the node before the reboot")
+		Expect(node.Annotations).To(HaveKey(cordonedByIchorAnnotation))
+
+		// The pause lands and the status mark is lost, as a crash before the write would lose it.
+		got.Status.Machines = nil
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+		got = fetchOperation(op)
+		got.Spec.Paused = true
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		mustReconcileOperation(r, op)
+
+		// The node reboots onto the staged configuration, so nothing is pending any more.
+		fake.bootID = testBootIDAfter
+		fake.current = f.after(m)
+
+		live := fetchMachine(m)
+		live.Status.RebootPaths = nil
+		Expect(k8sClient.Status().Update(ctx, live)).To(Succeed())
+
+		got = fetchOperation(op)
+		got.Spec.Paused = false
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		reconcileTimes(r, op, 3)
+
+		Expect(fake.rebootCalls).To(Equal(1), "the resumed node is not rebooted again")
+		Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+
+		node, err = kube.CoreV1().Nodes().Get(ctx, "node-pause-resume", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(node.Spec.Unschedulable).To(BeFalse())
+		Expect(node.Annotations).NotTo(HaveKey(cordonedByIchorAnnotation))
+		Expect(node.Annotations).NotTo(HaveKey(drainStartedAnnotation))
 	})
 })

@@ -223,6 +223,34 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(f.fake(hostW1).rebootCalls).To(Equal(1))
 		})
 
+		It("uncordons the node and releases the lock when the operation is deleted while the drain is held", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			_, err := f.kube.CoreV1().Pods("default").Create(context.Background(), drainTestPod("db", hostW1, "StatefulSet", false), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			f.kube.blocked["db"] = true
+			shortenDrain(500 * time.Millisecond)
+
+			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
+			f.reconcile(op)
+			Expect(f.fake(hostW1).rebootCalls).To(BeZero(), "a budget holds the drain")
+			Expect(f.unschedulable(hostW1)).To(BeTrue())
+
+			Expect(k8sClient.Delete(ctx, fetchOperation(op))).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				_, rerr := reconcileOperation(f.r, op)
+				g.Expect(rerr).NotTo(HaveOccurred())
+
+				var gone ichorv1alpha1.TalosOperation
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(op), &gone)).To(MatchError(apierrors.IsNotFound, "the operation is gone"))
+			}).Should(Succeed())
+
+			node := f.kube.node(hostW1)
+			Expect(node.Spec.Unschedulable).To(BeFalse())
+			Expect(node.Annotations).NotTo(HaveKey(cordonedByIchorAnnotation))
+			Expect(node.Annotations).NotTo(HaveKey(drainStartedAnnotation))
+		})
+
 		It("a node that is away while rebooting is waited for, and a restarted controller does not reboot it again", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))

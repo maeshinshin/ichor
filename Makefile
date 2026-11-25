@@ -451,23 +451,30 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary, 
 	@# The binary itself is asked for the plugin on every run (this target is phony): a marker file, or the file target
 	@# alone, would keep a plain go install over the same path.
 	@if [ -f .custom-gcl.yml ] && ! "$(GOLANGCI_LINT)" linters 2>/dev/null | grep -q '^logcheck:'; then \
+		$(call golangci-lint-go-floor) \
 		echo "Building custom golangci-lint with plugins..." && \
 		$(GOLANGCI_LINT) custom --destination $(LOCALBIN) --name golangci-lint-custom && \
 		mv -f $(LOCALBIN)/golangci-lint-custom "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)"; \
 	fi
 
+# golangci-lint-go-floor refuses a build made with a Go older than go.mod's go directive: the build uses the Go on PATH,
+# and a golangci-lint built with an older Go refuses to run. GOTOOLCHAIN=local so the Go named is the one on PATH.
+golangci-lint-go-floor = want=$$(awk '$$1 == "go" {print $$2; exit}' go.mod); have=$$(GOTOOLCHAIN=local go env GOVERSION | sed 's/^go//'); [ "$$(printf '%s\n' "$$want" "$$have" | sort -V | head -n1)" = "$$want" ] || { echo "golangci-lint: the Go on PATH is go$$have, but go.mod requires go$$want. Refusing to build golangci-lint; the existing binary is untouched. Run make inside nix develop." >&2; exit 1; };
+
 $(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION),golangci-lint-go-floor)
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
 # $2 - package url which can be installed
 # $3 - specific version of package
+# $4 - optional name of a make function run before any build; it must exit non-zero to stop the build
 define go-install-tool
 @# realpath (not readlink) so a bin/ that is a symlink to another checkout counts as installed; it fails when the tool is not installed yet, which the install below handles. go version reports the Go a
 @# binary was built with; a rebuild replaces the plugin-enabled golangci-lint, which its target then rebuilds.
 @[ -f "$(1)-$(3)" ] && [ "$$(realpath -- "$(1)" 2>/dev/null)" = "$$(realpath -- "$(1)-$(3)")" ] && [ "$$(go version "$(1)-$(3)" 2>/dev/null | awk '{print $$NF}')" = "$$(go env GOVERSION)" ] || { \
 set -e; \
+$(if $(4),$(call $(4))) \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
 rm -f "$(1)" ;\

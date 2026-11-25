@@ -114,7 +114,7 @@ type MachineReclaimSpec struct {
 
 	// ttl is how long the request and its credential live. Default 15 minutes, at most 60.
 	// +kubebuilder:default="15m"
-	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s') && duration(self) <= duration('60m')",message="ttl must be between 1s and 60m"
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s') && duration(self) <= duration('60m')",message="ttl must be greater than 0s and at most 60m"
 	// +optional
 	TTL *metav1.Duration `json:"ttl,omitempty"`
 }

@@ -19,7 +19,7 @@ Webhooks enforce, among other things:
 | kube-proxy | mode changes only with the `ichor.maesh.dev/confirm-kube-proxy-switch` annotation |
 | VIP | a `vip` endpoint that an approved control plane with static addresses cannot hold is refused: outside its subnets, or one of its own addresses. A DHCP machine is not checked |
 | Image Factory | `spec.imageFactoryURL` must be an https URL with a host and an optional port, no path, query or credentials |
-| Disk roles | those that need a reinstall are immutable after install |
+| Disk roles | mutable after install (ADR 0092) |
 | Deletion | `TalosCluster` and `TalosMachine` need `ichor.maesh.dev/allow-delete: "true"`, so a prune by your own tooling cannot cascade into node resets |
 | Override verb | removing an Ichor finalizer, resetting a node, restoring etcd |
 | Versions | Talos/Kubernetes pairs and upgrade paths are checked; an admitted version is never a downgrade and never a pair the compatibility table refuses |

@@ -61,6 +61,8 @@ func TestMachineReclaimWebhook(t *testing.T) {
 	awaiting := ichorv1alpha1.MachineReclaimAwaitingConfirmation
 	stored := reclaimObject(t, "", bgUnitHolder, "", awaiting, "uuid-1")
 
+	confirmed := reclaimObject(t, "uuid-1", bgUnitHolder, bgUnitHolder, awaiting, "uuid-1")
+
 	tests := []struct {
 		name    string
 		h       *MachineReclaimHandler
@@ -86,6 +88,8 @@ func TestMachineReclaimWebhook(t *testing.T) {
 		{"confirm before inspection", h, reclaimReq(admissionv1.Update, bgUnitHolder,
 			reclaimObject(t, "uuid-1", bgUnitHolder, bgUnitHolder, "", ""),
 			reclaimObject(t, "", bgUnitHolder, "", "", "")), false},
+		{"confirmed-by rewritten after confirmation", h, reclaimReq(admissionv1.Update, bgUnitPlain,
+			reclaimObject(t, "uuid-1", bgUnitHolder, "bob", awaiting, "uuid-1"), confirmed), false},
 		{"edit that leaves confirmUUID alone", h, reclaimReq(admissionv1.Update, bgUnitPlain,
 			reclaimObject(t, "", bgUnitHolder, "", awaiting, "uuid-1"), stored), true},
 	}

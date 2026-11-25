@@ -93,6 +93,12 @@ func (h *MachineReclaimHandler) Handle(ctx context.Context, req admission.Reques
 			return admission.Denied("the requesting user cannot be changed")
 		}
 
+		// The controller reads the confirmer at reset time, so it is as fixed as the requester once confirmed.
+		if old.Spec.ConfirmUUID != "" &&
+			old.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] != mr.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] {
+			return admission.Denied("the confirming user cannot be changed once confirmUUID is set")
+		}
+
 		if mr.Spec.ConfirmUUID == old.Spec.ConfirmUUID || mr.Spec.ConfirmUUID == "" {
 			return admission.Allowed("")
 		}

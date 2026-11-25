@@ -33,29 +33,62 @@ func normalizeLiftedSettings(docs map[string]configDoc) {
 		return
 	}
 
+	// The move works on copies: on an error it may have half moved the trees, and the settings must stay as they
+	// were.
 	trees := map[[2]string]map[string]any{}
 
 	for _, d := range docs {
 		if d.root != "" {
 			name, _ := d.data[labelName].(string)
-			trees[[2]string{d.root, name}] = d.data
+			trees[[2]string{d.root, name}] = deepCopyTree(d.data)
 		}
-
 	}
 
-	root := v1.data
+	root := deepCopyTree(v1.data)
 
 	if err := ichorv1alpha1.LiftSettings(root, trees); err != nil {
 		return
 	}
 
+	docs[""] = configDoc{root: "", data: root}
+
 	for k, t := range trees {
 		key := k[0] + ":" + k[1]
-		if _, exists := docs[key]; exists {
+		if old, exists := docs[key]; exists {
+			docs[key] = configDoc{root: old.root, data: t}
+
 			continue
 		}
 
 		t["apiVersion"], t["kind"] = "v1alpha1", k[0]
 		docs[key] = configDoc{root: k[0], data: t}
 	}
+}
+
+// deepCopyTree copies the maps and lists of a decoded YAML tree (its scalars are values).
+func deepCopyTree(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+
+	for k, v := range m {
+		out[k] = deepCopyValue(v)
+	}
+
+	return out
+}
+
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return deepCopyTree(t)
+	case []any:
+		out := make([]any, len(t))
+
+		for i, e := range t {
+			out[i] = deepCopyValue(e)
+		}
+
+		return out
+	}
+
+	return v
 }

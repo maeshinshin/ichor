@@ -161,6 +161,38 @@ func (l *lifter) put(kind, name, path string, v any) error {
 	return nil
 }
 
+// putList is put for a list the v1alpha1 document may spell in several entries of the same name (two
+// extraHostEntries of one address, two kernel modules of one name): the entries' items join in order, each once.
+func (l *lifter) putList(kind, name, path string, v any) error {
+	t := l.into(kind, name)
+
+	if prev, ok := t[path].([]any); ok {
+		for _, x := range asList(v) {
+			if !slices.Contains(prev, x) {
+				prev = append(prev, x)
+			}
+		}
+
+		t[path] = prev
+
+		return nil
+	}
+
+	return l.put(kind, name, path, dedupe(asList(v)))
+}
+
+func dedupe(in []any) []any {
+	out := make([]any, 0, len(in))
+
+	for _, x := range in {
+		if !slices.Contains(out, x) {
+			out = append(out, x)
+		}
+	}
+
+	return out
+}
+
 func splitPath(p string) []string {
 	var out []string
 
@@ -252,7 +284,7 @@ func (l *lifter) kernelModules(root map[string]any) error {
 		name, _ := e["name"].(string)
 
 		if p, ok := e["parameters"]; ok {
-			return l.put("KernelModuleConfig", name, "parameters", p)
+			return l.putList("KernelModuleConfig", name, "parameters", p)
 		}
 
 		l.into("KernelModuleConfig", name)
@@ -266,7 +298,7 @@ func (l *lifter) hostEntries(root map[string]any) error {
 	return eachEntry(root, "machine.network.extraHostEntries", func(e map[string]any) error {
 		ip, _ := e["ip"].(string)
 
-		return l.put("StaticHostConfig", ip, "hostnames", e["aliases"])
+		return l.putList("StaticHostConfig", ip, "hostnames", e["aliases"])
 	})
 }
 

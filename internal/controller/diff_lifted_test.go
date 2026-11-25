@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
@@ -78,5 +79,28 @@ func TestChangedPathsLiftedTimeServersValueChange(t *testing.T) {
 
 	if fieldmeta.Assess(paths, nil).RebootRequired {
 		t.Fatalf("time servers need a reboot: %v", paths)
+	}
+}
+
+// A lift that fails (the document already sets what the v1alpha1 document spells) leaves every setting where it
+// was, including those the lift had already moved before it failed.
+func TestNormalizeLiftedSettingsKeepsTheSettingsOnAnError(t *testing.T) {
+	build := func() map[string]configDoc {
+		return map[string]configDoc{
+			"": {data: map[string]any{
+				"cluster": map[string]any{"apiServer": map[string]any{"certSANs": []any{"san.example"}}},
+				"machine": map[string]any{"time": map[string]any{"servers": []any{"ntp.example"}}},
+			}},
+			"TimeSyncConfig:": {root: "TimeSyncConfig", data: map[string]any{
+				"kind": "TimeSyncConfig", "ntp": map[string]any{"servers": []any{"other.example"}},
+			}},
+		}
+	}
+
+	docs := build()
+	normalizeLiftedSettings(docs)
+
+	if want := build(); !reflect.DeepEqual(docs, want) {
+		t.Errorf("the settings moved although the lift failed:\n got %v\nwant %v", docs, want)
 	}
 }

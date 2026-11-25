@@ -286,3 +286,30 @@ func TestSwitchedOffDocumentKeepsItsSettingsInTheV1Alpha1Document(t *testing.T) 
 		t.Errorf("the v1alpha1 document holds %+v", access)
 	}
 }
+
+// Two v1alpha1 extraHostEntries of one address, and two kernel modules of one name, are valid there: the settings
+// carry them as one entry whose items join in order, each once.
+func TestDuplicateV1Alpha1EntriesMerge(t *testing.T) {
+	docs := []TalosConfigPatchDocument{}
+	raw := `[{"kind":"Config","config":{"version":"v1alpha1","machine":{` +
+		`"network":{"extraHostEntries":[{"ip":"10.1.1.1","aliases":["a.example","b.example"]},` +
+		`{"ip":"10.1.1.1","aliases":["b.example","c.example"]}]},` +
+		`"kernel":{"modules":[{"name":"m","parameters":["x=1"]},{"name":"m","parameters":["x=1","y=2"]}]}}}}]`
+
+	if err := json.Unmarshal([]byte(raw), &docs); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := ConfigFromDocuments(docs)
+	if err != nil {
+		t.Fatalf("ConfigFromDocuments: %v", err)
+	}
+
+	b, _ := json.Marshal(cfg)
+
+	for _, want := range []string{`"10.1.1.1":{"hostnames":["a.example","b.example","c.example"]}`, `"parameters":["x=1","y=2"]`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%s lacks %s", b, want)
+		}
+	}
+}

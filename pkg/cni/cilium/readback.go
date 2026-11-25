@@ -89,7 +89,9 @@ func ReadBackRelease(rel *release.Release) (ReadBack, error) {
 			ne, _ := values.Get(user, "encryption.nodeEncryption")
 			rb.WireGuard, rb.NodeEncryption = true, ne == true
 
-			for _, k := range []string{"encryption.enabled", "encryption.type", "encryption.nodeEncryption", "rollOutCiliumPods"} {
+			for _, k := range []string{
+				"encryption.enabled", "encryption.type", "encryption.nodeEncryption", "rollOutCiliumPods",
+			} {
 				values.Delete(user, k)
 			}
 		}

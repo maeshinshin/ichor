@@ -21,7 +21,8 @@ import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient } from '@/lib/connect'
 import { checkDiscoveryTarget, discoveryOn, maskCidr } from '@/lib/discovery'
-import { describeError } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
+import { loadOutcome } from '@/lib/loadOutcome'
 import { notifyWrite } from '@/lib/notify'
 import { mayApprove } from '@/lib/actions'
 import { useCluster } from '@/lib/useCluster'
@@ -42,7 +43,8 @@ export function AddNode() {
   const namespace = current?.ref?.namespace
   const name = current?.ref?.name
   const perms = useMyPermissions(undefined, namespace && name ? { namespace, name } : undefined)
-  const [machines, setMachines] = useState<Machine[]>([])
+  const [machines, setMachines] = useState<Machine[] | null>(null)
+  const [machinesError, setMachinesError] = useState<ErrorShape | null>(null)
   // Addresses discovery reached that already run a Talos configuration.
   const [configured, setConfigured] = useState<string[]>([])
   // Addresses of configured nodes that sit at a Kubernetes Node no machine accounts for: possible orphans.
@@ -50,13 +52,17 @@ export function AddNode() {
 
   async function reloadMachines() {
     if (!namespace || !name) return
-    try {
-      setMachines((await machineClient.listMachines({ cluster: { namespace, name } })).machines)
+    const { value, error } = await loadOutcome(async () => {
+      const list = (await machineClient.listMachines({ cluster: { namespace, name } })).machines
       const res = await clusterClient.getCluster({ cluster: { namespace, name } })
-      setConfigured(res.cluster?.alreadyConfiguredAddresses ?? [])
-      setOrphans(res.cluster?.orphanAddresses ?? [])
-    } catch {
-      // The next poll tries again; the cluster itself loaded or the page shows its error.
+      return { list, res }
+    })
+    // The next poll tries again; a failure shows its error, never an empty list.
+    setMachines(value?.list ?? null)
+    setMachinesError(error ? describeError(error) : null)
+    if (value) {
+      setConfigured(value.res.cluster?.alreadyConfiguredAddresses ?? [])
+      setOrphans(value.res.cluster?.orphanAddresses ?? [])
     }
   }
 
@@ -70,7 +76,7 @@ export function AddNode() {
   if (clusterError) return <ErrorAlert {...clusterError} />
   if (!cluster) return <PageSkeleton label={t('cluster.loading')} />
 
-  const pending = machines.filter(
+  const pending = (machines ?? []).filter(
     (m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED,
   )
 
@@ -89,6 +95,7 @@ export function AddNode() {
         }
       />
       <div class="max-w-4xl space-y-4">
+        {machinesError && <ErrorAlert {...machinesError} />}
         <SectionCard id="steps" title={t('addNode.stepsTitle')}>
           <ItemGroup>
             {([[PowerIcon, 'addNode.step1'], [RadarIcon, 'addNode.step2'], [CircleCheckIcon, 'addNode.step3']] as const).map(([Icon, step], i) => (

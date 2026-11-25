@@ -51,7 +51,8 @@ import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1al
 import { apiRestartPendingCount, blockingOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
-import type { ErrorShape } from '@/lib/errors'
+import { describeError, type ErrorShape } from '@/lib/errors'
+import { loadOutcome } from '@/lib/loadOutcome'
 import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts, type OpKind } from '@/lib/operations'
@@ -104,6 +105,7 @@ function Home({
   const ref = cluster.ref!
   const ops = operations.map(toRow)
   const [machines, setMachines] = useState<Machine[] | null>(null)
+  const [machinesError, setMachinesError] = useState<ErrorShape | null>(null)
   const [backups, setBackups] = useState<EtcdBackup[] | null>(null)
   const [ichorVersion, setIchorVersion] = useState<string | null>(null)
   // The newer Ichor release the controller found, or null.
@@ -132,11 +134,9 @@ function Home({
   }
 
   async function reloadMachines() {
-    try {
-      setMachines((await machineClient.listMachines({ cluster: ref })).machines)
-    } catch {
-      setMachines([])
-    }
+    const { value, error } = await loadOutcome(async () => (await machineClient.listMachines({ cluster: ref })).machines)
+    setMachines(value)
+    setMachinesError(error ? describeError(error) : null)
   }
 
   async function loadBackups() {
@@ -257,6 +257,7 @@ function Home({
         </div>
       </header>
       {opsError && <ErrorAlert {...opsError} />}
+      {machinesError && <ErrorAlert {...machinesError} />}
       <div class="space-y-4">
         {cluster.conditions.some((c) => c.type === 'CARotationAdvised' && c.status === 'True') && <CARotationAdvice cluster={ref} canDismiss={perms?.clusterUpdate === true} />}
         {items.length > 0 && (

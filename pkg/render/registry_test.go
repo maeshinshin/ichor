@@ -152,7 +152,7 @@ func TestRenderRegistries(t *testing.T) {
 		patch := configPatch("override-username", &ichorconfig.Config{Machine: &ichorconfig.Machine{
 			Registries: &ichorconfig.MachineRegistries{
 				Config: map[string]*typedconfig.RegistryConfig{
-					registryHost: {RegistryAuth: &typedconfig.RegistryAuthConfig{RegistryUsername: "overridden-user"}},
+					"mirror.example.com": {RegistryAuth: &typedconfig.RegistryAuthConfig{RegistryUsername: "overridden-user"}},
 				},
 			},
 		}})
@@ -267,4 +267,40 @@ func TestRegistryAuthLeak(t *testing.T) {
 		_, _, err := Render(bad, m, bundle, nil, &SystemInputs{RegistryAuth: auth})
 		assertNoLeak(t, err)
 	})
+}
+
+// TestRenderRegistryAuthIsPerEndpoint checks that credentials are keyed by the endpoint host
+// Talos applies them to, not by the registry being mirrored, and stay under the registry's own
+// host when it has no mirror endpoints.
+func TestRenderRegistryAuthIsPerEndpoint(t *testing.T) {
+	m := testMachine("node-a", roleWorker, nil)
+	bundle := testBundle(t)
+
+	for _, tc := range []struct {
+		name    string
+		reg     ichorv1alpha1.TalosClusterRegistry
+		want    string
+		wantNot string
+	}{
+		{"mirror endpoint", ichorv1alpha1.TalosClusterRegistry{Host: "docker.io", Endpoints: []string{"https://harbor.example.com"}},
+			"        harbor.example.com:\n", "        docker.io:\n"},
+		{"endpoint with port", ichorv1alpha1.TalosClusterRegistry{Host: "docker.io", Endpoints: []string{"https://harbor.example.com:5000/v2/"}},
+			"        harbor.example.com:5000:\n", "        harbor.example.com:\n"},
+		{"no endpoints", ichorv1alpha1.TalosClusterRegistry{Host: "docker.io"}, "        docker.io:\n", "harbor"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.reg.Username = "u"
+			auth := map[string]RegistryAuth{"docker.io": {Password: "p"}}
+
+			out, _, err := Render(registryCluster(tc.reg), m, bundle, nil, &SystemInputs{RegistryAuth: auth})
+			if err != nil {
+				t.Fatalf("Render: %v", err)
+			}
+
+			doc := section(string(out), "registries:")
+			cfg := doc[strings.Index(doc, "config:"):]
+			requireAll(t, cfg, tc.want, "password: p")
+			requireNone(t, cfg, tc.wantNot)
+		})
+	}
 }

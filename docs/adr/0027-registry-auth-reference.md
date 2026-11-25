@@ -1,6 +1,6 @@
 # 0027. Private registry auth through a Secret reference on `TalosCluster`
 
-Status: Accepted, amended once · Date: 2026-10-25 · Design section: "Typed configuration", "Monitoring and registry mirrors"
+Status: Accepted, amended twice · Date: 2026-10-25 · Design section: "Typed configuration", "Monitoring and registry mirrors"
 
 Decided: Private registry auth through `TalosCluster.spec.registries[].authSecretRef`, resolved and injected as the system layer by `pkg/render`; the auth-less `Render`/`BuildConfig` entry points were merged into one that always takes the resolved auth, after no production caller had ever been moved onto the auth-aware pair
 
@@ -36,8 +36,7 @@ with both.
 
 ## Decision
 
-**`TalosClusterRegistry` on `TalosCluster.spec.registries[]`.** One entry per mirror: `host` (the
-`RegistriesConfig` map key machinery itself uses), `endpoints` (mirror URLs, not secret),
+**`TalosClusterRegistry` on `TalosCluster.spec.registries[]`.** One entry per mirror: `host` (the registry being mirrored), `endpoints` (mirror URLs, not secret),
 `username` (the one `RegistryAuthConfig` field ADR 0003 left mirrorable, not secret), and
 `authSecretRef`, optional -- unset is an anonymous mirror, not an error.
 
@@ -181,3 +180,12 @@ mistake this repository has made twice, see ADR 0018's amendment):
 RBAC needed no change: the controller's `Role` in `ichor-system` already has `get;list;watch` on
 Secrets and the UI backend's has `get` (both namespaced, the same grants `loadBundle` relies on);
 no cluster-wide Secret read was added.
+
+## Amendment (2026-11-26): credentials are keyed by the endpoint host
+
+Talos applies credentials per endpoint host (`RegistryAuthConfig.name` is "the hostname part of the
+endpoint URL"), not per mirrored registry, so keying `machine.registries.config` by `host` sent
+anonymous pulls to the mirror. `injectRegistries` now writes the credentials under each endpoint's
+`host[:port]`, and under `host` only when the registry has no endpoints. `authSecretRef` and
+`ResolveRegistryAuth` still go by `host`. A cluster that used auth with endpoints sees its
+`machine.registries.config` keys change on upgrade; the subtree is a no-reboot path (ADR 0009).

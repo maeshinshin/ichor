@@ -156,13 +156,33 @@ func injectRegistries(
 			continue
 		}
 
-		regConfig[reg.Host] = &mv1alpha1.RegistryConfig{
-			RegistryAuth: &mv1alpha1.RegistryAuthConfig{
-				RegistryUsername:      reg.Username,
-				RegistryPassword:      a.Password,
-				RegistryAuth:          a.Auth,
-				RegistryIdentityToken: a.IdentityToken,
-			},
+		// Talos applies auth per endpoint host, not per mirrored registry (RegistryAuthConfig.name
+		// is "the hostname part of the endpoint URL"), so the credentials go under each endpoint.
+		// A registry with no endpoints is itself the pull target.
+		hosts := []string{reg.Host}
+
+		if len(reg.Endpoints) > 0 {
+			hosts = hosts[:0]
+
+			for _, ep := range reg.Endpoints {
+				u, err := url.Parse(ep)
+				if err != nil {
+					return nil, fmt.Errorf("render: registry %q: endpoint %q: %w", reg.Host, ep, err)
+				}
+
+				hosts = append(hosts, u.Host)
+			}
+		}
+
+		for _, h := range hosts {
+			regConfig[h] = &mv1alpha1.RegistryConfig{
+				RegistryAuth: &mv1alpha1.RegistryAuthConfig{
+					RegistryUsername:      reg.Username,
+					RegistryPassword:      a.Password,
+					RegistryAuth:          a.Auth,
+					RegistryIdentityToken: a.IdentityToken,
+				},
+			}
 		}
 	}
 

@@ -155,9 +155,12 @@ type GetCiliumValuesResponse struct {
 	AvailableChartVersion string `protobuf:"bytes,6,opt,name=available_chart_version,json=availableChartVersion,proto3" json:"available_chart_version,omitempty"`
 	// can_edit is whether the caller may change the user layer: the verb update on
 	// talosclusters/cilium-values, which ichor-admin holds.
-	CanEdit       bool `protobuf:"varint,7,opt,name=can_edit,json=canEdit,proto3" json:"can_edit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	CanEdit bool `protobuf:"varint,7,opt,name=can_edit,json=canEdit,proto3" json:"can_edit,omitempty"`
+	// resource_version is the TalosCluster's metadata.resourceVersion at the read; send it back as
+	// SetCiliumValuesRequest.base_resource_version.
+	ResourceVersion string `protobuf:"bytes,8,opt,name=resource_version,json=resourceVersion,proto3" json:"resource_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GetCiliumValuesResponse) Reset() {
@@ -238,6 +241,13 @@ func (x *GetCiliumValuesResponse) GetCanEdit() bool {
 		return x.CanEdit
 	}
 	return false
+}
+
+func (x *GetCiliumValuesResponse) GetResourceVersion() string {
+	if x != nil {
+		return x.ResourceVersion
+	}
+	return ""
 }
 
 type ValidateCiliumValuesRequest struct {
@@ -449,9 +459,12 @@ type SetCiliumValuesRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	// user_yaml is the new user layer; empty clears it.
-	UserYaml      string `protobuf:"bytes,2,opt,name=user_yaml,json=userYaml,proto3" json:"user_yaml,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	UserYaml string `protobuf:"bytes,2,opt,name=user_yaml,json=userYaml,proto3" json:"user_yaml,omitempty"`
+	// base_resource_version is the GetCiliumValuesResponse.resource_version the client's copy was read at. When set
+	// and the stored cluster has moved on, the write is refused with ABORTED; empty writes without the check.
+	BaseResourceVersion string `protobuf:"bytes,3,opt,name=base_resource_version,json=baseResourceVersion,proto3" json:"base_resource_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SetCiliumValuesRequest) Reset() {
@@ -494,6 +507,13 @@ func (x *SetCiliumValuesRequest) GetCluster() *ObjectRef {
 func (x *SetCiliumValuesRequest) GetUserYaml() string {
 	if x != nil {
 		return x.UserYaml
+	}
+	return ""
+}
+
+func (x *SetCiliumValuesRequest) GetBaseResourceVersion() string {
+	if x != nil {
+		return x.BaseResourceVersion
 	}
 	return ""
 }
@@ -694,7 +714,7 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\n" +
 	"value_yaml\x18\x03 \x01(\tR\tvalueYaml\"M\n" +
 	"\x16GetCiliumValuesRequest\x123\n" +
-	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xa8\x02\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xd3\x02\n" +
 	"\x17GetCiliumValuesResponse\x12#\n" +
 	"\rdefaults_yaml\x18\x01 \x01(\tR\fdefaultsYaml\x12\x1b\n" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\x12.\n" +
@@ -703,7 +723,8 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\n" +
 	"tracked_by\x18\x05 \x01(\tB\x02\x18\x01R\ttrackedBy\x126\n" +
 	"\x17available_chart_version\x18\x06 \x01(\tR\x15availableChartVersion\x12\x19\n" +
-	"\bcan_edit\x18\a \x01(\bR\acanEdit\"o\n" +
+	"\bcan_edit\x18\a \x01(\bR\acanEdit\x12)\n" +
+	"\x10resource_version\x18\b \x01(\tR\x0fresourceVersion\"o\n" +
 	"\x1bValidateCiliumValuesRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x1b\n" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\"L\n" +
@@ -714,10 +735,11 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x1b\n" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\".\n" +
 	"\x18DiffCiliumValuesResponse\x12\x12\n" +
-	"\x04diff\x18\x01 \x01(\tR\x04diff\"j\n" +
+	"\x04diff\x18\x01 \x01(\tR\x04diff\"\x9e\x01\n" +
 	"\x16SetCiliumValuesRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x1b\n" +
-	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\"s\n" +
+	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\x122\n" +
+	"\x15base_resource_version\x18\x03 \x01(\tR\x13baseResourceVersion\"s\n" +
 	"\x17SetCiliumValuesResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12%\n" +
 	"\x0eeffective_yaml\x18\x02 \x01(\tR\reffectiveYaml\"\x9d\x01\n" +

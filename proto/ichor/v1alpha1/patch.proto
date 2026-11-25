@@ -67,6 +67,9 @@ message UpdatePatchRequest {
   Patch patch = 1;
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
   Override override = 2 [deprecated = true];
+  // base_resource_version is the patch.resource_version the client's copy was read at. When set and the stored
+  // patch has moved on, the write is refused with ABORTED; empty replaces without the check.
+  string base_resource_version = 3;
 }
 
 message UpdatePatchResponse {
@@ -182,4 +185,7 @@ message Patch {
   // (the Migrated condition's message, else the conversion error). config is "{}" for it, which does not mean the
   // patch sets nothing, so a client shows it read-only and a save is refused. Empty for every other patch.
   string unmigrated_reason = 9;
+  // resource_version is the object's metadata.resourceVersion at the read; send it back as
+  // UpdatePatchRequest.base_resource_version. Unset when talking to an older backend.
+  string resource_version = 10;
 }

@@ -126,6 +126,24 @@ var _ = Describe("CniService", func() {
 		return err
 	}
 
+	It("refuses a write made from values another write has since replaced, and an empty base still writes", func() {
+		opened, err := s.GetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opened.Msg.GetResourceVersion()).NotTo(BeEmpty())
+
+		Expect(set(cniAdminUser, cniDebugOn)).To(Succeed()) // B saves meanwhile, with no base.
+
+		_, err = s.SetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
+			Cluster: ref, UserYaml: "", BaseResourceVersion: opened.Msg.GetResourceVersion(),
+		}))
+		Expect(err).To(HaveOccurred())
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeAborted))
+		Expect(err.Error()).To(ContainSubstring("changed since you opened it"))
+		Expect(stored()).NotTo(BeEmpty())
+
+		Expect(set(cniAdminUser, "")).To(Succeed())
+	})
+
 	It("lets a viewer read the layers but not write", func() {
 		resp, err := s.GetCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
 		Expect(err).NotTo(HaveOccurred())

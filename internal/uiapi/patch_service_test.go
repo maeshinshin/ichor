@@ -109,6 +109,51 @@ var _ = Describe("PatchService", func() {
 		})
 	})
 
+	Describe("UpdatePatch with a base version", func() {
+		It("refuses a save made from a copy that another save has since replaced, and keeps the other save", func() {
+			cluster := newTestCluster("does-not-exist")
+
+			s := &Server{Client: k8sClient}
+			_, err := s.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{
+				Patch: sysctlPatchWire("patch-lost-1", cluster.Name),
+			}))
+			Expect(err).NotTo(HaveOccurred())
+
+			opened, err := s.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(testNamespace, "patch-lost-1")}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(opened.Msg.GetPatch().GetResourceVersion()).NotTo(BeEmpty())
+
+			// B saves meanwhile, with no base.
+			b := sysctlPatchWire("patch-lost-1", cluster.Name)
+			b.Config = `{"machine":{"sysctls":{"net.core.somaxconn":"4096"}}}`
+			_, err = s.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: b}))
+			Expect(err).NotTo(HaveOccurred())
+
+			// A saves the copy it opened.
+			a := opened.Msg.GetPatch()
+			a.Priority = 7
+			_, err = s.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: a, BaseResourceVersion: opened.Msg.GetPatch().GetResourceVersion()}))
+			Expect(err).To(HaveOccurred())
+			Expect(connect.CodeOf(err)).To(Equal(connect.CodeAborted))
+			Expect(err.Error()).To(ContainSubstring("changed since you opened it"))
+
+			got, err := s.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(testNamespace, "patch-lost-1")}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(got.Msg.GetPatch().GetConfig()).To(ContainSubstring("4096"))
+			Expect(got.Msg.GetPatch().GetPriority()).NotTo(Equal(int32(7)))
+
+			// The version just read is current, so a save from it goes through; an empty base always replaces.
+			a = got.Msg.GetPatch()
+			a.Priority = 8
+			_, err = s.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: a, BaseResourceVersion: a.GetResourceVersion()}))
+			Expect(err).NotTo(HaveOccurred())
+
+			a.Priority = 9
+			_, err = s.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: a}))
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Describe("the CRD's own CEL rules, surfaced as CodeInvalidArgument", func() {
 		It("refuses a cluster-layer patch that also sets a target", func() {
 			cluster := newTestCluster("does-not-exist")

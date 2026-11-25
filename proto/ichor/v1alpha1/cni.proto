@@ -66,6 +66,9 @@ message GetCiliumValuesResponse {
   // can_edit is whether the caller may change the user layer: the verb update on
   // talosclusters/cilium-values, which ichor-admin holds.
   bool can_edit = 7;
+  // resource_version is the TalosCluster's metadata.resourceVersion at the read; send it back as
+  // SetCiliumValuesRequest.base_resource_version.
+  string resource_version = 8;
 }
 
 message ValidateCiliumValuesRequest {
@@ -96,6 +99,9 @@ message SetCiliumValuesRequest {
   ObjectRef cluster = 1;
   // user_yaml is the new user layer; empty clears it.
   string user_yaml = 2;
+  // base_resource_version is the GetCiliumValuesResponse.resource_version the client's copy was read at. When set
+  // and the stored cluster has moved on, the write is refused with ABORTED; empty writes without the check.
+  string base_resource_version = 3;
 }
 
 message SetCiliumValuesResponse {

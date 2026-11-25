@@ -315,9 +315,12 @@ type UpdatePatchRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
-	Override      *Override `protobuf:"bytes,2,opt,name=override,proto3" json:"override,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Override *Override `protobuf:"bytes,2,opt,name=override,proto3" json:"override,omitempty"`
+	// base_resource_version is the patch.resource_version the client's copy was read at. When set and the stored
+	// patch has moved on, the write is refused with ABORTED; empty replaces without the check.
+	BaseResourceVersion string `protobuf:"bytes,3,opt,name=base_resource_version,json=baseResourceVersion,proto3" json:"base_resource_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *UpdatePatchRequest) Reset() {
@@ -363,6 +366,13 @@ func (x *UpdatePatchRequest) GetOverride() *Override {
 		return x.Override
 	}
 	return nil
+}
+
+func (x *UpdatePatchRequest) GetBaseResourceVersion() string {
+	if x != nil {
+		return x.BaseResourceVersion
+	}
+	return ""
 }
 
 type UpdatePatchResponse struct {
@@ -954,8 +964,11 @@ type Patch struct {
 	// (the Migrated condition's message, else the conversion error). config is "{}" for it, which does not mean the
 	// patch sets nothing, so a client shows it read-only and a save is refused. Empty for every other patch.
 	UnmigratedReason string `protobuf:"bytes,9,opt,name=unmigrated_reason,json=unmigratedReason,proto3" json:"unmigrated_reason,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// resource_version is the object's metadata.resourceVersion at the read; send it back as
+	// UpdatePatchRequest.base_resource_version. Unset when talking to an older backend.
+	ResourceVersion string `protobuf:"bytes,10,opt,name=resource_version,json=resourceVersion,proto3" json:"resource_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Patch) Reset() {
@@ -1052,6 +1065,13 @@ func (x *Patch) GetUnmigratedReason() string {
 	return ""
 }
 
+func (x *Patch) GetResourceVersion() string {
+	if x != nil {
+		return x.ResourceVersion
+	}
+	return ""
+}
+
 var File_ichor_v1alpha1_patch_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
@@ -1069,10 +1089,11 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\"u\n" +
 	"\x13CreatePatchResponse\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"{\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xaf\x01\n" +
 	"\x12UpdatePatchRequest\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x128\n" +
-	"\boverride\x18\x02 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xbf\x01\n" +
+	"\boverride\x18\x02 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\x122\n" +
+	"\x15base_resource_version\x18\x03 \x01(\tR\x13baseResourceVersion\"\xbf\x01\n" +
 	"\x13UpdatePatchResponse\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
@@ -1108,7 +1129,7 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"machineRef\"?\n" +
 	"\rPatchDocument\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
-	"\bdocument\x18\x02 \x01(\tR\bdocument\"\xae\x03\n" +
+	"\bdocument\x18\x02 \x01(\tR\bdocument\"\xd9\x03\n" +
 	"\x05Patch\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -1119,7 +1140,9 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06config\x18\b \x01(\tR\x06config\x12+\n" +
-	"\x11unmigrated_reason\x18\t \x01(\tR\x10unmigratedReason2\x9b\x04\n" +
+	"\x11unmigrated_reason\x18\t \x01(\tR\x10unmigratedReason\x12)\n" +
+	"\x10resource_version\x18\n" +
+	" \x01(\tR\x0fresourceVersion2\x9b\x04\n" +
 	"\fPatchService\x12V\n" +
 	"\vListPatches\x12\".ichor.v1alpha1.ListPatchesRequest\x1a#.ichor.v1alpha1.ListPatchesResponse\x12M\n" +
 	"\bGetPatch\x12\x1f.ichor.v1alpha1.GetPatchRequest\x1a .ichor.v1alpha1.GetPatchResponse\x12V\n" +

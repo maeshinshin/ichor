@@ -36,8 +36,10 @@ You need one machine booted from a Talos ISO into maintenance mode.
 
    ```sh
    tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" ichor
-   install -m 0755 ichor ~/.local/bin/ichor
+   mkdir -p ~/.local/bin && install -m 0755 ichor ~/.local/bin/ichor
    ```
+
+   `~/.local/bin` must be on your `PATH`.
 
 5. Turn the machine into the first control plane of a new cluster:
 

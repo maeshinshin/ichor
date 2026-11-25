@@ -23,6 +23,7 @@ ichor ui
 ```text
 ✓ ichor-ui  https://localhost:8443/
   port-forward to ichor-system/ichor-ichor-ui-7d9c5b6f4-x2k8q · Ctrl-C to stop
+  signed by the Ichor serving CA (ConfigMap ichor-system/ichor-ui-ca, key ca.crt): import it into your browser to remove the warning
 ```
 
 > [!IMPORTANT]

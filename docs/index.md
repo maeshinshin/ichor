@@ -61,6 +61,7 @@ storage, monitoring, GitOps tools and air-gapped installs. Changes:
   [Hardening](guides/hardening.md).
 - [Upgrade Ichor with the installer](guides/upgrade-ichor.md).
 - [Rotating keys](guides/rotate-keys.md), [Replace a control plane](guides/replace-a-control-plane.md).
+- [Patch the Talos config](guides/patch-talos-config.md), [Upgrade Talos and Kubernetes](guides/upgrade-talos-and-kubernetes.md).
 - [Node actions](guides/node-actions.md), [Shutdown and power](guides/shutdown-and-power.md), [The web UI](guides/the-web-ui.md).
 - [Troubleshooting](guides/troubleshooting.md), [Metrics and monitoring access](guides/metrics-and-monitoring-access.md).
 - Storage: [Longhorn](guides/longhorn.md) or [Rook/Ceph](guides/rook-ceph.md).

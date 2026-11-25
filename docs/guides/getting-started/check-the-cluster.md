@@ -22,6 +22,13 @@ demo · ichor-system
   Endpoint     192.168.1.50 (node)
   Health       ✓ ready
 
+Conditions
+  ✓ CertificatesExpiring    NoneExpiring             no CA expires within 90 days
+  ✓ Transitioning           StableControlPlaneCount  approved control planes right now: 1
+  ✓ CNIHandover             Complete                 Helm release cilium is deployed and Cilium is ready; no longer rendering its cluster.inlineManifests entry
+  ✓ CNIValuesApplied        Applied                  the Cilium Helm release is deployed at the cluster's values and the DaemonSet is ready
+  ✓ CiliumUpgradeAvailable  UpToDate                 the Cilium release is at the chart 1.20.4 this Ichor embeds
+
 $ ichor get nodes --cluster demo
 NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE  AGE
 fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp          5m
@@ -32,8 +39,8 @@ installed    v{{version}}
 new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
 ```
 
-`get cluster` prints versions, endpoint and health; `describe cluster` adds the
-network, CNI, control plane, certificate expiry and every condition (✓, `!`, ✗ or …).
+`get cluster` prints versions, endpoint, health and the conditions; `describe cluster` adds the
+network, CNI, control plane and certificate expiry (✓, `!`, ✗ or … mark each condition).
 Every machine should be Ready (✓), and `ichor version` should show the release you
 installed for both CLI and installed Ichor. With sign-in on, these commands print
 the sign-in line from [step 3](approve-machines.md) on stderr; the output below omits it.
@@ -70,4 +77,5 @@ operation NAME`. A step that failed on a transient error is first retried by the
 controller itself, with backoff, up to five times (`status.autoRetry` shows the
 count and the next retry); an operation that waits for approval is started with
 `ichor approve operation NAME`. `ichor upgrade talos --list` (and `kubernetes`)
-prints the versions on offer.
+prints the versions on offer; see [Upgrade Talos and
+Kubernetes](../upgrade-talos-and-kubernetes.md).

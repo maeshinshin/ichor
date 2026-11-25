@@ -61,7 +61,7 @@ apiVersion: ichor.maesh.dev/v1alpha1
 kind: TalosEtcdBackup
 metadata:
   name: nightly
-  namespace: default
+  namespace: ichor-system
 spec:
   clusterRef:
     name: prod            # a TalosCluster in this namespace; cannot change later
@@ -80,8 +80,11 @@ spec:
 ## Check it
 
 ```sh
-kubectl -n default get talosetcdbackup nightly -o yaml
+kubectl -n ichor-system get talosetcdbackup nightly -o yaml
 ```
+
+`ichor create etcd-backup` writes into `--namespace` (default `ichor-system`). A
+backup you write by hand lives in the namespace you gave it; use that one here.
 
 - `Ready` is `True` (`Succeeded`) while the newest snapshot is fresher than
   twice the schedule interval; `False` is `Failed` (reason in the message: a
@@ -100,6 +103,20 @@ fix the Secret or the bucket.
 and `ichor restore cluster` (needs the bundle and bucket) read these snapshots.
 A restore fails at once, with the cause, when the store refuses the credentials
 or the bucket or snapshot object is gone; fix that and start it again.
+
+`ichor restore etcd` rewinds a running cluster and loses everything written
+since the snapshot. It needs:
+
+- `--override`, and the `override` verb on the TalosCluster;
+- the cluster's name typed as confirmation (or `--confirm NAME`); `--yes` does not replace it.
+
+```sh
+ichor restore etcd --cluster prod --override
+ichor restore etcd --cluster prod --backup nightly \
+  --snapshot etcd-20261112T020000Z.snapshot.age --override --follow
+```
+
+Without `--snapshot` the newest one is used.
 
 > [!IMPORTANT]
 > Keep the bundle: `~/.ichor/clusters/NAME/secrets.yaml`, plus

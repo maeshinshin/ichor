@@ -1,6 +1,6 @@
 # 0088. A renderer change is a desired-state change, not drift
 
-Status: Accepted · Date: 2026-10-27 · Design section: Configuration reconcile
+Status: Accepted, amended · Date: 2026-10-27 · Design section: Configuration reconcile
 
 Decided: `render.Version` (an integer in `pkg/render/version.go`) is part of every machine's input hash (`desiredInputsHash`), so an Ichor release whose renderer emits different output for the same CRs reads as a desired-state change and is applied like any other, while a node that changed on its own with the same version is still drift; the version is bumped by hand in any change that alters render output, and `TestRenderVersionMatchesOutput` fails when the output of a fixed set of inputs (secrets removed) changes without Version and the pinned fingerprint moving together
 
@@ -15,3 +15,7 @@ The input hash (`status.observedInputsHash`) covered only the generations of the
 - The build version is not used: a rebuild with unchanged rendering must not touch nodes.
 - Enforcement is a test, not a review habit. `TestRenderVersionMatchesOutput` renders a control plane and a worker under two different secrets bundles and fingerprints every key path of the output, keeping a value only where both renders agree (so secrets drop out and Ichor's own decisions stay in). The test pins `Version` and that fingerprint; a render change fails it with instructions to bump `Version` and update both pins. It sees only what its inputs exercise, so a change visible only under other inputs (a CNI, a storage layout) must bump `Version` by the author's judgment, and the inputs can be widened when one is missed.
 - Docs: an Ichor upgrade may apply configuration to nodes when the renderer changed; changes that need a reboot wait for a config rollout. Nothing about this is in the upgrade plan (the new release's render version is not known to the old controller), so the note lives here and in the design's Configuration reconcile step 5.
+
+## Amendment
+
+- The fixture of `TestRenderVersionMatchesOutput` sets one field for each input-dependent branch of the renderer (registry mirror credentials, pod security exemptions, the firewall and the Cilium ports it follows, WireGuard, kube-proxy replaced, and a v1.13 contract with a stored time-servers document), so a change to any of them moves the pinned fingerprint. A change that only shows under a new input must widen the fixture in the same commit. The registry credentials now landing under the endpoint host went out in v0.3.2 without a bump because the fixture had no registry; `Version` is 2 for it, and for every render change since the first bump.

@@ -251,6 +251,39 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(node.Annotations).NotTo(HaveKey(drainStartedAnnotation))
 		})
 
+		It("leaves the cordon and storage evacuation of another operation alone when a queued operation is deleted", func() {
+			const worker3 = "worker-3"
+
+			f := newNodeFixture(map[string]string{worker3: roleWorker})
+			evacuator := f.longhornEvacuator()
+
+			// Operation A holds the lock, has cordoned the node and is evacuating its storage.
+			Expect(opTestLock(f.cluster).Acquire(ctx, "operation-a")).To(Succeed())
+
+			n := f.kube.node(worker3)
+			n.Spec.Unschedulable = true
+			n.Annotations = map[string]string{cordonedByIchorAnnotation: "true", drainStartedAnnotation: "true"}
+			_, err := f.kube.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(setEvacuationCondition(ctx, k8sClient, f.machines[worker3], metav1.ConditionTrue, "Evacuating", "evacuating")).To(Succeed())
+
+			op := f.newOp(worker3, nodeSpec(ichorv1alpha1.NodeActionReboot))
+			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused), "queued: the lock is not available")
+
+			Expect(k8sClient.Delete(ctx, fetchOperation(op))).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				_, rerr := reconcileOperation(f.r, op)
+				g.Expect(rerr).NotTo(HaveOccurred())
+
+				var gone ichorv1alpha1.TalosOperation
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(op), &gone)).To(MatchError(apierrors.IsNotFound, "the operation is gone"))
+			}).Should(Succeed())
+
+			Expect(f.unschedulable(worker3)).To(BeTrue(), "the cordon is operation A's, not the deleted one's")
+			Expect(evacuator.endCalls).To(BeZero(), "operation A's storage evacuation goes on")
+		})
+
 		It("a node that is away while rebooting is waited for, and a restarted controller does not reboot it again", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))

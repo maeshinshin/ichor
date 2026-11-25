@@ -2,7 +2,7 @@
 
 `ichor upgrade ichor VERSION` moves an Ichor that `ichor init` or `ichor adopt` installed. An Ichor that Helm installed is upgraded with [`helm upgrade`](install-with-helm/upgrade.md).
 
-![Five steps in a row: the checks (downgrade, stored fields, installer check, plan), which may refuse; sign-in, set up first if ichor-ui has none; the installer Job, which writes the CRDs, controller and ichor-ui; the TalosConfigPatch migration, spec.documents to spec.config; and ichor rollout config, which you run.](../images/ih-upgrade-ichor.light.drawio.svg)
+![Five steps in a row: the checks (downgrade, stored fields, installer check, plan), which may refuse; sign-in, set up first if ichor-ui has none; the installer Job, which writes the CRDs, controller and ichor-ui; the TalosConfigPatch migration, spec.documents to spec.config; and ichor rollout config for what waits.](../images/ih-upgrade-ichor.light.drawio.svg)
 
 *Refusals come first; the migration is the last write.*
 
@@ -55,7 +55,7 @@ For a `Migrated=False` patch, write the setting in `spec.config` and clear `spec
 
 ## Reaching the nodes
 
-The controller writes configuration to nodes only through `ichor rollout config`. A migration alone changes nothing on a node: a setting that only moved to its own document renders the same. Run it after the upgrade for a setting whose value changed, and for the API server restart that sign-in needs.
+The controller applies a change that needs no reboot by itself. `ichor rollout config` rolls out only what waits for you: nodes at `RebootRequired`, and control planes at `APIServerRestartRequired` (the restart that sign-in needs). A migration alone changes nothing on a node, because a setting that only moved renders the same.
 
 ## Compared with `helm upgrade`
 

@@ -38,11 +38,11 @@ first, so the cluster is never below its declared `spec.controlPlane.count`.
 
    The count is now even. The spare's etcd can stay in `Preparing` while the
    dead member is still listed; that ends in step 3.
-3. Remove the dead one. It needs the override permission, and the typed node
+3. Remove the dead one. It needs `--override` and the override verb on the node; the typed node
    name is the confirmation:
 
    ```sh
-   ichor delete node cp-2 --follow
+   ichor delete node cp-2 --override --follow
    ```
 
    The plan allows a removal below the declared count when the machine's `Ready`

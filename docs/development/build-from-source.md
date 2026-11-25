@@ -41,8 +41,10 @@ so the first `make` needs network access. Developers of Ichor need more:
 ## What you need
 
 - One machine booted from a Talos ISO into maintenance mode, reachable on port
-  50000 (here `192.168.1.50`), with at least 2 GiB of memory for a control
-  plane. Ichor does not boot machines.
+  50000 (here `192.168.1.50`), with at least 3 GiB of memory for a control
+  plane. During init that control plane is the only node, so it also runs
+  Ichor's controller and ichor-ui; 2 GiB leaves too little beside the system
+  pods. Ichor does not boot machines.
 - A container registry your workstation can push to and every node can pull
   from (here `192.168.1.10:5000`). A plain-HTTP registry on your LAN is enough;
   [`test/harness/ui-demo/registry.yaml`](../../test/harness/ui-demo/registry.yaml)

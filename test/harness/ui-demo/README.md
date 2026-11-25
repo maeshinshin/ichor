@@ -34,7 +34,7 @@ outer cluster serves (`kubectl --context $C get ippools -o yaml`).
 
 VM memory defaults to 2560Mi for both VMs. Override per role before `up-demo` with
 `ICHOR_UI_DEMO_CP_MEMORY` and `ICHOR_UI_DEMO_WORKER_MEMORY` (a plain `Mi`/`Gi` quantity, e.g.
-`ICHOR_UI_DEMO_CP_MEMORY=3Gi`). Talos needs at least 2 GiB for a control plane and 1 GiB for a worker.
+`ICHOR_UI_DEMO_CP_MEMORY=3Gi`). Talos needs at least 1 GiB for a worker. A 2 GiB control plane fails because the controller cannot schedule; the 2560 MiB default works. The 3 GiB recommendation is in `docs/guides/getting-started.md`.
 
 **ISO cache.** `up-demo`, `up` and `up-ha` clone one cached Talos ISO DataVolume
 (`ichor-e2e-talos-v1-14-3-<schematic8>-base`, outer namespace `$NS`) instead of importing the ISO per VM.
@@ -205,8 +205,8 @@ Deleting the VMs removes the inner cluster and everything in it.
   `kubectl delete node <name>`.
 - VM sizing: the harness gives both VMs 2560Mi by default. For the control plane that is enough;
   measured use is about 1.6Gi with ichor and ichor-ui. A memory-bound host can shrink the worker
-  with `ICHOR_UI_DEMO_WORKER_MEMORY=1536Mi` (Talos minimum is 1 GiB for a worker, 2 GiB for a
-  control plane); `ICHOR_UI_DEMO_CP_MEMORY` sets the control plane.
+  with `ICHOR_UI_DEMO_WORKER_MEMORY=1536Mi` (Talos minimum is 1 GiB for a worker; for the control
+  plane see above); `ICHOR_UI_DEMO_CP_MEMORY` sets the control plane.
 - Run `make demo-images` from a separate worktree for each agent or user. Two builds in one
   checkout overwrite each other's `dist/install.yaml` and `bin/img` and `bin/oci`.
 - On this KubeVirt harness Cilium's default VXLAN tunnel does not pass traffic between VMs; use the geneve tunnel protocol (`ichor init --cni cilium --cni-tunnel geneve`, recorded as `spec.cni.tunnel`).

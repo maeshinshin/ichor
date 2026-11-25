@@ -24,8 +24,8 @@ From a downloaded `ichor` CLI to a running cluster managed by Ichor.
 
 | You need | Why |
 | --- | --- |
-| A machine booted from a Talos ISO into maintenance mode, reachable on port 50000 (this guide uses `192.168.1.50`), with at least 2 GiB of memory for a control plane | `ichor init` configures it over the Talos API |
-| At least 2 GiB of memory on a worker that will run Ichor's controller, which asks for 256 MiB and may use 512 MiB | Talos's own floor for a worker is 1 GiB and it recommends 2 GiB; on less, the controller is starved and restarted during upgrades |
+| A machine booted from a Talos ISO into maintenance mode, reachable on port 50000 (this guide uses `192.168.1.50`), with at least 3 GiB of memory for a control plane | `ichor init` configures it over the Talos API. During init the first control plane is the only node, so it also runs Ichor's controller and ichor-ui; 2 GiB leaves too little beside the system pods |
+| At least 2 GiB of memory on each worker. Ichor's controller asks for 256 MiB and may use 512 MiB; it prefers a control plane, so a worker runs it only when no control plane can take it | Talos's own floor for a worker is 1 GiB and it recommends 2 GiB; on less, the controller is starved and restarted during upgrades |
 | Network access from the machine to `ghcr.io` (Ichor's images), the Talos installer image and Cilium's images | Air-gapped installs are out of scope, except a self-hosted Image Factory, named by `spec.imageFactoryURL` on the `TalosCluster` (default `https://factory.talos.dev`) |
 | A Linux or macOS workstation (amd64 or arm64) reaching port 50000 on the machine and, once up, port 6443 on the endpoint address | init, `kubectl` and the later steps use them |
 | [`kubectl`](https://kubernetes.io/docs/tasks/tools/) | Steps 3 and 4; the CLI does not bundle it |

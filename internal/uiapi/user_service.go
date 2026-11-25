@@ -375,9 +375,41 @@ func (s *Server) ChangeOwnPassword(ctx context.Context, req *connect.Request[pb.
 		changePasswordFailures.Reset(name)
 	}
 
-	if err := s.setCredential(ctx, name, req.Msg.GetNewPassword(), false); err != nil {
+	next, err := s.newCredential(ctx, req.Msg.GetNewPassword(), false)
+	if err != nil {
 		return nil, credentialWriteError(err)
 	}
+
+	// The check above read the entry once; an admin's SetPassword since then must not be overwritten, so it is
+	// made again on the entry the write is locked to.
+	errStale := errors.New("the entry changed")
+
+	_, found, err = s.updateCredential(ctx, name, func(c *ichorauth.Credential) error {
+		if forced && !c.MustChange {
+			return errStale
+		}
+
+		if !forced {
+			if good, err := s.verifyPassword(ctx, req.Msg.GetOldPassword(), c.Hash); err != nil || !good {
+				return errStale
+			}
+		}
+
+		*c = next
+
+		return nil
+	})
+
+	switch {
+	case errors.Is(err, errStale), err == nil && !found:
+		changePasswordFailures.Fail(name, s.now())
+
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("invalid credentials"))
+	case err != nil:
+		return nil, credentialWriteError(err)
+	}
+
+	s.Users.Cache.Forget(name) // this replica must see the new mustChange at once
 
 	return connect.NewResponse(&pb.ChangeOwnPasswordResponse{}), nil
 }
@@ -396,9 +428,11 @@ func (s *Server) RevokeSessions(ctx context.Context, req *connect.Request[pb.Rev
 		return nil, err
 	}
 
-	cred, found, err := s.updateCredential(ctx, u.Name, func(c *ichorauth.Credential) {
+	cred, found, err := s.updateCredential(ctx, u.Name, func(c *ichorauth.Credential) error {
 		c.NotBefore = s.now().UTC().Truncate(time.Second)
 		c.Families = nil // every refresh token dies with the sessions
+
+		return nil
 	})
 	if err != nil {
 		return nil, credentialWriteError(err)

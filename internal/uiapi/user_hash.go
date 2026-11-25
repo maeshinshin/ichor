@@ -161,9 +161,10 @@ func (s *Server) writeCredential(ctx context.Context, name string, cred ichoraut
 }
 
 // updateCredential reads user name's entry, lets mutate change it and writes it back under an optimistic
-// lock, retrying on a conflict, so a concurrent password change is never reverted by a stale copy.
+// lock, retrying on a conflict (mutate runs again on the fresh entry), so a concurrent password change is never
+// reverted by a stale copy. An error from mutate stops the update and is returned as is.
 // found is false when the user has no password yet; nothing is written then.
-func (s *Server) updateCredential(ctx context.Context, name string, mutate func(*ichorauth.Credential)) (cred ichorauth.Credential, found bool, err error) {
+func (s *Server) updateCredential(ctx context.Context, name string, mutate func(*ichorauth.Credential) error) (cred ichorauth.Credential, found bool, err error) {
 	key := types.NamespacedName{Namespace: s.ControllerNamespace, Name: ichorauth.CredentialsSecretName}
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -190,7 +191,9 @@ func (s *Server) updateCredential(ctx context.Context, name string, mutate func(
 			return fmt.Errorf("credentials entry for %q is unreadable", name)
 		}
 
-		mutate(&parsed)
+		if err := mutate(&parsed); err != nil {
+			return err
+		}
 
 		if raw, err = parsed.Marshal(); err != nil {
 			return err
@@ -215,13 +218,7 @@ func (s *Server) updateCredential(ctx context.Context, name string, mutate func(
 // setCredential hashes password and stores it for name with the given
 // mustChange. notBefore is now: every refresh token issued before this is dead.
 func (s *Server) setCredential(ctx context.Context, name, password string, mustChange bool) error {
-	release, err := s.Users.acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-
-	cred, err := ichorauth.NewCredential(password, mustChange, s.now())
+	cred, err := s.newCredential(ctx, password, mustChange)
 	if err != nil {
 		return err
 	}
@@ -234,4 +231,15 @@ func (s *Server) setCredential(ctx context.Context, name, password string, mustC
 	s.Users.Cache.Forget(name)
 
 	return nil
+}
+
+// newCredential hashes password under the hashing limit.
+func (s *Server) newCredential(ctx context.Context, password string, mustChange bool) (ichorauth.Credential, error) {
+	release, err := s.Users.acquire(ctx)
+	if err != nil {
+		return ichorauth.Credential{}, err
+	}
+	defer release()
+
+	return ichorauth.NewCredential(password, mustChange, s.now())
 }

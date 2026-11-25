@@ -555,6 +555,40 @@ func TestRevokeSessionsKeepsAPasswordChangedMeanwhile(t *testing.T) {
 	}
 }
 
+func TestChangeOwnPasswordKeepsAnAdminChangeMadeMeanwhile(t *testing.T) {
+	s := userServer(t, true, newUser(userAlice, false, "viewer"))
+	if err := s.setCredential(context.Background(), userAlice, strongPass, false); err != nil {
+		t.Fatal(err)
+	}
+
+	const adminPass = "Set-By-The-Admin-Passw0rd-xyz"
+
+	changed := false
+	s.Client = interceptor.NewClient(s.Client.(client.WithWatch), interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			err := c.Get(ctx, key, obj, opts...)
+			if _, isSecret := obj.(*corev1.Secret); isSecret && !changed {
+				changed = true // an admin's SetPassword lands after the user's old password was checked
+				if err := s.setCredential(ctx, userAlice, adminPass, true); err != nil {
+					t.Error(err)
+				}
+			}
+
+			return err
+		},
+	})
+
+	_, err := s.ChangeOwnPassword(ichorCtx(userAlice), connect.NewRequest(&pb.ChangeOwnPasswordRequest{OldPassword: strongPass, NewPassword: strongPass2}))
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("err = %v, want the wrong-password error", err)
+	}
+
+	cred, _ := readStored(t, s)
+	if !pwMatches(adminPass, cred.Hash) {
+		t.Error("ChangeOwnPassword overwrote the admin's password")
+	}
+}
+
 func TestKubeconfigHoldsPublicDataOnly(t *testing.T) {
 	raw, err := buildKubeconfig("c1", "https://10.0.0.5:6443", "", []byte("CA-PEM"), userAlice, "https://ichor.example.com", "")
 	if err != nil {

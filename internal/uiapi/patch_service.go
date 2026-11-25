@@ -73,6 +73,16 @@ func (s *Server) getPatch(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alpha
 	return &p, nil
 }
 
+// checkBase refuses a write made from a copy that is no longer the stored one. An empty base is no check,
+// so `ichor apply -f` and older clients keep replacing.
+func checkBase(base, stored, kind, name string) error {
+	if base == "" || base == stored {
+		return nil
+	}
+
+	return connect.NewError(connect.CodeAborted, fmt.Errorf("%s %s changed since you opened it; reload to see the new version", kind, name))
+}
+
 // GetPatch returns one TalosConfigPatch.
 func (s *Server) GetPatch(
 	ctx context.Context, req *connect.Request[pb.GetPatchRequest],
@@ -140,6 +150,10 @@ func (s *Server) UpdatePatch(
 
 	p, err := s.getPatch(ctx, ref)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := checkBase(req.Msg.GetBaseResourceVersion(), p.ResourceVersion, "patch", namespacedName(ref).String()); err != nil {
 		return nil, err
 	}
 

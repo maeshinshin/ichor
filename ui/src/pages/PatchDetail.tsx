@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea'
 import type { MessageInitShape } from '@bufbuild/protobuf'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { ChangedAlert } from '@/components/ChangedAlert'
+import { isChanged, withBase } from '@/lib/baseVersion'
 import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
@@ -103,6 +105,10 @@ export function PatchDetail({ name }: { name?: string }) {
   const [indexFailed, setIndexFailed] = useState(false)
 
   const [saveError, setSaveError] = useState<ErrorShape | null>(null)
+  // The resourceVersion the form was loaded at; a save sends it back so another save is not overwritten.
+  const [baseVersion, setBaseVersion] = useState('')
+  const [changed, setChanged] = useState(false)
+  const [reloads, setReloads] = useState(0)
   const [saving, setSaving] = useState(false)
 
   const [preview, setPreview] = useState<{ rebootRequired: boolean; installTimeOnly: string[]; unsupported: string[] } | null>(null)
@@ -148,6 +154,7 @@ export function PatchDetail({ name }: { name?: string }) {
         applyTargetFields(targetFieldsFor(layerKeyOf(p.layer), p.target))
         setConfig(prettyConfig(p.config))
         setUnmigratedReason(p.unmigratedReason)
+        setBaseVersion(p.resourceVersion)
         setLoaded(true)
       },
       (err) => {
@@ -160,7 +167,7 @@ export function PatchDetail({ name }: { name?: string }) {
     return () => {
       cancelled = true
     }
-  }, [isNew, namespace, name])
+  }, [isNew, namespace, name, reloads])
 
   function applyTargetFields(f: { role: string; labelSelectorText: string; machineRef: string }) {
     setRole(f.role)
@@ -209,12 +216,13 @@ export function PatchDetail({ name }: { name?: string }) {
         await patchClient.createPatch({ patch: wire })
         notifyDone(t('toast.patchCreated', { name: wire.ref?.name ?? '' }))
       } else {
-        await patchClient.updatePatch({ patch: wire })
+        await patchClient.updatePatch(withBase({ patch: wire }, baseVersion))
         notifyWrite('toast.patchSaved', { name: wire.ref?.name ?? '' })
       }
       navigate('/config')
     } catch (err) {
       setSaveError(describeError(err))
+      setChanged(isChanged(err))
     } finally {
       setSaving(false)
     }
@@ -558,7 +566,17 @@ export function PatchDetail({ name }: { name?: string }) {
           </CardContent>
         </Card>
 
-        {saveError && <ErrorAlert {...saveError} />}
+        {saveError && changed && (
+          <ChangedAlert
+            detail={saveError.detail}
+            onReload={() => {
+              setSaveError(null)
+              setChanged(false)
+              setReloads(reloads + 1)
+            }}
+          />
+        )}
+        {saveError && !changed && <ErrorAlert {...saveError} />}
 
         {!previewFresh && !previewing && (
           <Alert>

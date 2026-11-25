@@ -461,6 +461,8 @@ export const en = {
 
   'patch.loading': 'Loading patch…',
   'patch.noPatch': 'No patch was returned.',
+  'edit.changedTitle': 'Changed since you opened it',
+  'edit.reload': 'Reload',
   'patch.chooseCluster': 'Choose a cluster first.',
   'patch.newTitle': 'New patch',
   'patch.intro':

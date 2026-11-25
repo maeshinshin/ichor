@@ -317,6 +317,7 @@ func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
 		Config:    config,
 		CreatedAt: createdAtToPB(p.CreationTimestamp),
 
+		ResourceVersion:  p.ResourceVersion,
 		UnmigratedReason: unmigratedReason(p),
 	}, nil
 }

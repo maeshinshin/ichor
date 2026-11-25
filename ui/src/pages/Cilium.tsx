@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { ChangedAlert } from '@/components/ChangedAlert'
+import { isChanged, withBase } from '@/lib/baseVersion'
 import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { CiliumUpgradeDialog } from '@/components/CiliumUpgradeDialog'
@@ -175,6 +177,7 @@ function UserValues({
   const [busy, setBusy] = useState<'validate' | 'preview' | 'apply' | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [confirm, setConfirm] = useState(false)
+  const [changed, setChanged] = useState(false)
 
   async function check(withDiff: boolean) {
     setBusy(withDiff ? 'preview' : 'validate')
@@ -194,12 +197,14 @@ function UserValues({
     setBusy('apply')
     setError(null)
     try {
-      await cniClient.setCiliumValues({ cluster, userYaml: text })
+      await cniClient.setCiliumValues(withBase({ cluster, userYaml: text }, data.resourceVersion))
       setConfirm(false)
       notifyDone(t('cilium.applied'))
       onApplied()
     } catch (err) {
       setError(describeError(err))
+      setChanged(isChanged(err))
+      if (isChanged(err)) setConfirm(false)
     } finally {
       setBusy(null)
     }
@@ -254,7 +259,8 @@ function UserValues({
           </div>
         </>
       )}
-      {!confirm && error && <ErrorAlert {...error} />}
+      {!confirm && error && changed && <ChangedAlert detail={error.detail} onReload={onApplied} />}
+      {!confirm && error && !changed && <ErrorAlert {...error} />}
       {stale && (
         <Alert>
           <TriangleAlertIcon />

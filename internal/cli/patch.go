@@ -221,7 +221,7 @@ func runPatchWrite(
 	}
 
 	if update {
-		resp, err := c.Patch.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire}))
+		resp, err := c.Patch.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: wire, BaseResourceVersion: wire.GetResourceVersion()}))
 		if err != nil {
 			return err
 		}
@@ -275,7 +275,8 @@ func init() {
 	applyCmd.Long = `apply writes the TalosConfigPatch in FILE: it creates the patch when none of that name exists in the
 namespace and replaces its spec when one does. It shows the impact first (a reboot, a reset and
 reinstall for install-time-only fields, fields too new for the cluster's Talos) and asks for confirmation
-when there is any, unless --yes. - reads the manifest from stdin.
+when there is any, unless --yes. - reads the manifest from stdin. A manifest that carries metadata.resourceVersion is
+refused if the patch has changed since that version; without it, apply replaces.
 
 The manifest is a typed TalosConfigPatch: spec.config holds the Talos machine configuration, each setting once.
 

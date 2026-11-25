@@ -214,7 +214,7 @@ func (s *Server) GetCiliumValues(
 		effective = nil
 	}
 
-	resp := &pb.GetCiliumValuesResponse{}
+	resp := &pb.GetCiliumValuesResponse{ResourceVersion: v.cluster.ResourceVersion}
 	if resp.DefaultsYaml, err = toYAML(defaults); err != nil {
 		return nil, err
 	}
@@ -327,6 +327,10 @@ func (s *Server) SetCiliumValues(
 
 	v, err := s.getCiliumView(ctx, ref)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := checkBase(req.Msg.GetBaseResourceVersion(), v.cluster.ResourceVersion, "cluster", namespacedName(ref).String()); err != nil {
 		return nil, err
 	}
 

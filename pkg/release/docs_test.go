@@ -104,6 +104,6 @@ func TestDocsSkippedMatchesTheBumpScript(t *testing.T) {
 	slices.Sort(got)
 
 	if want := slices.Sorted(maps.Keys(docsSkipped)); !slices.Equal(got, want) {
-		t.Errorf("hack/bump-cilium-rewrite.sh docs_skipped = %v, docsSkipped = %v: they must name the same top-level directories", got, want)
+		t.Errorf("bump script docs_skipped = %v, docsSkipped = %v: they must name the same top-level directories", got, want)
 	}
 }

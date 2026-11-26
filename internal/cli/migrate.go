@@ -80,5 +80,6 @@ func init() {
 	migrateCmd.AddCommand(migratePatchesCmd)
 	// Default "": every namespace, so a patch an older release left outside the controller's namespace is migrated too.
 	bindControllerNamespaceFlag(migratePatchesCmd.Flags(), &migratePatchesNamespace, "")
+	bindIchorNamespaceFlag(migratePatchesCmd.Flags())
 	markWrites(migratePatchesCmd)
 }

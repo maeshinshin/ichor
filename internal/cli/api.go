@@ -100,9 +100,20 @@ func overrideOf(opts apiOptions) *pb.Override {
 	return &pb.Override{}
 }
 
-// controllerNamespaceValue is the value of every -n/--namespace flag: it accepts only the controller's namespace
-// (ADR 0175), so a command never reaches for an Ichor object anywhere else.
-type controllerNamespaceValue struct{ p *string }
+// errNotControllerNamespace is the one refusal of a namespace other than the controller's, for init, adopt and the
+// shared -n flag alike (ADR 0175).
+func errNotControllerNamespace(command, got, want string) error {
+	return fmt.Errorf("%s: --namespace %q is not %q, the namespace Ichor's controller runs in: every Ichor object lives there, and the "+
+		"controller reads the secrets bundle Secret only there, so one created elsewhere would never be reconciled; nothing was written",
+		command, got, want)
+}
+
+// controllerNamespaceValue is the value of every shared -n/--namespace flag. It only stores: checkNamespaceFlag judges
+// it once --ichor-namespace is parsed too, since the flags come in any order.
+type controllerNamespaceValue struct {
+	p   *string
+	def string
+}
 
 func (v controllerNamespaceValue) String() string {
 	if v.p == nil {
@@ -113,11 +124,6 @@ func (v controllerNamespaceValue) String() string {
 }
 
 func (v controllerNamespaceValue) Set(s string) error {
-	if s != ichorControllerNamespace {
-		return fmt.Errorf("--namespace %q is not %q: every Ichor object lives in the namespace of Ichor's controller, %q; nothing was written",
-			s, ichorControllerNamespace, ichorControllerNamespace)
-	}
-
 	*v.p = s
 
 	return nil
@@ -126,19 +132,49 @@ func (v controllerNamespaceValue) Set(s string) error {
 func (controllerNamespaceValue) Type() string { return "string" }
 
 // bindControllerNamespaceFlag registers a hidden, deprecated -n/--namespace that only accepts the controller's
-// namespace; def is its default ("" where the command's own default is every namespace).
+// namespace (the one --ichor-namespace names); def is its default, "" where the command's own default is every namespace.
 func bindControllerNamespaceFlag(f *pflag.FlagSet, p *string, def string) {
 	*p = def
-	f.VarP(controllerNamespaceValue{p}, "namespace", "n", "namespace of the Ichor resources; only \""+ichorControllerNamespace+"\", the controller's, is accepted")
-	_ = f.MarkDeprecated("namespace", "every Ichor object lives in the controller's namespace (\""+ichorControllerNamespace+"\"); the flag only accepts that value")
+	f.VarP(controllerNamespaceValue{p, def}, "namespace", "n", "namespace of the Ichor resources; only the controller's (--ichor-namespace) is accepted")
+	_ = f.MarkDeprecated("namespace", "every Ichor object lives in the controller's namespace (--ichor-namespace); the flag only accepts that value")
+}
+
+// bindIchorNamespaceFlag registers --ichor-namespace, the effective controller namespace every command reads.
+func bindIchorNamespaceFlag(f *pflag.FlagSet) {
+	f.StringVar(&apiOpts.IchorNamespace, "ichor-namespace", ichorControllerNamespace,
+		"namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives)")
+}
+
+// checkNamespaceFlag refuses a -n that differs from the effective controller namespace (apiOpts.IchorNamespace), and
+// makes an unset -n mean that namespace. It runs in the root's pre-run, before anything is read or written.
+func checkNamespaceFlag(cmd *cobra.Command) error {
+	f := cmd.Flags().Lookup("namespace")
+	if f == nil {
+		return nil
+	}
+
+	v, ok := f.Value.(controllerNamespaceValue)
+	if !ok {
+		return nil
+	}
+
+	want := cmp.Or(apiOpts.IchorNamespace, ichorControllerNamespace)
+
+	switch {
+	case f.Changed && *v.p != want:
+		return errNotControllerNamespace(cmd.CommandPath(), *v.p, want)
+	case !f.Changed && v.def != "":
+		*v.p = want
+	}
+
+	return nil
 }
 
 // addAPIFlags registers the shared flags on a command group.
 func addAPIFlags(cmd *cobra.Command) {
 	f := cmd.PersistentFlags()
 	bindControllerNamespaceFlag(f, &apiOpts.Namespace, ichorControllerNamespace)
-	f.StringVar(&apiOpts.IchorNamespace, "ichor-namespace", ichorControllerNamespace,
-		"namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives)")
+	bindIchorNamespaceFlag(f)
 	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")
 	f.StringVar(&apiOpts.CAFile, "ca-file", os.Getenv(caFileEnv),
 		"PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env "+caFileEnv+")")

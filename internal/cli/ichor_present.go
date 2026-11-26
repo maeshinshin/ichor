@@ -282,9 +282,7 @@ func checkControllerNamespace(ctx context.Context, c client.Reader, install *ado
 			namespace, ichorControllerNamespace, namespace, ichorControllerNamespace)
 	}
 
-	return fmt.Errorf("adopt: --namespace %q is not %q, the namespace Ichor's controller runs in; the controller reads the secrets bundle "+
-		"Secret from its own namespace, so a bundle written to %q would never be found. Run adopt again without --namespace (it uses the controller's, %s); nothing was written",
-		namespace, want, namespace, want)
+	return errNotControllerNamespace("adopt", namespace, want)
 }
 
 // adoptNamespaceOf is adopt's namespace: --namespace when given (checkControllerNamespace judges it), else

@@ -69,6 +69,10 @@ func checkServerSkew(ctx context.Context, c client.Reader, cliVersion string) er
 
 // skewPreRun is the root's PersistentPreRunE.
 func skewPreRun(cmd *cobra.Command, _ []string) error {
+	if err := checkNamespaceFlag(cmd); err != nil {
+		return err
+	}
+
 	if cmd.Annotations[writesAnnotation] != "true" {
 		return nil
 	}

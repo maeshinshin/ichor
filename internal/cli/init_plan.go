@@ -346,9 +346,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 	// The controller reads the bundle Secret only from its own namespace (ADR 0011, 0019) and the upgrade's
 	// migrations cover only that namespace, so a cluster created elsewhere would never come up.
 	if in.Namespace != ichorControllerNamespace {
-		return nil, fmt.Errorf("init: --namespace %q is not %q: Ichor's controller always runs in %q and reads the secrets bundle "+
-			"Secret only there, so a cluster created elsewhere would never be reconciled; nothing was written",
-			in.Namespace, ichorControllerNamespace, ichorControllerNamespace)
+		return nil, errNotControllerNamespace("init", in.Namespace, ichorControllerNamespace)
 	}
 
 	if err := validateCIDRs("--pod-subnets", in.PodSubnets); err != nil {

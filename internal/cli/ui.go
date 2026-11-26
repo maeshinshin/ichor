@@ -145,6 +145,7 @@ func init() {
 
 	flags := uiCmd.Flags()
 	bindControllerNamespaceFlag(flags, &uiOpts.Namespace, ichorControllerNamespace)
+	bindIchorNamespaceFlag(flags)
 	flags.IntVar(&uiOpts.LocalPort, "local-port", 0, "local port to forward to (defaults to the Service's own port)")
 	flags.BoolVar(&uiOpts.OpenBrowser, "open-browser", true, "open the default web browser once the port-forward is ready")
 }

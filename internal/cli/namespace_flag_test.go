@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -133,30 +134,53 @@ func TestNoCommandShowsANamespaceFlag(t *testing.T) {
 	}
 }
 
-// -n is accepted only when it names the controller's namespace.
-func TestNamespaceFlagRefusesAnotherNamespace(t *testing.T) {
-	for path, f := range namespaceFlags(rootCmd) {
-		// init and adopt refuse another namespace when they run (buildInitPlan, checkControllerNamespace); the
-		// installer's Job passes the namespace the controller really runs in.
-		if slices.Contains([]string{rootCmd.Name() + " " + cmdInit, rootCmd.Name() + " adopt"}, path) || strings.HasPrefix(path, "ichor installer") {
+// namespaceFlagError parses args on cmd, runs the namespace check the root's pre-run runs, and restores every flag.
+func namespaceFlagError(t *testing.T, cmd *cobra.Command, args ...string) error {
+	t.Helper()
+
+	reset := func() { cmd.Flags().VisitAll(func(f *pflag.Flag) { _ = f.Value.Set(f.DefValue); f.Changed = false }) }
+	reset()
+	t.Cleanup(reset)
+
+	if err := cmd.ParseFlags(args); err != nil {
+		t.Fatalf("%s %v: %v", cmd.CommandPath(), args, err)
+	}
+
+	return checkNamespaceFlag(cmd)
+}
+
+// -n names the controller's namespace or it is refused. That namespace is the one --ichor-namespace names (a Helm
+// install may use another than the default), so the flag is judged against it, not against a constant.
+func TestNamespaceFlagIsJudgedAgainstTheEffectiveControllerNamespace(t *testing.T) {
+	flags := namespaceFlags(rootCmd)
+
+	for _, path := range slices.Sorted(maps.Keys(flags)) {
+		// init and adopt refuse when they run (buildInitPlan, checkControllerNamespace); the installer's Job passes
+		// the namespace the controller really runs in.
+		if path == rootCmd.Name()+" "+cmdInit || path == rootCmd.Name()+" adopt" || strings.HasPrefix(path, rootCmd.Name()+" installer") {
 			continue
 		}
 
-		if f.Deprecated == "" {
+		cmd, _, err := rootCmd.Find(strings.Fields(path)[1:])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if flags[path].Deprecated == "" {
 			t.Errorf("%s: --namespace is not marked deprecated", path)
 		}
 
-		old := f.Value.String()
-
-		err := f.Value.Set("elsewhere")
-		if err == nil || !strings.Contains(err.Error(), ichorControllerNamespace) {
-			t.Errorf("%s: -n elsewhere = %v, want a refusal naming %q", path, err, ichorControllerNamespace)
+		if err := namespaceFlagError(t, cmd, "--ichor-namespace", "other", "-n", "other"); err != nil {
+			t.Errorf("%s: -n other with --ichor-namespace other: %v", path, err)
 		}
 
-		if err := f.Value.Set(ichorControllerNamespace); err != nil {
-			t.Errorf("%s: -n %s refused: %v", path, ichorControllerNamespace, err)
+		err = namespaceFlagError(t, cmd, "--ichor-namespace", "other", "-n", ichorControllerNamespace)
+		if err == nil || !strings.Contains(err.Error(), `"other"`) {
+			t.Errorf("%s: -n %s with --ichor-namespace other = %v, want a refusal naming other", path, ichorControllerNamespace, err)
 		}
 
-		_ = f.Value.Set(old)
+		if err := namespaceFlagError(t, cmd, "-n", ichorControllerNamespace); err != nil {
+			t.Errorf("%s: -n %s alone: %v", path, ichorControllerNamespace, err)
+		}
 	}
 }

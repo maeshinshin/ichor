@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -474,5 +475,22 @@ func TestAdoptSignIn_RerunOnAHealthyInstallWithAnotherAdminChangesNothing(t *tes
 
 	if a := f.cluster(t).Spec.Authentication; a == nil || a.Ichor == nil || a.Ichor.Enabled {
 		t.Errorf("spec.authentication = %+v, want the issuer left disabled", a)
+	}
+}
+
+// TestAdoptSignIn_LeftoverIchorInstallationIsNamed: an IchorInstallation of a removed install, with no
+// controller Deployment, is reported as that and not as a missing ichor-ui Deployment.
+func TestAdoptSignIn_LeftoverIchorInstallationIsNamed(t *testing.T) {
+	f := signInFlow(t)
+
+	inst := &ichorv1alpha1.IchorInstallation{ObjectMeta: metav1.ObjectMeta{Name: ichorv1alpha1.IchorInstallationName}}
+	if err := f.env.k8s.Create(context.Background(), inst); err != nil {
+		t.Fatal(err)
+	}
+
+	err := f.runSignIn()
+	if err == nil || !strings.Contains(err.Error(), "left over from a removed install") ||
+		!strings.Contains(err.Error(), "kubectl delete ichorinstallation "+ichorv1alpha1.IchorInstallationName) {
+		t.Fatalf("runAdopt error = %v, want the leftover IchorInstallation named with how to remove it", err)
 	}
 }

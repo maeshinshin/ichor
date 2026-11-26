@@ -58,7 +58,7 @@ const (
 	// patch minus one. Cilium 1.19 is tested with 1.32 to 1.35 and Talos v1.14.5 supports 1.33 to 1.37. A test that
 	// upgrades to the release set starts one minor below it (see TestA1Upgrade).
 	foreignK8sVersion = "v1.34.12"
-	// foreignCiliumVersion is the Cilium the foreign clusters start with: one minor below the embedded 1.20.4, so
+	// foreignCiliumVersion is the Cilium the foreign clusters start with: one minor below the embedded 1.20.5, so
 	// adopt's takeover of a one-minor-older Cilium is what the cases exercise. The chart is
 	// fetched by `make foreign-cilium-chart`.
 	foreignCiliumVersion = "1.19.10"

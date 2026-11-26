@@ -25,7 +25,7 @@ const (
 
 	// ChartVersion is the Cilium release the values below were written
 	// against. Bump it alongside the values when moving to a newer Cilium.
-	ChartVersion = "1.20.4"
+	ChartVersion = "1.20.5"
 )
 
 // kubePrismPort is KubePrism's local, load-balanced Kubernetes API port,

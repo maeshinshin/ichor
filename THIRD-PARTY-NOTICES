@@ -1161,7 +1161,7 @@ Components:
     Copyright 2021-2026 The Connect Authors
 - class-variance-authority@0.7.1
     Copyright 2022 Joe Bell
-- Cilium Helm chart 1.20.4
+- Cilium Helm chart 1.20.5
 - Gateway API CRDs@v1.6.1
     Copyright The Kubernetes Authors.
 - Sigstore public-good trusted root
@@ -3743,8 +3743,8 @@ Upstream projects:
 
 Embedded chart:
 
-- Cilium Helm chart 1.20.4 (https://github.com/cilium/cilium)
-    pkg/cni/cilium/chart/cilium-1.20.4.tgz
+- Cilium Helm chart 1.20.5 (https://github.com/cilium/cilium)
+    pkg/cni/cilium/chart/cilium-1.20.5.tgz
     Licence: Apache-2.0 (variant 1 of 4) (text in section 3)
 
 Embedded data:

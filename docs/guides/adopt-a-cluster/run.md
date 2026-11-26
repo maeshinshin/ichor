@@ -27,7 +27,7 @@ has never seen looks like this (the `…` progress lines of each step are left o
 Ichor adopt · prod
 namespace ichor-system · discovering from 10.0.0.11
 ✓ Read cluster — Talos v1.14.5 · Kubernetes v1.36.6 · 2 read · no TalosCluster yet
-  no CNI found: Cilium will be installed by adopt (Cilium 1.20.4, tunnel the default, kube-proxy enabled) as Ichor's own Helm release, then Ichor is installed, then the cluster is adopted with the managed cilium preset
+  no CNI found: Cilium will be installed by adopt (Cilium 1.20.5, tunnel the default, kube-proxy enabled) as Ichor's own Helm release, then Ichor is installed, then the cluster is adopted with the managed cilium preset
 ✓ Inspect CNI — CNI: none (no CNI installed, every node NotReady)
 ! after the nodes are released adopt will set Ichor's sign-in up: create the first administrator "admin" (ichor-ui signs in at https://localhost:8443), and set spec.authentication.ichor on the TalosCluster, which marks every control plane APIServerRestartRequired: kube-apiserver restarts on each control plane, one at a time, when you run `ichor rollout config` (until then it runs as it is; with a single control plane the Kubernetes API is unavailable while it restarts)
   node "uuid-10.0.0.10": role controlplane, install disk not stated in the node's configuration

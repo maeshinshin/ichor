@@ -663,7 +663,7 @@ func TestA7Refused(t *testing.T) {
 	}
 }
 
-// TestA6Refused: a Cilium more than one minor below the embedded 1.20.4 (here 1.16.x) is refused and nothing
+// TestA6Refused: a Cilium more than one minor below the embedded 1.20.5 (here 1.16.x) is refused and nothing
 // is written. One minor below (1.19, TestA6Accepted119) is taken over; two below (1.18) is refused by the same rule.
 // The cluster is built from bin/foreign/chart116/cilium-1.16.19.tgz (`make foreign-old-cilium-chart` fetches it);
 // one operator replica keeps the health check from refusing before the version rule runs.
@@ -688,8 +688,8 @@ func TestA6Refused(t *testing.T) {
 	refusedWritesNothing(t, c, hashes, records)
 }
 
-// TestA6Accepted119 (the other half of the rule): a Cilium one minor below the embedded 1.20.4 (the foreign
-// default, chart 1.19.10, installed by `make foreign-cilium-chart`) is taken over and upgraded to 1.20.4.
+// TestA6Accepted119 (the other half of the rule): a Cilium one minor below the embedded 1.20.5 (the foreign
+// default, chart 1.19.10, installed by `make foreign-cilium-chart`) is taken over and upgraded to 1.20.5.
 func TestA6Accepted119(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
 	logState(t, c, "before")
@@ -704,8 +704,8 @@ func TestA6Accepted119(t *testing.T) {
 	if out, err := inner(c, "-n", nsKubeSystem, "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Errorf("rollout after takeover: %v\n%s", err, out)
 	}
-	if img := ciliumDS(c); !strings.Contains(img, "cilium:v1.20.4") {
-		t.Errorf("the agent was not upgraded to 1.20.4: %s", img)
+	if img := ciliumDS(c); !strings.Contains(img, "cilium:v1.20.5") {
+		t.Errorf("the agent was not upgraded to 1.20.5: %s", img)
 	}
 	logState(t, c, "after takeover")
 	time.Sleep(30 * time.Second)

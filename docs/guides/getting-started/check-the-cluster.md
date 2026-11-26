@@ -18,7 +18,7 @@ $ ichor get cluster demo
 demo · ichor-system
   Talos        v1.14.5
   Kubernetes   v1.36.6
-  Cilium       1.20.4
+  Cilium       1.20.5
   Endpoint     192.168.1.50 (node)
   Health       ✓ ready
 
@@ -27,7 +27,7 @@ Conditions
   ✓ Transitioning           StableControlPlaneCount  approved control planes right now: 1
   ✓ CNIHandover             Complete                 Helm release cilium is deployed and Cilium is ready; no longer rendering its cluster.inlineManifests entry
   ✓ CNIValuesApplied        Applied                  the Cilium Helm release is deployed at the cluster's values and the DaemonSet is ready
-  ✓ CiliumUpgradeAvailable  UpToDate                 the Cilium release is at the chart 1.20.4 this Ichor embeds
+  ✓ CiliumUpgradeAvailable  UpToDate                 the Cilium release is at the chart 1.20.5 this Ichor embeds
 
 $ ichor get nodes --cluster demo
 NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE  AGE
@@ -36,7 +36,7 @@ fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp         
 $ ichor version
 ichor        v{{version}}
 installed    v{{version}}
-new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
+new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.5 (contract v1.14)
 ```
 
 `get cluster` prints versions, endpoint, health and the conditions; `describe cluster` adds the

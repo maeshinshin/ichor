@@ -62,7 +62,7 @@ var ciliumKubernetes = map[string]kubernetesRange{
 	// The requirements page at v1.19.10 still lists 1.31 to 1.34 (stale); compatibility.rst agrees with the
 	// matrix, so the matrix wins.
 	"1.19": {min: "1.32", max: "1.35"},
-	// https://github.com/cilium/cilium/blob/v1.20.4/.github/actions/ginkgo/main-k8s-versions.yaml runs 1.33 to 1.36.
+	// https://github.com/cilium/cilium/blob/v1.20.5/.github/actions/ginkgo/main-k8s-versions.yaml runs 1.33 to 1.36.
 	"1.20": {min: kubernetes133, max: "1.36"},
 }
 

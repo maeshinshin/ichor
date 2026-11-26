@@ -44,6 +44,9 @@ const (
 	// reasonRebootRequired is the Ready=False reason the controller sets on a machine whose pending
 	// change needs a reboot (talosmachine_controller.go).
 	reasonRebootRequired = "RebootRequired"
+	// reasonAPIServerRestartRequired is the one for a change that only restarts the control plane's
+	// kube-apiserver (talosmachine_controller.go, refuseForOperation); it too waits for a rollout.
+	reasonAPIServerRestartRequired = "APIServerRestartRequired"
 )
 
 // caRotationAdvice is the recommendation, word for word. Advice only: nothing here
@@ -87,6 +90,7 @@ func releaseHold(
 	own func(*adoptNode) ownership,
 ) (int, error) {
 	released := 0
+	pending := false
 
 	for _, n := range releaseOrder(nodes) {
 		key := types.NamespacedName{Namespace: namespace, Name: n.M.Name}
@@ -141,17 +145,20 @@ func releaseHold(
 
 		released++
 
-		reboot, err := waitMachineReleased(ctx, deps, key)
+		waiting, err := waitMachineReleased(ctx, deps, key)
 		if err != nil {
 			return released, err
 		}
 
-		// The hold is already off and nothing reboots a node on its own, so go on to the next
+		// The hold is already off and nothing applies the change on its own, so go on to the next
 		// machine; a rerun of adopt skips the machines whose hold is gone.
-		if reboot {
-			_, _ = fmt.Fprintf(deps.Stderr, "adopt: node %q needs a reboot to apply a pending change; run `ichor rollout config --cluster %s`; adopt goes on with the other nodes\n",
-				m.Name, clusterName)
-		}
+		pending = pending || waiting
+	}
+
+	if pending {
+		// One rollout covers this and the authenticator adopt sets next: it applies whatever is rendered when it runs.
+		_, _ = fmt.Fprintf(deps.Stderr, "adopt: a machine holds a pending change that only a rollout applies; adopt goes on, "+
+			"and afterwards run `ichor rollout config --cluster %s --follow`\n", clusterName)
 	}
 
 	return released, nil
@@ -184,7 +191,8 @@ func clusterPatches(ctx context.Context, c client.Client, namespace, clusterName
 }
 
 // waitMachineReleased polls until the machine is Ready and no longer held. It returns true early
-// when the machine reports Ready=False/RebootRequired: that waits for the operator, not for time.
+// when the machine reports Ready=False with RebootRequired or APIServerRestartRequired: that waits
+// for the operator's rollout, not for time.
 func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.NamespacedName) (bool, error) {
 	wait := cmp.Or(deps.ReleaseWait, defaultReleaseWait)
 	interval := cmp.Or(deps.Interval, defaultReleaseInterval)
@@ -202,7 +210,7 @@ func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.Namespac
 		}
 
 		if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionReady); err == nil && c != nil &&
-			c.Status == metav1.ConditionFalse && c.Reason == reasonRebootRequired {
+			c.Status == metav1.ConditionFalse && (c.Reason == reasonRebootRequired || c.Reason == reasonAPIServerRestartRequired) {
 			return true, nil
 		}
 

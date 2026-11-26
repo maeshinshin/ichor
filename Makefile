@@ -507,6 +507,7 @@ HELM_EXTRA_ARGS ?=
 
 .PHONY: install-helm
 install-helm: ## Check that Helm is on the PATH; the dev shell provides it.
+	@# command -v fails when helm is absent; the message turns that into a clear "run inside nix develop"
 	@command -v $(HELM) >/dev/null 2>&1 || { echo "helm not found: run inside nix develop" >&2; exit 1; }
 
 .PHONY: helm-deploy

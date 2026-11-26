@@ -179,7 +179,7 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: |
           # shellcheck disable=SC2016 # the single-quoted script is meant for the inner bash -c, not this shell
-          nix develop --command bash -c 'echo "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$ACTOR" --password-stdin'
+          nix develop --command bash -o pipefail -c 'echo "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$ACTOR" --password-stdin'
 
       # ghcr.io/maeshinshin/{ichor-controller,ichor-ui}:<tag>. The digests land in bin/digests.txt as <repo>@<digest>.
       - name: Push the controller and UI images
@@ -289,9 +289,9 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: |
           # shellcheck disable=SC2016 # the single-quoted scripts are meant for the inner bash -c, not this shell
-          nix develop --command bash -c 'echo "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$ACTOR" --password-stdin'
+          nix develop --command bash -o pipefail -c 'echo "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$ACTOR" --password-stdin'
           # shellcheck disable=SC2016 # as above
-          nix develop --command bash -c 'echo "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin'
+          nix develop --command bash -o pipefail -c 'echo "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin'
 
       # ghcr.io/maeshinshin/ichor-installer:<tag>; its digest is appended to bin/digests.txt, which already holds the
       # controller's and the UI's.

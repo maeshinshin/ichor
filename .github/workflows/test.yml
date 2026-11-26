@@ -53,7 +53,7 @@ jobs:
       - name: Verify the devShell Go floor
         run: |
           # shellcheck disable=SC2016 # the single-quoted script is meant for the inner bash -c, not this shell
-          nix develop --command bash -c '
+          nix develop --command bash -o pipefail -c '
             want=$(sed -n "s/^go //p" go.mod)
             # local: auto would download go.mods version and the check could never fail
             have=$(GOTOOLCHAIN=local go env GOVERSION | sed "s/^go//")

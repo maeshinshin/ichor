@@ -1215,6 +1215,7 @@ func deleteRecord(ctx context.Context, kube kubernetes.Interface, rec corev1.Sec
 }
 
 func errRecordChanged(rec corev1.Secret) error {
-	return fmt.Errorf("cilium: the foreign Helm release record %s/%s changed during the takeover, after it was backed up; "+
+	return fmt.Errorf("cilium: the foreign Helm release record %s/%s changed during the takeover, "+
+		"after it was backed up; "+
 		"nothing newer was deleted. Run the command again", rec.Namespace, rec.Name)
 }

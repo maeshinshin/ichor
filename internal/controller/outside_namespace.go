@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -114,7 +115,13 @@ func (r *OutsideNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.Status().Patch(ctx, obj, client.MergeFrom(base)); err != nil {
+	// Optimistic lock: the conditions are an array, which a merge patch replaces whole from this possibly stale copy. A
+	// conflict requeues and the next pass reads the object again.
+	if err := r.Status().Patch(ctx, obj, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
+
 		return ctrl.Result{}, fmt.Errorf("writing the %s condition: %w", ichorv1alpha1.ConditionOutsideControllerNamespace, err)
 	}
 

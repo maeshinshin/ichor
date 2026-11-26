@@ -27,7 +27,7 @@ func TestAuthFlowRefusesAPlainHTTPIssuer(t *testing.T) {
 	old := authOpts
 	t.Cleanup(func() { authOpts = old })
 
-	authOpts.issuer = "http://ichor.example.com"
+	authOpts.issuer = "http://ui.example.org"
 
 	if _, err := newAuthFlowFor(&cobra.Command{}, uiAudience, false); err == nil || !strings.Contains(err.Error(), "https") {
 		t.Fatalf("newAuthFlowFor error = %v, want an https refusal", err)

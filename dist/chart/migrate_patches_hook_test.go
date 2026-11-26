@@ -61,6 +61,7 @@ func TestMigratePatchesHook(t *testing.T) {
 	}
 
 	want := map[rbacTriple]bool{
+		{ichorGroup, resPatches, verbGetController, ""}:     true,
 		{ichorGroup, resPatches, verbList, ""}:              true,
 		{ichorGroup, resPatches, verbPatch, ""}:             true,
 		{ichorGroup, resPatches + "/status", verbPatch, ""}: true,

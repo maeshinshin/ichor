@@ -64,3 +64,31 @@ func TestEmbeddedFilesAreInNotices(t *testing.T) {
 		}
 	}
 }
+
+// ichorArchives lists tracked archives that are Ichor's own test fixtures, with the reason each needs no entry.
+var ichorArchives = map[string]string{}
+
+// TestTrackedArchivesAreInNotices fails when a tracked *.tgz or *.tar.gz is not named in THIRD-PARTY-NOTICES:
+// an archive in git is redistributed with the source tree, embedded or not.
+func TestTrackedArchivesAreInNotices(t *testing.T) {
+	notices, err := os.ReadFile("../../../THIRD-PARTY-NOTICES")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list := exec.Command("git", "ls-files", "-z", "--", "*.tgz", "*.tar.gz")
+	list.Dir = "../../.."
+
+	out, err := list.Output()
+	if err != nil {
+		t.Fatalf("git ls-files: %v", err)
+	}
+
+	for p := range strings.SplitSeq(string(out), "\x00") {
+		if p == "" || ichorArchives[p] != "" || strings.Contains(string(notices), p) {
+			continue
+		}
+
+		t.Errorf("%s is tracked in git but THIRD-PARTY-NOTICES does not name it; name it, fetch it on demand, or add it to ichorArchives with a reason", p)
+	}
+}

@@ -26,7 +26,8 @@ spec:
         this namespace holds Ichor and its managed clusters' secrets, and deleting it destroys them and leaves the
         clusters unmanaged; uninstall on purpose: remove the TalosClusters or export the bundle
         (ichor export bundle), then set the annotation ichor.maesh.dev/allow-delete=true on the namespace and
-        delete it again
+        delete it again; the Secrets labelled ichor.maesh.dev/protected (the secrets bundles and the Cilium prior
+        release) need the same annotation first, or the namespace stays Terminating
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

@@ -30,7 +30,7 @@ spec:
     - expression: >-
         (variables.sa == 'ichor-installer' && object.metadata.namespace == '{{ .Release.Namespace }}') ||
         (variables.sa == 'ichor-cni' && object.metadata.namespace == 'kube-system')
-      message: the controller may only create Jobs under the ServiceAccount ichor-installer in ichor-system or ichor-cni in kube-system
+      message: the controller may only create Jobs under the ServiceAccount ichor-installer in {{ .Release.Namespace }} or ichor-cni in kube-system
       reason: Forbidden
     - expression: >-
         size(variables.pod.containers) == 1 && !has(variables.pod.initContainers) &&

@@ -120,7 +120,7 @@ Older versions let `kubectl delete namespace ichor-system` through. The namespac
 1. Save the bundle: `ichor export bundle NAME`. It reads the Secret, which still exists, and writes the file before its last step; that step marks the TalosCluster as exported and fails while the webhook is down.
 2. Delete the validating webhook, so the remaining deletes can pass: `kubectl delete validatingwebhookconfiguration ichor-validating-webhook-configuration`. The mutating one fails open and can stay.
 3. The controller is gone, so nothing clears the finalizers. On each TalosMachine, and on each TalosOperation, that has a `deletionTimestamp`: `kubectl -n ichor-system patch talosmachine NAME --type merge -p '{"metadata":{"finalizers":null}}'`. This writes nothing to a node.
-4. A version with the `ichor-protected-secrets` policy keeps the bundle Secret. Once it is exported, `kubectl -n ichor-system annotate secret SECRET ichor.maesh.dev/allow-delete=true` lets the namespace finish.
+4. A version with the `ichor-protected-secrets` policy keeps the Secrets labelled `ichor.maesh.dev/protected` (one secrets bundle per cluster, and the Cilium prior release if adopt took one over). Once the bundles are exported, `kubectl -n ichor-system annotate secret -l ichor.maesh.dev/protected ichor.maesh.dev/allow-delete=true` lets the namespace finish.
 
 The nodes keep running, so bring the cluster back under a fresh Ichor with `ichor adopt`. It installs Ichor when it is absent, then creates the bundle Secret, the TalosCluster and the TalosMachines; with no TalosCluster yet, `--node` names one control plane and adopt reads the members from it. Use the file from step 1:
 

@@ -378,8 +378,7 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 
 ##@ Deployment
 
-# KUBE_CONTEXT is optional: when set, every kubectl call in install, uninstall, deploy and
-# undeploy is pinned to that kubeconfig context; when empty, kubectl uses the current-context.
+# KUBE_CONTEXT is optional: when set, every kubectl call in the targets below is pinned to that kubeconfig context; when empty, kubectl uses the current-context.
 KUBE_CONTEXT ?=
 KUBE_CONTEXT_FLAG = $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
 # Server-side apply, as the installer applies (internal/installer FieldOwner): client-side apply keeps the whole

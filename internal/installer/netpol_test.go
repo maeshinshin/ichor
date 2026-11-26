@@ -90,7 +90,7 @@ func TestRunAppliesNetworkPoliciesOnlyWhenCiliumsCRDExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := applyOne(context.Background(), k8sClient, crds[0]); err != nil {
+	if err := ApplyOne(context.Background(), k8sClient, crds[0]); err != nil {
 		t.Fatalf("creating the Cilium CRD stub: %v", err)
 	}
 

@@ -55,7 +55,7 @@ func TestCheckReadsStoredPatchesUnderTheInstallerRole(t *testing.T) {
 				}
 
 				for _, obj := range objs {
-					if err := applyOne(ctx, k8sClient, obj); err != nil {
+					if err := ApplyOne(ctx, k8sClient, obj); err != nil {
 						t.Fatalf("seeding %s %s: %v", obj.GetKind(), obj.GetName(), err)
 					}
 				}
@@ -123,7 +123,7 @@ func TestRunFromV024RefusesAStoredRetiredFieldInAnotherNamespace(t *testing.T) {
 		}
 
 		for _, obj := range objs {
-			if err := applyOne(ctx, k8sClient, obj); err != nil {
+			if err := ApplyOne(ctx, k8sClient, obj); err != nil {
 				t.Fatalf("seeding %s %s: %v", obj.GetKind(), obj.GetName(), err)
 			}
 		}

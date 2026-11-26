@@ -40,8 +40,8 @@ func TestApplyOneKeepsTheRulesOfTheLiveImpersonationRole(t *testing.T) {
 	key := client.ObjectKey{Name: uiImpersonateRole}
 
 	// Absent: created, empty.
-	if err := applyOne(ctx, k8sClient, manifest()); err != nil {
-		t.Fatalf("applyOne on an absent role: %v", err)
+	if err := ApplyOne(ctx, k8sClient, manifest()); err != nil {
+		t.Fatalf("ApplyOne on an absent role: %v", err)
 	}
 
 	role := &rbacv1.ClusterRole{}
@@ -55,8 +55,8 @@ func TestApplyOneKeepsTheRulesOfTheLiveImpersonationRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := applyOne(ctx, k8sClient, manifest()); err != nil {
-		t.Fatalf("applyOne on a live role: %v", err)
+	if err := ApplyOne(ctx, k8sClient, manifest()); err != nil {
+		t.Fatalf("ApplyOne on a live role: %v", err)
 	}
 
 	got := &rbacv1.ClusterRole{}

@@ -670,3 +670,82 @@ func TestApplyIchorManifest_InstallsIchorUIWithSignInOn(t *testing.T) {
 		t.Errorf("ichor-ui was created with args %v, want sign-in on at %s", args, defaultUIURL)
 	}
 }
+
+const staleManifest = `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ichor-manager-role
+rules:
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [get]
+- apiGroups: [""]
+  resources: [namespaces]
+  verbs: [get]
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.example.dev
+spec:
+  group: example.dev
+  names: {kind: Widget, plural: widgets}
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              old: {type: string}
+              added: {type: string}
+`
+
+// TestApplyIchorManifest_UpdatesObjectsLeftByAnEarlierInstall proves a re-install brings the
+// cluster-scoped objects of an older install up to the manifest, not just creates absent ones.
+func TestApplyIchorManifest_UpdatesObjectsLeftByAnEarlierInstall(t *testing.T) {
+	ctx := context.Background()
+
+	oldRole := &rbacv1.ClusterRole{
+		Name:  "ichor-manager-role",
+		Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"get"}}},
+	}
+
+	old, err := installer.Decode([]byte(strings.Replace(staleManifest, "added: {type: string}", "", 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	oldCRD := old[1]
+
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(oldRole, oldCRD).Build()
+
+	if err := applyIchorManifest(ctx, c, []byte(staleManifest), &bytes.Buffer{}, false, installer.UISettings{}); err != nil {
+		t.Fatalf("applyIchorManifest: %v", err)
+	}
+
+	var role rbacv1.ClusterRole
+	if err := c.Get(ctx, types.NamespacedName{Name: "ichor-manager-role"}, &role); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(role.Rules) != 2 {
+		t.Errorf("ClusterRole kept %d rules, want the manifest's 2: %+v", len(role.Rules), role.Rules)
+	}
+
+	crd := &unstructured.Unstructured{}
+	crd.SetGroupVersionKind(oldCRD.GroupVersionKind())
+
+	if err := c.Get(ctx, types.NamespacedName{Name: "widgets.example.dev"}, crd); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(fmt.Sprint(crd.Object["spec"]), "added") {
+		t.Errorf("CRD still lacks the field the manifest adds: %v", crd.Object["spec"])
+	}
+}

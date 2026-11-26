@@ -251,7 +251,7 @@ func TestRunAppliesCRDsThenControllerThenUI(t *testing.T) {
 	}
 }
 
-// A status write by the Deployment controller between applyOne's Get and Update surfaces as a
+// A status write by the Deployment controller between ApplyOne's Get and Update surfaces as a
 // Conflict; the pair must be retried rather than fail the step.
 func TestApplyOneRetriesADeploymentUpdateConflict(t *testing.T) {
 	deployment := func(image string) *unstructured.Unstructured {
@@ -282,8 +282,8 @@ func TestApplyOneRetriesADeploymentUpdateConflict(t *testing.T) {
 			},
 		}).Build()
 
-	if err := applyOne(context.Background(), c, deployment("new")); err != nil {
-		t.Fatalf("applyOne: %v", err)
+	if err := ApplyOne(context.Background(), c, deployment("new")); err != nil {
+		t.Fatalf("ApplyOne: %v", err)
 	}
 
 	if updates != 2 {

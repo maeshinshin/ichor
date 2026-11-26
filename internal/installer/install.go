@@ -415,7 +415,7 @@ func applyWithSettle(ctx context.Context, c client.Client, u *unstructured.Unstr
 	var err error
 
 	pollErr := wait.PollUntilContextTimeout(ctx, time.Second, settle, true, func(ctx context.Context) (bool, error) {
-		err = applyOne(ctx, c, u)
+		err = ApplyOne(ctx, c, u)
 
 		return !apierrors.IsForbidden(err), nil
 	})
@@ -454,11 +454,11 @@ func adoptInitFields(ctx context.Context, c client.Client, u *unstructured.Unstr
 // uiImpersonateRole is internal/controller.ImpersonationRoleName: the controller owns its rules.
 const uiImpersonateRole = "ichor-ui-impersonate"
 
-// applyOne server-side applies u, except a Deployment, which is replaced whole. Apply merges
+// ApplyOne server-side applies u, except a Deployment, which is replaced whole. Apply merges
 // into fields other managers own (init's Update owns its probes and args), so a tcpSocket
 // probe applied over init's httpGet one is two handlers in one probe, which is invalid. The
 // replacement keeps the live annotations the Deployment controller writes.
-func applyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured) error {
+func ApplyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured) error {
 	if u.GetKind() != kindDeployment {
 		if err := adoptInitFields(ctx, c, u); err != nil {
 			return err

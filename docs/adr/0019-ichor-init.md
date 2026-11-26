@@ -228,3 +228,9 @@ of the installed controller (its Deployment or Helm release), else `ichor-system
 init file is still read, under the same rule. The flag stays where a namespace is a real choice: every command that
 names a Ichor resource through the shared API flags (`get`, `describe`, `patch`, `backup`, `upgrade` and the like), and
 `migrate patches -n`.
+
+## Amendment (2026-11-26): the endpoint types are three
+
+"The CRD's four endpoint types (`vip`, `loadBalancer`, `dns`, `node`)" is out of date. `dns` was removed from
+`spec.endpoint.type` in v0.3.0 (b81348264), so `buildInitPlan` accepts `vip`, `loadBalancer` and `node`, and still only
+warns when the type is not `vip`.

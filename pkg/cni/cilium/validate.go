@@ -60,6 +60,9 @@ type ValidationContext struct {
 	ForwardKubeDNSToHost *bool
 	// KubePrism is the effective KubePrism setting.
 	KubePrism *KubePrism
+	// KeptPrivateKeys are private-key paths (PrivateKeyPaths) an existing object already carried unchanged; they
+	// pass, so such an object stays editable. Everything else that holds a private key is refused.
+	KeptPrivateKeys []string
 }
 
 // ValidateValues is the one validation of user Cilium values. The TalosCluster webhook runs it with no facts, so
@@ -87,7 +90,7 @@ func ValidateValues(user map[string]any, c ValidationContext) error {
 
 	effective := values.Effective(defaults, user, owned)
 
-	if err := errors.Join(spec.Check(user, effective), guards(effective, c)); err != nil {
+	if err := errors.Join(checkPrivateKeys(user, c.KeptPrivateKeys), spec.Check(user, effective), guards(effective, c)); err != nil {
 		return err
 	}
 

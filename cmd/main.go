@@ -654,15 +654,9 @@ func main() {
 	})), "Failed to add the IchorInstallation seed")
 	// Label the controller's own namespace so ichor-protected-namespace refuses deleting it; retried until the API answers.
 	must(mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		return wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-			if err := controller.ProtectNamespace(ctx, mgr.GetAPIReader(), mgr.GetClient(), ns); err != nil {
-				setupLog.Info("Could not label the namespace as protected yet", "error", err.Error())
+		controller.ProtectNamespaceUntilDone(logr.NewContext(ctx, setupLog), mgr.GetAPIReader(), mgr.GetClient(), ns, 5*time.Second, 5*time.Minute)
 
-				return false, nil
-			}
-
-			return true, nil
-		})
+		return nil
 	})), "Failed to add the namespace protector")
 	must((&controller.MachineReclaimReconciler{
 		Client:              mgr.GetClient(),

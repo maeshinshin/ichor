@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	sysctlKey         = "net.ipv4.ip_forward"
+	sysctlKind        = "SysctlConfig"
 	dryRenderNS       = "ns"
 	dryRenderSecretNS = "ichor-system"
 	dryRenderFalse    = "false"
@@ -224,7 +226,7 @@ func TestTalosConfigPatchRefusesNewDocumentsAndAllowsClearingThem(t *testing.T) 
 	withDocs := func(value string) *ichorv1alpha1.TalosConfigPatch {
 		p := configPatch("old", nil)
 		p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
-			Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": value}},
+			Kind: sysctlKind, SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{sysctlKey: value}},
 		}}
 
 		return p
@@ -246,7 +248,7 @@ func TestTalosConfigPatchRefusesNewDocumentsAndAllowsClearingThem(t *testing.T) 
 		t.Errorf("an update that leaves spec.documents as stored was refused: %v", err)
 	}
 
-	migrated := configPatch("old", &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.ipv4.ip_forward": "1"}}})
+	migrated := configPatch("old", &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{sysctlKey: "1"}}})
 	if _, err := v.ValidateUpdate(ctx, withDocs("1"), migrated); err != nil {
 		t.Errorf("an update that clears spec.documents and sets spec.config was refused: %v", err)
 	}
@@ -267,7 +269,7 @@ func TestTalosConfigPatchRefusesConfigBesideStoredDocuments(t *testing.T) {
 
 	stored := configPatch("old", nil)
 	stored.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
-		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"kernel.pid_max": "1"}},
+		Kind: sysctlKind, SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"kernel.pid_max": "1"}},
 	}}
 
 	added := &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"vm.swappiness": "1"}}}
@@ -326,7 +328,7 @@ func TestTalosConfigPatchValidatesASpecChangeWhileDeleting(t *testing.T) {
 
 	added := configPatch("old", nil)
 	added.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
-		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
+		Kind: sysctlKind, SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{sysctlKey: "1"}},
 	}}
 
 	if _, err := v.ValidateUpdate(ctx, deleting(configPatch("old", nil)), deleting(added)); err == nil {

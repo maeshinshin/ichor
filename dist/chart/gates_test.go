@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const byoName = "byo"
+
 var fixedIdentities = []string{"ichor-auto-patch", "ichor-storage-extensions", "ichor-consent-sweep"}
 
 // TestNoWebhookNoImpersonatedIdentities: the identities' limits live in the validating webhook, so
@@ -60,14 +62,14 @@ func TestNamespacedRBACIsRefused(t *testing.T) {
 }
 
 func TestBringYourOwnServiceAccount(t *testing.T) {
-	docs := renderChartWithValues(t, "ichor", "serviceAccount.enabled=false", "serviceAccount.name=byo")
+	docs := renderChartWithValues(t, "ichor", "serviceAccount.enabled=false", "serviceAccount.name="+byoName)
 
-	if got := deploymentServiceAccountName(findNameSuffix(docs, kindDeployment, "controller-manager")); got != "byo" {
+	if got := deploymentServiceAccountName(findNameSuffix(docs, kindDeployment, "controller-manager")); got != byoName {
 		t.Errorf("Deployment serviceAccountName = %q, want byo", got)
 	}
 
 	for _, sa := range findAll(docs, kindServiceAccount) {
-		if nameOf(sa) == "ichor-controller-manager" || nameOf(sa) == "byo" {
+		if nameOf(sa) == "ichor-controller-manager" || nameOf(sa) == byoName {
 			t.Errorf("ServiceAccount %s renders with serviceAccount.enabled=false", nameOf(sa))
 		}
 	}
@@ -87,7 +89,7 @@ func TestBringYourOwnServiceAccount(t *testing.T) {
 				t.Errorf("%s %s binds %s, not byo", b["kind"], nameOf(b), name)
 			}
 
-			if name == "byo" {
+			if name == byoName {
 				found = true
 			}
 		}

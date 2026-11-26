@@ -53,10 +53,10 @@ func TestTalosStorageValidatesASpecChangeWhileDeleting(t *testing.T) {
 	now := metav1.Now()
 
 	deleting := func(sel metav1.LabelSelector) *ichorv1alpha1.TalosStorage {
-		return &ichorv1alpha1.TalosStorage{
-			ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &now, Finalizers: []string{"example.com/foreign"}},
-			Spec:       ichorv1alpha1.TalosStorageSpec{Nodes: sel},
-		}
+		s := &ichorv1alpha1.TalosStorage{Spec: ichorv1alpha1.TalosStorageSpec{Nodes: sel}}
+		s.DeletionTimestamp, s.Finalizers = &now, []string{"example.com/foreign"}
+
+		return s
 	}
 
 	for name, sel := range badSelectors() {

@@ -19,8 +19,8 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"

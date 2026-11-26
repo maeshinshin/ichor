@@ -23,7 +23,7 @@ same way it catches a stale chart.
 | [0008](0008-schedulable-has-no-auto.md) | `controlPlane.schedulable` takes a required `true`/`false`; dropped `auto` | Accepted |
 | [0009](0009-reboot-necessity-is-predicted-not-asked.md) | Keep predicting reboot necessity from `pkg/fieldmeta`'s field-path table; Talos itself won't answer the question | Accepted, amended |
 | [0010](0010-quorum-and-last-control-plane-guard.md) | Added `CheckControlPlaneQuorum` as a pure guard stronger than the `allow-delete` annotation alone | Accepted, amended |
-| [0011](0011-discovery-does-not-choose-candidates-or-auto-register-weak-identities.md) | Made `TalosMachineSpec.Role` optional; discovery never picks a role or auto-registers a weak identity | Accepted |
+| [0011](0011-discovery-does-not-choose-candidates-or-auto-register-weak-identities.md) | Made `TalosMachineSpec.Role` optional; discovery never picks a role or auto-registers a weak identity | Accepted, amended |
 | [0012](0012-volume-config-document-kinds.md) | Mirror `VolumeConfig`/`UserVolumeConfig`/`RawVolumeConfig` as three more mirrorgen roots, for disk roles | Accepted |
 | [0013](0013-cni-presets.md) | Settled the `cni.Preset` interface, `custom`'s required fields, Hubble's certificate handling, and where the two immutability guards live | Accepted; superseded in part by ADR 0099 |
 | [0014](0014-cli-skeleton-and-adopt.md) | Settled `cmd/ichor`'s package layout and how `ichor adopt` guarantees zero drift | Accepted, amended |

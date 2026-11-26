@@ -224,3 +224,18 @@ func TestAdopt_IchorCiliumRecordInControllerNamespace(t *testing.T) {
 		t.Fatal("no read-back: the record in the controller's namespace was not read")
 	}
 }
+
+// --cilium-values goes through the same check as the foreign record: a private key is refused and not stored.
+func TestSetCiliumUserValues_RefusesAPrivateKey(t *testing.T) {
+	cluster := &ichorv1alpha1.TalosCluster{}
+	user := map[string]any{"tls": map[string]any{"ca": map[string]any{"key": "c2VjcmV0"}}}
+
+	err := setCiliumUserValues(cluster, user, string(cni.KubeProxyEnabled), "")
+	if err == nil || !strings.Contains(err.Error(), "tls.ca.key") {
+		t.Fatalf("err = %v, want a refusal naming tls.ca.key", err)
+	}
+
+	if cluster.Spec.CNI.Cilium != nil {
+		t.Error("the values were stored although they were refused")
+	}
+}

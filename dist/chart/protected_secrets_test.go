@@ -22,7 +22,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -66,9 +65,10 @@ func TestProtectedSecretsCannotBeDeletedWithoutConsent(t *testing.T) {
 	}
 
 	secret := func(name string, labels, annotations map[string]string) *corev1.Secret {
-		return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		return &corev1.Secret{
 			Name: name, Namespace: kDefault, Labels: labels, Annotations: annotations,
-		}, Data: map[string][]byte{"k": []byte("v")}}
+			Data: map[string][]byte{"k": []byte("v")},
+		}
 	}
 	protected := map[string]string{deleteguard.ProtectedLabel: deleteguard.ProtectedValue}
 	consent := map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
@@ -104,7 +104,8 @@ func TestProtectedSecretsCannotBeDeletedWithoutConsent(t *testing.T) {
 	}
 
 	// The namespace controller removes a namespace's Secrets with DeleteCollection.
-	if err := admin.DeleteAllOf(ctx, &corev1.Secret{}, client.InNamespace(kDefault)); !isPolicyDenial(err, "allow-delete") {
+	err = admin.DeleteAllOf(ctx, &corev1.Secret{}, client.InNamespace(kDefault))
+	if !isPolicyDenial(err, "allow-delete") {
 		t.Errorf("deleting the namespace's Secrets in one call: got %v, want the policy's refusal", err)
 	}
 

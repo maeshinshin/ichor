@@ -25,18 +25,23 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const (
+	kindCluster = "TalosCluster"
+	kindMachine = "TalosMachine"
+)
+
 // TestNamespaceControllerIsToldWhyItsDeleteIsRefused guards: deleting a namespace that holds a TalosCluster or
 // TalosMachine is refused with the namespace message, not the bare annotation hint, and is not exempted: the
 // same refusal reaches any other user with the plain message, and the annotation still admits the delete.
 func TestNamespaceControllerIsToldWhyItsDeleteIsRefused(t *testing.T) {
 	deletes := map[string]func(ctx context.Context, annotations map[string]string) error{
-		"TalosCluster": func(ctx context.Context, a map[string]string) error {
+		kindCluster: func(ctx context.Context, a map[string]string) error {
 			_, err := (&TalosClusterCustomValidator{}).ValidateDelete(ctx,
 				&ichorv1alpha1.TalosCluster{Annotations: a})
 
 			return err
 		},
-		"TalosMachine": func(ctx context.Context, a map[string]string) error {
+		kindMachine: func(ctx context.Context, a map[string]string) error {
 			_, err := (&TalosMachineCustomValidator{}).ValidateDelete(ctx,
 				&ichorv1alpha1.TalosMachine{Annotations: a})
 
@@ -56,7 +61,7 @@ func TestNamespaceControllerIsToldWhyItsDeleteIsRefused(t *testing.T) {
 		}
 
 		consent := map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-		if err := del(userRequestCtx(nsControllerUser), consent); kind == "TalosCluster" && err != nil {
+		if err := del(userRequestCtx(nsControllerUser), consent); kind == kindCluster && err != nil {
 			t.Errorf("%s with the annotation as namespace-controller: %v", kind, err)
 		}
 	}

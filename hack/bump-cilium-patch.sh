@@ -26,7 +26,6 @@ helm_base=https://helm.cilium.io
 oidc_issuer=https://token.actions.githubusercontent.com
 workflow=https://github.com/cilium/cilium/.github/workflows/build-images-releases.yaml@refs/tags/
 k8s_matrix=.github/actions/ginkgo/main-k8s-versions.yaml
-chart_dir=pkg/cni/cilium/chart
 
 die() {
 	echo "bump-cilium-patch: $*" >&2
@@ -103,52 +102,9 @@ new_k8s=$(k8s_list "$new")
 [ "$old_k8s" = "$new_k8s" ] ||
 	die "Cilium v$new tests other Kubernetes versions than v$old ($k8s_matrix); update pkg/release/compat.go by hand: nothing was changed"
 
-# Everything is checked: write.
-subst() {
-	sed "$2" "$1" >"$work/subst" && cat "$work/subst" >"$1"
-}
-# must_have FILE TEXT: the move took effect.
-must_have() {
-	grep -Fq -- "$2" "$1" || die "$1: expected '$2' after the bump, the file's layout changed"
-}
-
-oldre=$(printf '%s' "$old" | sed 's/\./\\./g')
-echo "moving the pins from $old to $new"
-
-# 1. The pin and its digest (make cilium-chart reads both).
-subst Makefile "s/^CILIUM_CHART_VERSION ?= .*/CILIUM_CHART_VERSION ?= $new/"
-subst Makefile "s/^CILIUM_CHART_SHA256 ?= .*/CILIUM_CHART_SHA256 ?= $digest/"
-must_have Makefile "CILIUM_CHART_SHA256 ?= $digest"
-
-# 2. The embedded archive and the version constant the code compares with.
-subst pkg/cni/cilium/render.go "s#^//go:embed chart/cilium-$oldre\.tgz#//go:embed chart/cilium-$new.tgz#"
-must_have pkg/cni/cilium/render.go "//go:embed chart/cilium-$new.tgz"
-subst pkg/cni/cilium/values.go "s/^\([[:space:]]*ChartVersion = \)\"$oldre\"/\1\"$new\"/"
-must_have pkg/cni/cilium/values.go "ChartVersion = \"$new\""
-# The embedded archive is the one chart .gitignore does not ignore (the foreign test chart is fetched, not tracked).
-subst .gitignore "s#^!/pkg/cni/cilium/chart/cilium-$oldre\.tgz#!/pkg/cni/cilium/chart/cilium-$new.tgz#"
-must_have .gitignore "!/pkg/cni/cilium/chart/cilium-$new.tgz"
-[ "$old" = "$(makefile_var FOREIGN_CILIUM_CHART_VERSION)" ] || rm -f "$chart_dir/cilium-$old.tgz"
-
-# 3. Prose and hardware-test checks that name the embedded version. Not touched: CHANGELOG.md (a release
-#    section is written when the release is cut) and test fixtures that merely use a Cilium version.
-#    The pattern keeps 1.20.45 and 21.20.4 out; it runs twice because neighbours share a delimiter.
-# The docs are every file under docs/ that TestDocsStateThePinnedVersions scans (not adr, design, reference).
-# shortcut: a file-wide grep, so a prose line that names the old version for another reason is moved too; narrow it then.
-# shellcheck disable=SC2046
-for f in README.md $(grep -rlF --include='*.md' --exclude-dir=adr --exclude-dir=design --exclude-dir=reference -e "$old" docs) \
-	test/e2e/foreign/cilium_test.go test/internal/foreign/foreign.go; do
-	for _ in 1 2; do
-		subst "$f" "s/\([^0-9.]\|^\)$oldre\([^0-9]\|\$\)/\1$new\2/g"
-	done
-done
-subst pkg/release/compat.go "s#cilium/cilium/blob/v$oldre/$k8s_matrix#cilium/cilium/blob/v$new/$k8s_matrix#"
-
-# 4. The chart itself, digest-verified by the Makefile, and what is rendered from it.
-make cilium-chart
-make cilium-goldens
-# THIRD-PARTY-NOTICES names the embedded archive and chart version; TestEmbeddedFilesAreInNotices reads it.
-make third-party-notices
+# Everything is checked: write (hack/bump-cilium-rewrite.sh moves every pin; make check-cilium-bump runs it on a
+# made-up patch, so a pull request cannot break it unseen).
+hack/bump-cilium-rewrite.sh "$old" "$new" "$archive"
 
 echo "moved the embedded Cilium chart from $old to $new"
 if [ -n "${GITHUB_OUTPUT:-}" ]; then

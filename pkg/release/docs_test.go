@@ -18,9 +18,11 @@ package release
 
 import (
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -82,5 +84,26 @@ func TestDocsStateThePinnedVersions(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The bump script moves the pinned versions in the docs it is not told to skip; this test skips the same top-level
+// directories, so a docs file the script rewrites is one the test reads.
+func TestDocsSkippedMatchesTheBumpScript(t *testing.T) {
+	b, err := os.ReadFile("../../hack/bump-cilium-rewrite.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := regexp.MustCompile(`(?m)^docs_skipped="([^"]*)"$`).FindSubmatch(b)
+	if m == nil {
+		t.Fatal(`hack/bump-cilium-rewrite.sh has no docs_skipped="..." line`)
+	}
+
+	got := strings.Fields(string(m[1]))
+	slices.Sort(got)
+
+	if want := slices.Sorted(maps.Keys(docsSkipped)); !slices.Equal(got, want) {
+		t.Errorf("hack/bump-cilium-rewrite.sh docs_skipped = %v, docsSkipped = %v: they must name the same top-level directories", got, want)
 	}
 }

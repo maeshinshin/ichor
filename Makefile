@@ -84,6 +84,10 @@ cilium-goldens: ## Regenerate pkg/cni/cilium/testdata/bootstrap-*.golden.yaml fr
 bump-cilium-patch: ## Move the embedded Cilium chart to the newest patch of its minor, if the images are signed (hack/bump-cilium-patch.sh; CI runs it daily).
 	hack/bump-cilium-patch.sh
 
+.PHONY: check-cilium-bump
+check-cilium-bump: ## Run the rewrite half of the Cilium patch bot (hack/bump-cilium-rewrite.sh) on a made-up next patch in a throwaway copy, then the tests the bot's pull request must pass.
+	hack/check-cilium-bump.sh
+
 # The foreign-cluster e2e tests (test/e2e/foreign) install this one-minor-older chart as the
 # Cilium a foreign cluster starts with, so adopt's takeover of a live 1.19 is covered.
 FOREIGN_CILIUM_CHART_VERSION ?= 1.19.10

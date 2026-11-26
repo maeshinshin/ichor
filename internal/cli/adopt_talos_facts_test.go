@@ -137,7 +137,7 @@ func testReadTalosFactsV1alpha1(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if f.Role != "controlplane" || f.CNI.Kind != CNIFlannel || !f.KubeProxyEnabled || f.KubePrism.Enabled {
+		if f.Role != roleControlPlane || f.CNI.Kind != CNIFlannel || !f.KubeProxyEnabled || f.KubePrism.Enabled {
 			t.Errorf("facts = %+v", f)
 		}
 	})

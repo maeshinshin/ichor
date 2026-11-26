@@ -25,18 +25,20 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
+const oidcPrefix = "oidc:"
+
 // TestBuildAdoptPlan_RefusesJWTAuthenticators: a node whose KubeAuthenticationConfig already has
 // jwt entries would lose them to the render, so adopt refuses instead of dropping them.
 func TestBuildAdoptPlan_RefusesJWTAuthenticators(t *testing.T) {
 	bundle := newTestBundle(t)
 	cluster := newTestCluster()
 	machine := newTestMachine(cluster.Name)
-	machine.Spec.Role = "controlplane"
+	machine.Spec.Role = roleControlPlane
 
 	withIdP := cluster.DeepCopy()
 	withIdP.Spec.Authentication = &ichorv1alpha1.TalosClusterAuthentication{External: []ichorv1alpha1.TalosClusterExternalIssuer{{
 		IssuerURL: "https://idp.example.org", Audiences: []string{"ichor"},
-		UsernameClaim: "email", GroupsClaim: "groups", UsernamePrefix: "oidc:", GroupsPrefix: "oidc:",
+		UsernameClaim: "email", GroupsClaim: "groups", UsernamePrefix: oidcPrefix, GroupsPrefix: oidcPrefix,
 	}}}
 
 	currentCfg, _, err := render.Render(withIdP, machine, bundle, nil, nil)
@@ -63,7 +65,7 @@ func liveWithAuth(t *testing.T, auth *ichorv1alpha1.TalosClusterAuthentication) 
 	bundle := newTestBundle(t)
 	cluster := newTestCluster()
 	machine := newTestMachine(cluster.Name)
-	machine.Spec.Role = "controlplane"
+	machine.Spec.Role = roleControlPlane
 
 	live := cluster.DeepCopy()
 	live.Spec.Authentication = auth
@@ -104,8 +106,8 @@ func TestBuildAdoptPlan_AcceptsIchorOwnAuthenticator(t *testing.T) {
 func TestBuildAdoptPlan_RefusesForeignBesideIchorOwn(t *testing.T) {
 	auth := ichorOwnIssuer()
 	auth.External = []ichorv1alpha1.TalosClusterExternalIssuer{{
-		IssuerURL: "https://idp.example.org", Audiences: []string{"ichor-kube"},
-		UsernameClaim: "email", GroupsClaim: "groups", UsernamePrefix: "oidc:", GroupsPrefix: "oidc:",
+		IssuerURL: "https://idp.example.org", Audiences: []string{defaultAuthAudience},
+		UsernameClaim: "email", GroupsClaim: "groups", UsernamePrefix: oidcPrefix, GroupsPrefix: oidcPrefix,
 	}}
 	cluster, machine, cfg := liveWithAuth(t, auth)
 

@@ -53,6 +53,7 @@ You need one machine booted from a Talos ISO into maintenance mode.
 6. Check it:
 
    ```sh
+   export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
    ichor describe cluster demo
    ```
 

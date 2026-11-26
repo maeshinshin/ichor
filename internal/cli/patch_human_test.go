@@ -172,6 +172,7 @@ type patchEnv struct {
 
 func newPatchEnv(t *testing.T) *patchEnv {
 	t.Helper()
+	patchesLiveInTestNamespace(t)
 
 	cluster := newTestCluster()
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()

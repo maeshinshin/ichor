@@ -290,6 +290,7 @@ func TestCommandsThatNeedTheBackendRefuseToFallBack(t *testing.T) {
 // even when nothing needs confirming.
 func TestPatchCreatePrintsItsImpact(t *testing.T) {
 	setAPITestFlags(t, true)
+	patchesLiveInTestNamespace(t)
 
 	cluster := newTestCluster()
 	c, _ := freshClients(t, []client.Object{cluster})
@@ -310,6 +311,7 @@ func TestPatchCreatePrintsItsImpact(t *testing.T) {
 
 func TestPatchWriteAndPreviewLocally(t *testing.T) {
 	setAPITestFlags(t, true)
+	patchesLiveInTestNamespace(t)
 
 	cluster := newTestCluster()
 	c, k8s := freshClients(t, []client.Object{cluster})
@@ -626,6 +628,7 @@ func TestOverrideIsABareFlagWithNoReason(t *testing.T) {
 // ichor apply -f creates a patch that is not there and replaces the spec of one that is.
 func TestPatchApplyCreatesThenUpdates(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
+	patchesLiveInTestNamespace(t)
 
 	cluster := newTestCluster()
 	c, k8s := freshClients(t, []client.Object{cluster})
@@ -720,4 +723,12 @@ func TestNodeLogsIdleTimeoutEndsAStreamTheServerKeepsOpen(t *testing.T) {
 	if err != nil || out.String() != "three\n" || ctx.Err() != nil {
 		t.Fatalf("err=%v out=%q ctx=%v: the idle timer did not end the stream", err, out.String(), ctx.Err())
 	}
+}
+
+// patchesLiveInTestNamespace makes the in-process API write patches into testNamespace: it writes them to the
+// controller's namespace (ADR 0175), which these fixtures place there.
+func patchesLiveInTestNamespace(t *testing.T) {
+	t.Helper()
+
+	apiOpts.IchorNamespace = testNamespace
 }

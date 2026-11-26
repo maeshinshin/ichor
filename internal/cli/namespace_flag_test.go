@@ -132,11 +132,12 @@ func TestNoCommandShowsANamespaceFlag(t *testing.T) {
 	}
 }
 
-// -n is accepted only when it names the controller's namespace. `installer run|check` is the exception: the
-// controller's own Job passes the namespace it really runs in, which a Helm install may choose.
+// -n is accepted only when it names the controller's namespace.
 func TestNamespaceFlagRefusesAnotherNamespace(t *testing.T) {
 	for path, f := range namespaceFlags(rootCmd) {
-		if strings.HasPrefix(path, "ichor installer") {
+		// init and adopt refuse another namespace when they run (buildInitPlan, checkControllerNamespace); the
+		// installer's Job passes the namespace the controller really runs in.
+		if path == "ichor init" || path == "ichor adopt" || strings.HasPrefix(path, "ichor installer") {
 			continue
 		}
 

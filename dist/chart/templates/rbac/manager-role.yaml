@@ -213,6 +213,7 @@ rules:
   - taloscredentialrequests/status
   - talosclusters/status
   - talosetcdbackups/status
+  - talosconfigpatches/status
   - talosmachines/status
   - talosoperations/status
   - talosstorages/status

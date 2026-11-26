@@ -934,7 +934,7 @@ func checkControllerRBACMatchesConfig(t *testing.T, release string, docs []map[s
 	for _, r := range configRole["rules"].([]any) {
 		names, _ := r.(map[string]any)["resourceNames"].([]any)
 		for i, n := range names {
-			if n == "ichor-system" {
+			if n == kustomizeNamespace {
 				names[i] = kDefault
 			}
 		}
@@ -952,6 +952,9 @@ func checkControllerRBACMatchesConfig(t *testing.T, release string, docs []map[s
 }
 
 const managerContainerName = "manager"
+
+// kustomizeNamespace is the namespace config/ names for the objects the chart puts in the release namespace.
+const kustomizeNamespace = "ichor-system"
 
 // TestManagerStartupProbe pins the startupProbe that covers the controller's start-up wait
 // for the API server (cmd/waitapi.go, up to 5 minutes): without it the liveness probe kills
@@ -1522,7 +1525,7 @@ func TestInstallerRBAC(t *testing.T) {
 			for _, r := range rules {
 				rm, _ := r.(map[string]any)
 				if names, ok := rm["resourceNames"].([]any); ok && len(names) == 1 && names[0] == "default" {
-					rm["resourceNames"] = []any{"ichor-system"}
+					rm["resourceNames"] = []any{kustomizeNamespace}
 				}
 			}
 		}

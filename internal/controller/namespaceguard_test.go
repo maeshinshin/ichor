@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -33,7 +32,7 @@ func TestProtectNamespaceAddsTheLabelOnce(t *testing.T) {
 	ctx := context.Background()
 	patches := 0
 	c := fake.NewClientBuilder().
-		WithObjects(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ichor-system", Labels: map[string]string{"keep": "me"}}}).
+		WithObjects(&corev1.Namespace{Name: trustNamespace, Labels: map[string]string{"keep": "me"}}).
 		WithInterceptorFuncs(interceptor.Funcs{Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, p client.Patch, o ...client.PatchOption) error {
 			patches++
 
@@ -41,13 +40,13 @@ func TestProtectNamespaceAddsTheLabelOnce(t *testing.T) {
 		}}).Build()
 
 	for range 2 {
-		if err := ProtectNamespace(ctx, c, c, "ichor-system"); err != nil {
+		if err := ProtectNamespace(ctx, c, c, trustNamespace); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	var ns corev1.Namespace
-	if err := c.Get(ctx, client.ObjectKey{Name: "ichor-system"}, &ns); err != nil {
+	if err := c.Get(ctx, client.ObjectKey{Name: trustNamespace}, &ns); err != nil {
 		t.Fatal(err)
 	}
 

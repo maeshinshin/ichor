@@ -16,7 +16,7 @@ spec:
     wireGuard: {enabled: true, nodeEncryption: false}
 ```
 
-- Sets `encryption.enabled`, `encryption.type=wireguard` and `encryption.nodeEncryption` in the managed Cilium Helm values (Cilium 1.18). It wins over a conflicting `encryption.*` in `spec.cni.cilium.values`.
+- Sets `encryption.enabled`, `encryption.type=wireguard` and `encryption.nodeEncryption` in the managed Cilium Helm values (Cilium 1.20). It wins over a conflicting `encryption.*` in `spec.cni.cilium.values`.
 - Agents read encryption only at start, so Ichor sets the chart's `rollOutCiliumPods`: the DaemonSet rolls one node at a time. Nodes do not reboot.
 - `CNIValuesApplied` turns True when the Job is done and the DaemonSet has rolled out. Check with `cilium-dbg encrypt status`.
 - Pod traffic between nodes is encrypted once both ends have switched; connections reset briefly as each agent flips. The tunnel MTU shrinks.

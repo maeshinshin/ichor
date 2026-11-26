@@ -109,3 +109,20 @@ func TestRunInit_WaitsForTheUIBeforeReturning(t *testing.T) {
 		t.Errorf("ichor-ui wait timeout = %v, want --wait-timeout (7m)", gotTimeout)
 	}
 }
+
+// ichor-ui is looked up in the effective controller namespace (--ichor-namespace), not the default one.
+func TestWaitForUIRollout_UsesTheEffectiveControllerNamespace(t *testing.T) {
+	old := apiOpts.IchorNamespace
+	apiOpts.IchorNamespace = testOtherNS
+
+	t.Cleanup(func() { apiOpts.IchorNamespace = old })
+
+	d := uiDeployment(1)
+	d.Namespace = testOtherNS
+
+	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(d).Build()
+
+	if err := waitForUIRollout(context.Background(), c, 100*time.Millisecond, 5*time.Millisecond, io.Discard); err != nil {
+		t.Fatalf("ichor-ui in %s was not found: %v", testOtherNS, err)
+	}
+}

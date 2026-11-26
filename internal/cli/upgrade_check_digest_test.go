@@ -79,3 +79,36 @@ func TestUpgradeIchorUnreachableRegistryNamesTheWayOut(t *testing.T) {
 		}
 	}
 }
+
+// With --ichor-namespace other the check Job runs in other, and its timeout message names that namespace.
+func TestUpgradeIchorCheckJobRunsInTheEffectiveControllerNamespace(t *testing.T) {
+	old, oldPoll, oldWait := apiOpts.IchorNamespace, installerCheckPoll, installerCheckWait
+	apiOpts.IchorNamespace, installerCheckPoll, installerCheckWait = testOtherNS, time.Millisecond, 20*time.Millisecond
+
+	t.Cleanup(func() { apiOpts.IchorNamespace, installerCheckPoll, installerCheckWait = old, oldPoll, oldWait })
+
+	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: runningVersion, InstallerRepository: checkTestRepo}}
+	inst.Name = ichorv1alpha1.IchorInstallationName
+
+	var jobNS string
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(inst).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.CreateOption) error {
+			if job, ok := o.(*batchv1.Job); ok {
+				jobNS = job.Namespace
+			}
+
+			return c.Create(ctx, o, opts...)
+		},
+	}).Build()
+
+	_, err := runInstallerCheck(context.Background(), k, fakeImages{}, io.Discard, "v0.3.0", "", false, false)
+
+	if jobNS != testOtherNS {
+		t.Errorf("the check Job was created in %q, want %q", jobNS, testOtherNS)
+	}
+
+	if err == nil || !strings.Contains(err.Error(), "pod in "+testOtherNS) {
+		t.Errorf("the timeout message %v does not name %s", err, testOtherNS)
+	}
+}

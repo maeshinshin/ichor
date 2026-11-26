@@ -19,6 +19,7 @@ package chart
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,6 +159,25 @@ func TestProtectedNamespacePolicyIsGatedLikeProtectedSecrets(t *testing.T) {
 	for _, verb := range []string{"get", "patch"} {
 		if !rbacTriples(allRules(role))[rbacTriple{"", "namespaces", verb, kDefault}] {
 			t.Errorf("the manager role lacks %s on the namespace %s alone", verb, kDefault)
+		}
+	}
+}
+
+// TestProtectedNamespaceMessageNamesProtectedSecrets guards the refusal text: the namespace delete also needs the
+// protected Secrets annotated, or the namespace hangs in Terminating, so the message must say so.
+func TestProtectedNamespaceMessageNamesProtectedSecrets(t *testing.T) {
+	policy := find(renderChart(t, "ichor"), kindValidatingAdmissionPolicy, "ichor-protected-namespace")
+	if policy == nil {
+		t.Fatal("the chart renders no ichor-protected-namespace policy")
+	}
+
+	spec, _ := policy["spec"].(map[string]any)
+	list, _ := spec["validations"].([]any)
+
+	for _, v := range list {
+		msg, _ := v.(map[string]any)["message"].(string)
+		if !strings.Contains(msg, "ichor.maesh.dev/protected") {
+			t.Errorf("message %q does not mention the protected Secrets (ichor.maesh.dev/protected)", msg)
 		}
 	}
 }

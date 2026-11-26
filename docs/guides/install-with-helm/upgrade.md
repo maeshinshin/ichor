@@ -20,7 +20,7 @@ sidebar_order: 9
 >
 > 1. Export each bundle: `ichor export bundle NAME`.
 > 2. Remove the clusters: set the annotation `ichor.maesh.dev/allow-delete=true` on each TalosCluster and TalosMachine, then delete them.
-> 3. Annotate the bundle Secret `ichor.maesh.dev/allow-delete=true`.
+> 3. Annotate the Secrets labelled `ichor.maesh.dev/protected` (one secrets bundle per cluster, and the Cilium prior release if adopt took one over): `kubectl -n ichor-system annotate secret -l ichor.maesh.dev/protected ichor.maesh.dev/allow-delete=true`.
 > 4. Annotate the namespace `ichor.maesh.dev/allow-delete=true`, then `kubectl delete namespace ichor-system`.
 >
 > If a namespace is already stuck, see [Recover a namespace stuck in Terminating](../troubleshooting.md#recover-a-namespace-stuck-in-terminating).

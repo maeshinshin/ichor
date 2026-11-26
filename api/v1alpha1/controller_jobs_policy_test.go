@@ -42,7 +42,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		ctr.SecurityContext = hardened()
 
 		return &batchv1.Job{
-			GenerateName: "j-", Namespace: ns,
+			GenerateName: "j-", Namespace: ns, Labels: map[string]string{"app.kubernetes.io/name": sa},
 			Spec: batchv1.JobSpec{
 				ActiveDeadlineSeconds: ptr.To(deadline),
 				BackoffLimit:          ptr.To[int32](0),
@@ -145,6 +145,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		}, "env"),
 		Entry("no active deadline", func(j *batchv1.Job) { j.Spec.ActiveDeadlineSeconds = nil }, "deadline"),
 		Entry("a day-long deadline", func(j *batchv1.Job) { j.Spec.ActiveDeadlineSeconds = ptr.To[int64](86400) }, "deadline"),
+		Entry("no app.kubernetes.io/name label", func(j *batchv1.Job) { j.Labels = nil }, "label"),
 		Entry("a namespace of its own", func(j *batchv1.Job) { j.Namespace = defaultName }, "namespace"),
 	)
 

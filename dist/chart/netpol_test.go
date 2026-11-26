@@ -130,7 +130,7 @@ func selectorLabels(spec map[string]any) map[string]any {
 
 func podLabels(deployment map[string]any) map[string]any {
 	spec, _ := deployment["spec"].(map[string]any)
-	tmpl, _ := spec["template"].(map[string]any)
+	tmpl, _ := spec[kTemplate].(map[string]any)
 	md, _ := tmpl["metadata"].(map[string]any)
 	labels, _ := md["labels"].(map[string]any)
 

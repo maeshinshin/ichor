@@ -42,7 +42,7 @@ func TestPackagedChart(t *testing.T) {
 		t.Fatalf("helm lint %s: %v\n%s", archive, err, out)
 	}
 
-	out, err := exec.Command("helm", "template", "ichor", archive, "--set", usersOn, "--set", usersURL).CombinedOutput()
+	out, err := exec.Command("helm", kTemplate, "ichor", archive, "--set", usersOn, "--set", usersURL).CombinedOutput()
 	if err != nil {
 		t.Fatalf("helm template %s: %v\n%s", archive, err, out)
 	}

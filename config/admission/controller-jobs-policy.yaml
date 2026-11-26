@@ -5,7 +5,7 @@
 # lives in, one hardened container with the subcommand it runs, no hostPath, a bounded run time.
 # Enforced by the apiserver, independent of the webhook and of the controller.
 #
-# Two policies: the first is structural and needs no parameter; the second ties the image of both Jobs to
+# Two policies: the first is structural and needs no parameter (it also requires the label the second selects by); the second ties the image of both Jobs to
 # IchorInstallation.spec (installerRepository@digest; the setting that needs the
 # ichorinstallations/version right), and denies every controller Job while there is no IchorInstallation.
 #
@@ -38,6 +38,13 @@ spec:
         (variables.sa == 'ichor-installer' && object.metadata.namespace == 'ichor-system') ||
         (variables.sa == 'ichor-cni' && object.metadata.namespace == 'kube-system')
       message: the controller may only create Jobs under the ServiceAccount ichor-installer in ichor-system or ichor-cni in kube-system
+      reason: Forbidden
+    # The image policy's binding selects the controller's Jobs by this label, so that the apiserver looks up
+    # the IchorInstallation only for them: a Job without it would skip the image check, so it is refused here.
+    - expression: >-
+        has(object.metadata.labels) && 'app.kubernetes.io/name' in object.metadata.labels &&
+        object.metadata.labels['app.kubernetes.io/name'] == variables.sa
+      message: the Job must carry the label app.kubernetes.io/name equal to its ServiceAccount, ichor-installer or ichor-cni
       reason: Forbidden
     - expression: >-
         size(variables.pod.containers) == 1 && !has(variables.pod.initContainers) &&
@@ -127,6 +134,13 @@ metadata:
   name: ichor-controller-job-image-binding
 spec:
   policyName: ichor-controller-job-image
+  # Only the controller's Jobs (the structural policy requires this label of them). The apiserver resolves
+  # paramRef before it evaluates matchConditions, so without this a Job anywhere is refused while no
+  # IchorInstallation exists (a fresh install, before the controller seeds it).
+  matchResources:
+    objectSelector:
+      matchExpressions:
+        - {key: app.kubernetes.io/name, operator: In, values: [ichor-installer, ichor-cni]}
   paramRef:
     name: ichor
     parameterNotFoundAction: Deny

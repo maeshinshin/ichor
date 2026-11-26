@@ -518,7 +518,7 @@ func cniGrantedRules(docs []map[string]any, ns string) []any {
 }
 
 // bindsCNIJob reports whether a binding's subjects include the Cilium Job's ServiceAccount in kube-system.
-// Config names it "cni" (kustomize adds the prefix), the chart and some config files "ichor-cni".
+// Config names it "cni" (kustomize adds the prefix), the chart and some config files kIchorCNI.
 func bindsCNIJob(b map[string]any) bool {
 	subjects, _ := b["subjects"].([]any)
 
@@ -527,7 +527,7 @@ func bindsCNIJob(b map[string]any) bool {
 		name, _ := sm["name"].(string)
 		ns, _ := sm["namespace"].(string)
 
-		if sm["kind"] == kindServiceAccount && ns == kubeSystemNs && (name == "ichor-cni" || name == "cni") {
+		if sm["kind"] == kindServiceAccount && ns == kubeSystemNs && (name == kIchorCNI || name == "cni") {
 			return true
 		}
 	}
@@ -576,7 +576,7 @@ func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 	cfg := loadYAMLDocs(t, "../../config/admission/controller-jobs-policy.yaml")
 	docs := renderChart(t, "ichor")
 
-	for _, name := range []string{"ichor-controller-jobs", "ichor-controller-job-image"} {
+	for _, name := range []string{kJobsPolicy, kJobImagePolicy} {
 		want := find(cfg, kindValidatingAdmissionPolicy, name)
 		got := find(docs, kindValidatingAdmissionPolicy, name)
 
@@ -605,7 +605,7 @@ func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 	}
 
 	off := renderChartWithValues(t, "ichor", "admission.enabled=false")
-	if find(off, kindValidatingAdmissionPolicy, "ichor-controller-jobs") != nil {
+	if find(off, kindValidatingAdmissionPolicy, kJobsPolicy) != nil {
 		t.Error("the Job policy renders with admission.enabled=false")
 	}
 }

@@ -20,7 +20,7 @@ func podTemplates(docs []map[string]any) map[string]map[string]any {
 
 		switch kind {
 		case "Deployment", kindJob, "DaemonSet", "StatefulSet", "CronJob":
-			tpl, _ := spec["template"].(map[string]any)
+			tpl, _ := spec[kTemplate].(map[string]any)
 			pod, _ := tpl["spec"].(map[string]any)
 			meta, _ := d["metadata"].(map[string]any)
 			out[kind+"/"+meta["name"].(string)] = pod

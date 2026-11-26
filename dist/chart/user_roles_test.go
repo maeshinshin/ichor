@@ -136,7 +136,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 
 	// cluster-admin is opt-in.
 	for _, d := range findAll(docs, kindClusterRoleBinding) {
-		if ref, _ := clusterRoleBindingRefs(d); ref == "cluster-admin" {
+		if ref, _ := clusterRoleBindingRefs(d); ref == kClusterAdmin {
 			t.Errorf("cluster-admin bound by default: %v", d)
 		}
 	}

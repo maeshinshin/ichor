@@ -32,7 +32,7 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 		}
 	}
 
-	out, err := exec.Command("helm", "template", "ichor", ".").CombinedOutput()
+	out, err := exec.Command("helm", kTemplate, "ichor", ".").CombinedOutput()
 	check("default values", out, err)
 
 	for name, sets := range map[string][]string{

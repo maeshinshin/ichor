@@ -40,7 +40,7 @@ func TestCNIHelmRBAC(t *testing.T) {
 	t.Run("matches config", func(t *testing.T) {
 		docs := renderChart(t, "ichor")
 
-		if find(docs, kindServiceAccount, "ichor-cni") == nil {
+		if find(docs, kindServiceAccount, kIchorCNI) == nil {
 			t.Fatalf("the chart renders no ServiceAccount ichor-cni, the name the controller puts in the Job")
 		}
 
@@ -103,7 +103,7 @@ func TestCNIHelmRBAC(t *testing.T) {
 	t.Run("lives in kube-system", func(t *testing.T) {
 		docs := renderChart(t, "ichor")
 
-		sa := find(docs, kindServiceAccount, "ichor-cni")
+		sa := find(docs, kindServiceAccount, kIchorCNI)
 		if sa == nil || namespaceOf(sa) != kubeSystemNs {
 			t.Errorf("ServiceAccount ichor-cni = %v, want it in kube-system", sa)
 		}
@@ -148,7 +148,7 @@ func TestCNIHelmRBAC(t *testing.T) {
 
 	t.Run("can be turned off", func(t *testing.T) {
 		docs := renderChartWithValues(t, "ichor", "cniHelm.enabled=false")
-		if find(docs, kindServiceAccount, "ichor-cni") != nil || find(docs, kindClusterRole, "ichor-cni-role") != nil {
+		if find(docs, kindServiceAccount, kIchorCNI) != nil || find(docs, kindClusterRole, "ichor-cni-role") != nil {
 			t.Error("cniHelm.enabled=false still renders the Cilium Job's identity")
 		}
 	})

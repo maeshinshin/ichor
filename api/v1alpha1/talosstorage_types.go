@@ -67,7 +67,9 @@ type TalosStorageSpec struct {
 type TalosStorageStatus struct {
 	// conditions represent the current state of the TalosStorage resource, kstatus-compatible.
 	// Ready reports whether the Talos side (layer 1) is prepared, so whatever installs the storage system can hold
-	// it until this is true (design section "Storage").
+	// it until this is true (design section "Storage"). ExtensionsPresent is whether every node it governs runs the
+	// Talos system extensions its preset needs; a node that lacks one holds Ready False. StorageSystemConsistent is
+	// informational and never gates Ready: whether the storage system itself is present and configured to match.
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

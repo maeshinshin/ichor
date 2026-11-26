@@ -402,7 +402,14 @@ spec:
                 type: string
               conditions:
                 description: |-
-                  conditions represent the current state of the TalosMachine resource, kstatus-compatible.
+                  conditions represent the current state of the TalosMachine resource, kstatus-compatible. The types are Ready,
+                  ConfigRollout, ConfigWarnings, Provisioned, NodeReachable, AdoptionHeld, StorageEvacuation, Removal,
+                  TalosUpgrade, TalosUpgradeWaiting, SecureBoot and KernelLockdown. ConfigWarnings carries the dry-run
+                  warnings and is informational. Provisioned is False with the stage the node is in until it has joined.
+                  NodeReachable is present, False, only while reading the node fails. AdoptionHeld is True while the hold-apply
+                  annotation is set. StorageEvacuation is True while storage is evacuated for an upgrade or a removal. Removal
+                  and TalosUpgrade report those operations on this machine; TalosUpgradeWaiting is the clock of the upgrade's
+                  waits. SecureBoot and KernelLockdown exist only while the matching spec.security option is set.
                   The ConfigRollout condition is the marker of a `config` operation rolling out to this machine. It is True,
                   with reason RebootRequested (the message is the boot ID read before the reboot) or APIServerRestarting
                   (the message is the kube-apiserver container ID), while the machine is being rebooted or its

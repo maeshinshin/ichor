@@ -245,8 +245,10 @@ type IchorInstallationStatus struct {
 
 	// conditions represent the current state of the IchorInstallation resource. UpToDate is
 	// True when installedVersion equals spec.version. InstallerImageUnverified is True once an
-	// installer image ran with its signature unchecked, and stays until a person removes it. An ExternalSuggested condition
-	// from an older build is removed.
+	// installer image ran with its signature unchecked, and stays until a person removes it. AutoPatchHalted is True
+	// while automatic patching is stopped by an automatic operation that failed or paused. SettingsApplied is True when
+	// the controller has seen the generation of the settings in spec. ImpersonationRoleReady says whether the
+	// ClusterRole that ichor-ui sign-in needs exists. An ExternalSuggested condition from an older build is removed.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

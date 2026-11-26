@@ -169,7 +169,10 @@ spec:
             description: status defines the observed state of TalosEtcdBackup
             properties:
               conditions:
-                description: 'conditions: Ready.'
+                description: |-
+                  conditions: Ready, StoreInCluster and SharedDestination. Ready is True while the newest snapshot is fresher than
+                  twice the schedule interval. StoreInCluster is True while the destination is inside the cluster being backed
+                  up. SharedDestination is True while another TalosEtcdBackup writes the same endpoint, bucket and prefix.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

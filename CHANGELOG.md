@@ -39,6 +39,21 @@ field is added or removed.
   from an earlier version is not recovered by this release; see "Recover a namespace
   stuck in Terminating" in the troubleshooting guide, which brings the cluster back
   with `ichor adopt --secrets-bundle`.
+- **A TalosConfigPatch may omit `machine.install.wipe`, a route's `gateway`,
+  `routeMetric`, a VLAN's `routes` and both `dnsDomain` fields.** Talos documents each
+  as optional or defaulted, and the CRD marked them required, so
+  `machine.install: {extraKernelArgs: [...]}` was refused with `wipe: Required value`.
+  The change only relaxes validation: nothing stored changes, and no field is added or
+  removed.
+- **`ichor adopt` accepts Ichor's own sign-in authenticator on a node.** A jwt
+  authenticator whose only audience is `ichor-kube` and whose username and groups
+  prefixes are `ichor:` is taken as Ichor's, from an install that was removed. Adopt
+  turns sign-in on again and replaces the entry with one for the new install's issuer
+  and CA. An identity provider of your own is still refused; put it in
+  `spec.authentication.external` first.
+- **`ichor adopt` refuses while a leftover IchorInstallation exists.** With no Ichor
+  controller Deployment, it names the object and says to run
+  `kubectl delete ichorinstallation ichor`, then adopt again.
 
 ### Controller
 
@@ -61,6 +76,11 @@ field is added or removed.
 - The CNI version message reads "Ichor never moves the CNI to a lower minor" in place
   of "never downgrades a CNI".
 - `--cilium-values` refuses a private key, as the webhook does.
+- `ichor adopt` recognises Ichor's own jwt authenticator (audience `ichor-kube`,
+  `ichor:` username and groups prefixes), does not capture it as drift, says so for
+  each node, and turns sign-in on again.
+- `ichor adopt` names a leftover IchorInstallation when no controller Deployment
+  exists, and how to delete it.
 
 ### Webhooks
 
@@ -74,6 +94,15 @@ field is added or removed.
   `admission.enabled`.
 - The manager role may `get` and `patch` the release namespace.
 - The `controller-jobs-policy` message names `{{ .Release.Namespace }}`.
+- The CRD no longer requires `machine.install.wipe`, a route's `gateway`,
+  `routeMetric`, a VLAN's `routes` and the `dnsDomain` of `ClusterNetworkConfig` and
+  `KubeNetworkConfig` in `TalosConfigPatch`; the mirror generator leaves them out
+  because Talos documents them as optional or defaulted.
+- The `status.conditions` descriptions of `TalosMachine`, `TalosStorage`,
+  `TalosEtcdBackup`, `IchorInstallation` and `IchorUser` list every condition type the
+  controller sets.
+- The deepcopy header year is pinned to 2026, so the regenerate-and-diff check does
+  not fail on 1 January.
 
 ### Docs
 
@@ -85,6 +114,11 @@ field is added or removed.
   install's cluster-scoped objects, and says `ichor restore cluster` is for a cluster
   whose control planes and etcd data are gone.
 - ADR 0010 is amended for the protected namespace.
+- The stuck-namespace recovery guide deletes the IchorInstallation before adopt, says
+  what to do when the bundle Secret is gone (use a bundle exported earlier, or
+  `--recover-secrets --recover-from`), and says what adopt does with Ichor's own
+  sign-in entry.
+- ADR 0106 is amended for the optional fields.
 
 ## v0.3.4 (2026-11-26)
 

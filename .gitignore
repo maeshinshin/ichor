@@ -66,3 +66,6 @@ kodata/
 
 # built by `go build ./internal/tools/ichorgen` at the root
 /ichorgen
+
+# Fetched by make foreign-cilium-chart (pinned SHA-256); not redistributed with the source tree.
+/pkg/cni/cilium/chart/cilium-1.19.10.tgz

@@ -1,5 +1,193 @@
 # Changelog
 
+## v0.3.4 (2026-11-26)
+
+A patch release of fixes to v0.3.3: a cluster stored without `spec.cni` reads as
+Cilium, a Cilium install is refused on a cluster that runs another CNI, the secrets
+bundle can no longer be lost by deleting the controller namespace, the Helm chart
+stops installing identities its webhook does not guard, and several status writes no
+longer erase a condition another writer set. No CRD field is added or removed.
+
+### Upgrade notes
+
+- **`spec.cni` now defaults to `{preset: cilium, kubeProxy: enabled}`.** An object
+  stored without `cni` reads as Cilium everywhere (controller, webhook, renderer, UI
+  API), as one stored with the default does. The CRD default is applied on the next
+  write of the object.
+- **A Cilium install or upgrade is refused with `ForeignCNI` when another CNI is
+  detected.** No Cilium Helm Job starts on a cluster whose `status.cni.detected` is
+  flannel, calico or another CNI. `spec.cni.preset` is immutable, so the message says
+  to remove the other CNI (see "Moving from flannel") or to recreate the cluster with
+  `spec.cni.preset: unmanaged`.
+- **`rbac.namespaced=true` is refused by the chart.** The controller watches its
+  resources cluster-wide and needs cluster-scoped permissions, so the key stays in
+  `values.yaml` as deprecated but `helm install` and `helm upgrade` fail with it set
+  to `true`. Leave it at `false`.
+- **`webhook.enabled=false` no longer installs the three impersonated identities.**
+  `ichor-auto-patch`, `ichor-storage-extensions` and `ichor-consent-sweep`, with their
+  roles and bindings, exist only with the webhook, because their limits live in it.
+  Without the webhook, auto-patch, the storage-preset schematic change and the
+  kube-proxy consent sweep cannot act; the controller says so in an Event or a
+  condition and keeps reconciling.
+- **A new `ichor-protected-secrets` ValidatingAdmissionPolicy protects the secrets
+  bundle.** The chart (with `admission.enabled`) and `config/admission` install it. It
+  refuses the DELETE of a Secret labelled `ichor.maesh.dev/protected` unless it carries
+  `ichor.maesh.dev/allow-delete: "true"`. The bundle Secret and
+  `ichor-cilium-prior-release` carry the label; the controller adds it to a bundle
+  Secret an earlier version created. Deleting the controller namespace
+  (`kubectl delete namespace ichor-system`) while it holds a cluster now hangs in
+  `Terminating`, and says why, instead of losing the bundle and the cluster's PKI.
+  Export the bundle (`ichor export bundle`) and set the annotation first when you mean
+  to delete it.
+- **`ichor ui` exits when the port-forward never starts.** It returns an error naming
+  the pod, the local port and the `pods/portforward` permission instead of retrying
+  forever. A tunnel that was up and is lost is re-forwarded after a one-second pause.
+- **The release workflow verify job now runs the PR gates.** A tag is checked with the
+  workflow lint, `goreleaser check`, the Helm release record size and a regenerate-and-diff
+  of the generated files, as a pull request is.
+- **The embedded Cilium chart moves from 1.20.4 to 1.20.5.** A new cluster installs
+  1.20.5. An existing cluster is not changed by upgrading Ichor: the controller sets the
+  `CiliumUpgradeAvailable` condition and `status.cni.availableChartVersion`, and the
+  release moves when you run `ichor upgrade cni`, which runs the Cilium Helm Job with the
+  cluster's current values.
+- **Helm users on a single tainted control plane can now upgrade.** The
+  `ichor-migrate-patches` hook Job used to carry no scheduling, so `helm upgrade` failed
+  when the only node was a tainted control plane (present in v0.3.3). The Job now takes the
+  manager's `tolerations`, `nodeSelector`, `affinity` and `priorityClassName` values.
+
+### Controller
+
+- A status write that carries the conditions array is made under an optimistic lock,
+  or re-reads and retries on conflict. A merge patch sends the whole list, so a write
+  from a stale copy used to erase a condition another controller had raised since. This
+  covers the CA rotation and bundle-backup conditions, certificate expiry, the cluster
+  security status, CNI detection, the CNI upgrade and kube-proxy switch, the issuer
+  trust, the release check, auto-patch and the Ichor upgrade skip condition.
+- `TalosEtcdBackup` status is written as a patch against the copy read at the start of
+  the run, not an update with a resourceVersion. A spec or annotation write during a
+  run, such as Back up now, no longer loses the status of a snapshot already uploaded
+  and pruned, which made the next reconcile take a second one. The
+  `backupLastSuccess` metric is set only after the status write succeeds.
+- The inputs hash that tells a desired-state change from drift now covers every field
+  of the renderer's system inputs: the OIDC trust, the CA rotation, the key rotation and
+  the staged inputs, which were missing. A change to one is applied instead of reported
+  as `NodeDrifted`. The `TalosStorage` readiness check hashes the same inputs, so it
+  agrees with the machine controller.
+- A Cilium Helm Job is not started on a cluster that runs another CNI; the refusal
+  is the `ForeignCNI` error described in the upgrade notes.
+- A `TalosCluster` with an unset `spec.cni.preset` is read as Cilium by the
+  kube-proxy switch, the CNI hand-over, the Kubernetes upgrade and the machine
+  controller, as the default does.
+- A forbidden write by an impersonated identity that does not exist no longer loops.
+  Auto-patch raises an `AutoPatchForbidden` Warning Event, the kube-proxy consent
+  sweep a `ConsentSweepForbidden` one, and the storage-extension change a condition
+  that names the schematic to set by hand.
+- The certificate-expiry reconciler labels the bundle Secret
+  `ichor.maesh.dev/protected` (a metadata write only).
+- The installer and check Jobs the controller and the CLI create copy the manager
+  pod's tolerations, nodeSelector, affinity, priorityClassName and imagePullSecrets, so
+  they schedule wherever the manager does, including a tainted control plane. When the
+  manager pod cannot be read they keep a toleration of the control-plane taint and the
+  reason is logged once. The manager pod now sets `POD_NAME` from its own name.
+- The embedded Cilium chart is 1.20.5; the rendered bootstrap manifests change with it.
+
+### CLI
+
+- `ichor ui` stops with an error when the port-forward never starts, and pauses a
+  second before re-forwarding a tunnel that was lost.
+- `ichor edit cni-values` sends the resource version it read, so a concurrent change
+  is refused with "reload to see the new version" instead of being overwritten.
+- Prompts on one piped stdin share a reader, so the second answer is no longer lost
+  to the first reader's buffer.
+- `ichor init` and `ichor adopt` label the secrets bundle Secret they create, and the
+  Cilium takeover labels the Secret it writes
+  `ichor.maesh.dev/protected`.
+- `ichor adopt` and `ichor init` refuse an invalid `--cluster` name before anything is
+  written, including the secrets bundle under `~/.ichor/clusters`.
+- The CLI writes of the kubeconfig, talosconfig and credential files follow a symlink
+  instead of replacing it with a regular file.
+- `ichor auth login`, `auth token` and `auth logout` refuse a plain-http `--issuer`,
+  except for loopback.
+
+### UI
+
+- The cluster's CNI preset is shown as Cilium for an object stored without
+  `spec.cni`.
+- The key-rotation summary names only the keys it rotates, such as "Rotate the
+  service-account key", instead of always naming both.
+- The reclaim form stores the UUID in the spelling the inspection reported, so a
+  case-only difference no longer fails the webhook's exact comparison.
+- A snapshot refusal that arrives after the 15-second wait, which the server can send
+  after 20 seconds without credentials, is shown as an error toast and no longer lost. The
+  frame's initial `about:blank` load is no longer read as an empty refusal.
+- The auto-patch and update-check controls start from what the spec sets, then from what
+  is in force, so a saved value shows at once.
+- Clear halt follows RBAC: the setting-edit permission is computed on a read-only
+  deployment too, so the button no longer appears there for anyone.
+
+### Webhooks
+
+- A `TalosConfigPatch` or `TalosStorage` that is being deleted (a foreign finalizer
+  holds it) is still validated when its spec changes; only an update that leaves the
+  spec alone, such as a finalizer removal, is admitted without it.
+- The delete guard on `TalosCluster` and `TalosMachine` tells the namespace controller
+  why its delete was refused, instead of the bare guard message. It is not exempt.
+- An unset `spec.cni.preset` is read as Cilium by the `TalosCluster` webhook.
+
+### Chart
+
+- The three impersonated identities render only with `webhook.enabled=true`.
+- `rbac.namespaced=true` fails the preflight; the namespaced Role and RoleBinding
+  branches it could no longer reach are removed from the templates.
+- A bring-your-own ServiceAccount (`serviceAccount.enabled=false` with
+  `serviceAccount.name`) is honoured: the Deployment uses it and the bindings name
+  it. `serviceAccount.enabled=false` was read as unset.
+- The `ichor-protected-secrets` policy and its binding are added under
+  `admission.enabled`.
+- The `ichor-migrate-patches` hook Job takes the manager's `tolerations`, `nodeSelector`,
+  `affinity` and `priorityClassName` (see the upgrade notes).
+- The `ichor-migrate-patches` hook role and the installer role may `get`
+  TalosConfigPatches, which the conflict re-read of the `Migrated` condition needs.
+- The migrate-patches hook and `ichor upgrade ichor` re-read and retry the `Migrated`
+  condition write on conflict, so a controller write to the same status no longer
+  fails the Job.
+
+### Docs
+
+- The Helm verify guide names the SPDX SBOM attestation type that is actually
+  signed (`https://spdx.dev/Document/v2.3`), says the three images carry it and the
+  chart does not, and that the release assets hold no SBOM.
+- The CNI concept page and the `ForeignCNI` advice say what an existing cluster can
+  do: remove the other CNI, or recreate the cluster with `unmanaged`, since the
+  preset cannot change.
+- The Helm upgrade guide warns against deleting the controller namespace while it
+  holds a cluster, and says how to remove the cluster on purpose.
+- The WireGuard hardening guide names the Cilium minor the chart ships (1.20).
+- The README quick start sets `KUBECONFIG`.
+- The CRD reference marks a field deprecated only when its description deprecates
+  it, so `spec.cni.preset` and `spec.endpoint.type` no longer carry the mark.
+- ADR 0010 is amended for the namespace delete and the protected Secrets; ADRs 0011,
+  0019 and 0088 are updated to match.
+
+### CI
+
+- The release verify job runs workflow lint, `goreleaser check`, the Helm release
+  record check, and regenerates manifests, docs and notices and fails on a diff.
+- Workflows run bash with `pipefail`; an inner `bash -c` with a pipe sets it too, so a
+  failing first command of a pipe is no longer hidden.
+- `helm push` in the release fails when it prints no `sha256` digest, rather than
+  writing a bad reference to `digests.txt`.
+- goreleaser replaces assets already on a release, so a re-run after a partial upload
+  completes.
+- The chart test workflow runs its tools through `nix develop`; `kind` joins the dev
+  shell and the Helm and kind installers are removed. `make install-helm` checks that
+  Helm is on the PATH.
+- The Cilium 1.19.10 chart used by the foreign-cluster test is fetched when missing and
+  ignored by pattern, not tracked in git. A test fails when a tracked third-party archive
+  is not named in `THIRD-PARTY-NOTICES`.
+- A test fails when a comment names a patch of the embedded Cilium minor, so a chart
+  patch bump no longer leaves stale version comments.
+
 ## v0.3.3 (2026-11-26)
 
 A patch release of fixes to v0.3.2: registry credentials reach the mirror, a Helm

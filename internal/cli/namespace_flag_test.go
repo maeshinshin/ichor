@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	appsv1 "k8s.io/api/apps/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -91,5 +93,68 @@ func TestAdoptNamespaceDefaultsToTheControllers(t *testing.T) {
 
 	if got := adoptNamespaceOf(ctx, c, "x"); got != "x" {
 		t.Errorf("explicit --namespace: %q, want x (checkControllerNamespace judges it)", got)
+	}
+}
+
+// namespaceFlags returns every `namespace` flag a command declares or inherits, by command path.
+func namespaceFlags(root *cobra.Command) map[string]*pflag.Flag {
+	out := map[string]*pflag.Flag{}
+
+	var walk func(c *cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		for _, fs := range []*pflag.FlagSet{c.LocalFlags(), c.InheritedFlags()} {
+			if f := fs.Lookup("namespace"); f != nil {
+				out[c.CommandPath()] = f
+			}
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+	walk(root)
+
+	return out
+}
+
+// Every Ichor object lives in the controller's namespace (ADR 0175), so no command shows --namespace.
+func TestNoCommandShowsANamespaceFlag(t *testing.T) {
+	flags := namespaceFlags(rootCmd)
+	if len(flags) == 0 {
+		t.Fatal("found no namespace flag at all; the walk is broken")
+	}
+
+	for path, f := range flags {
+		if !f.Hidden {
+			t.Errorf("%s: --namespace is visible in --help", path)
+		}
+	}
+}
+
+// -n is accepted only when it names the controller's namespace. `installer run|check` is the exception: the
+// controller's own Job passes the namespace it really runs in, which a Helm install may choose.
+func TestNamespaceFlagRefusesAnotherNamespace(t *testing.T) {
+	for path, f := range namespaceFlags(rootCmd) {
+		if strings.HasPrefix(path, "ichor installer") {
+			continue
+		}
+
+		if f.Deprecated == "" {
+			t.Errorf("%s: --namespace is not marked deprecated", path)
+		}
+
+		old := f.Value.String()
+
+		err := f.Value.Set("elsewhere")
+		if err == nil || !strings.Contains(err.Error(), ichorControllerNamespace) {
+			t.Errorf("%s: -n elsewhere = %v, want a refusal naming %q", path, err, ichorControllerNamespace)
+		}
+
+		if err := f.Value.Set(ichorControllerNamespace); err != nil {
+			t.Errorf("%s: -n %s refused: %v", path, ichorControllerNamespace, err)
+		}
+
+		_ = f.Value.Set(old)
 	}
 }

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -67,7 +66,7 @@ func TestProtectedNamespaceCannotBeDeletedWithoutConsent(t *testing.T) {
 	}
 
 	namespace := func(name string, labels, annotations map[string]string) *corev1.Namespace {
-		return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: annotations}}
+		return &corev1.Namespace{Name: name, Labels: labels, Annotations: annotations}
 	}
 	protected := map[string]string{deleteguard.ProtectedLabel: deleteguard.ProtectedValue}
 	consent := map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}

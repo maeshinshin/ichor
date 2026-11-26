@@ -211,7 +211,7 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 			clusterRoles = append(clusterRoles, nameOf(d))
 		case kindRole:
 			allRoles = append(allRoles, nameOf(d))
-			if namespaceOf(d) == "ichor-system" {
+			if namespaceOf(d) == kustomizeNamespace {
 				nsRoles = append(nsRoles, nameOf(d))
 			}
 		}

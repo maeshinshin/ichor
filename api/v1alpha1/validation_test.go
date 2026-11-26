@@ -563,8 +563,12 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 		Expect(yaml.Unmarshal(raw, &u.Object)).To(Succeed())
 		_, hasCNI, _ := unstructured.NestedMap(u.Object, "spec", "cni")
 		Expect(hasCNI).To(BeFalse(), "the sample must not set spec.cni")
+		// samples_test.go applies the same file under its own name, so this one takes a generated name.
+		u.SetName("")
+		u.SetGenerateName("cni-default-")
 		u.SetNamespace(testNamespace)
 		Expect(k8sClient.Create(context.Background(), u)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(context.Background(), u))).To(Succeed()) })
 
 		readBack := &TalosCluster{}
 		Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(u), readBack)).To(Succeed())

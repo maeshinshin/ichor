@@ -17,7 +17,18 @@ runs:
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY"
         df -h /
 
+    # The action has no retry input and its archive download sometimes truncates; its script is safe to run again, so try twice.
     - name: Install Nix
+      id: nix_install
+      continue-on-error: true
+      uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
+      with:
+        nix_conf: |
+          keep-env-derivations = true
+          keep-outputs = true
+
+    - name: Install Nix (second attempt)
+      if: steps.nix_install.outcome == 'failure'
       uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
       with:
         nix_conf: |

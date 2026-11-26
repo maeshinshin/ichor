@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -50,7 +51,9 @@ func CheckAgentsReady(ctx context.Context, kube kubernetes.Interface) (notReady,
 	if st := ds.Status; st.DesiredNumberScheduled == 0 || st.NumberReady != st.DesiredNumberScheduled || len(bad) > 0 {
 		errs = append(errs, fmt.Errorf("the DaemonSet %s is not Ready on all nodes (%d of %d agents Ready%s)",
 			ReleaseName, st.NumberReady, st.DesiredNumberScheduled, listed(bad)))
-	} else if st.UpdatedNumberScheduled != st.DesiredNumberScheduled {
+	} else if ds.Spec.UpdateStrategy.Type != appsv1.OnDeleteDaemonSetStrategyType &&
+		st.UpdatedNumberScheduled != st.DesiredNumberScheduled {
+		// OnDelete never updates pods by itself (new pods only when old ones are deleted), so it never counts up.
 		errs = append(errs, fmt.Errorf("the DaemonSet %s is still rolling out (%d of %d agents updated)",
 			ReleaseName, st.UpdatedNumberScheduled, st.DesiredNumberScheduled))
 	}

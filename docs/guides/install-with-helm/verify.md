@@ -8,13 +8,16 @@ sidebar_order: 4
 
 *Verify by digest against this repository's release workflow.*
 
-Every release image (`ichor-controller`, `ichor-ui`, `ichor-installer`) and the chart is signed keylessly with cosign by the release workflow, with an SPDX SBOM and a build provenance attestation.
+Every release image (`ichor-controller`, `ichor-ui`, `ichor-installer`) and the chart is signed keylessly with cosign by the release workflow, and each carries a build provenance attestation. The three images also carry an SPDX SBOM attestation; the chart does not. The release assets hold no SBOM.
 
 ```sh
 cosign verify ghcr.io/maeshinshin/ichor-controller:vX.Y.Z \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/maeshinshin/ichor/\.github/workflows/release\.yml@refs/tags/v.*$'
 gh attestation verify oci://ghcr.io/maeshinshin/ichor-controller:vX.Y.Z --repo maeshinshin/ichor
+cosign verify-attestation ghcr.io/maeshinshin/ichor-controller:vX.Y.Z --type https://spdx.dev/Document/v2.3 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/maeshinshin/ichor/\.github/workflows/release\.yml@refs/tags/v.*$'
 ```
 
 - The same `cosign verify` covers `ichor-ui`, `ichor-installer` and the chart (`ghcr.io/maeshinshin/charts/ichor:X.Y.Z`).

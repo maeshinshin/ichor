@@ -179,7 +179,7 @@ func TestRequireDeployed_RefusesFailedRelease(t *testing.T) {
 
 // Precondition 1: same minor, or exactly one lower.
 func TestCheckVersion(t *testing.T) { //nolint:funlen // one table
-	// ChartVersion is 1.20.4, so the accepted minors are 1.20 and 1.19.
+	// ChartVersion is 1.20.5, so the accepted minors are 1.20 and 1.19.
 	for _, tc := range []struct {
 		live    string
 		ok      bool

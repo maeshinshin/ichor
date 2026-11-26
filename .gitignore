@@ -69,4 +69,4 @@ kodata/
 
 # Fetched by make foreign-cilium-chart (pinned SHA-256); not redistributed with the source tree.
 /pkg/cni/cilium/chart/cilium-*.tgz
-!/pkg/cni/cilium/chart/cilium-1.20.4.tgz
+!/pkg/cni/cilium/chart/cilium-1.20.5.tgz

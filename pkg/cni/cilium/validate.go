@@ -37,7 +37,7 @@ type KubePrism struct {
 
 // gatewayAPIMinimum is the Gateway API release Cilium 1.20 needs at minimum: "Cilium's Gateway API support now
 // requires Gateway API v1.6.1 at a minimum to work correctly" (docs.cilium.io/en/stable/operations/upgrade, 1.20
-// Upgrade Notes, Action Required). ChartVersion is 1.20.4; a new Cilium minor sets its own minimum.
+// Upgrade Notes, Action Required). ChartVersion is 1.20.5; a new Cilium minor sets its own minimum.
 const gatewayAPIMinimum = "v1.6.1"
 
 // ValidationContext carries what the caller knows. A nil fact is unknown and

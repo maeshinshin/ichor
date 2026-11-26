@@ -96,7 +96,7 @@ foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster 
 	curl -fsSL -o $$f https://helm.cilium.io/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz && \
 	echo "$(FOREIGN_CILIUM_CHART_SHA256)  $$f" | sha256sum -c -
 
-# TestA6Refused installs this chart, two minors below the embedded 1.20.4. The digest is the one helm.cilium.io's
+# TestA6Refused installs this chart, two minors below the embedded 1.20.5. The digest is the one helm.cilium.io's
 # index.yaml lists for it.
 FOREIGN_OLD_CILIUM_CHART_VERSION ?= 1.16.19
 FOREIGN_OLD_CILIUM_CHART_SHA256 ?= 91672864f438a2a45fbfac65b0f8b42a8dd76e9e712cabe602311c34f290f7a3

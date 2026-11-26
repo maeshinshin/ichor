@@ -138,3 +138,34 @@ func TestRootPageIsGroupedLikeTheHelp(t *testing.T) {
 		t.Errorf("root page:\n%s", page)
 	}
 }
+
+// TestDeprecatedMarksOnlyDeprecatedFields: a description that merely mentions "deprecated" does not mark
+// its field, and a field that is deprecated still is.
+func TestDeprecatedMarksOnlyDeprecatedFields(t *testing.T) {
+	out := t.TempDir()
+	if err := generate(filepath.Join(repoRoot, crdDir), out); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	b, err := os.ReadFile(filepath.Join(out, "crds", "taloscluster.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows := string(b)
+	for _, live := range []string{"`spec.cni.preset`", "`spec.endpoint.type`"} {
+		if strings.Contains(rows, live+" **(deprecated)**") {
+			t.Errorf("%s is marked (deprecated)", live)
+		}
+	}
+
+	// positive control: spec.documents of TalosConfigPatch says it is deprecated itself
+	b, err = os.ReadFile(filepath.Join(out, "crds", "talosconfigpatch.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(b), "`spec.documents` **(deprecated)**") {
+		t.Error("spec.documents is no longer marked (deprecated)")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -119,7 +120,7 @@ func renderCRD(crd *apiextv1.CustomResourceDefinition) string {
 type walker struct{ b *strings.Builder }
 
 func (w *walker) walk(path string, s apiextv1.JSONSchemaProps, required, parentDeprecated bool) {
-	deprecated := parentDeprecated || strings.Contains(strings.ToLower(s.Description), "deprecated")
+	deprecated := parentDeprecated || deprecatedField(path, s.Description)
 
 	label := "`" + path + "`"
 	if deprecated {
@@ -134,6 +135,16 @@ func (w *walker) walk(path string, s apiextv1.JSONSchemaProps, required, parentD
 	fmt.Fprintf(w.b, "| %s | %s | %s | %s |\n", label, typeName(s), req, cell(describe(s)))
 
 	w.below(path, s, deprecated)
+}
+
+// deprecatedField reports whether desc deprecates the field at path itself: a sentence of it starts with
+// "Deprecated" (the Kubernetes convention) or with "<field name> is deprecated". A description that only
+// mentions the word, about a value or another field, does not.
+func deprecatedField(path, desc string) bool {
+	name := strings.TrimSuffix(path[strings.LastIndex(path, ".")+1:], "[]")
+	re := regexp.MustCompile(`(?i)(?:^|[.!?]\s+|\n)\s*(?:deprecated|` + regexp.QuoteMeta(name) + `\s+is\s+(?:a\s+)?deprecated)`)
+
+	return re.MatchString(desc)
 }
 
 // below writes the rows under a node: its properties, and those of its array elements and map

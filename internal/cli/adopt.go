@@ -163,6 +163,10 @@ clusters keep the old CAs, but never starts one.`,
 			return err
 		}
 
+		if err := validClusterName("adopt", adoptCluster); err != nil {
+			return err
+		}
+
 		k8sClient, err := newKubeClient(kubeconfigPath)
 		if err != nil {
 			return fmt.Errorf("adopt: building the Kubernetes client: %w", err)

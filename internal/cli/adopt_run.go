@@ -217,6 +217,10 @@ func checkAdoptIchor(ctx context.Context, namespace string, deps adoptDeps) erro
 }
 
 func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
+	if err := validClusterName("adopt", clusterName); err != nil {
+		return err
+	}
+
 	if deps.Output == outputHuman && deps.Steps == nil {
 		deps.Steps = newProgress(deps.Stderr)
 	}

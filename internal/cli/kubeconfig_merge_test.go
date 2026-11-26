@@ -207,3 +207,29 @@ func TestMergeKubeconfig_ErrorsNeverContainCredentials(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestMergeKubeconfigWritesThroughASymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real-config")
+	link := filepath.Join(dir, "config")
+
+	if err := os.WriteFile(real, adminKubeconfig(t, "other", "https://10.0.0.9:6443"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := mergeKubeconfig(link, []string{link}, adminKubeconfig(t, "demo", credServer), "demo"); err != nil {
+		t.Fatal(err)
+	}
+
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v, %v", fi, err)
+	}
+
+	if cfg := mustLoad(t, real); cfg.Contexts[mergedDemo] == nil || cfg.Contexts["admin@other"] == nil {
+		t.Fatalf("the real file lacks the merged context: %+v", cfg.Contexts)
+	}
+}

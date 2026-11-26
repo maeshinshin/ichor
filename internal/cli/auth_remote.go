@@ -124,10 +124,6 @@ var dialUI = dialUIOverIssuer
 func dialUIOverIssuer(cmd *cobra.Command, interactive bool) (*uiSession, error) {
 	ctx := cmd.Context()
 
-	if err := secureIssuer(authOpts.issuer); err != nil {
-		return nil, err
-	}
-
 	f, err := newAuthFlowFor(cmd, uiAudience, interactive)
 	if err != nil {
 		return nil, err

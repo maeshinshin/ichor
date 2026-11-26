@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -287,9 +286,8 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 	// refused before it reaches a filesystem path built from it, not
 	// after -- the same constraint, just applied at the point that can
 	// still refuse cleanly instead of writing to the wrong place first.
-	if errs := validation.IsDNS1123Subdomain(in.Cluster); len(errs) > 0 {
-		return nil, fmt.Errorf("init: --cluster %q is invalid: %s (it becomes the TalosCluster's own Kubernetes object name)",
-			in.Cluster, strings.Join(errs, "; "))
+	if err := validClusterName("init", in.Cluster); err != nil {
+		return nil, err
 	}
 
 	top, ok := presetTopology[in.Preset]

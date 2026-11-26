@@ -159,6 +159,10 @@ func newAuthFlowFor(cmd *cobra.Command, audience string, openBrowserToo bool) (*
 		return nil, errors.New("--issuer is required")
 	}
 
+	if err := secureIssuer(authOpts.issuer); err != nil {
+		return nil, err
+	}
+
 	dir, err := authCacheDir()
 	if err != nil {
 		return nil, err

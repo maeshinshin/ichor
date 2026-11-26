@@ -183,3 +183,23 @@ func TestAdoptSavesTheRecoveredBundleOnlyAfterConsent(t *testing.T) {
 		})
 	}
 }
+
+func TestAdoptRefusesAnInvalidClusterNameBeforeSavingTheBundle(t *testing.T) {
+	for _, name := range []string{"Prod", "../x"} {
+		t.Run(name, func(t *testing.T) {
+			env, deps := freshFlow(t)
+
+			saved := 0
+			deps.SaveBundle = func() error { saved++; return nil }
+
+			err := runAdopt(context.Background(), name, testNamespace, deps)
+			if err == nil || !strings.Contains(err.Error(), "--cluster") {
+				t.Fatalf("runAdopt error = %v, want a --cluster refusal\n%s", err, env.stderr.String())
+			}
+
+			if saved != 0 {
+				t.Fatalf("SaveBundle called %d times, want 0", saved)
+			}
+		})
+	}
+}

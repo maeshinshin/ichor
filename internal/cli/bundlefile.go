@@ -23,10 +23,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
@@ -51,6 +53,10 @@ const (
 // contract ("ichor restore cluster rebuilds control planes from
 // the local bundle"), and a moving target would undermine that.
 func bundleDir(cluster string) (string, error) {
+	if err := validClusterName("", cluster); err != nil {
+		return "", err
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("finding home directory for the secrets bundle backup: %w", err)
@@ -197,12 +203,34 @@ func buildBundleSecret(cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bund
 // restores it afterward.
 var fsyncFile = func(f *os.File) error { return f.Sync() }
 
+// validClusterName refuses a --cluster value that is not a Kubernetes object name: it becomes the
+// TalosCluster's name and a path under ~/.ichor/clusters, so it is checked before either is used.
+func validClusterName(cmd, name string) error {
+	if errs := validation.IsDNS1123Subdomain(name); len(errs) > 0 {
+		prefix := ""
+		if cmd != "" {
+			prefix = cmd + ": "
+		}
+
+		return fmt.Errorf("%s--cluster %q is invalid: %s (it becomes the TalosCluster's own Kubernetes object name)",
+			prefix, name, strings.Join(errs, "; "))
+	}
+
+	return nil
+}
+
 // writeFileAtomic writes data to path at bundleFilePerm (0600; every caller is the secrets bundle or the
 // kubeconfig next to it) via a temp file in the same directory, fsyncing the file's data and, after the
 // rename, the directory entry. A crash at any point leaves the old content or nothing, never a truncated
 // bundle, and the new content (not stale blocks) survives power loss. It trusts the kernel's fsync
 // contract: a filesystem that lies about fsync is not detectable from userspace.
 func writeFileAtomic(path string, data []byte) error {
+	// A symlinked path (a dotfiles-managed kubeconfig) is written through: renaming over the link would
+	// replace it with a regular file.
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+
 	dir := filepath.Dir(path)
 
 	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")

@@ -631,3 +631,42 @@ func TestAdoptWaitsForCNIHandoverBeforeRelease(t *testing.T) {
 		t.Fatal("machines are still held after the hand-over")
 	}
 }
+
+// A machine that reports APIServerRestartRequired once its hold is off waits for a rollout, not for
+// time: adopt goes on, releases the rest and names the rollout as the next step.
+func TestAdoptDoesNotWaitOnAPIServerRestartRequired(t *testing.T) {
+	ok := func(context.Context, cilium.PreflightInput) (*cilium.PreflightReport, error) {
+		return &cilium.PreflightReport{}, nil
+	}
+
+	env, deps := ciliumFlowEnv(t, ok)
+	deps.ReleaseWait = time.Minute
+	deps.Interval = 5 * time.Millisecond
+
+	env.afterGet = func(o client.Object) {
+		switch o := o.(type) {
+		case *ichorv1alpha1.TalosCluster:
+			o.Status.Conditions = []metav1.Condition{{Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: testReadyReason, LastTransitionTime: metav1.Now()}}
+		case *ichorv1alpha1.TalosMachine:
+			o.Status.Conditions = []metav1.Condition{{Type: conditionReady, Status: metav1.ConditionFalse, Reason: reasonAPIServerRestartRequired, LastTransitionTime: metav1.Now()}}
+		}
+	}
+
+	start := time.Now()
+
+	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err != nil {
+		t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())
+	}
+
+	if time.Since(start) > 20*time.Second {
+		t.Fatalf("adopt waited %s", time.Since(start))
+	}
+
+	if want := "run `ichor rollout config --cluster " + env.cluster.Name + " --follow`"; !strings.Contains(env.stderr.String(), want) {
+		t.Fatalf("no rollout step %q in:\n%s", want, env.stderr.String())
+	}
+
+	if env.held(t, flowCP) || env.held(t, flowWorker) {
+		t.Fatal("machines are still held")
+	}
+}

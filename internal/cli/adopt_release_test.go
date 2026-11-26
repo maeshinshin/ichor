@@ -32,8 +32,9 @@ func TestWaitMachineReleasedReportsRebootRequiredWithoutWaiting(t *testing.T) {
 		reason string
 		reboot bool
 	}{
-		"became ready":    {metav1.ConditionTrue, testReadyReason, false},
-		"reboot required": {metav1.ConditionFalse, reasonRebootRequired, true},
+		"became ready":                {metav1.ConditionTrue, testReadyReason, false},
+		"reboot required":             {metav1.ConditionFalse, reasonRebootRequired, true},
+		"api server restart required": {metav1.ConditionFalse, reasonAPIServerRestartRequired, true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := newTestMachine("c")
@@ -43,7 +44,7 @@ func TestWaitMachineReleasedReportsRebootRequiredWithoutWaiting(t *testing.T) {
 
 			deps := adoptDeps{
 				K8s:         fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(m).Build(),
-				ReleaseWait: time.Minute, Interval: 5 * time.Millisecond,
+				ReleaseWait: 2 * time.Second, Interval: 5 * time.Millisecond,
 			}
 
 			start := time.Now()

@@ -119,7 +119,7 @@ subjects: [{apiGroup: rbac.authorization.k8s.io, kind: User, name: %[2]s}]
 		}
 
 		for _, obj := range objs {
-			if err := applyOne(ctx, k8sClient, obj); err != nil {
+			if err := ApplyOne(ctx, k8sClient, obj); err != nil {
 				t.Fatalf("seeding %s %s: %v", obj.GetKind(), obj.GetName(), err)
 			}
 		}
@@ -432,7 +432,7 @@ rules:
 		}
 
 		for _, obj := range objs {
-			if err := applyOne(ctx, k8sClient, obj); err != nil {
+			if err := ApplyOne(ctx, k8sClient, obj); err != nil {
 				t.Fatal(err)
 			}
 		}

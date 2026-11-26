@@ -30,7 +30,7 @@ import (
 )
 
 // An object an older `ichor init` created (field manager "ichor", operation Update) owns its list
-// items, which an apply as FieldOwner cannot remove. applyOne hands them over first, so the
+// items, which an apply as FieldOwner cannot remove. ApplyOne hands them over first, so the
 // plaintext ichor-ui Service port goes away and an operator's own port stays.
 func TestApplyOneRemovesAPortOwnedByAnOlderInit(t *testing.T) {
 	ctx := context.Background()
@@ -62,8 +62,8 @@ func TestApplyOneRemovesAPortOwnedByAnOlderInit(t *testing.T) {
 		},
 	}}
 
-	if err := applyOne(ctx, k8sClient, want); err != nil {
-		t.Fatalf("applyOne: %v", err)
+	if err := ApplyOne(ctx, k8sClient, want); err != nil {
+		t.Fatalf("ApplyOne: %v", err)
 	}
 
 	got := &corev1.Service{}

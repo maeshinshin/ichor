@@ -30,7 +30,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -111,28 +110,19 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 
 // createWithRetry creates obj, retrying briefly if the API server
 // doesn't recognize its kind yet (a CRD this same manifest just created
-// needs a moment to become Established), and treating "already exists"
-// as success -- re-running init against a cluster that already has some
-// of this applied should not fail on that alone. It creates with a
-// server-side apply as the installer's field manager, so a later `ichor
-// upgrade` owns every field it wrote and can remove what a release drops;
-// a Deployment is created, as the installer replaces those whole.
+// needs a moment to become Established). Re-running init, or installing over
+// objects an earlier install left, brings each one up to the manifest: it
+// applies as the installer does (installer.ApplyOne, server-side apply as
+// its field manager), so a later `ichor upgrade` owns every field it wrote
+// and can remove what a release drops. A Deployment is only created, and
+// "already exists" is success: init customized it, the installer replaces it whole.
 func createWithRetry(ctx context.Context, k8sClient client.Client, obj *unstructured.Unstructured, progress io.Writer) error {
 	err := retryInit(ctx, progress, func() error {
 		if obj.GetKind() == "Deployment" {
 			return k8sClient.Create(ctx, obj, client.FieldOwner(installer.FieldOwner))
 		}
 
-		live := &unstructured.Unstructured{}
-		live.SetGroupVersionKind(obj.GroupVersionKind())
-
-		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), live); err == nil {
-			return apierrors.NewAlreadyExists(schema.GroupResource{Resource: obj.GetKind()}, obj.GetName())
-		} else if !apierrors.IsNotFound(err) {
-			return err
-		}
-
-		return k8sClient.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), client.FieldOwner(installer.FieldOwner), client.ForceOwnership)
+		return installer.ApplyOne(ctx, k8sClient, obj)
 	})
 	if apierrors.IsAlreadyExists(err) {
 		return nil

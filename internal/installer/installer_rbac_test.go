@@ -32,6 +32,7 @@ var installerCalls = []struct {
 	{false, groupIchor, "talosclusters", verbList},                       // customize.go withIssuerURL
 	{true, groupIchor, resPatches, verbPatch},                            // migrate_patches.go, every namespace
 	{true, groupIchor, "talosconfigpatches/status", verbPatch},           // migrate_patches.go setMigrated, every namespace
+	{true, groupIchor, resPatches, verbGet},                              // migrate_patches.go setMigrated re-reads on conflict
 	{true, groupIchor, resPatches, verbList},                             // retired_stored.go, every namespace
 	{true, groupIchor, "talosclusters", verbList},                        // migrate_patches.go checkClusterContract, every namespace
 	{true, "apiextensions.k8s.io", "customresourcedefinitions", verbGet}, // install.go, crdcheck.go

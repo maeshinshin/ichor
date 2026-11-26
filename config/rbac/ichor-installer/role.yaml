@@ -201,6 +201,7 @@ rules:
   resources:
   - talosconfigpatches
   verbs:
+  - get
   - list
   - patch
 - apiGroups:

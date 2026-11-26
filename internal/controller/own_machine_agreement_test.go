@@ -121,7 +121,7 @@ func TestThePlanAndTheExecutorNameTheSameMachineAsTheControllers(t *testing.T) {
 				},
 			}
 			pod := &corev1.Pod{
-				Namespace: testIchorNamespace, Name: "ichor-controller", Labels: map[string]string{"control-plane": "controller-manager"},
+				Namespace: testIchorNamespace, Name: "ichor-controller", Labels: map[string]string{controlPlaneLabel: valueControllerMgr},
 				Spec: corev1.PodSpec{NodeName: podNode},
 			}
 

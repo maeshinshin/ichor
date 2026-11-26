@@ -297,7 +297,10 @@ func advanceInstallerJob(
 		}
 
 		// AlreadyExists: the cache has not seen the Job just created.
-		return false, client.IgnoreAlreadyExists(c.Create(ctx, newInstallerJob(ns, name, op, inst, img.Digest, cni, noPolicies)))
+		job := newInstallerJob(ns, name, op, inst, img.Digest, cni, noPolicies)
+		InheritManagerScheduling(ctx, uncached, ns, job)
+
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, job))
 	case err != nil:
 		return false, err
 	}

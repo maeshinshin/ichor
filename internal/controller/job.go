@@ -18,14 +18,18 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"sync"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -136,8 +140,7 @@ func newJob(
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: serviceAccount,
-					// shortcut: the chart's default manager.tolerations, not the installed ones; read the manager's
-					// own pod when someone needs a different taint here.
+					// The fallback when the manager pod cannot be read; InheritManagerScheduling replaces it.
 					Tolerations: []corev1.Toleration{{
 						Key: "node-role.kubernetes.io/control-plane", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule,
 					}},
@@ -161,3 +164,41 @@ func newJob(
 
 	return job
 }
+
+// InheritManagerScheduling gives job's pod the scheduling of the controller's own pod (tolerations, nodeSelector,
+// affinity, priorityClassName, imagePullSecrets), so a Job schedules wherever the manager does. The pod is the one named
+// by POD_NAME (the controller), else the one labelled control-plane=controller-manager in ns (the CLI). When it cannot
+// be read the Job keeps newJob's control-plane toleration and the reason is logged.
+func InheritManagerScheduling(ctx context.Context, r client.Reader, ns string, job *batchv1.Job) {
+	var pod corev1.Pod
+
+	var err error
+
+	if name := os.Getenv("POD_NAME"); name != "" {
+		err = r.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &pod)
+	} else {
+		var pods corev1.PodList
+
+		if err = r.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{controlPlaneLabel: valueControllerMgr}); err == nil {
+			if len(pods.Items) == 0 {
+				err = errors.New("no pod labelled control-plane=controller-manager")
+			} else {
+				pod = pods.Items[0]
+			}
+		}
+	}
+
+	if err != nil {
+		schedulingFallback.Do(func() {
+			ctrl.Log.WithName("jobs").Info("the manager pod could not be read; Jobs tolerate the control-plane taint only", "error", err.Error())
+		})
+
+		return
+	}
+
+	spec, from := &job.Spec.Template.Spec, pod.Spec
+	spec.Tolerations, spec.NodeSelector, spec.Affinity = from.Tolerations, from.NodeSelector, from.Affinity
+	spec.PriorityClassName, spec.ImagePullSecrets = from.PriorityClassName, from.ImagePullSecrets
+}
+
+var schedulingFallback sync.Once

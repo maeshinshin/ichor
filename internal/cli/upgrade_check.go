@@ -67,6 +67,7 @@ func runInstallerCheck(ctx context.Context, k client.Client, images controller.I
 func runCheckJob(ctx context.Context, k client.Client, errw io.Writer, want *ichorv1alpha1.IchorInstallation, pinned string, signInPending bool) error {
 	name := "ichor-installer-check-" + rand.String(5)
 	job := controller.NewInstallerCheckJob(ichorControllerNamespace, name, want, pinned, "", false, signInPending)
+	controller.InheritManagerScheduling(ctx, k, ichorControllerNamespace, job)
 
 	if err := k.Create(ctx, job); err != nil {
 		return fmt.Errorf("upgrade: starting the check Job: %w", err)

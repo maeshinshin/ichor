@@ -4,8 +4,11 @@ import (
 	"slices"
 	"testing"
 
+	"context"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
@@ -63,6 +66,43 @@ func TestJobBuildersTolerateControlPlane(t *testing.T) {
 
 		if !tolerated {
 			t.Errorf("%s Job tolerations = %v, want one for %s:NoSchedule", name, job.Spec.Template.Spec.Tolerations, taint.Key)
+		}
+	}
+}
+
+const infraPool = "infra"
+
+// TestJobsFollowTheManagerPodScheduling pins that the installer and check Jobs take their scheduling from the
+// controller's own pod, so custom manager.tolerations, nodeSelector, affinity and priorityClassName apply to them too;
+// the pod is found by POD_NAME (the controller) or by its label (the CLI).
+func TestJobsFollowTheManagerPodScheduling(t *testing.T) {
+	mgr := &corev1.Pod{
+		Namespace: trustNamespace, Name: "mgr-0", Labels: map[string]string{controlPlaneLabel: valueControllerMgr},
+		Spec: corev1.PodSpec{
+			Tolerations:       []corev1.Toleration{{Key: infraPool, Operator: corev1.TolerationOpExists}},
+			NodeSelector:      map[string]string{"pool": infraPool},
+			Affinity:          &corev1.Affinity{NodeAffinity: &corev1.NodeAffinity{}},
+			PriorityClassName: "ichor-high",
+			ImagePullSecrets:  []corev1.LocalObjectReference{{Name: "pull"}},
+		},
+	}
+	r := fake.NewClientBuilder().WithObjects(mgr).Build()
+	inst := &ichorv1alpha1.IchorInstallation{}
+
+	for _, podName := range []string{"mgr-0", ""} { // by POD_NAME, then by label
+		t.Setenv("POD_NAME", podName)
+
+		for name, job := range map[string]*batchv1.Job{
+			"run":   newInstallerJob(trustNamespace, "r", &ichorv1alpha1.TalosOperation{}, inst, "sha256:x", "", false),
+			"check": NewInstallerCheckJob(trustNamespace, "c", inst, "sha256:x", "", false, false),
+		} {
+			InheritManagerScheduling(context.Background(), r, trustNamespace, job)
+
+			if got := job.Spec.Template.Spec; len(got.Tolerations) != 1 || got.Tolerations[0].Key != infraPool ||
+				got.NodeSelector["pool"] != infraPool || got.Affinity == nil || got.PriorityClassName != "ichor-high" ||
+				len(got.ImagePullSecrets) != 1 {
+				t.Errorf("%s Job (POD_NAME=%q) scheduling = %+v, want the manager pod's", name, podName, got)
+			}
 		}
 	}
 }

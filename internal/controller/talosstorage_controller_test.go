@@ -572,4 +572,22 @@ var _ = Describe("TalosStorage adds the extensions its preset needs (ADR 0173)",
 		Expect(fetchCluster(cluster).Spec.Schematic.ID).To(Equal("custom-id"))
 		Expect(storageOps(cluster.Name)).To(BeEmpty())
 	})
+	It("says in the condition that the identity may not write, naming webhook.enabled, and returns no error", func() {
+		cluster := newTestCluster(newTestSecret(bundleRaw).Name, "v1.14")
+		s := newRealStorage(cluster.Name)
+		m := bareNode(cluster.Name)
+		sys, err := render.ResolveSystemInputs(ctx, k8sClient, tmNamespace, cluster)
+		Expect(err).NotTo(HaveOccurred())
+
+		rendered, _, err := render.Render(cluster, m, bundleRaw, nil, sys)
+		Expect(err).NotTo(HaveOccurred())
+		convergeMachine(m, rendered)
+
+		r.Actor = forbiddenActor{k8sClient}
+
+		ready := apimeta.FindStatusCondition(reconcileStorage(r, s).Status.Conditions, conditionStorageReady)
+		Expect(ready.Reason).To(Equal(reasonStorageSchematicNotMergeable))
+		Expect(ready.Message).To(ContainSubstring("webhook.enabled"))
+		Expect(storageOps(cluster.Name)).To(BeEmpty())
+	})
 })

@@ -47,6 +47,10 @@ func TestDetectCNI(t *testing.T) {
 		{cniNone, []appsv1.DaemonSet{ds("kube-system", "kube-proxy", "k8s/kube-proxy:v1.34.0")}, cniNone, ""},
 		{"empty", nil, cniNone, ""},
 		{ciliumName, []appsv1.DaemonSet{ds("kube-system", "cilium", "quay.io/cilium/cilium:v1.18.3@sha256:abc"), ds("kube-system", "kube-proxy", "x:1")}, ciliumName, "v1.18.3"},
+		{"cilium beside non-CNI DaemonSets", []appsv1.DaemonSet{
+			ds("kube-system", "cilium", "c:v1"), ds("kube-system", "kube-proxy", "x:1"),
+			ds("kube-system", "csi-node-driver", "csi:1"), ds("kube-system", "talos-kubelet-extra", "t:1"),
+		}, ciliumName, "v1"},
 		{cniFlannel, []appsv1.DaemonSet{ds("kube-system", "kube-flannel", "ghcr.io/siderolabs/flannel:v0.27.4")}, cniFlannel, "v0.27.4"},
 		{cniCalico, []appsv1.DaemonSet{ds("kube-system", "calico-node", "calico/node:v3.30.0")}, cniCalico, "v3.30.0"},
 		{cniOther, []appsv1.DaemonSet{ds("kube-system", "weave-net", "weave:2.8.1")}, cniOther, "2.8.1"},

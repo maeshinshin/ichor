@@ -50,6 +50,7 @@
               talosctl
               kubectl
               kubernetes-helm
+              kind # the test-chart workflow creates its cluster with it
               cilium-cli # installs Cilium as a Helm release for the foreign-cluster hardware test
               buf
               protoc-gen-go

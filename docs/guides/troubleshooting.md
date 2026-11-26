@@ -112,3 +112,14 @@ Reference: [`ichor logs node`](../reference/cli/ichor_logs_node.md),
 [`ichor support-bundle`](../reference/cli/ichor_support-bundle.md),
 [`ichor pcap`](../reference/cli/ichor_pcap.md),
 [`ichor snapshot etcd`](../reference/cli/ichor_snapshot_etcd.md).
+
+## Recover a namespace stuck in Terminating
+
+Older versions let `kubectl delete namespace ichor-system` through. The namespace controller then deleted the controller and the webhook Service together with the custom resources, so every delete failed with `failed calling webhook ... service "ichor-webhook-service" not found`. The cluster is unmanaged and the namespace stays `Terminating`. To get out:
+
+1. Save the bundle: `ichor export bundle NAME`. It reads the Secret, which still exists, and writes the file before its last step; that step marks the TalosCluster as exported and fails while the webhook is down.
+2. Delete the validating webhook, so the remaining deletes can pass: `kubectl delete validatingwebhookconfiguration ichor-validating-webhook-configuration`. The mutating one fails open and can stay.
+3. The controller is gone, so nothing clears the finalizers. On each TalosMachine, and on each TalosOperation, that has a `deletionTimestamp`: `kubectl -n ichor-system patch talosmachine NAME --type merge -p '{"metadata":{"finalizers":null}}'`. This writes nothing to a node.
+4. A version with the `ichor-protected-secrets` policy keeps the bundle Secret. Once it is exported, `kubectl -n ichor-system annotate secret SECRET ichor.maesh.dev/allow-delete=true` lets the namespace finish.
+
+Then install Ichor again and recover the cluster from the exported bundle (`ichor restore cluster`).

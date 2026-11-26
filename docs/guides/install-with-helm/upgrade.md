@@ -16,6 +16,13 @@ sidebar_order: 9
 > `helm uninstall` keeps the CRDs by default (`crd.keep: true`), and so every cluster object. Cilium is a separate release and stays.
 
 > [!WARNING]
-> Do not delete the namespace Ichor runs in (`kubectl delete namespace ichor-system`) while it holds a cluster. Ichor refuses to delete its TalosClusters and TalosMachines, so the namespace stays `Terminating`, and it refuses to delete the secrets bundle Secret (label `ichor.maesh.dev/protected`) for the same reason. Remove the cluster on purpose: set the annotation `ichor.maesh.dev/allow-delete=true`, then delete the TalosClusters and TalosMachines. Export the bundle first (`ichor export bundle`); the bundle Secret needs the same annotation before it can go.
+> The namespace Ichor runs in carries the label `ichor.maesh.dev/protected` (the controller sets it at start-up) and cannot be deleted until you say so. Deleting it takes the controller down while the clusters it manages are still there, and the namespace then stays `Terminating` for good. To remove Ichor on purpose:
+>
+> 1. Export each bundle: `ichor export bundle NAME`.
+> 2. Remove the clusters: set the annotation `ichor.maesh.dev/allow-delete=true` on each TalosCluster and TalosMachine, then delete them.
+> 3. Annotate the bundle Secret `ichor.maesh.dev/allow-delete=true`.
+> 4. Annotate the namespace `ichor.maesh.dev/allow-delete=true`, then `kubectl delete namespace ichor-system`.
+>
+> If a namespace is already stuck, see [Recover a namespace stuck in Terminating](../troubleshooting.md#recover-a-namespace-stuck-in-terminating).
 
 For an Ichor the installer made, see [Upgrade Ichor with the installer](../upgrade-ichor.md).

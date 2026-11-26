@@ -19,7 +19,11 @@ package controller
 import (
 	"reflect"
 	"testing"
+	"time"
 
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -96,5 +100,71 @@ func TestEverySystemInputsFieldMovesInputsHash(t *testing.T) {
 		if inputsHashFor(t, sys) == base {
 			t.Errorf("SystemInputs.%s does not move desiredInputsHash", name)
 		}
+	}
+}
+
+// TestRotationInputsHashIsStableAcrossBuilds: what an executor hands the render is read back from
+// the stored rotation (rotation.yaml, keyrotation.yaml) or taken from the node, never generated per
+// pass, so two builds from the same stored state hash the same. A new rotation hashes differently.
+func TestRotationInputsHashIsStableAcrossBuilds(t *testing.T) {
+	contract, err := coreconfig.ParseContractFromVersion("v1.14")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bundle, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rot, err := secretsbundle.NewRotationFor(time.Now(), contract, []string{ichorv1alpha1.CARotationTargetTalos})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kr, err := secretsbundle.NewKeyRotation(bundle, []string{secretsbundle.TargetServiceAccount, secretsbundle.TargetSecretbox})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rawRot, _ := rot.Marshal()
+	rawKr, _ := kr.Marshal()
+
+	build := func() *render.SystemInputs {
+		r, err := secretsbundle.ParseRotation(rawRot)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		k, err := secretsbundle.ParseKeyRotation(rawKr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		node := &corev1.Node{}
+		node.Status.NodeInfo.KubeletVersion = "v1.35.0"
+
+		return &render.SystemInputs{
+			CARotation:  &render.CARotation{Stage: ichorv1alpha1.CARotationStageAccepting, New: r},
+			KeyRotation: &render.KeyRotation{Stage: ichorv1alpha1.KeyRotationStageAccepting, New: k},
+			Staged:      stagedFor(ichorv1alpha1.KubernetesStageAPIServers, node),
+		}
+	}
+
+	first, second := inputsHashFor(t, build()), inputsHashFor(t, build())
+	if first != second {
+		t.Fatal("two builds from the same stored rotations hash differently")
+	}
+
+	other, err := secretsbundle.NewRotationFor(time.Now(), contract, []string{ichorv1alpha1.CARotationTargetTalos})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	changed := build()
+	changed.CARotation.New = other
+
+	if inputsHashFor(t, build()) == inputsHashFor(t, changed) {
+		t.Fatal("a different rotation hashes the same")
 	}
 }

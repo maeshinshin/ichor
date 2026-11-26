@@ -414,11 +414,11 @@ var fingerprintUnaffecting = map[string]string{
 
 	"SystemInputs.Storage[].Spec.EvacuationTimeout": "read by the node-operation hook (layer 4); layer 1 does not read it",
 
-	"SystemInputs.CARotation.Stage": "the CA rotation executor's input; New is key material generated per run",
+	"SystemInputs.CARotation.Stage": "the CA rotation executor's input; New is stored key material, not fixable here",
 
 	"SystemInputs.CARotation.New": "as Stage",
 
-	"SystemInputs.KeyRotation.Stage": "the key rotation executor's input; New is generated key material",
+	"SystemInputs.KeyRotation.Stage": "the key rotation executor's input; New is stored key material, not fixable here",
 
 	"SystemInputs.KeyRotation.New": "as Stage",
 }

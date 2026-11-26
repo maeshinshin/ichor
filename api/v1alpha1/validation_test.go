@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
@@ -551,13 +554,20 @@ func customCNISource() TalosClusterCNICustomSource {
 }
 
 var _ = Describe("TalosCluster.spec.cni", func() {
+	// The typed client always sends cni: {}, which hides a missing parent default, so this creates
+	// the shipped sample (no spec.cni at all) through unstructured.
 	It("defaults preset to cilium and kubeProxy to enabled when cni is omitted entirely", func() {
-		created := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
-		Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
+		raw, err := os.ReadFile("../../config/samples/ichor_v1alpha1_taloscluster.yaml")
+		Expect(err).NotTo(HaveOccurred())
+		u := &unstructured.Unstructured{}
+		Expect(yaml.Unmarshal(raw, &u.Object)).To(Succeed())
+		_, hasCNI, _ := unstructured.NestedMap(u.Object, "spec", "cni")
+		Expect(hasCNI).To(BeFalse(), "the sample must not set spec.cni")
+		u.SetNamespace(testNamespace)
+		Expect(k8sClient.Create(context.Background(), u)).To(Succeed())
 
 		readBack := &TalosCluster{}
-		key := types.NamespacedName{Name: created.Name, Namespace: created.Namespace}
-		Expect(k8sClient.Get(context.Background(), key, readBack)).To(Succeed())
+		Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(u), readBack)).To(Succeed())
 
 		Expect(readBack.Spec.CNI.Preset).To(Equal(cniPresetCilium))
 		Expect(readBack.Spec.CNI.KubeProxy).To(Equal(kubeProxyEnabled))

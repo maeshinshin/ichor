@@ -413,7 +413,7 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 	}
 
 	return &pb.Cluster{
-		CniPreset:                 c.Spec.CNI.Preset,
+		CniPreset:                 c.Spec.CNI.EffectivePreset(),
 		CniDetected:               detected,
 		CniDetectedVersion:        detectedVersion,
 		DiscoveryAddresses:        addrs,

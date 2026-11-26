@@ -792,7 +792,7 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 // not read: every value is automatic now. A CNI with nothing to hand over (any preset but cilium,
 // which the controllers refuse) waits for nothing.
 func cniHandoverPending(cluster *ichorv1alpha1.TalosCluster) string {
-	if cluster.Spec.CNI.Preset != ciliumName {
+	if cluster.Spec.CNI.EffectivePreset() != ciliumName {
 		return ""
 	}
 

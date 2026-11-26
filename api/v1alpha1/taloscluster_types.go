@@ -383,8 +383,12 @@ type TalosClusterSpec struct {
 	// +optional
 	DriftPolicy string `json:"driftPolicy,omitempty"`
 
+	// The cni default spells out the children: the CEL rules on the object read self.preset and run
+	// against the default itself, which a bare {} would fail at CRD creation.
+
 	// cni configures which CNI preset this cluster bootstraps and how kube-proxy is split
 	// between Talos and the CNI (docs/design/architecture.md, "CNI").
+	// +kubebuilder:default={preset: "cilium", kubeProxy: "enabled"}
 	// +optional
 	CNI TalosClusterCNI `json:"cni,omitempty"`
 
@@ -673,6 +677,19 @@ const TalosClusterCARotationAdviceDismissedAnnotation = "ichor.maesh.dev/ca-rota
 // TalosClusterCNIPresetUnmanaged is the value of spec.cni.preset for a cluster whose CNI Ichor
 // leaves exactly as it is.
 const TalosClusterCNIPresetUnmanaged = "unmanaged"
+
+// TalosClusterCNIPresetCilium is the value of spec.cni.preset for the Cilium CNI Ichor owns.
+const TalosClusterCNIPresetCilium = "cilium"
+
+// EffectivePreset is the preset in force: an unset one is the CRD default, cilium. Compare this,
+// never Preset itself, so an object stored before the default applied reads the same as one after.
+func (c TalosClusterCNI) EffectivePreset() string {
+	if c.Preset == "" {
+		return TalosClusterCNIPresetCilium
+	}
+
+	return c.Preset
+}
 
 // Condition types added to TalosCluster.status.conditions.
 const (

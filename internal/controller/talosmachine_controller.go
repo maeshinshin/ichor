@@ -136,8 +136,8 @@ func (r *TalosMachineReconciler) ensureRemovalFinalizer(ctx context.Context, m *
 func (r *TalosMachineReconciler) refuseUnsupportedCNI(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (ctrl.Result, bool, error) {
-	p := cluster.Spec.CNI.Preset
-	if p == "" || p == ciliumName || p == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+	p := cluster.Spec.CNI.EffectivePreset()
+	if p == ciliumName || p == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return ctrl.Result{}, false, nil
 	}
 

@@ -179,6 +179,9 @@ spec:
                 maxItems: 64
                 type: array
               cni:
+                default:
+                  kubeProxy: enabled
+                  preset: cilium
                 description: |-
                   cni configures which CNI preset this cluster bootstraps and how kube-proxy is split
                   between Talos and the CNI (docs/design/architecture.md, "CNI").

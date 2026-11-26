@@ -154,11 +154,11 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Ichor leaves an unmanaged cluster's CNI alone: no hand-over, no Job, no conditions.
-	if cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+	if cluster.Spec.CNI.EffectivePreset() == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return ctrl.Result{}, nil
 	}
 
-	if cluster.Spec.CNI.Preset != ciliumName {
+	if cluster.Spec.CNI.EffectivePreset() != ciliumName {
 		return ctrl.Result{}, r.markCNIUnsupported(ctx, &cluster)
 	}
 
@@ -811,13 +811,9 @@ func (r *CNIHandoverReconciler) setCondition(
 // markCNIUnsupported sets CNIUnsupported=True on a cluster whose preset is not cilium.
 // The controllers refuse to render it and change nothing on its nodes; the condition says why.
 func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
-	if cluster.Spec.CNI.Preset == "" {
-		return nil
-	}
-
 	return r.setCondition(ctx, cluster, ichorv1alpha1.ConditionCNIUnsupported, metav1.ConditionTrue, reasonCNIPresetRemoved,
 		fmt.Sprintf("spec.cni.preset %q was removed (Cilium is the only CNI); "+
-			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset))
+			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.EffectivePreset()))
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -347,9 +347,9 @@ const presetRemovedMessage = "spec.cni.preset %q was removed: " +
 // removedPreset reports whether a stored preset is a removed one. The CRD default makes an
 // unset preset cilium.
 func removedPreset(c *ichorv1alpha1.TalosCluster) bool {
-	p := c.Spec.CNI.Preset
+	p := c.Spec.CNI.EffectivePreset()
 
-	return p != "" && p != "cilium" && p != presetUnmanaged
+	return p != "cilium" && p != presetUnmanaged
 }
 
 // presetUnmanaged is spec.cni.preset for an adopted cluster whose CNI Ichor leaves alone.

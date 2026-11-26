@@ -122,4 +122,11 @@ Older versions let `kubectl delete namespace ichor-system` through. The namespac
 3. The controller is gone, so nothing clears the finalizers. On each TalosMachine, and on each TalosOperation, that has a `deletionTimestamp`: `kubectl -n ichor-system patch talosmachine NAME --type merge -p '{"metadata":{"finalizers":null}}'`. This writes nothing to a node.
 4. A version with the `ichor-protected-secrets` policy keeps the bundle Secret. Once it is exported, `kubectl -n ichor-system annotate secret SECRET ichor.maesh.dev/allow-delete=true` lets the namespace finish.
 
-The nodes keep running. Keep the exported bundle: `ichor restore cluster` reads it (`--secrets-bundle`, or `~/.ichor/clusters/NAME/secrets.yaml`) without Ichor or the namespace, but only to recover a cluster whose control planes and etcd data are gone.
+The nodes keep running, so bring the cluster back under a fresh Ichor with `ichor adopt`. It installs Ichor when it is absent, then creates the bundle Secret, the TalosCluster and the TalosMachines; with no TalosCluster yet, `--node` names one control plane and adopt reads the members from it. Use the file from step 1:
+
+```sh
+ichor adopt --cluster NAME --node CP_ADDRESS --secrets-bundle ~/.ichor/clusters/NAME/secrets.yaml --plan
+ichor adopt --cluster NAME --node CP_ADDRESS --secrets-bundle ~/.ichor/clusters/NAME/secrets.yaml
+```
+
+Without the file, `--recover-secrets --recover-from CP_ADDRESS` rebuilds the bundle from that control plane's machine config instead of `--secrets-bundle`. An encrypted file needs its passphrase (`--bundle-passphrase-file` or `$ICHOR_BUNDLE_PASSPHRASE`). An object that already exists is kept when identical, and adopt refuses one that differs. Installing over the cluster-scoped objects the old install left behind is untested. `ichor restore cluster` is for a cluster whose control planes and etcd data are gone, not this case.

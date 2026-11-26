@@ -406,8 +406,8 @@ type ClusterInlineManifest struct {
 type ClusterNetworkConfig struct {
 	// +optional
 	CNI *CNIConfig `json:"cni,omitempty"`
-	// +required
-	DNSDomain string `json:"dnsDomain"`
+	// +optional
+	DNSDomain string `json:"dnsDomain,omitempty"`
 	// +required
 	PodSubnet []string `json:"podSubnets"`
 	// +required
@@ -564,8 +564,8 @@ type CoreDNS struct {
 
 // Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DHCPOptions struct {
-	// +required
-	DHCPRouteMetric uint32 `json:"routeMetric"`
+	// +optional
+	DHCPRouteMetric uint32 `json:"routeMetric,omitempty"`
 	// +optional
 	DHCPIPv4 *bool `json:"ipv4,omitempty"`
 	// +optional
@@ -1076,8 +1076,8 @@ type InstallConfig struct {
 	InstallExtensions []*InstallExtensionConfig `json:"extensions,omitempty"`
 	// +optional
 	InstallBootloader *bool `json:"bootloader,omitempty"`
-	// +required
-	InstallWipe *bool `json:"wipe"`
+	// +optional
+	InstallWipe *bool `json:"wipe,omitempty"`
 	// +optional
 	InstallLegacyBIOSSupport *bool `json:"legacyBIOSSupport,omitempty"`
 	// +optional
@@ -1230,8 +1230,8 @@ type KubeInlineManifestConfigV1Alpha1 struct {
 
 // Talos: KubeNetworkConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubenetworkconfig
 type KubeNetworkConfigV1Alpha1 struct {
-	// +required
-	NetworkDNSDomain string `json:"dnsDomain"`
+	// +optional
+	NetworkDNSDomain string `json:"dnsDomain,omitempty"`
 	// +required
 	NetworkPodSubnets []string `json:"podSubnets"`
 	// +required
@@ -1864,8 +1864,8 @@ type ResourcesConfig struct {
 type Route struct {
 	// +required
 	RouteNetwork string `json:"network"`
-	// +required
-	RouteGateway string `json:"gateway"`
+	// +optional
+	RouteGateway string `json:"gateway,omitempty"`
 	// +optional
 	RouteSource string `json:"source,omitempty"`
 	// +optional
@@ -2196,8 +2196,8 @@ type Vlan struct {
 	VlanAddresses []string `json:"addresses,omitempty"`
 	// +optional
 	VlanCIDR string `json:"cidr,omitempty"`
-	// +required
-	VlanRoutes []*Route `json:"routes"`
+	// +optional
+	VlanRoutes []*Route `json:"routes,omitempty"`
 	// +optional
 	VlanDHCP *bool `json:"dhcp,omitempty"`
 	// +required

@@ -244,6 +244,13 @@ var sparseFields = map[string]bool{
 	"Config.ClusterConfig":          true,
 	"MachineConfig.MachineType":     true,
 	"MachineConfig.MachineCertSANs": true,
+	// Talos documents each of these as optional or defaulted although the struct tag has no omitempty:
+	"InstallConfig.InstallWipe":                  true, // defaults to true
+	"Route.RouteGateway":                         true, // empty makes a link-scope route
+	"DHCPOptions.DHCPRouteMetric":                true, // zero leaves the route priority alone
+	"Vlan.VlanRoutes":                            true, // no routes is valid
+	"ClusterNetworkConfig.DNSDomain":             true, // defaults to cluster.local
+	"KubeNetworkConfigV1Alpha1.NetworkDNSDomain": true, // defaults to cluster.local
 }
 
 // secretFields are machinery fields that carry secret material, keyed

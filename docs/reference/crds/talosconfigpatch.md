@@ -448,7 +448,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.machine.install.grubUseUKICmdline` | `boolean` | no |  |
 | `spec.config.machine.install.image` | `string` | no |  |
 | `spec.config.machine.install.legacyBIOSSupport` | `boolean` | no |  |
-| `spec.config.machine.install.wipe` | `boolean` | yes |  |
+| `spec.config.machine.install.wipe` | `boolean` | no |  |
 | `spec.config.machine.kernel` | `object` | no | MachineKernel is the object at machine.kernel. |
 | `spec.config.machine.kernel.modules` | `map[string]object` | no | Kernel modules to load, by module name. |
 | `spec.config.machine.kernel.modules.<key>.parameters` | `[]string` | no |  |
@@ -822,13 +822,13 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.machine.network.interfaces[].dhcpOptions.duidv6` | `string` | no |  |
 | `spec.config.machine.network.interfaces[].dhcpOptions.ipv4` | `boolean` | no |  |
 | `spec.config.machine.network.interfaces[].dhcpOptions.ipv6` | `boolean` | no |  |
-| `spec.config.machine.network.interfaces[].dhcpOptions.routeMetric` | `integer` | yes |  |
+| `spec.config.machine.network.interfaces[].dhcpOptions.routeMetric` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].dummy` | `boolean` | no |  |
 | `spec.config.machine.network.interfaces[].ignore` | `boolean` | no |  |
 | `spec.config.machine.network.interfaces[].interface` | `string` | no |  |
 | `spec.config.machine.network.interfaces[].mtu` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].routes` | `[]object` | no |  |
-| `spec.config.machine.network.interfaces[].routes[].gateway` | `string` | yes |  |
+| `spec.config.machine.network.interfaces[].routes[].gateway` | `string` | no |  |
 | `spec.config.machine.network.interfaces[].routes[].metric` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].routes[].mtu` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].routes[].network` | `string` | yes |  |
@@ -845,10 +845,10 @@ Version v1alpha1: has a `status` subresource.
 | `spec.config.machine.network.interfaces[].vlans[].dhcpOptions.duidv6` | `string` | no |  |
 | `spec.config.machine.network.interfaces[].vlans[].dhcpOptions.ipv4` | `boolean` | no |  |
 | `spec.config.machine.network.interfaces[].vlans[].dhcpOptions.ipv6` | `boolean` | no |  |
-| `spec.config.machine.network.interfaces[].vlans[].dhcpOptions.routeMetric` | `integer` | yes |  |
+| `spec.config.machine.network.interfaces[].vlans[].dhcpOptions.routeMetric` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].vlans[].mtu` | `integer` | no |  |
-| `spec.config.machine.network.interfaces[].vlans[].routes` | `[]object` | yes |  |
-| `spec.config.machine.network.interfaces[].vlans[].routes[].gateway` | `string` | yes |  |
+| `spec.config.machine.network.interfaces[].vlans[].routes` | `[]object` | no |  |
+| `spec.config.machine.network.interfaces[].vlans[].routes[].gateway` | `string` | no |  |
 | `spec.config.machine.network.interfaces[].vlans[].routes[].metric` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].vlans[].routes[].mtu` | `integer` | no |  |
 | `spec.config.machine.network.interfaces[].vlans[].routes[].network` | `string` | yes |  |
@@ -2476,7 +2476,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.cluster.network.cni.flannel.kubeNetworkPoliciesEnabled` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.cluster.network.cni.name` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.cluster.network.cni.urls` **(deprecated)** | `[]string` | no |  |
-| `spec.documents[].config.cluster.network.dnsDomain` **(deprecated)** | `string` | yes |  |
+| `spec.documents[].config.cluster.network.dnsDomain` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.cluster.network.podSubnets` **(deprecated)** | `[]string` | yes |  |
 | `spec.documents[].config.cluster.network.serviceSubnets` **(deprecated)** | `[]string` | yes |  |
 | `spec.documents[].config.cluster.proxy` **(deprecated)** | `object` | no | Talos: ProxyConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
@@ -2554,7 +2554,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.machine.install.grubUseUKICmdline` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.machine.install.image` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.machine.install.legacyBIOSSupport` **(deprecated)** | `boolean` | no |  |
-| `spec.documents[].config.machine.install.wipe` **(deprecated)** | `boolean` | yes |  |
+| `spec.documents[].config.machine.install.wipe` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.machine.kernel` **(deprecated)** | `object` | no | Talos: KernelConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.documents[].config.machine.kernel.modules` **(deprecated)** | `[]object` | no |  |
 | `spec.documents[].config.machine.kernel.modules[].name` **(deprecated)** | `string` | yes |  |
@@ -2669,13 +2669,13 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.machine.network.interfaces[].dhcpOptions.duidv6` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].dhcpOptions.ipv4` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].dhcpOptions.ipv6` **(deprecated)** | `boolean` | no |  |
-| `spec.documents[].config.machine.network.interfaces[].dhcpOptions.routeMetric` **(deprecated)** | `integer` | yes |  |
+| `spec.documents[].config.machine.network.interfaces[].dhcpOptions.routeMetric` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].dummy` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].ignore` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].interface` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].mtu` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].routes` **(deprecated)** | `[]object` | no |  |
-| `spec.documents[].config.machine.network.interfaces[].routes[].gateway` **(deprecated)** | `string` | yes |  |
+| `spec.documents[].config.machine.network.interfaces[].routes[].gateway` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].routes[].metric` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].routes[].mtu` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].routes[].network` **(deprecated)** | `string` | yes |  |
@@ -2692,10 +2692,10 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.duidv6` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.ipv4` **(deprecated)** | `boolean` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.ipv6` **(deprecated)** | `boolean` | no |  |
-| `spec.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.routeMetric` **(deprecated)** | `integer` | yes |  |
+| `spec.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.routeMetric` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].vlans[].mtu` **(deprecated)** | `integer` | no |  |
-| `spec.documents[].config.machine.network.interfaces[].vlans[].routes` **(deprecated)** | `[]object` | yes |  |
-| `spec.documents[].config.machine.network.interfaces[].vlans[].routes[].gateway` **(deprecated)** | `string` | yes |  |
+| `spec.documents[].config.machine.network.interfaces[].vlans[].routes` **(deprecated)** | `[]object` | no |  |
+| `spec.documents[].config.machine.network.interfaces[].vlans[].routes[].gateway` **(deprecated)** | `string` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].vlans[].routes[].metric` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].vlans[].routes[].mtu` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].config.machine.network.interfaces[].vlans[].routes[].network` **(deprecated)** | `string` | yes |  |
@@ -3032,7 +3032,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].kubeInlineManifestConfig.manifest` **(deprecated)** | `string` | yes |  |
 | `spec.documents[].kubeInlineManifestConfig.name` **(deprecated)** | `string` | yes |  |
 | `spec.documents[].kubeNetworkConfig` **(deprecated)** | `object` | no | kubeNetworkConfig is a Talos KubeNetworkConfig document; populated when kind is "KubeNetworkConfig". |
-| `spec.documents[].kubeNetworkConfig.dnsDomain` **(deprecated)** | `string` | yes |  |
+| `spec.documents[].kubeNetworkConfig.dnsDomain` **(deprecated)** | `string` | no |  |
 | `spec.documents[].kubeNetworkConfig.nodeCIDRMaskSizeIPv4` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].kubeNetworkConfig.nodeCIDRMaskSizeIPv6` **(deprecated)** | `integer` | no |  |
 | `spec.documents[].kubeNetworkConfig.podSubnets` **(deprecated)** | `[]string` | yes |  |

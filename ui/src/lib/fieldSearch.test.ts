@@ -153,25 +153,34 @@ test('the JSON text and the typed fields are one object: an edit of either keeps
 // The required-field gate (A). Imported as a namespace so a function not written yet fails its own test, by name.
 import * as A from './fieldSearch.ts'
 
-test('choosing machine.install.disk alone names machine.install.wipe as missing before save', () => {
+// machine.install.wipe is optional (Talos defaults it), so the gate tests use a sibling that is still required.
+const enc = 'machine.systemDiskEncryption.state'
+
+test('choosing machine.install.disk alone names no missing setting, wipe being optional', () => {
   const chosen = A.pickField([], row('machine.install.disk'), 1)
+  assert.deepEqual(A.requiredMissing(rows, '{}', chosen), [])
+})
+
+test('choosing a setting beside required ones names them as missing before save', () => {
+  const chosen = A.pickField([], row(`${enc}.cipher`), 1)
   assert.deepEqual(
     A.requiredMissing(rows, '{}', chosen).map((m) => m.path),
-    ['machine.install.wipe'],
+    [`${enc}.keys`, `${enc}.provider`],
   )
 })
 
 test('a required sibling that is already set is not reported missing', () => {
-  const chosen = A.pickField([], row('machine.install.disk'), 1)
-  assert.deepEqual(A.requiredMissing(rows, '{"machine":{"install":{"wipe":false}}}', chosen), [])
+  const chosen = A.pickField([], row(`${enc}.cipher`), 1)
+  const cfg = '{"machine":{"systemDiskEncryption":{"state":{"provider":"luks2","keys":[{"slot":0}]}}}}'
+  assert.deepEqual(A.requiredMissing(rows, cfg, chosen), [])
 })
 
 test('choosing a setting under a present parent adds its missing required sibling as a chosen row', () => {
-  const chosen = A.pickField([], row('machine.install.disk'), 1)
+  const chosen = A.pickField([], row(`${enc}.cipher`), 1)
   const next = A.withRequiredSiblings(rows, '{}', chosen, 2)
   assert.deepEqual(
     next.map((c) => c.row.path),
-    ['machine.install.disk', 'machine.install.wipe'],
+    [`${enc}.cipher`, `${enc}.keys`, `${enc}.provider`],
   )
 })
 

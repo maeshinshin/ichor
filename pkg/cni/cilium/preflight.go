@@ -81,6 +81,9 @@ type PreflightReport struct {
 	AgentsErr error
 	// KubePrismErr is set when KubePrism does not answer on some node.
 	KubePrismErr error
+	// KeysErr is set when the user values hold a private key (PrivateKeyPaths): the takeover would copy it
+	// into spec.cni.cilium.values, and Secrets are referenced, never embedded.
+	KeysErr error
 }
 
 // Preflight runs the takeover preconditions read-only and returns the report. An error means a
@@ -101,6 +104,8 @@ func Preflight(ctx context.Context, in PreflightInput) (*PreflightReport, error)
 	if err != nil {
 		return nil, err
 	}
+
+	rep.KeysErr = checkTakeoverKeys(rep.UserValues)
 
 	if live != nil {
 		if rep.Conflicts, err = OwnedKeyConflicts(live, in.KubeProxy, in.Tunnel); err != nil {
@@ -176,7 +181,7 @@ func agentImage(ctx context.Context, kube kubernetes.Interface) (string, error) 
 // the diff were accepted (--accept-cilium-changes, --accept-cilium-diff).
 func (r *PreflightReport) Err(acceptChanges, acceptDiff bool) error {
 	errs := []error{
-		r.ForeignErr, r.VersionErr, r.CRDsErr, r.AgentsErr, r.KubePrismErr, AcceptConflicts(r.Conflicts, acceptChanges),
+		r.ForeignErr, r.KeysErr, r.VersionErr, r.CRDsErr, r.AgentsErr, r.KubePrismErr, AcceptConflicts(r.Conflicts, acceptChanges),
 	}
 
 	if len(r.Differences) > 0 && !acceptDiff {
@@ -185,4 +190,14 @@ func (r *PreflightReport) Err(acceptChanges, acceptDiff bool) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// checkTakeoverKeys refuses user values that hold a private key, naming the chart's Secret-based alternative.
+func checkTakeoverKeys(user map[string]any) error {
+	if err := checkPrivateKeys(user, nil); err != nil {
+		return fmt.Errorf("cilium: the existing Cilium's Helm values hold a private key, which would be copied into the "+
+			"TalosCluster. Move it to the chart's Secret mechanism with `helm upgrade` on the existing release, then run adopt again:\n%w", err)
+	}
+
+	return nil
 }

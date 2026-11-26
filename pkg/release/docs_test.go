@@ -31,7 +31,7 @@ const docsRoot = "../../docs"
 
 var docsSkipped = map[string]bool{"adr": true, "design": true, "reference": true}
 
-// statedVersion finds "Talos v1.14.5", "Kubernetes v1.36.6" and "Cilium 1.20.4", also across a line
+// statedVersion finds "Talos v1.14.5", "Kubernetes v1.36.6" and "Cilium X.Y.Z", also across a line
 // break or in aligned columns.
 var statedVersion = regexp.MustCompile(`\b(Talos|Kubernetes|Cilium)(?: chart)?\s+v?(\d+\.\d+\.\d+)\b`)
 

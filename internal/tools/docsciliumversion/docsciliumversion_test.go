@@ -42,3 +42,53 @@ func TestCiliumVersionsMatchTheChart(t *testing.T) {
 		}
 	}
 }
+
+// moved lists the files hack/bump-cilium-patch.sh (or a Cilium minor bump) rewrites or that record a dated
+// check, so a version literal in their comments is fine.
+var moved = map[string]bool{
+	"pkg/cni/cilium/values.go":                                   true,
+	"pkg/cni/cilium/render.go":                                   true,
+	"pkg/release/compat.go":                                      true,
+	"test/internal/foreign/foreign.go":                           true,
+	"test/e2e/foreign/cilium_test.go":                            true,
+	"internal/tools/docsciliumversion/docsciliumversion_test.go": true,
+}
+
+// TestCommentsNameNoChartVersion fails when a Go or Makefile comment spells out a patch of the embedded minor:
+// the bump script does not move those, so they go stale. Point to cilium.ChartVersion instead.
+func TestCommentsNameNoChartVersion(t *testing.T) {
+	minor := strings.Join(strings.SplitN(cilium.ChartVersion, ".", 3)[:2], ".")
+	lit := regexp.MustCompile(`(^|[^0-9.v])` + regexp.QuoteMeta(minor) + `\.\d+`)
+	root := "../../.."
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "node_modules", "bin", "ui", "site", "docs":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		base := filepath.Base(rel)
+		if (base != "Makefile" && !strings.HasSuffix(base, ".go")) || moved[rel] ||
+			strings.HasPrefix(base, "zz_generated") || strings.HasSuffix(base, ".pb.go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if s := strings.TrimSpace(line); (strings.HasPrefix(s, "//") || strings.HasPrefix(s, "#")) && lit.MatchString(s) {
+				t.Errorf("%s:%d names a Cilium %s patch in a comment; say cilium.ChartVersion instead: %s", rel, i+1, minor, s)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

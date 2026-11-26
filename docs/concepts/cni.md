@@ -63,5 +63,13 @@ kube-proxy replacement).
 - Once Cilium is ready, Ichor's own namespace is locked down with
   CiliumNetworkPolicies.
 
+## Reason `ForeignCNI`
+
+Condition `CNIValuesApplied` is False with reason `ForeignCNI` when Ichor detects another CNI and will not install Cilium next to it. The message:
+
+> the cluster runs the "flannel" CNI, not Cilium; no Cilium Helm Job was started. Use spec.cni.preset unmanaged to leave the CNI to the cluster
+
+(`flannel` is the detected CNI: `flannel`, `calico` or `other`.) Set `spec.cni.preset: unmanaged` (accepted on create only; the preset is immutable), or remove the other CNI.
+
 Related: [`ichor upgrade cni`](../reference/cli/ichor_upgrade_cni.md),
 [`ichor get cni-values`](../reference/cli/ichor_get_cni-values.md).

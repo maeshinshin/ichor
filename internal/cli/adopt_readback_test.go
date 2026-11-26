@@ -31,6 +31,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 // The spec adopt writes for Ichor's own Cilium reproduces the deployed values, so the
@@ -228,7 +229,8 @@ func TestAdopt_IchorCiliumRecordInControllerNamespace(t *testing.T) {
 // --cilium-values goes through the same check as the foreign record: a private key is refused and not stored.
 func TestSetCiliumUserValues_RefusesAPrivateKey(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{}
-	user := map[string]any{"tls": map[string]any{"ca": map[string]any{"key": "c2VjcmV0"}}}
+	user := map[string]any{}
+	values.Set(user, "tls.ca.key", "c2VjcmV0")
 
 	err := setCiliumUserValues(cluster, user, string(cni.KubeProxyEnabled), "")
 	if err == nil || !strings.Contains(err.Error(), "tls.ca.key") {

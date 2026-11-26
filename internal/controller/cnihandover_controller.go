@@ -88,6 +88,7 @@ const (
 	reasonCNIPresetRemoved         = "PresetRemoved"
 	reasonCNIJobRunning            = "Applying"
 	reasonCNIJobFailed             = "JobFailed"
+	reasonCNIJobNoRelease          = "JobCompletedWithoutRelease"
 	reasonCNIWaitingForLock        = "WaitingForLock"
 	reasonCNIWaitingForRelease     = "WaitingForRelease"
 	reasonCNIInvalidValues         = "InvalidValues"
@@ -517,6 +518,8 @@ func (r *CNIHandoverReconciler) finish(
 
 		return ctrl.Result{RequeueAfter: cniJobPollInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
 			"the Helm release is deployed at other values than the cluster's; running the Helm Job again")
+	case rel.Status == "":
+		return r.noRelease(ctx, cluster, hash, handedOver)
 	case rel.Status != helmStatusDeployed:
 		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
 			fmt.Sprintf("the Helm Job completed but release %s has status %q, not deployed", cilium.ReleaseName, rel.Status))
@@ -838,4 +841,35 @@ func (r *CNIHandoverReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		})).
 		Named("cnihandover").
 		Complete(quietExpected(r, "cnihandover"))
+}
+
+// noRelease handles a completed Job with no release record at all. The Job's name is a hash of the values, so one
+// an earlier install left in kube-system (its TTL is a day, and deleting the Ichor namespace takes the release
+// record but not the Job) is found as this cluster's own. A Job created before the TalosCluster is such a leftover:
+// remove it, in the foreground so the name is free once its pods are gone, and the next pass runs a new one. A Job
+// of this cluster's own that completed and wrote no release is not replaced, or it would run again every pass:
+// the condition says so and the wait goes on.
+func (r *CNIHandoverReconciler) noRelease(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string, handedOver bool,
+) (ctrl.Result, error) {
+	var job batchv1.Job
+
+	err := r.reader().Get(ctx, types.NamespacedName{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &job)
+	if client.IgnoreNotFound(err) != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err == nil && job.CreationTimestamp.Before(&cluster.CreationTimestamp) {
+		if err := client.IgnoreNotFound(r.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationForeground))); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: cniJobPollInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIWaitingForRelease,
+			fmt.Sprintf("the Helm Job completed but release %s has no record (the Job is left from an earlier install); running the Helm Job again",
+				cilium.ReleaseName))
+	}
+
+	return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIJobNoRelease,
+		fmt.Sprintf("the Helm Job completed but wrote no release record for %s; it is not run again by itself: read the Job's log "+
+			"in %s and delete the Job to run it again", cilium.ReleaseName, cniJobNamespace))
 }

@@ -329,19 +329,15 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		_, held = cniLockHolder(cluster)
 		Expect(held).To(BeTrue())
 
-		// The Job succeeded but no release record exists: not handed over, lock released.
+		// The Job succeeded but its release is not deployed: not handed over, lock released.
 		setJobCondition(job, batchv1.JobComplete, "")
+		helmRelease(1, "pending-install", effectiveValues(cluster))
 		result = reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("WaitingForRelease"))
 		_, held = cniLockHolder(cluster)
 		Expect(held).To(BeFalse())
-
-		// A release that is not deployed does not count either.
-		helmRelease(1, "pending-install", effectiveValues(cluster))
-		reconcileHandoverOK(r, cluster)
-		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 
 		// Deployed at the cluster's values, but the DaemonSet is not ready.
 		helmRelease(2, "deployed", effectiveValues(cluster))
@@ -366,6 +362,67 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		// Steady state: nothing more to do.
 		result = reconcileHandoverOK(r, cluster)
 		Expect(result).To(Equal(ctrl.Result{}))
+	})
+
+	// The Job's name is a hash of the values, so a completed Job an earlier install left in kube-system is
+	// found as this cluster's own, while the release record went with the Ichor namespace.
+	It("replaces a completed Job that predates the cluster and has no release", func() {
+		first := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		reconcileHandoverOK(r, first)
+		stale := cniJob(first)
+		setJobCondition(stale, batchv1.JobComplete, "")
+
+		// The earlier install is gone, the Job is not: the same cluster, created later.
+		Expect(k8sClient.Delete(ctx, first)).To(Succeed())
+		time.Sleep(1100 * time.Millisecond) // creationTimestamp has a resolution of a second
+
+		cluster := &ichorv1alpha1.TalosCluster{Namespace: first.Namespace, Spec: first.Spec}
+		cluster.Name = first.Name
+		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, cluster))).To(Succeed()) })
+
+		result := reconcileHandoverOK(r, cluster)
+		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("WaitingForRelease"))
+
+		// envtest runs no garbage collector: what it does for a foreground delete is done here.
+		var gone batchv1.Job
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(stale), &gone)).To(Succeed())
+		Expect(gone.DeletionTimestamp).NotTo(BeNil(), "the stale Job must be deleted")
+		Expect(gone.Finalizers).To(ContainElement(metav1.FinalizerDeleteDependents), "in the foreground")
+		gone.Finalizers = nil
+		Expect(k8sClient.Update(ctx, &gone)).To(Succeed())
+
+		reconcileHandoverOK(r, cluster)
+
+		fresh := cniJob(cluster)
+		Expect(fresh.UID).NotTo(Equal(stale.UID), "a new Job runs")
+		Expect(jobOutcomeDone(fresh)).To(BeFalse())
+	})
+
+	It("does not replace its own completed Job that wrote no release, and says so", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		reconcileHandoverOK(r, cluster)
+		own := cniJob(cluster)
+		setJobCondition(own, batchv1.JobComplete, "")
+
+		for range 3 {
+			result := reconcileHandoverOK(r, cluster)
+			Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+		}
+
+		cond := conditionOf(cluster, render.ConditionCNIHandover)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("JobCompletedWithoutRelease"))
+
+		var still batchv1.Job
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(own), &still)).To(Succeed())
+		Expect(still.DeletionTimestamp).To(BeNil())
+		Expect(still.UID).To(Equal(own.UID))
 	})
 
 	It("runs the takeover Job for an adopted cluster and records its inline manifest only once handed over", func() {

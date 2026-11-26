@@ -136,6 +136,11 @@ func newJob(
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: serviceAccount,
+					// shortcut: the chart's default manager.tolerations, not the installed ones; read the manager's
+					// own pod when someone needs a different taint here.
+					Tolerations: []corev1.Toleration{{
+						Key: "node-role.kubernetes.io/control-plane", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule,
+					}},
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot:   ptr.To(true),
 						RunAsUser:      ptr.To(jobUID),

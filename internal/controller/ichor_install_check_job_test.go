@@ -4,7 +4,11 @@ import (
 	"slices"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 )
 
 const checkJobTestVersion = "v0.3.0"
@@ -30,6 +34,35 @@ func TestInstallerCheckJobCarriesSignInPendingOnlyWhenAsked(t *testing.T) {
 
 		if got := slices.Contains(args, "--sign-in-pending"); got != want {
 			t.Errorf("signInPending=%v: args %v, --sign-in-pending present=%v", pending, args, got)
+		}
+	}
+}
+
+// TestJobBuildersTolerateControlPlane pins that every Job the controller or the CLI builds can run on a control plane
+// tainted NoSchedule, as the manager does, so a cluster of only such nodes still runs them.
+func TestJobBuildersTolerateControlPlane(t *testing.T) {
+	inst := &ichorv1alpha1.IchorInstallation{}
+	cluster := &ichorv1alpha1.TalosCluster{}
+	jobs := map[string]*batchv1.Job{
+		"installer": newInstallerJob("ichor-system", "r", &ichorv1alpha1.TalosOperation{}, inst, "sha256:x", "", false),
+		"check":     NewInstallerCheckJob("ichor-system", "c", inst, "sha256:x", "", false, false),
+		"cni-helm":  newCNIHelmJob("ichor-system", "j", cluster, cni.KubeProxyEnabled, testCNIImage, "h", false, 0),
+	}
+
+	taint := corev1.Taint{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule}
+
+	for name, job := range jobs {
+		tolerated := false
+
+		for i := range job.Spec.Template.Spec.Tolerations {
+			tol := job.Spec.Template.Spec.Tolerations[i]
+			// An empty key with Exists tolerates every taint, as the CNI Job's does.
+			tolerated = tolerated || (tol.Operator == corev1.TolerationOpExists && (tol.Key == "" || tol.Key == taint.Key) &&
+				(tol.Effect == "" || tol.Effect == taint.Effect))
+		}
+
+		if !tolerated {
+			t.Errorf("%s Job tolerations = %v, want one for %s:NoSchedule", name, job.Spec.Template.Spec.Tolerations, taint.Key)
 		}
 	}
 }

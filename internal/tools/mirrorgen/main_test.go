@@ -197,3 +197,26 @@ func TestEmbeddedStructsAreFlattened(t *testing.T) {
 		t.Errorf("fields of Outer: got %q, want %q", got, want)
 	}
 }
+
+// TestFieldsTalosDefaultsAreOptional: Talos documents these fields as optional or defaulted although its struct tags
+// carry no omitempty, so a patch that leaves one out must be admitted.
+func TestFieldsTalosDefaultsAreOptional(t *testing.T) {
+	want := []string{
+		"Route.RouteGateway", "InstallConfig.InstallWipe", "DHCPOptions.DHCPRouteMetric", "Vlan.VlanRoutes",
+		"ClusterNetworkConfig.DNSDomain", "KubeNetworkConfigV1Alpha1.NetworkDNSDomain",
+	}
+
+	got := map[string]bool{}
+
+	for _, s := range generate().structs {
+		for _, f := range s.fields {
+			got[s.machName+"."+f.name] = f.optional
+		}
+	}
+
+	for _, k := range want {
+		if optional, ok := got[k]; !ok || !optional {
+			t.Errorf("%s: want an optional mirror field (present=%v)", k, ok)
+		}
+	}
+}

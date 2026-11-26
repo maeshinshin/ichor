@@ -2496,8 +2496,6 @@ spec:
                             type: boolean
                           wipe:
                             type: boolean
-                        required:
-                        - wipe
                         type: object
                       kernel:
                         description: MachineKernel is the object at machine.kernel.
@@ -3861,8 +3859,6 @@ spec:
                                     routeMetric:
                                       format: int32
                                       type: integer
-                                  required:
-                                  - routeMetric
                                   type: object
                                 dummy:
                                   type: boolean
@@ -3889,7 +3885,6 @@ spec:
                                       source:
                                         type: string
                                     required:
-                                    - gateway
                                     - network
                                     type: object
                                   type: array
@@ -3930,8 +3925,6 @@ spec:
                                           routeMetric:
                                             format: int32
                                             type: integer
-                                        required:
-                                        - routeMetric
                                         type: object
                                       mtu:
                                         format: int32
@@ -3953,7 +3946,6 @@ spec:
                                             source:
                                               type: string
                                           required:
-                                          - gateway
                                           - network
                                           type: object
                                         type: array
@@ -3974,7 +3966,6 @@ spec:
                                       vlanId:
                                         type: integer
                                     required:
-                                    - routes
                                     - vlanId
                                     type: object
                                   type: array
@@ -14924,7 +14915,6 @@ spec:
                                     type: string
                                   type: array
                               required:
-                              - dnsDomain
                               - podSubnets
                               - serviceSubnets
                               type: object
@@ -15183,8 +15173,6 @@ spec:
                                   type: boolean
                                 wipe:
                                   type: boolean
-                              required:
-                              - wipe
                               type: object
                             kernel:
                               description: 'Talos: KernelConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
@@ -15694,8 +15682,6 @@ spec:
                                           routeMetric:
                                             format: int32
                                             type: integer
-                                        required:
-                                        - routeMetric
                                         type: object
                                       dummy:
                                         type: boolean
@@ -15722,7 +15708,6 @@ spec:
                                             source:
                                               type: string
                                           required:
-                                          - gateway
                                           - network
                                           type: object
                                         type: array
@@ -15764,8 +15749,6 @@ spec:
                                                 routeMetric:
                                                   format: int32
                                                   type: integer
-                                              required:
-                                              - routeMetric
                                               type: object
                                             mtu:
                                               format: int32
@@ -15787,7 +15770,6 @@ spec:
                                                   source:
                                                     type: string
                                                 required:
-                                                - gateway
                                                 - network
                                                 type: object
                                               type: array
@@ -15809,7 +15791,6 @@ spec:
                                             vlanId:
                                               type: integer
                                           required:
-                                          - routes
                                           - vlanId
                                           type: object
                                         type: array
@@ -17460,7 +17441,6 @@ spec:
                             type: string
                           type: array
                       required:
-                      - dnsDomain
                       - podSubnets
                       - serviceSubnets
                       type: object

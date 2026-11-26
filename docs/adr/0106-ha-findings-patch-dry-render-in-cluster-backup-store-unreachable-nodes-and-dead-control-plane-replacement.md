@@ -47,3 +47,7 @@ A machine whose endpoint answers as another node is reported as `EndpointIdentit
 ## Amendment (2026-11-16): `ichor restore --live` is `ichor restore etcd`
 
 The two places that name `ichor restore --live` mean `ichor restore etcd`, the name the verb-first command surface gave it. The findings and fixes are unchanged.
+
+## Amendment (2026-11-27): the mirror also leaves out what Talos documents as optional
+
+`InstallConfig.wipe`, `Route.gateway`, `DHCPOptions.routeMetric`, `Vlan.routes` and the `dnsDomain` of `ClusterNetworkConfig` and `KubeNetworkConfig` are optional in the generated mirror. Talos documents each as defaulted or optional but has no `omitempty` on it, so `machine.install: {extraKernelArgs: [...]}` was refused with `wipe: Required value`. Making them optional is additive; no field is removed or renamed.

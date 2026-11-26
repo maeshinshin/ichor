@@ -50,6 +50,9 @@ func CheckAgentsReady(ctx context.Context, kube kubernetes.Interface) (notReady,
 	if st := ds.Status; st.DesiredNumberScheduled == 0 || st.NumberReady != st.DesiredNumberScheduled || len(bad) > 0 {
 		errs = append(errs, fmt.Errorf("the DaemonSet %s is not Ready on all nodes (%d of %d agents Ready%s)",
 			ReleaseName, st.NumberReady, st.DesiredNumberScheduled, listed(bad)))
+	} else if st.UpdatedNumberScheduled != st.DesiredNumberScheduled {
+		errs = append(errs, fmt.Errorf("the DaemonSet %s is still rolling out (%d of %d agents updated)",
+			ReleaseName, st.UpdatedNumberScheduled, st.DesiredNumberScheduled))
 	}
 
 	op, err := kube.AppsV1().Deployments(ReleaseNamespace).Get(ctx, operatorName, metav1.GetOptions{})

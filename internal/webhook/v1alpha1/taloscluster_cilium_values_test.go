@@ -141,4 +141,30 @@ var _ = Describe("TalosCluster Webhook: Cilium values", func() {
 		_, err := v.ValidateCreate(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	// A private key in the values is refused when it is new or changed; one the stored object already carries
+	// passes, with a warning.
+	It("refuses a private key that an update adds or changes, and lets an unchanged one pass with a warning", func() {
+		const keyed = `{"debug":{"enabled":true},"hubble":{"tls":{"server":{"key":"c2VjcmV0"}}}}`
+
+		_, err := v.ValidateCreate(ctx, withValues(keyed))
+		Expect(err).To(MatchError(ContainSubstring("hubble.tls.server.key")))
+
+		old := withValues(keyed)
+
+		unchanged := old.DeepCopy()
+		unchanged.Spec.CNI.Cilium.Values.Raw = []byte(`{"debug":{"enabled":false},"hubble":{"tls":{"server":{"key":"c2VjcmV0"}}}}`)
+		warns, err := v.ValidateUpdate(ctx, old, unchanged)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Join(warns, " ")).To(ContainSubstring("hubble.tls.server.key"))
+
+		changed := old.DeepCopy()
+		changed.Spec.CNI.Cilium.Values.Raw = []byte(`{"debug":{"enabled":true},"hubble":{"tls":{"server":{"key":"b3RoZXI="}}}}`)
+		_, err = v.ValidateUpdate(ctx, old, changed)
+		Expect(err).To(MatchError(ContainSubstring("hubble.tls.server.key")))
+
+		added := withValues(valid)
+		_, err = v.ValidateUpdate(ctx, added, withValues(keyed))
+		Expect(err).To(MatchError(ContainSubstring("hubble.tls.server.key")))
+	})
 })

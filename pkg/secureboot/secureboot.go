@@ -154,7 +154,8 @@ func MachineConditions(
 		return nil
 	}
 
-	// Off reports nothing, except a node that runs SecureBoot anyway.
+	// Off reports nothing, except a node that runs SecureBoot anyway; with no secureBoot block at all the option
+	// is not set, so nothing is reported (ADR 0123: the conditions exist only while the matching option is set).
 	if m := Mode(sec); m != ichorv1alpha1.SecureBootOff || sec.SecureBoot != nil && node != nil && node.SecureBoot {
 		out = append(out, secureBootCondition(m, node))
 	}

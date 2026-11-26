@@ -307,7 +307,7 @@ func CheckVersion(live string) (VersionCheck, error) {
 	switch {
 	case lmaj != tmaj, lmin > tmin:
 		return res, fmt.Errorf("cilium: live version %s is newer than the version Ichor installs (%s); "+
-			"Ichor never downgrades a CNI", res.Live, ChartVersion)
+			"Ichor never moves the CNI to a lower minor", res.Live, ChartVersion)
 	case lmin == tmin:
 		return res, nil
 	case lmin == tmin-1:
@@ -1189,16 +1189,32 @@ func deleteRecord(ctx context.Context, kube kubernetes.Interface, rec corev1.Sec
 		return fmt.Errorf("cilium: re-reading record %s/%s: %w", rec.Namespace, rec.Name, err)
 	}
 
+	if cur.UID == rec.UID && cur.ResourceVersion != rec.ResourceVersion {
+		return errRecordChanged(rec)
+	}
+
 	if cur.UID != rec.UID || cur.Type != helmReleaseSecretType ||
 		cur.Labels["owner"] != "helm" || cur.Labels["name"] != ReleaseName {
 		return fmt.Errorf("cilium: %s/%s is no longer the Helm record that was backed up; not deleting it",
 			rec.Namespace, rec.Name)
 	}
 
-	err = secrets.Delete(ctx, rec.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &cur.UID}})
+	// The backup holds this version of the record; a later one must not be deleted unsaved.
+	err = secrets.Delete(ctx, rec.Name, metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{UID: &cur.UID, ResourceVersion: &rec.ResourceVersion},
+	})
+	if apierrors.IsConflict(err) {
+		return errRecordChanged(rec)
+	}
+
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("cilium: deleting record %s/%s: %w", rec.Namespace, rec.Name, err)
 	}
 
 	return nil
+}
+
+func errRecordChanged(rec corev1.Secret) error {
+	return fmt.Errorf("cilium: the foreign Helm release record %s/%s changed during the takeover, after it was backed up; "+
+		"nothing newer was deleted. Run the command again", rec.Namespace, rec.Name)
 }

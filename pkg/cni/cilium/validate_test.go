@@ -19,6 +19,7 @@ package cilium
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -334,5 +335,60 @@ func BenchmarkValidateValues(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// The private keys come from the chart, so a chart that gains one is covered by itself; this pins today's six.
+func TestPrivateKeyPathsAreDerivedFromTheChart(t *testing.T) {
+	got, err := PrivateKeyPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"hubble.metrics.tls.server.key", "hubble.relay.tls.client.key", "hubble.relay.tls.server.key",
+		"hubble.tls.server.key", "hubble.ui.tls.client.key", "tls.ca.key",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("PrivateKeyPaths = %v, want %v (a chart upgrade that adds a key leaf: confirm it is key material)", got, want)
+	}
+}
+
+func TestValidateValuesRefusesEmbeddedPrivateKeys(t *testing.T) {
+	ctx := ValidationContext{KubeProxy: cni.KubeProxyEnabled}
+
+	paths, err := PrivateKeyPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, p := range paths {
+		user := map[string]any{}
+		values.Set(user, p, "c2VjcmV0")
+
+		err := ValidateValues(user, ctx)
+		if err == nil || !strings.Contains(err.Error(), p) || !strings.Contains(err.Error(), "never embedded") {
+			t.Errorf("%s: err = %v, want a refusal naming the path", p, err)
+		}
+	}
+
+	if err := ValidateValues(map[string]any{"hubble": map[string]any{"tls": map[string]any{"server": map[string]any{"key": "x"}}}},
+		ctx); err == nil || !strings.Contains(err.Error(), "hubble.tls.server.existingSecret") {
+		t.Errorf("err = %v, want the existingSecret alternative", err)
+	}
+
+	// An empty key, and an unrelated value, pass.
+	if err := ValidateValues(map[string]any{"tls": map[string]any{"ca": map[string]any{"key": ""}}}, ctx); err != nil {
+		t.Errorf("empty key: %v", err)
+	}
+
+	if err := ValidateValues(debugOn, ctx); err != nil {
+		t.Errorf("unrelated value: %v", err)
+	}
+
+	// A kept key (an object that already carries it) passes.
+	kept := ValidationContext{KubeProxy: cni.KubeProxyEnabled, KeptPrivateKeys: []string{"tls.ca.key"}}
+	if err := ValidateValues(map[string]any{"tls": map[string]any{"ca": map[string]any{"key": "c2VjcmV0"}}}, kept); err != nil {
+		t.Errorf("kept key: %v", err)
 	}
 }

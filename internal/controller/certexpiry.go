@@ -29,6 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	talosx509 "github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,6 +38,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const (
@@ -71,10 +73,33 @@ func init() {
 	metrics.Registry.MustRegister(certExpiry)
 }
 
+// protectBundleSecret adds deleteguard.ProtectedLabel to a bundle Secret an earlier version created without
+// it, so the ichor-protected-secrets policy covers it. It writes metadata only (the bundle data is the
+// object just read) through Update, which the controller's role holds on Secrets; the rule that the
+// controller never mutates spec is about custom resource specs, not Secret metadata.
+func protectBundleSecret(ctx context.Context, c client.Client, namespace, name string) error {
+	var sec corev1.Secret
+	if err := c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &sec); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	if sec.Labels[deleteguard.ProtectedLabel] != "" {
+		return nil
+	}
+
+	if sec.Labels == nil {
+		sec.Labels = map[string]string{}
+	}
+
+	sec.Labels[deleteguard.ProtectedLabel] = deleteguard.ProtectedValue
+
+	return c.Update(ctx, &sec)
+}
+
 // CertExpiryReconciler publishes when each CA in a TalosCluster's secrets
 // bundle expires. It reads only the bundle: no node is dialed, so
-// it works while nodes are down, and it never writes anything but
-// status.certificates.
+// it works while nodes are down, and it writes only
+// status.certificates and the protected label of the bundle Secret.
 type CertExpiryReconciler struct {
 	client.Client
 
@@ -108,6 +133,11 @@ func (r *CertExpiryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		ctrl.LoggerFrom(ctx).Info("Cannot read the secrets bundle for certificate expiry", "reason", err.Error())
 
 		return ctrl.Result{RequeueAfter: certExpiryRetry}, nil
+	}
+
+	if err := protectBundleSecret(ctx, r.Client, r.ControllerNamespace, cluster.Spec.SecretsRef.Name); err != nil {
+		// Not fatal: the expiry below does not depend on it, and the next reconcile tries again.
+		ctrl.LoggerFrom(ctx).Info("Cannot label the secrets bundle Secret as protected", "reason", err.Error())
 	}
 
 	if err := r.clearBundleBackupStale(ctx, &cluster, bundle); err != nil {

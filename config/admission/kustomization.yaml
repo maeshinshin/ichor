@@ -1,4 +1,5 @@
 resources:
 - kubeproxy-switch-policy.yaml
 - reclaim-credential-policy.yaml
+- protected-secrets-policy.yaml
 - controller-jobs-policy.yaml

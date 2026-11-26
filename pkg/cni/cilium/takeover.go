@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/values"
 )
 
@@ -1137,7 +1138,8 @@ func writeBackup(ctx context.Context, kube kubernetes.Interface, ns string, f *F
 	case apierrors.IsNotFound(err):
 		_, err = secrets.Create(ctx, &corev1.Secret{
 			Name: PriorReleaseBackupName, Namespace: ns,
-			Data: data,
+			Labels: map[string]string{deleteguard.ProtectedLabel: deleteguard.ProtectedValue},
+			Data:   data,
 		}, metav1.CreateOptions{})
 	case err == nil:
 		if cur.Data == nil {
@@ -1145,6 +1147,12 @@ func writeBackup(ctx context.Context, kube kubernetes.Interface, ns string, f *F
 		}
 
 		maps.Copy(cur.Data, data)
+
+		if cur.Labels == nil {
+			cur.Labels = map[string]string{}
+		}
+
+		cur.Labels[deleteguard.ProtectedLabel] = deleteguard.ProtectedValue
 
 		_, err = secrets.Update(ctx, cur, metav1.UpdateOptions{})
 	}

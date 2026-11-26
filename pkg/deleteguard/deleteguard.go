@@ -41,6 +41,22 @@ const AllowDeleteAnnotation = "ichor.maesh.dev/allow-delete"
 // AllowDeleteValue is the only AllowDeleteAnnotation value that permits deletion.
 const AllowDeleteValue = "true"
 
+// ProtectedLabel marks a Secret whose loss costs a cluster its PKI or its access (the secrets bundle). The
+// ichor-protected-secrets ValidatingAdmissionPolicy refuses its DELETE unless the Secret also carries
+// AllowDeleteAnnotation=AllowDeleteValue. Every writer of such a Secret sets it to ProtectedValue.
+const ProtectedLabel = "ichor.maesh.dev/protected"
+
+// ProtectedValue is the value writers give ProtectedLabel; the policy matches the label's presence.
+const ProtectedValue = "true"
+
+// NamespaceControllerUser is the identity that deletes a namespace's objects when its namespace is deleted.
+const NamespaceControllerUser = "system:serviceaccount:kube-system:namespace-controller"
+
+// NamespaceDeleteMessage is what that identity is told when a guard refuses its delete.
+const NamespaceDeleteMessage = "deleting the namespace is refused because it holds a managed cluster; " +
+	"delete the TalosClusters and TalosMachines on purpose (set " + AllowDeleteAnnotation +
+	", then delete) before deleting the namespace"
+
 // CheckDelete returns an error unless annotations carries
 // AllowDeleteAnnotation set to AllowDeleteValue.
 func CheckDelete(annotations map[string]string) error {

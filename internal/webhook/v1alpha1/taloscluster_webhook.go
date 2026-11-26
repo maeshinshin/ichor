@@ -637,8 +637,23 @@ func (v *TalosClusterCustomValidator) validateChangedVersions(ctx context.Contex
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
-func (v *TalosClusterCustomValidator) ValidateDelete(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
+func (v *TalosClusterCustomValidator) ValidateDelete(ctx context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon deletion", "name", obj.GetName())
 
-	return nil, deleteguard.CheckDelete(obj.GetAnnotations())
+	return nil, checkDelete(ctx, obj.GetAnnotations())
+}
+
+// checkDelete is deleteguard.CheckDelete, but tells the namespace controller why its delete was refused: it is
+// not exempt (an exemption would make deleting a namespace a node-loss path), only told plainly.
+func checkDelete(ctx context.Context, annotations map[string]string) error {
+	err := deleteguard.CheckDelete(annotations)
+	if err == nil {
+		return nil
+	}
+
+	if req, rerr := admission.RequestFromContext(ctx); rerr == nil && req.UserInfo.Username == deleteguard.NamespaceControllerUser {
+		return errors.New(deleteguard.NamespaceDeleteMessage)
+	}
+
+	return err
 }

@@ -304,7 +304,7 @@ func (v *TalosMachineCustomValidator) checkWorkerLeaves(ctx context.Context, m *
 func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *ichorv1alpha1.TalosMachine) (admission.Warnings, error) {
 	talosmachinelog.Info("Validation for TalosMachine upon deletion", "name", obj.GetName())
 
-	if err := deleteguard.CheckDelete(obj.GetAnnotations()); err != nil {
+	if err := checkDelete(ctx, obj.GetAnnotations()); err != nil {
 		return nil, err
 	}
 

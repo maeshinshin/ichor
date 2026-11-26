@@ -30,6 +30,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 // bundleDirPerm and bundleFilePerm are the permissions
@@ -185,7 +186,8 @@ func buildBundleSecret(cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bund
 
 	return &corev1.Secret{
 		Name: cluster.Spec.SecretsRef.Name, Namespace: cluster.Namespace,
-		Data: map[string][]byte{secretsbundle.SecretKey: raw},
+		Labels: map[string]string{deleteguard.ProtectedLabel: deleteguard.ProtectedValue},
+		Data:   map[string][]byte{secretsbundle.SecretKey: raw},
 	}, nil
 }
 

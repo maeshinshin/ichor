@@ -20,12 +20,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 // ciliumUserValues is spec.cni.cilium.values as a map; nil when unset.
@@ -74,7 +77,14 @@ func validateCiliumValues(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 		kubeProxy = cni.KubeProxyEnabled
 	}
 
-	if err := cilium.ValidateValues(user, cilium.ValidationContext{KubeProxy: kubeProxy, Tunnel: newObj.Spec.CNI.Tunnel}); err != nil {
+	kept, err := keptPrivateKeys(oldObj, user)
+	if err != nil {
+		return err
+	}
+
+	if err := cilium.ValidateValues(user, cilium.ValidationContext{
+		KubeProxy: kubeProxy, Tunnel: newObj.Spec.CNI.Tunnel, KeptPrivateKeys: kept,
+	}); err != nil {
 		return fmt.Errorf("spec.cni.cilium.values is not valid (the same check as the UI and `ichor apply cni-values`):\n%w", err)
 	}
 
@@ -91,4 +101,50 @@ func ciliumInputsChanged(oldObj, newObj *ichorv1alpha1.TalosCluster, user map[st
 	stored, err := ciliumUserValues(oldObj)
 
 	return err != nil || !apiequality.Semantic.DeepEqual(stored, user)
+}
+
+// keptPrivateKeys are the private keys user holds with the very value oldObj already stored: they pass on
+// update (ratcheting), so an object that already carries a key stays editable. A key that is new or changed
+// is not kept, and is refused.
+func keptPrivateKeys(oldObj *ichorv1alpha1.TalosCluster, user map[string]any) ([]string, error) {
+	if oldObj == nil {
+		return nil, nil
+	}
+
+	old, err := ciliumUserValues(oldObj)
+	if err != nil {
+		return nil, nil //nolint:nilerr // a stored object that does not decode keeps nothing
+	}
+
+	set, err := cilium.EmbeddedPrivateKeys(user)
+	if err != nil {
+		return nil, err
+	}
+
+	var kept []string
+
+	for _, p := range set {
+		nv, _ := values.Get(user, p)
+		if ov, ok := values.Get(old, p); ok && ov == nv {
+			kept = append(kept, p)
+		}
+	}
+
+	return kept, nil
+}
+
+// ciliumKeyWarnings names the private keys the stored values still embed.
+func ciliumKeyWarnings(obj *ichorv1alpha1.TalosCluster) admission.Warnings {
+	user, err := ciliumUserValues(obj)
+	if err != nil {
+		return nil
+	}
+
+	set, err := cilium.EmbeddedPrivateKeys(user)
+	if err != nil || len(set) == 0 {
+		return nil
+	}
+
+	return admission.Warnings{fmt.Sprintf("spec.cni.cilium.values embeds a private key at %s; Secrets are referenced, never embedded. "+
+		"Move it to a Secret the chart references and remove it from the values", strings.Join(set, ", "))}
 }

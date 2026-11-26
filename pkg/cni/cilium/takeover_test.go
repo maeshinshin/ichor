@@ -841,3 +841,41 @@ func TestDifferenceStringTruncatesLargeValues(t *testing.T) {
 		t.Errorf("String() = %q", got)
 	}
 }
+
+// A record that changes after the backup was written is not deleted: the backup holds the older copy.
+func TestRetireForeignRecord_RecordChangedAfterBackupIsKept(t *testing.T) {
+	ctx := t.Context()
+	kube := fake.NewSimpleClientset()
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, "1.17.5", nil))
+
+	rec, err := kube.CoreV1().Secrets(kubeSystem).Get(ctx, recordV1, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec.ResourceVersion = "1" // the fake clientset assigns none
+	if err := kube.Tracker().Update(corev1.SchemeGroupVersion.WithResource("secrets"), rec, kubeSystem); err != nil {
+		t.Fatal(err)
+	}
+
+	kube.PrependReactor("create", "secrets", func(a clienttesting.Action) (bool, runtime.Object, error) {
+		if a.GetNamespace() != ichorNS {
+			return false, nil, nil
+		}
+
+		changed := rec.DeepCopy()
+		changed.ResourceVersion = "2"
+		changed.Data["release"] = []byte("newer")
+
+		return false, nil, kube.Tracker().Update(corev1.SchemeGroupVersion.WithResource("secrets"), changed, kubeSystem)
+	})
+
+	_, err = RetireForeignRecord(ctx, kube, RetireOptions{IchorNamespace: ichorNS, RemoveForeignReleaseRecord: true})
+	if err == nil || !strings.Contains(err.Error(), "changed during the takeover") {
+		t.Fatalf("err = %v, want the record-changed error", err)
+	}
+
+	if _, err := kube.CoreV1().Secrets(kubeSystem).Get(ctx, recordV1, metav1.GetOptions{}); err != nil {
+		t.Errorf("the changed record was deleted: %v", err)
+	}
+}

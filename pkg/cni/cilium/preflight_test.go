@@ -42,7 +42,7 @@ func agentDaemonSet(image string) *appsv1.DaemonSet {
 				Containers: []corev1.Container{{Name: agentContainerName, Image: image}},
 			}},
 		},
-		Status: appsv1.DaemonSetStatus{DesiredNumberScheduled: 3, NumberReady: 3},
+		Status: appsv1.DaemonSetStatus{DesiredNumberScheduled: 3, UpdatedNumberScheduled: 3, NumberReady: 3},
 	}
 }
 
@@ -251,5 +251,37 @@ func TestPreflight_KubePrismNotAnsweringRefuses(t *testing.T) {
 
 	if err := rep.Err(true, true); err == nil {
 		t.Fatal("an unprobed KubePrism was accepted")
+	}
+}
+
+// A rollout in progress (UpdatedNumberScheduled below Desired) is not Ready, even when every old pod is.
+func TestCheckAgentsReady_RolloutInProgressIsNotReady(t *testing.T) {
+	ds := agentDaemonSet("quay.io/cilium/cilium:v" + ChartVersion)
+	ds.Status.UpdatedNumberScheduled = 1
+	kube := fake.NewSimpleClientset(ds, operatorDeployment())
+
+	notReady, err := CheckAgentsReady(t.Context(), kube)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if notReady == nil || !strings.Contains(notReady.Error(), "1 of 3 agents updated") {
+		t.Fatalf("notReady = %v, want a rollout refusal", notReady)
+	}
+}
+
+func TestPreflight_RefusesAPrivateKeyInTheForeignRecord(t *testing.T) {
+	kube := fake.NewSimpleClientset(agentDaemonSet("quay.io/cilium/cilium:v"+ChartVersion), operatorDeployment())
+	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, ChartVersion,
+		map[string]any{"hubble": map[string]any{"tls": map[string]any{"server": map[string]any{"key": "c2VjcmV0"}}}}))
+
+	rep, err := Preflight(t.Context(), preflightInput(t, kube))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = rep.Err(true, true)
+	if err == nil || !strings.Contains(err.Error(), "hubble.tls.server.key") || !strings.Contains(err.Error(), "hubble.tls.server.existingSecret") {
+		t.Fatalf("Err = %v, want a refusal naming hubble.tls.server.key and its existingSecret", err)
 	}
 }

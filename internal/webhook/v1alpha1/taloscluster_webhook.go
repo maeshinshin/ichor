@@ -503,6 +503,7 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	}
 
 	warns = append(warns, vipWarns...)
+	warns = append(warns, ciliumKeyWarnings(newObj)...)
 
 	// Only the transition to "false" is checked: a cluster created
 	// unschedulable has no workers yet (they are discovered afterwards), and

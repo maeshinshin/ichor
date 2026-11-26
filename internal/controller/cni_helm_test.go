@@ -404,6 +404,20 @@ func TestInstallerSourceWithoutAnIchorInstallation(t *testing.T) {
 	}
 }
 
+// The refusal names the detected CNI and gives only advice an existing cluster can follow: the preset is immutable.
+func TestForeignCNIErrorAdvice(t *testing.T) {
+	msg := (&ForeignCNIError{Detected: cniCalico}).Error()
+	for _, want := range []string{`"calico"`, "moving-from-flannel.md", "recreate the cluster with spec.cni.preset unmanaged"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message %q lacks %q", msg, want)
+		}
+	}
+
+	if strings.Contains(msg, "Use spec.cni.preset") {
+		t.Errorf("message %q tells an existing cluster to set the immutable preset", msg)
+	}
+}
+
 func TestAdvanceCNIHelmJobRefusesAForeignCNI(t *testing.T) {
 	for _, tc := range []struct {
 		detected string

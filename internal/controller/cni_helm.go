@@ -216,7 +216,8 @@ type ForeignCNIError struct{ Detected string }
 
 func (e *ForeignCNIError) Error() string {
 	return fmt.Sprintf("the cluster runs the %q CNI, not Cilium; no Cilium Helm Job was started. "+
-		"Use spec.cni.preset unmanaged to leave the CNI to the cluster", e.Detected)
+		"Remove that CNI (see docs/guides/adopt-a-cluster/moving-from-flannel.md), or keep it and "+
+		"recreate the cluster with spec.cni.preset unmanaged: the preset cannot be changed on this one", e.Detected)
 }
 
 // foreignCNI is the detected CNI when it is a running one other than Cilium; "none" and unset are not.

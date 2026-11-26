@@ -643,7 +643,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		op := &ichorv1alpha1.TalosOperation{}
 
 		_, err := adv.requireCilium(ctx, cluster, op, cni.KubeProxyReplaced)
-		Expect(err).To(MatchError(ContainSubstring("unmanaged")))
+		Expect(err).To(MatchError(ContainSubstring("recreate the cluster with spec.cni.preset unmanaged")))
 		Expect(err).To(MatchError(func(err error) bool {
 			_, ok := errors.AsType[*ForeignCNIError](err)
 

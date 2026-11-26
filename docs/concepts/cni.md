@@ -67,9 +67,9 @@ kube-proxy replacement).
 
 Condition `CNIValuesApplied` is False with reason `ForeignCNI` when Ichor detects another CNI and will not install Cilium next to it. The message:
 
-> the cluster runs the "flannel" CNI, not Cilium; no Cilium Helm Job was started. Use spec.cni.preset unmanaged to leave the CNI to the cluster
+> the cluster runs the "flannel" CNI, not Cilium; no Cilium Helm Job was started. Remove that CNI (see docs/guides/adopt-a-cluster/moving-from-flannel.md), or keep it and recreate the cluster with spec.cni.preset unmanaged: the preset cannot be changed on this one
 
-(`flannel` is the detected CNI: `flannel`, `calico` or `other`.) Set `spec.cni.preset: unmanaged` (accepted on create only; the preset is immutable), or remove the other CNI.
+(`flannel` is the detected CNI: `flannel`, `calico` or `other`.) `spec.cni.preset` is immutable, so a new cluster is the only way to keep the other CNI. To move to Cilium, see [Moving from flannel](../guides/adopt-a-cluster/moving-from-flannel.md).
 
 Related: [`ichor upgrade cni`](../reference/cli/ichor_upgrade_cni.md),
 [`ichor get cni-values`](../reference/cli/ichor_get_cni-values.md).

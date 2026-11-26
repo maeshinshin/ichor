@@ -428,7 +428,7 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 				if conflicts > 0 {
 					conflicts--
 
-					return apierrors.NewConflict(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosetcdbackups"}, obj.GetName(), errors.New("modified"))
+					return apierrors.NewConflict(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosetcdbackups"}, obj.GetName(), errors.New("modified"))
 				}
 
 				return c.SubResource(sub).Update(ctx, obj, opts...)

@@ -320,6 +320,11 @@ func AdvanceCNIHelmJob(
 		return false, err
 	}
 
+	// A Job being deleted (a stale one the caller removed in the foreground) is neither done nor failed.
+	if !job.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+
 	done, failed := jobOutcome(&job)
 	if ended := jobEnded(&job); !ended.IsZero() && ended.Before(since) {
 		return false, deleteCNIHelmJob(ctx, c, &job)

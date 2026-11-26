@@ -310,3 +310,29 @@ func TestConfirmReclaimStoresTheInspectedUUIDWhenOnlyTheCaseDiffers(t *testing.T
 		t.Fatalf("ConfirmUUID %q, want the inspected %q", got.Spec.ConfirmUUID, "0a1b-c2")
 	}
 }
+
+// A reclaim is created in the controller's namespace, where the controller resolves its cluster (ADR 0175), so a
+// cluster of that name elsewhere would be a different cluster from the one checked and updated. It is refused.
+func TestCreateReclaimForAClusterOutsideTheControllerNamespaceIsRefused(t *testing.T) {
+	cluster := discoveryCluster(nil)
+	cluster.Namespace = "tenant"
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cluster).Build()
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
+		Impersonate: func(Identity) (client.Client, error) {
+			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
+		}}
+	ctx := ContextWithIdentity(context.Background(), Identity{User: bgUser})
+
+	_, err := s.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{
+		Address: "10.0.0.5:50000", Talosconfig: []byte(reclaimMarker), Cluster: objectRef("tenant", "c"),
+	}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || err == nil ||
+		!strings.Contains(err.Error(), "recreated in "+testNS) {
+		t.Fatalf("CreateReclaim = %v, want a refusal saying the cluster must be recreated in %s", err, testNS)
+	}
+
+	var list ichorv1alpha1.MachineReclaimList
+	if err := k8s.List(ctx, &list); err != nil || len(list.Items) != 0 {
+		t.Fatalf("a reclaim was written: %v %v", list.Items, err)
+	}
+}

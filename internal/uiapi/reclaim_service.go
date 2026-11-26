@@ -107,6 +107,24 @@ func (s *Server) reclaimGate(ctx context.Context) error {
 	return nil
 }
 
+// reclaimCluster is the cluster ref of a reclaim request, in the controller's namespace: the reclaim is created there and
+// the controller looks its cluster up there, so a cluster of the same name elsewhere would be another one. A cluster
+// outside it (only a legacy one can be) is refused: new objects for it are refused too (ADR 0175).
+func (s *Server) reclaimCluster(ref *pb.ObjectRef) (*pb.ObjectRef, error) {
+	if ref.GetName() == "" {
+		return ref, nil
+	}
+
+	if ns := ref.GetNamespace(); ns != "" && ns != s.ControllerNamespace {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+			"cluster %s is outside the controller's namespace %q: a reclaim for it would be created there and could not "+
+				"find it; the cluster must be recreated in %s (every Ichor object lives in the controller's namespace)",
+			namespacedName(ref), s.ControllerNamespace, s.ControllerNamespace))
+	}
+
+	return objectRef(s.ControllerNamespace, ref.GetName()), nil
+}
+
 func (s *Server) CanReclaim(
 	ctx context.Context, req *connect.Request[pb.CanReclaimRequest],
 ) (*connect.Response[pb.CanReclaimResponse], error) {
@@ -117,7 +135,7 @@ func (s *Server) CanReclaim(
 
 	out := &pb.CanReclaimResponse{Enabled: true, Allowed: ok} // Enabled is deprecated, always true
 
-	if c := req.Msg.GetCluster(); ok && c.GetName() != "" {
+	if c, cerr := s.reclaimCluster(req.Msg.GetCluster()); ok && c.GetName() != "" && cerr == nil {
 		if out.ClusterAllowed, err = s.clusterWritable(ctx, c); err != nil {
 			return nil, err
 		}
@@ -147,9 +165,14 @@ func (s *Server) CreateReclaim(
 		return nil, invalid("address and talosconfig are required")
 	}
 
+	cluster, err := s.reclaimCluster(m.GetCluster())
+	if err != nil {
+		return nil, err
+	}
+
 	// Refuse before anything is written: registering the address is an update made as the caller, and failing it
 	// after the request and the credential exist would leave a half-done request carrying a foreign credential.
-	if c := m.GetCluster(); c.GetName() != "" {
+	if c := cluster; c.GetName() != "" {
 		ok, err := s.clusterWritable(ctx, c)
 		if err != nil {
 			return nil, err
@@ -185,7 +208,7 @@ func (s *Server) CreateReclaim(
 	if own {
 		mr.Spec.CredentialSecretRef, mr.Spec.ClusterCredentials = "", true
 	}
-	if c := m.GetCluster(); c.GetName() != "" {
+	if c := cluster; c.GetName() != "" {
 		mr.Spec.ClusterRef = &corev1.LocalObjectReference{Name: c.GetName()}
 	}
 
@@ -199,7 +222,7 @@ func (s *Server) CreateReclaim(
 		}
 	}
 
-	if c := m.GetCluster(); c.GetName() != "" {
+	if c := cluster; c.GetName() != "" {
 		if err := s.registerReclaimAddress(ctx, c, address); err != nil {
 			return nil, err
 		}

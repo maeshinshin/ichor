@@ -588,7 +588,7 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{TalosCNI: "none"},
 		}, true),
 		Entry("unmanaged with an unknown talosCNI is rejected", TalosClusterCNI{
-			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{TalosCNI: "flannel"},
+			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled, Unmanaged: &TalosClusterCNIUnmanaged{TalosCNI: cniPresetFlannel},
 		}, false),
 		Entry("unmanaged with cilium values is rejected: cilium only applies to the cilium preset", TalosClusterCNI{
 			Preset: presetUnmanaged, KubeProxy: kubeProxyEnabled,

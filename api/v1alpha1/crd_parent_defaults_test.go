@@ -16,10 +16,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 
@@ -117,14 +117,7 @@ func walkParents(s *apiextensionsv1.JSONSchemaProps, kind, path string, required
 			report(kind + " " + path)
 		}
 
-		names := make([]string, 0, len(s.Properties))
-		for n := range s.Properties {
-			names = append(names, n)
-		}
-
-		sort.Strings(names)
-
-		for _, n := range names {
+		for _, n := range slices.Sorted(maps.Keys(s.Properties)) {
 			c := s.Properties[n]
 			walkParents(&c, kind, path+"."+n, slices.Contains(s.Required, n), report)
 		}
@@ -150,7 +143,10 @@ func hasDefaultedChild(s *apiextensionsv1.JSONSchemaProps) bool {
 }
 
 func TestEffectivePresetReadsUnsetAsCilium(t *testing.T) {
-	for preset, want := range map[string]string{"": "cilium", "cilium": "cilium", "unmanaged": "unmanaged", "flannel": "flannel"} {
+	for preset, want := range map[string]string{
+		"": TalosClusterCNIPresetCilium, TalosClusterCNIPresetCilium: TalosClusterCNIPresetCilium,
+		TalosClusterCNIPresetUnmanaged: TalosClusterCNIPresetUnmanaged, cniPresetFlannel: cniPresetFlannel,
+	} {
 		if got := (TalosClusterCNI{Preset: preset}).EffectivePreset(); got != want {
 			t.Errorf("EffectivePreset(%q) = %q, want %q", preset, got, want)
 		}

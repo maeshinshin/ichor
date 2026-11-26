@@ -50,7 +50,8 @@ func cniSelectionNone(cluster *ichorv1alpha1.TalosCluster) bool {
 // checkCNISupported refuses a cluster whose preset is not cilium. An unset preset is the CRD
 // default, cilium.
 func checkCNISupported(cluster *ichorv1alpha1.TalosCluster) error {
-	if p := cluster.Spec.CNI.EffectivePreset(); p != ichorv1alpha1.TalosClusterCNIPresetCilium && p != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+	if p := cluster.Spec.CNI.EffectivePreset(); p != ichorv1alpha1.TalosClusterCNIPresetCilium &&
+		p != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return fmt.Errorf("%w (preset %q)", ErrCNIUnsupported, p)
 	}
 

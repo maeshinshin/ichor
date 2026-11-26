@@ -17,13 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"encoding/json"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -96,10 +93,8 @@ var _ = Describe("TalosCluster Webhook: immutable fields through the API server"
 		Expect(err.Error()).To(ContainSubstring("spec.network is fixed once the cluster exists"))
 	})
 
-	It("refuses a JSON patch that removes spec.cni", func() {
-		err := removeField("/spec/cni")
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("spec.cni is fixed once the cluster exists"))
+	It("admits a JSON patch that removes spec.cni of a cilium cluster, because the CRD default restores it", func() {
+		Expect(removeField("/spec/cni")).To(Succeed())
 	})
 
 	It("still refuses a different spec.network value", func() {
@@ -133,8 +128,8 @@ var _ = Describe("TalosCluster Webhook: spec.cni through the API server", func()
 			Expect(k8sClient.Create(ctx, obj)).To(Succeed())
 		})
 
-		It("refuses a JSON patch that nulls spec.cni", func() {
-			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":null}]`)).To(MatchError(ContainSubstring("spec.cni is fixed once the cluster exists")))
+		It("refuses a JSON patch that nulls spec.cni, because the default makes the preset cilium", func() {
+			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":null}]`)).To(MatchError(ContainSubstring("cni.preset cannot change")))
 		})
 
 		It("admits a JSON patch that replaces spec.cni with {}, because the preset default restores cilium", func() {
@@ -204,43 +199,8 @@ var _ = Describe("TalosCluster Webhook: spec.cni through the API server", func()
 			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":{}}]`)).To(MatchError(ContainSubstring("cni.preset cannot change")))
 		})
 
-		It("refuses a JSON patch that nulls spec.cni", func() {
-			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":null}]`)).To(MatchError(ContainSubstring("spec.cni is fixed once the cluster exists")))
-		})
-	})
-
-	Context("on a cluster created without spec.cni", func() {
-		BeforeEach(func() {
-			// A Go client always sends spec.cni, so an object without it comes from a raw document. With
-			// driftPolicy set, the defaulting webhook adds nothing and the stored object keeps no spec.cni.
-			raw, err := json.Marshal(newTestCluster())
-			Expect(err).NotTo(HaveOccurred())
-			var m map[string]any
-			Expect(json.Unmarshal(raw, &m)).To(Succeed())
-			m["apiVersion"], m["kind"] = "ichor.maesh.dev/v1alpha1", "TalosCluster"
-			delete(m["spec"].(map[string]any), "cni")
-			m["spec"].(map[string]any)["driftPolicy"] = "warnOnly"
-
-			u := &unstructured.Unstructured{Object: m}
-			Expect(k8sClient.Create(ctx, u)).To(Succeed())
-
-			stored := &unstructured.Unstructured{}
-			stored.SetGroupVersionKind(u.GroupVersionKind())
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(u), stored)).To(Succeed())
-			_, found, _ := unstructured.NestedFieldNoCopy(stored.Object, "spec", "cni")
-			Expect(found).To(BeFalse())
-
-			obj = &ichorv1alpha1.TalosCluster{}
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(u), obj)).To(Succeed())
-		})
-
-		It("admits a JSON patch that adds spec.cni as {}, which reads back as cilium", func() {
-			Expect(patch(`[{"op":"add","path":"/spec/cni","value":{}}]`)).To(Succeed())
-			Expect(presetOf()).To(Equal(ciliumPreset))
-		})
-
-		It("refuses a JSON patch that adds spec.cni as unmanaged without the adoption annotation", func() {
-			Expect(patch(`[{"op":"add","path":"/spec/cni","value":{"preset":"unmanaged"}}]`)).To(MatchError(ContainSubstring("only for clusters brought in by")))
+		It("refuses a JSON patch that nulls spec.cni, because the default makes the preset cilium", func() {
+			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":null}]`)).To(MatchError(ContainSubstring("cni.preset cannot change")))
 		})
 	})
 })

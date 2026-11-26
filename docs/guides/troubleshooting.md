@@ -122,4 +122,4 @@ Older versions let `kubectl delete namespace ichor-system` through. The namespac
 3. The controller is gone, so nothing clears the finalizers. On each TalosMachine, and on each TalosOperation, that has a `deletionTimestamp`: `kubectl -n ichor-system patch talosmachine NAME --type merge -p '{"metadata":{"finalizers":null}}'`. This writes nothing to a node.
 4. A version with the `ichor-protected-secrets` policy keeps the bundle Secret. Once it is exported, `kubectl -n ichor-system annotate secret SECRET ichor.maesh.dev/allow-delete=true` lets the namespace finish.
 
-Then install Ichor again and recover the cluster from the exported bundle (`ichor restore cluster`).
+The nodes keep running. Keep the exported bundle: `ichor restore cluster` reads it (`--secrets-bundle`, or `~/.ichor/clusters/NAME/secrets.yaml`) without Ichor or the namespace, but only to recover a cluster whose control planes and etcd data are gone.

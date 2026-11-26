@@ -484,6 +484,8 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				// delete of a tracked cluster.
 				"vauthentication-v1alpha1.kb.io": {opCreate, opUpdate},
 				"vsecretrefs-v1alpha1.kb.io":     {opCreate, opUpdate},
+				// A new object outside the controller's namespace is refused (ADR 0175).
+				"vnamespace-v1alpha1.kb.io": {opCreate},
 			}[name]
 			if !reflect.DeepEqual(ops, want) {
 				t.Errorf("webhook %q: expected operations %v; got %v",

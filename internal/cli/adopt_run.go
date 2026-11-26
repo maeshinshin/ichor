@@ -1498,6 +1498,11 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	var toCreate []*adoptPlan
 
 	for _, p := range plans {
+		if p.IchorAuthenticator {
+			say(adoptInfo, "node %q: carries an Ichor sign-in authenticator from an earlier install; adopt turns sign-in on again "+
+				"and the node's entry is replaced by one for this install's issuer and CA", p.Machine)
+		}
+
 		switch {
 		case p.Skipped != "":
 			say(adoptWarn, "node %q: skipped, %s (only approved nodes are read; approve it and re-run adopt to include it)",

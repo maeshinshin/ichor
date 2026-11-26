@@ -28,12 +28,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 func notAfterOf(pemBytes []byte) time.Time {
@@ -80,6 +83,24 @@ var _ = Describe("CertExpiryReconciler", func() {
 		for _, secretScalar := range bundleSecretMaterial(bundle) {
 			Expect(strings.Contains(raw, secretScalar)).To(BeFalse())
 		}
+	})
+
+	It("labels a bundle Secret an earlier version created without the protected label", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestCluster(secret.Name, "v1.14")
+		key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}
+		r := &CertExpiryReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+
+		Expect(secret.Labels).NotTo(HaveKey(deleteguard.ProtectedLabel))
+
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+
+		var got corev1.Secret
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), &got)).To(Succeed())
+		Expect(got.Labels).To(HaveKeyWithValue(deleteguard.ProtectedLabel, deleteguard.ProtectedValue))
+		Expect(got.Data).To(Equal(secret.Data))
 	})
 
 	It("drops a deleted cluster's series", func() {

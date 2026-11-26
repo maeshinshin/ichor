@@ -120,11 +120,20 @@ func keyRotationBlocked(cluster *ichorv1alpha1.TalosCluster) string {
 
 // describeKeyRotation adds the summary and the facts of a key-rotation operation.
 func describeKeyRotation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, add func(key, value string)) {
-	out.Summary = "Rotate the service-account and secretbox keys"
-
 	kr := op.Spec.KeyRotation
 	if kr == nil {
+		out.Summary = "Rotate the service-account and secretbox keys"
 		return
+	}
+
+	names := make([]string, len(kr.Targets))
+	for i, t := range kr.Targets {
+		names[i] = strings.ReplaceAll(t, "serviceAccount", "service-account")
+	}
+
+	out.Summary = "Rotate the " + strings.Join(names, " and ") + " key"
+	if len(names) > 1 {
+		out.Summary += "s"
 	}
 
 	add("Keys", strings.Join(kr.Targets, ", "))

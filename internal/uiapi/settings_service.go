@@ -143,12 +143,10 @@ func (s *Server) settingsResponse(ctx context.Context, inst *ichorv1alpha1.Ichor
 		resp.UiEffective = effectivePB(e)
 	}
 
-	if !resp.ReadOnly {
-		var err error
-
-		if resp.CanEditSettings, err = s.mayEditSetting(ctx); err != nil {
-			return nil, err
-		}
+	// Computed on a read-only deployment too: the halt clear is an action RBAC grants, not a setting.
+	var err error
+	if resp.CanEditSettings, err = s.mayEditSetting(ctx); err != nil {
+		return nil, err
 	}
 
 	return resp, nil

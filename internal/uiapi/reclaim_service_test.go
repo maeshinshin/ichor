@@ -282,3 +282,31 @@ func TestCancelReclaimDeletesOnlyTheCallersUnconfirmedRequest(t *testing.T) {
 		t.Fatalf("left %d, %v", len(list.Items), err)
 	}
 }
+
+func TestConfirmReclaimStoresTheInspectedUUIDWhenOnlyTheCaseDiffers(t *testing.T) {
+	before := &ichorv1alpha1.MachineReclaim{
+		Namespace: testNS, Name: "r",
+		Spec:   ichorv1alpha1.MachineReclaimSpec{Address: testReclaimAddr, CredentialSecretRef: "s"},
+		Status: ichorv1alpha1.MachineReclaimStatus{Inspection: &ichorv1alpha1.MachineReclaimInspection{UUID: "abc"}},
+	}
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(before.DeepCopy()).Build()
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
+		Impersonate: func(Identity) (client.Client, error) {
+			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
+		}}
+
+	if _, err := s.ConfirmReclaim(ContextWithIdentity(context.Background(), Identity{User: bgUser}), connect.NewRequest(&pb.ConfirmReclaimRequest{
+		Reclaim: objectRef(testNS, "r"), Uuid: "ABC",
+	})); err != nil {
+		t.Fatal(err)
+	}
+
+	var got ichorv1alpha1.MachineReclaim
+	if err := k8s.Get(context.Background(), client.ObjectKeyFromObject(before), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Spec.ConfirmUUID != "abc" {
+		t.Fatalf("ConfirmUUID %q, want the inspected %q", got.Spec.ConfirmUUID, "abc")
+	}
+}

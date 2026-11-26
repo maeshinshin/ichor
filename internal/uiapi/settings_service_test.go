@@ -61,7 +61,8 @@ func TestGetSettingsEditableFollowsRBAC(t *testing.T) {
 	}{
 		{[]string{subSettings}, false, true},
 		{nil, false, false},
-		{[]string{subSettings}, true, false},
+		{[]string{subSettings}, true, true},
+		{nil, true, false},
 	} {
 		s, _ := settingsServer(t, tc.readOnly, tc.allow...)
 

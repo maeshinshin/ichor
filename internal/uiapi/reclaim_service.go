@@ -404,6 +404,11 @@ func (s *Server) ConfirmReclaim(
 
 	metav1.SetMetaDataAnnotation(&mr.ObjectMeta, ichorv1alpha1.ReclaimConfirmedByAnnotation, user)
 
+	// The webhook compares exactly; a case-only difference is the same UUID, so store the inspected spelling.
+	if in := mr.Status.Inspection; in != nil && strings.EqualFold(uuid, in.UUID) {
+		uuid = in.UUID
+	}
+
 	mr.Spec.ConfirmUUID = uuid
 	if n := strings.TrimSpace(req.Msg.GetClusterName()); n != "" {
 		mr.Spec.ConfirmClusterName = n

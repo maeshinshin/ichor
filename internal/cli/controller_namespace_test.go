@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const helmControllerNamespace = "tenant"
@@ -72,5 +73,17 @@ func TestResolveClusterBundleReadsTheSecretFromTheControllerNamespace(t *testing
 
 	if _, err := resolveClusterBundle(context.Background(), k8s, testNamespace, cluster.Name); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The bundle Secret every writer builds (init, adopt) carries the label the delete-protection policy matches.
+func TestBundleSecretIsProtected(t *testing.T) {
+	secret, err := buildBundleSecret(newTestCluster(), newTestBundle(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := secret.Labels[deleteguard.ProtectedLabel]; got != deleteguard.ProtectedValue {
+		t.Errorf("label %s = %q, want %q", deleteguard.ProtectedLabel, got, deleteguard.ProtectedValue)
 	}
 }

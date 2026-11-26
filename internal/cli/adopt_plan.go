@@ -35,6 +35,8 @@ import (
 const (
 	kindResolverConfig = "ResolverConfig"
 
+	kindKubeAuthenticationConfig = "KubeAuthenticationConfig"
+
 	// pathNetworkInterfaces is the v1alpha1 network block of a node whose Talos config predates the
 	// multi-document form; spec.network renders the new form, so the block is captured as a patch.
 	pathNetworkInterfaces = "machine.network.interfaces"
@@ -58,6 +60,9 @@ type adoptPlan struct {
 	// Owned are the class B paths: Ichor-owned settings the first render will change. They are
 	// listed for consent and do not block.
 	Owned []string
+
+	// IchorAuthenticator: the node carries Ichor's own authenticator, which adopt replaces by turning sign-in on.
+	IchorAuthenticator bool
 
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
@@ -151,7 +156,8 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: rendering node %q's baseline: %w", m.Name, err)
 	}
 
-	if err := refuseJWTAuthenticators(m.Name, currentCfg, baseline); err != nil {
+	ichorAuth, err := refuseJWTAuthenticators(m.Name, currentCfg, baseline)
+	if err != nil {
 		return nil, err
 	}
 
@@ -160,7 +166,12 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: diffing node %q's current configuration: %w", m.Name, err)
 	}
 
-	plan := &adoptPlan{Machine: m.Name}
+	// Ichor's own authenticator is not drift to capture: sign-in is turned on again and the render replaces it.
+	if ichorAuth {
+		paths = slices.DeleteFunc(paths, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
+	}
+
+	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth}
 
 	if len(paths) == 0 {
 		return plan, nil
@@ -225,6 +236,10 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: verifying node %q's zero-drift patch: %w", m.Name, err)
 	}
 
+	if ichorAuth {
+		left = slices.DeleteFunc(left, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
+	}
+
 	if _, notOwned := own.split(left); len(notOwned) == 0 {
 		plan.Patch = &candidate
 	} else {
@@ -245,37 +260,50 @@ func buildAdoptPlan(
 // the fresh render (baseline) does not: the render would replace it (the document is
 // merge:replace), which would silently lock out whoever signs in through it. Refused, not
 // dropped; the external provider belongs in spec.authentication.external. An issuer the cluster's own
-// spec renders, Ichor's after an earlier adopt turned sign-in on, is not foreign.
-func refuseJWTAuthenticators(machine string, currentCfg, baseline []byte) error {
-	have, err := jwtIssuers(machine, currentCfg)
+// spec renders is not foreign, and neither is Ichor's own authenticator (isIchorJWT): adopt turns sign-in
+// on again and the render replaces it with the new install's issuer and CA. own reports that last case.
+func refuseJWTAuthenticators(machine string, currentCfg, baseline []byte) (own bool, err error) {
+	have, err := jwtEntries(machine, currentCfg)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	own, err := jwtIssuers(machine, baseline)
+	rendered, err := jwtEntries(machine, baseline)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	foreign := 0
 
-	for _, url := range have {
-		if !slices.Contains(own, url) {
+	for _, e := range have {
+		switch {
+		case slices.ContainsFunc(rendered, func(r jwtEntry) bool { return r.url == e.url }):
+		case e.ichor:
+			own = true
+		default:
 			foreign++
 		}
 	}
 
 	if foreign > 0 {
-		return fmt.Errorf("adopt: node %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
+		return false, fmt.Errorf("adopt: node %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
 			"when it renders the node; move the identity provider into spec.authentication.external of the TalosCluster and adopt again",
 			machine, foreign)
 	}
 
-	return nil
+	return own, nil
 }
 
-// jwtIssuers is the issuer URL of every jwt authenticator in cfg's KubeAuthenticationConfig.
-func jwtIssuers(machine string, cfg []byte) ([]string, error) {
+type jwtEntry struct {
+	url   string
+	ichor bool
+}
+
+// jwtEntries is every jwt authenticator in cfg's KubeAuthenticationConfig. An entry is Ichor's own when
+// its only audience is render.IchorKubeAudience and both claim prefixes are render.IchorPrefix, which is
+// what pkg/render/authentication.go renders for spec.authentication.ichor; an external provider cannot
+// have that prefix (the CRD refuses it), so a user's own IdP is never taken for Ichor's.
+func jwtEntries(machine string, cfg []byte) ([]jwtEntry, error) {
 	provider, err := configloader.NewFromBytes(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: decoding node %q's current configuration: %w", machine, err)
@@ -286,16 +314,28 @@ func jwtIssuers(machine string, cfg []byte) ([]string, error) {
 		return nil, nil
 	}
 
-	var urls []string
+	var entries []jwtEntry
 
 	jwt, _ := auth.Configuration()["jwt"].([]any)
 	for _, j := range jwt {
-		issuer, _ := j.(map[string]any)["issuer"].(map[string]any)
+		jm, _ := j.(map[string]any)
+		issuer, _ := jm["issuer"].(map[string]any)
 		url, _ := issuer["url"].(string)
-		urls = append(urls, url)
+		audiences, _ := issuer["audiences"].([]any)
+		mappings, _ := jm["claimMappings"].(map[string]any)
+
+		entries = append(entries, jwtEntry{url: url, ichor: len(audiences) == 1 && audiences[0] == render.IchorKubeAudience &&
+			claimPrefix(mappings, "username") == render.IchorPrefix && claimPrefix(mappings, "groups") == render.IchorPrefix})
 	}
 
-	return urls, nil
+	return entries, nil
+}
+
+func claimPrefix(mappings map[string]any, which string) string {
+	m, _ := mappings[which].(map[string]any)
+	prefix, _ := m["prefix"].(string)
+
+	return prefix
 }
 
 // groupChangedPaths partitions ChangedPaths' output by which

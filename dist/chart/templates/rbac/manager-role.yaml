@@ -20,6 +20,16 @@ rules:
   - patch
 - apiGroups:
   - ""
+  # The controller's own namespace, labelled at start-up so ichor-protected-namespace guards it.
+  resourceNames:
+  - {{ .Release.Namespace }}
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - ""
   resources:
   - nodes
   verbs:

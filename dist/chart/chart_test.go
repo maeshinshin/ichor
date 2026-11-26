@@ -929,8 +929,19 @@ func checkControllerRBACMatchesConfig(t *testing.T, release string, docs []map[s
 
 	configDocs := loadYAMLDocs(t, controllerConfigRolePath)
 
+	// The config names its fixed namespace; the chart names the release namespace, which helm template sets to default.
+	configRole := find(configDocs, kindClusterRole, "manager-role")
+	for _, r := range configRole["rules"].([]any) {
+		names, _ := r.(map[string]any)["resourceNames"].([]any)
+		for i, n := range names {
+			if n == "ichor-system" {
+				names[i] = kDefault
+			}
+		}
+	}
+
 	checkRBACRulesMatch(t, release, "ClusterRole manager-role",
-		find(configDocs, kindClusterRole, "manager-role"),
+		configRole,
 		findNameSuffix(docs, kindClusterRole, "-manager-role"),
 		controllerConfigRolePath, "dist/chart/templates/rbac/manager-role.yaml")
 

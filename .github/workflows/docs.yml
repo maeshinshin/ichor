@@ -18,12 +18,23 @@ on:
     paths:
       - "docs/**"
       - "site/**"
+      - "hack/docs-shots.mjs"
+      - "Makefile"
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/actions/nix/**"
+      - ".github/actions/npm-cache/**"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/**"
       - "site/**"
       - "hack/docs-shots.mjs"
+      - "Makefile"
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/actions/nix/**"
+      - ".github/actions/npm-cache/**"
       - ".github/workflows/docs.yml"
   workflow_run:
     workflows: [Release]

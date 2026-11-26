@@ -298,3 +298,34 @@ func TestEveryRunStartsInNixDevelop(t *testing.T) {
 		}
 	}
 }
+
+// docsInputs are what the docs build and its browser check read besides docs/ and site/. A change to one
+// must run the Docs workflow, or a break first shows after a release tag, when the docs and the Helm index fail to publish.
+var docsInputs = []string{
+	"Makefile", "flake.nix", "flake.lock", "hack/docs-shots.mjs",
+	".github/actions/nix/**", ".github/actions/npm-cache/**", ".github/workflows/docs.yml",
+}
+
+func TestDocsRunsForItsBuildInputs(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot, ".github/workflows/docs.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var w struct {
+		On map[string]struct {
+			Paths []string `yaml:"paths"`
+		} `yaml:"on"`
+	}
+	if err := yaml.Unmarshal(b, &w); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, event := range []string{"push", "pull_request"} {
+		for _, want := range docsInputs {
+			if !slices.Contains(w.On[event].Paths, want) {
+				t.Errorf("docs.yml on.%s.paths lacks %q: a change to it would not run Docs", event, want)
+			}
+		}
+	}
+}

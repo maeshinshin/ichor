@@ -124,11 +124,17 @@ Older versions let `kubectl delete namespace ichor-system` through. The namespac
 
 5. The IchorInstallation is cluster-scoped and survives the namespace. While it exists, adopt takes Ichor for installed and installs nothing, so delete it: `kubectl delete ichorinstallation ichor`.
 
-The nodes keep running, so bring the cluster back under a fresh Ichor with `ichor adopt`. It installs Ichor when it is absent, then creates the bundle Secret, the TalosCluster and the TalosMachines; with no TalosCluster yet, `--node` names one control plane and adopt reads the members from it. Use the file from step 1, or a bundle exported earlier:
+The nodes keep running, so bring the cluster back under a fresh Ichor with `ichor adopt`. It installs Ichor when it is absent, then creates the bundle Secret, the TalosCluster and the TalosMachines; with no TalosCluster yet, `--node` names one control plane and adopt reads the members from it. Use the file from step 1, or a bundle exported earlier.
+
+adopt reads each node over the Talos API, so it needs a talosconfig that reaches a control plane (`--talosconfig`, else `$TALOSCONFIG`, else `~/.talos/config`). Use your own, or write one from the bundle: `ichor create credentials NAME --bundle ~/.ichor/clusters/NAME/secrets.yaml --kube-server https://CP_ADDRESS:6443 --talos-endpoints CP_ADDRESS --talosconfig-out ./talosconfig`.
+
+A cluster made by an earlier `ichor init` kept the Cilium release record in `ichor-system`, and it was lost with the namespace. adopt then finds Cilium without a record (`CNI: cilium (manifest)`) and reports chart and image differences, so the plan ends with `pass --accept-cilium-diff`. Read the list, then pass the flag on both commands:
 
 ```sh
-ichor adopt --cluster NAME --node CP_ADDRESS --secrets-bundle ~/.ichor/clusters/NAME/secrets.yaml --plan
-ichor adopt --cluster NAME --node CP_ADDRESS --secrets-bundle ~/.ichor/clusters/NAME/secrets.yaml
+ichor adopt --cluster NAME --node CP_ADDRESS --talosconfig ./talosconfig --secrets-bundle ~/.ichor/clusters/NAME/secrets.yaml --accept-cilium-diff --plan
+ichor adopt --cluster NAME --node CP_ADDRESS --talosconfig ./talosconfig --secrets-bundle ~/.ichor/clusters/NAME/secrets.yaml --accept-cilium-diff
 ```
+
+adopt then turns sign-in on and sets `spec.authentication.ichor`, and a control plane whose kube-apiserver still runs the old install's sign-in entry reports `Ready=False/APIServerRestartRequired`. adopt does not wait for it. It ends with one step to run: `ichor rollout config --cluster NAME --follow`. That one rollout restarts kube-apiserver on each control plane in turn and applies both changes.
 
 With no file at all, `--recover-secrets --recover-from CP_ADDRESS` rebuilds the bundle from that control plane's machine config instead of `--secrets-bundle`. An encrypted file needs its passphrase (`--bundle-passphrase-file` or `$ICHOR_BUNDLE_PASSPHRASE`). An object that already exists is kept when identical, and adopt refuses one that differs. A cluster made with `ichor init` has Ichor's own sign-in entry on its control planes: adopt recognises it, turns sign-in on again and replaces the entry with one for the new install. An identity provider of your own is refused; put it in `spec.authentication.external` first. The other cluster-scoped objects of the old install (CRDs, ClusterRoles) stay as they are: adopt creates only those that are missing. `ichor restore cluster` is for a cluster whose control planes and etcd data are gone, not this case.

@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,7 +138,7 @@ func TestNamespaceFlagRefusesAnotherNamespace(t *testing.T) {
 	for path, f := range namespaceFlags(rootCmd) {
 		// init and adopt refuse another namespace when they run (buildInitPlan, checkControllerNamespace); the
 		// installer's Job passes the namespace the controller really runs in.
-		if path == "ichor init" || path == "ichor adopt" || strings.HasPrefix(path, "ichor installer") {
+		if slices.Contains([]string{rootCmd.Name() + " " + cmdInit, rootCmd.Name() + " adopt"}, path) || strings.HasPrefix(path, "ichor installer") {
 			continue
 		}
 

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -217,7 +218,22 @@ func configOfDocuments(raw []any) (map[string]any, error) {
 	return out, json.Unmarshal(b, &out)
 }
 
+// setMigrated records the Migrated condition. The hook Job and `ichor upgrade ichor` do not requeue, and the
+// controller writes the same status, so a conflict re-reads the patch and applies only this condition again.
 func setMigrated(ctx context.Context, c client.Client, p *unstructured.Unstructured, ok bool, reason, msg string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		cur := &unstructured.Unstructured{}
+		cur.SetGroupVersionKind(p.GroupVersionKind())
+
+		if err := c.Get(ctx, client.ObjectKeyFromObject(p), cur); err != nil {
+			return err
+		}
+
+		return setMigratedOnce(ctx, c, cur, ok, reason, msg)
+	})
+}
+
+func setMigratedOnce(ctx context.Context, c client.Client, p *unstructured.Unstructured, ok bool, reason, msg string) error {
 	status := "False"
 	if ok {
 		status = "True"

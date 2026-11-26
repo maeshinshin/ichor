@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -330,5 +332,30 @@ func TestMigrateAllPatchesMigratesAStoredPatchAndToleratesOneLeftAsIs(t *testing
 
 	if p := getPatchIn(t, c, "other", "bad"); len(p.Spec.Documents) == 0 {
 		t.Errorf("want bad left as stored, got %+v", p.Spec)
+	}
+}
+
+// The hook Job and `ichor upgrade ichor` do not requeue, so a conflict with the controller's own status write
+// must not fail the migration: setMigrated re-reads and writes its condition again.
+func TestSetMigratedRetriesAConflict(t *testing.T) {
+	conflicts := 1
+	c := fake.NewClientBuilder().WithStatusSubresource(storedPatch("s", nil)).WithObjects(storedPatch("p", nil)).
+		WithInterceptorFuncs(interceptor.Funcs{SubResourcePatch: func(ctx context.Context, cl client.Client, sub string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+			if conflicts > 0 {
+				conflicts--
+
+				return apierrors.NewConflict(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosconfigpatches"}, obj.GetName(), errors.New("modified"))
+			}
+
+			return cl.SubResource(sub).Patch(ctx, obj, patch, opts...)
+		}}).Build()
+
+	p := storedPatch("p", nil)
+	if err := setMigrated(context.Background(), c, p, true, "Migrated", "moved"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := getPatch(t, c, "p"); len(got.Status.Conditions) != 1 || got.Status.Conditions[0].Type != MigratedCondition {
+		t.Fatalf("conditions = %+v; want the Migrated condition", got.Status.Conditions)
 	}
 }

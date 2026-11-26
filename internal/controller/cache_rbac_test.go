@@ -141,3 +141,44 @@ var _ = Describe("manager cache against the generated RBAC", func() {
 		Entry("IchorInstallation", &ichorv1alpha1.IchorInstallation{}),
 	)
 })
+
+var _ = Describe("ProtectNamespace against the generated RBAC", func() {
+	It("labels the controller's namespace as the controller's identity", func() {
+		const ns = "ichor-protect-rbac"
+
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{Name: ns})).To(Succeed())
+
+		raw, err := os.ReadFile("../../config/rbac/role.yaml")
+		Expect(err).NotTo(HaveOccurred())
+
+		var cr rbacv1.ClusterRole
+
+		Expect(yaml.Unmarshal([]byte(strings.SplitN(string(raw), "\n---\n", 2)[0]), &cr)).To(Succeed())
+
+		// The generated rule names ichor-system; the namespace under test takes its place.
+		for i := range cr.Rules {
+			for j, n := range cr.Rules[i].ResourceNames {
+				if n == trustNamespace && cr.Rules[i].Resources[0] == "namespaces" {
+					cr.Rules[i].ResourceNames[j] = ns
+				}
+			}
+		}
+
+		const user = "system:serviceaccount:ichor-protect-rbac:controller"
+
+		cr.Name = "protect-role-test"
+		Expect(k8sClient.Create(ctx, &cr)).To(Succeed())
+		Expect(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{
+			Name:     "protect-binding-test",
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: clusterRoleKind, Name: cr.Name},
+			Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: user}},
+		})).To(Succeed())
+
+		c := rest.CopyConfig(cfg)
+		c.Impersonate = rest.ImpersonationConfig{UserName: user}
+		as, err := client.New(c, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() error { return ProtectNamespace(ctx, as, as, ns) }, 15*time.Second, 200*time.Millisecond).Should(Succeed())
+	})
+})

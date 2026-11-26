@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -50,4 +52,33 @@ func ProtectNamespace(ctx context.Context, reader client.Reader, w client.Client
 	ns.Labels[deleteguard.ProtectedLabel] = deleteguard.ProtectedValue
 
 	return w.Patch(ctx, &ns, patch)
+}
+
+// ProtectNamespaceUntilDone calls ProtectNamespace until it succeeds or ctx ends. A failure is logged once per
+// distinct message, not on every try (a permanent RBAC refusal would otherwise log every few seconds for the life of
+// the pod; the logger is the context's), and the wait doubles from first up to limit.
+func ProtectNamespaceUntilDone(
+	ctx context.Context, reader client.Reader, w client.Client, name string, first, limit time.Duration,
+) {
+	log := logr.FromContextOrDiscard(ctx)
+	var last string
+
+	for wait := first; ; wait = min(2*wait, limit) {
+		err := ProtectNamespace(ctx, reader, w, name)
+		if err == nil {
+			return
+		}
+
+		if msg := err.Error(); msg != last {
+			last = msg
+
+			log.Info("Could not label the namespace as protected yet; retrying with a growing wait", "error", msg, "retryAfter", wait.String())
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+	}
 }

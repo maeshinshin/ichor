@@ -18,9 +18,14 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -56,5 +61,34 @@ func TestProtectNamespaceAddsTheLabelOnce(t *testing.T) {
 
 	if patches != 1 {
 		t.Errorf("patches = %d, want 1: the second call must be a no-op", patches)
+	}
+}
+
+func TestProtectNamespaceUntilDoneLogsOnceAndBacksOff(t *testing.T) {
+	tries := 0
+	c := fake.NewClientBuilder().
+		WithObjects(&corev1.Namespace{Name: trustNamespace}).
+		WithInterceptorFuncs(interceptor.Funcs{Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, o ...client.GetOption) error {
+			tries++
+			if tries <= 4 {
+				return apierrors.NewForbidden(corev1.Resource("namespaces"), key.Name, errors.New("no rule"))
+			}
+
+			return c.Get(ctx, key, obj, o...)
+		}}).Build()
+
+	var lines int
+
+	log := funcr.New(func(_, _ string) { lines++ }, funcr.Options{})
+
+	ProtectNamespaceUntilDone(logr.NewContext(context.Background(), log), c, c, trustNamespace, time.Millisecond, 4*time.Millisecond)
+
+	if tries != 5 || lines != 1 {
+		t.Errorf("tries = %d, log lines = %d, want 5 tries (four refused) and one line", tries, lines)
+	}
+
+	var ns corev1.Namespace
+	if err := c.Get(context.Background(), client.ObjectKey{Name: trustNamespace}, &ns); err != nil || ns.Labels[deleteguard.ProtectedLabel] == "" {
+		t.Errorf("label after success: %v, %v", ns.Labels, err)
 	}
 }

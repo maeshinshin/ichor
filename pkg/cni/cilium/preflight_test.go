@@ -270,6 +270,19 @@ func TestCheckAgentsReady_RolloutInProgressIsNotReady(t *testing.T) {
 	}
 }
 
+// OnDelete never raises UpdatedNumberScheduled by itself, so it is not a rollout in progress.
+func TestCheckAgentsReady_OnDeleteIsReadyWithOldPods(t *testing.T) {
+	ds := agentDaemonSet("quay.io/cilium/cilium:v" + ChartVersion)
+	ds.Spec.UpdateStrategy.Type = appsv1.OnDeleteDaemonSetStrategyType
+	ds.Status.UpdatedNumberScheduled = 1
+	kube := fake.NewSimpleClientset(ds, operatorDeployment())
+
+	notReady, err := CheckAgentsReady(t.Context(), kube)
+	if err != nil || notReady != nil {
+		t.Fatalf("notReady = %v, err = %v, want ready", notReady, err)
+	}
+}
+
 func TestPreflight_RefusesAPrivateKeyInTheForeignRecord(t *testing.T) {
 	kube := fake.NewSimpleClientset(agentDaemonSet("quay.io/cilium/cilium:v"+ChartVersion), operatorDeployment())
 	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, ChartVersion,

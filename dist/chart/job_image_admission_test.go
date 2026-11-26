@@ -38,6 +38,13 @@ const (
 	kKindKey  = "kind"
 	kNameKey  = "name"
 	kDefault  = "default"
+
+	kIchorCNI       = "ichor-cni"
+	kJobImagePolicy = "ichor-controller-job-image"
+	kJobsPolicy     = "ichor-controller-jobs"
+	kTemplate       = "template"
+	kClusterAdmin   = "cluster-admin"
+	kNever          = "Never"
 )
 
 // TestControllerJobImageFollowsTheIchorInstallation guards: with the chart's default values, a mirror
@@ -62,7 +69,7 @@ func TestControllerJobImageFollowsTheIchorInstallation(t *testing.T) {
 	}
 
 	docs := renderChart(t, "ichor")
-	for _, name := range []string{"ichor-controller-jobs", "ichor-controller-job-image"} {
+	for _, name := range []string{kJobsPolicy, kJobImagePolicy} {
 		objs := map[string]string{kindValidatingAdmissionPolicy: name, kindValidatingAdmissionPolicyBind: name + "-binding"}
 		for kind, n := range objs {
 			if err := admin.Create(ctx, &unstructured.Unstructured{Object: find(docs, kind, n)}); err != nil {
@@ -71,7 +78,7 @@ func TestControllerJobImageFollowsTheIchorInstallation(t *testing.T) {
 		}
 	}
 
-	policy := find(docs, kindValidatingAdmissionPolicy, "ichor-controller-jobs")
+	policy := find(docs, kindValidatingAdmissionPolicy, kJobsPolicy)
 	conds := policy[specKey].(map[string]any)["matchConditions"].([]any)
 	expr := conds[0].(map[string]any)["expression"].(string)
 	sa := regexp.MustCompile(`== '(system:serviceaccount:[^']+)'`).FindStringSubmatch(expr)[1]
@@ -80,7 +87,7 @@ func TestControllerJobImageFollowsTheIchorInstallation(t *testing.T) {
 	crb := &unstructured.Unstructured{Object: map[string]any{
 		kAPIVer: "rbac.authorization.k8s.io/v1", kKindKey: "ClusterRoleBinding",
 		kMeta:      map[string]any{kNameKey: "controller-test"},
-		"roleRef":  map[string]any{kAPIGroup: rbacGroup, kKindKey: "ClusterRole", kNameKey: "cluster-admin"},
+		"roleRef":  map[string]any{kAPIGroup: rbacGroup, kKindKey: "ClusterRole", kNameKey: kClusterAdmin},
 		"subjects": []any{map[string]any{kAPIGroup: rbacGroup, kKindKey: "User", kNameKey: sa}},
 	}}
 	if err := admin.Create(ctx, crb); err != nil {
@@ -97,11 +104,13 @@ func TestControllerJobImageFollowsTheIchorInstallation(t *testing.T) {
 	job := func(name, image string) *unstructured.Unstructured {
 		return &unstructured.Unstructured{Object: map[string]any{
 			kAPIVer: "batch/v1", kKindKey: kindJob,
-			kMeta: map[string]any{kNameKey: name, "namespace": "kube-system"},
+			kMeta: map[string]any{
+				kNameKey: name, "namespace": "kube-system", "labels": map[string]any{"app.kubernetes.io/name": kIchorCNI},
+			},
 			specKey: map[string]any{
 				"activeDeadlineSeconds": int64(1500),
-				"template": map[string]any{specKey: map[string]any{
-					"serviceAccountName": "ichor-cni", "restartPolicy": "Never", "hostNetwork": true,
+				kTemplate: map[string]any{specKey: map[string]any{
+					"serviceAccountName": kIchorCNI, "restartPolicy": kNever, "hostNetwork": true,
 					"containers": []any{map[string]any{
 						kNameKey: kCNI, "image": image, "args": []any{kCNI, "helm", "apply"},
 						"securityContext": map[string]any{
@@ -184,4 +193,110 @@ func isPolicyDenial(err error, mentions string) bool {
 	}
 
 	return strings.Contains(err.Error(), "ValidatingAdmissionPolicy") && strings.Contains(err.Error(), mentions)
+}
+
+// TestControllerJobImagePolicyLeavesOtherJobsAlone guards: while there is no IchorInstallation (a fresh install,
+// before the controller seeds it) the apiserver resolves the image policy's paramRef before its matchConditions,
+// so a binding that selects every Job refuses every Job in the cluster, a Helm hook's among them. The binding must
+// select only the controller's Jobs, and those must still be refused without an IchorInstallation.
+func TestControllerJobImagePolicyLeavesOtherJobsAlone(t *testing.T) {
+	ctx := context.Background()
+	crd := "../../config/crd/bases/ichor.maesh.dev_ichorinstallations.yaml"
+	env := &envtest.Environment{CRDDirectoryPaths: []string{crd}, ErrorIfCRDPathMissing: true}
+
+	cfg, err := env.Start()
+	if err != nil {
+		t.Fatalf("starting envtest: %v", err)
+	}
+
+	t.Cleanup(func() { _ = env.Stop() })
+
+	admin, err := client.New(cfg, client.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docs := renderChart(t, "ichor")
+	for _, name := range []string{kJobsPolicy, kJobImagePolicy} {
+		objs := map[string]string{kindValidatingAdmissionPolicy: name, kindValidatingAdmissionPolicyBind: name + "-binding"}
+		for kind, n := range objs {
+			if err := admin.Create(ctx, &unstructured.Unstructured{Object: find(docs, kind, n)}); err != nil {
+				t.Fatalf("creating %s %s: %v", kind, n, err)
+			}
+		}
+	}
+
+	policy := find(docs, kindValidatingAdmissionPolicy, kJobsPolicy)
+	expr := policy[specKey].(map[string]any)["matchConditions"].([]any)[0].(map[string]any)["expression"].(string)
+	sa := regexp.MustCompile(`== '(system:serviceaccount:[^']+)'`).FindStringSubmatch(expr)[1]
+
+	crb := &unstructured.Unstructured{Object: map[string]any{
+		kAPIVer: "rbac.authorization.k8s.io/v1", kKindKey: "ClusterRoleBinding",
+		kMeta:      map[string]any{kNameKey: "controller-test"},
+		"roleRef":  map[string]any{kAPIGroup: rbacGroup, kKindKey: "ClusterRole", kNameKey: kClusterAdmin},
+		"subjects": []any{map[string]any{kAPIGroup: rbacGroup, kKindKey: "User", kNameKey: sa}},
+	}}
+	if err := admin.Create(ctx, crb); err != nil {
+		t.Fatal(err)
+	}
+
+	as := &rest.Config{Host: cfg.Host, TLSClientConfig: cfg.TLSClientConfig}
+	as.Impersonate.UserName = sa
+	ctrl, err := client.New(as, client.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	image := "mirror.example/ichor-installer@sha256:" + strings.Repeat("a", 64)
+	job := func(name, namespace, serviceAccount string, labels map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			kAPIVer: "batch/v1", kKindKey: kindJob,
+			kMeta: map[string]any{kNameKey: name, "namespace": namespace, "labels": labels},
+			specKey: map[string]any{
+				"activeDeadlineSeconds": int64(1500),
+				kTemplate: map[string]any{specKey: map[string]any{
+					"serviceAccountName": serviceAccount, "restartPolicy": kNever, "hostNetwork": true,
+					"containers": []any{map[string]any{
+						kNameKey: kCNI, "image": image, "args": []any{kCNI, "helm", "apply"},
+						"securityContext": map[string]any{
+							"allowPrivilegeEscalation": false,
+							"capabilities":             map[string]any{"drop": []any{"ALL"}},
+						},
+					}},
+				}},
+			},
+		}}
+	}
+	label := func(v string) map[string]any { return map[string]any{"app.kubernetes.io/name": v} }
+
+	// Policies take a moment to compile: wait until the controller's own labelled Job is refused for the missing
+	// IchorInstallation.
+	deadline := time.Now().Add(30 * time.Second)
+	for n := 0; ; n++ {
+		err := ctrl.Create(ctx, job(fmt.Sprintf("own-%d", n), "kube-system", kIchorCNI, label(kIchorCNI)))
+		if isPolicyDenial(err, "no params found") {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("the controller's Job with no IchorInstallation: got %v, want a denial for the missing parameter", err)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// A Job that is not the controller's, anywhere: a Helm hook in the release namespace, and one elsewhere.
+	if err := admin.Create(ctx, job("hook", "default", "default", label("ichor"))); err != nil {
+		t.Errorf("an unrelated Job while there is no IchorInstallation: %v", err)
+	}
+
+	if err := admin.Create(ctx, job("other", "default", "default", nil)); err != nil {
+		t.Errorf("an unlabelled Job while there is no IchorInstallation: %v", err)
+	}
+
+	// The controller cannot slip past the image policy by leaving the label off.
+	err = ctrl.Create(ctx, job("unlabelled", "kube-system", kIchorCNI, nil))
+	if !isPolicyDenial(err, "ichor-controller-jobs'") {
+		t.Errorf("the controller's Job without the label: got %v, want the structural policy's refusal", err)
+	}
 }

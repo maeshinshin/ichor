@@ -58,7 +58,7 @@ func TestPreflightCondition(t *testing.T) {
 			write(t, filepath.Join(dir, "templates", "zz-test.yaml"),
 				"result: \"{{ include \"ichor.preflight.noCNI\" (fromYaml (.Files.Get \"fixture.yaml\")).items }}\"\n")
 
-			render := exec.Command("helm", "template", "t", dir, "-s", "templates/zz-test.yaml",
+			render := exec.Command("helm", kTemplate, "t", dir, "-s", "templates/zz-test.yaml",
 				"--set", usersOn, "--set", usersURL)
 			out, err := render.CombinedOutput()
 			if err != nil {

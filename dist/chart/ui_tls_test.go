@@ -30,7 +30,7 @@ func uiParts(t *testing.T, docs []map[string]any) (c map[string]any, volumes []a
 	t.Helper()
 
 	dep := find(docs, kindDeployment, ichorUIDeploymentName)
-	podSpec := dep[specKey].(map[string]any)["template"].(map[string]any)[specKey].(map[string]any)
+	podSpec := dep[specKey].(map[string]any)[kTemplate].(map[string]any)[specKey].(map[string]any)
 	c = podSpec["containers"].([]any)[0].(map[string]any)
 	volumes, _ = podSpec["volumes"].([]any)
 

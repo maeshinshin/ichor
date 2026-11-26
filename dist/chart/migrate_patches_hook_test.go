@@ -40,9 +40,9 @@ func TestMigratePatchesHook(t *testing.T) {
 	}
 
 	job := find(docs, kindJob, migrateHookName)
-	pod := job["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	pod := job["spec"].(map[string]any)[kTemplate].(map[string]any)["spec"].(map[string]any)
 
-	if pod["serviceAccountName"] != migrateHookName || pod["restartPolicy"] != "Never" {
+	if pod["serviceAccountName"] != migrateHookName || pod["restartPolicy"] != kNever {
 		t.Errorf("pod runs as %v with restartPolicy %v", pod["serviceAccountName"], pod["restartPolicy"])
 	}
 

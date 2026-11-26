@@ -282,7 +282,7 @@ func renderChartWithValuesErr(release string, sets ...string) ([]byte, error) {
 
 // helmTemplate runs "helm template" on this directory's chart with extra flags and --set overrides.
 func helmTemplate(release string, flags, sets []string) ([]byte, error) {
-	args := append([]string{"template", release, "."}, flags...)
+	args := append([]string{kTemplate, release, "."}, flags...)
 	sets = withSignIn(sets)
 	for _, s := range sets {
 		args = append(args, "--set", s)
@@ -371,7 +371,7 @@ func nameOf(doc map[string]any) string {
 // podSpecOf returns spec.template.spec of a decoded Deployment.
 func podSpecOf(deployment map[string]any) map[string]any {
 	spec, _ := deployment["spec"].(map[string]any)
-	tmpl, _ := spec["template"].(map[string]any)
+	tmpl, _ := spec[kTemplate].(map[string]any)
 	podSpec, _ := tmpl["spec"].(map[string]any)
 	return podSpec
 }

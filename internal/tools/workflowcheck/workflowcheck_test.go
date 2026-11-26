@@ -119,7 +119,7 @@ func runSteps(t *testing.T, path string) []runStep {
 func code(run string) []string {
 	var lines []string
 
-	for _, l := range strings.Split(run, "\n") {
+	for l := range strings.SplitSeq(run, "\n") {
 		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
 			lines = append(lines, l)
 		}
@@ -223,7 +223,25 @@ func TestReleaseVerifyRunsEveryPRGate(t *testing.T) {
 }
 
 // nixExempt are run: steps that do not start with `nix develop --command`, keyed "file: step name".
-var nixExempt = map[string]string{}
+var nixExempt = map[string]string{
+	// Shell builtins, git, awk and the repository's own scripts; no dev shell tool is called.
+	".github/workflows/docs.yml: Dispatch the workflow on main":                                        "gh on a job that checks out nothing",
+	".github/workflows/lint.yml: Keep the changelog block out of the goreleaser config":                "grep",
+	".github/workflows/test.yml: Fail if regenerating produced a diff":                                 "git diff",
+	".github/workflows/release.yml: Fail if regenerating produced a diff":                              "git diff",
+	".github/workflows/release.yml: CHANGELOG.md has a section for the tag":                            "awk and grep",
+	".github/workflows/release.yml: Take the release notes from CHANGELOG.md":                          "awk",
+	".github/workflows/release.yml: Check that the tag was not cut from main":                          "git",
+	".github/workflows/release.yml: Add the changelog section":                                         "git and hack/add-release-section.sh",
+	".github/workflows/release.yml: Set the README's version":                                          "sync-main installs no Nix; make release-prep edits text only",
+	".github/workflows/release.yml: Resolve the digests":                                               "grep over bin/digests.txt",
+	".github/workflows/release.yml: Sign the images and the chart":                                     "a loop whose body is nix develop --command cosign",
+	".github/workflows/release.yml: Generate the SBOMs":                                                "a loop whose body is nix develop --command syft",
+	".github/workflows/release.yml: Verify the signatures as the controller does":                      "bin/verifyimage is built by this workflow",
+	".github/workflows/test-chart.yml: Show why the deploy failed":                                     "failure diagnostics; every line is best effort",
+	".github/actions/nix/action.yml: Free disk space":                                                  "runs before Nix exists",
+	".github/actions/nix/action.yml: Keep the devShell and the flake inputs out of garbage collection": "builds the dev shell profile itself",
+}
 
 func TestEveryRunStartsInNixDevelop(t *testing.T) {
 	for _, p := range paths(t) {

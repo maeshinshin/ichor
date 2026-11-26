@@ -7,6 +7,11 @@ on:
 
 permissions: {}
 
+# bash adds -o pipefail: without it a pipe hides the failure of every command but its last. The default shell is bash -e.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     permissions:

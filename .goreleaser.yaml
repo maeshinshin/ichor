@@ -72,6 +72,8 @@ signs:
 # and a generated commit log would span whatever ancestor tag is nearest, or be empty with a warning.
 
 release:
+  # A re-run after a partial upload replaces the files already on the release instead of failing on them.
+  replace_existing_artifacts: true
   # Name the repo explicitly so goreleaser doesn't need to read it from
   # `git remote`.
   github:

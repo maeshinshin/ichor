@@ -19,6 +19,11 @@ on:
 
 permissions: {}
 
+# bash adds -o pipefail: without it a pipe hides the failure of every command but its last. The default shell is bash -e.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   verify:
     name: Verify the tagged commit
@@ -67,11 +72,31 @@ jobs:
       - name: Lint
         run: nix develop --command make lint-config lint
 
+      - name: Check the workflows
+        run: nix develop --command actionlint
+
+      - name: Check goreleaser configuration
+        run: nix develop --command goreleaser check
+
       # -count=1: a release reruns every test instead of replaying a result cached on main.
       - name: Test
         env:
           GOFLAGS: -count=1
         run: nix develop --command make test
+
+      # Helm stores the release in a Secret of at most 1 MiB; past that "helm install" fails on the user's cluster.
+      - name: Helm release record is under the Secret limit
+        run: nix develop --command make check-release-record
+
+      - name: Regenerate manifests and mirror types
+        run: nix develop --command make manifests generate fmt docs-reference third-party-notices
+
+      - name: Fail if regenerating produced a diff
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated files are out of date with their source (api/v1alpha1 types, +kubebuilder:rbac markers, go.mod or ui/package-lock.json)." >&2
+            exit 1
+          fi
 
       - name: UI CI (type-check, lint, unit tests, build)
         run: nix develop --command make ui-ci
@@ -152,7 +177,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
-        run: echo "$GITHUB_TOKEN" | nix develop --command crane auth login ghcr.io --username "$ACTOR" --password-stdin
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted script is meant for the inner bash -c, not this shell
+          nix develop --command bash -c 'echo "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$ACTOR" --password-stdin'
 
       # ghcr.io/maeshinshin/{ichor-controller,ichor-ui}:<tag>. The digests land in bin/digests.txt as <repo>@<digest>.
       - name: Push the controller and UI images
@@ -261,8 +288,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
         run: |
-          echo "$GITHUB_TOKEN" | nix develop --command crane auth login ghcr.io --username "$ACTOR" --password-stdin
-          echo "$GITHUB_TOKEN" | nix develop --command helm registry login ghcr.io --username "$ACTOR" --password-stdin
+          # shellcheck disable=SC2016 # the single-quoted scripts are meant for the inner bash -c, not this shell
+          nix develop --command bash -c 'echo "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$ACTOR" --password-stdin'
+          # shellcheck disable=SC2016 # as above
+          nix develop --command bash -c 'echo "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin'
 
       # ghcr.io/maeshinshin/ichor-installer:<tag>; its digest is appended to bin/digests.txt, which already holds the
       # controller's and the UI's.
@@ -276,7 +305,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           nix develop --command helm push "bin/chart/ichor-${TAG#v}.tgz" oci://ghcr.io/maeshinshin/charts 2>&1 | tee bin/helm-push.txt
-          echo "ghcr.io/maeshinshin/charts/ichor@$(sed -n 's/^Digest: //p' bin/helm-push.txt)" >> bin/digests.txt
+          digest=$(sed -n 's/^Digest: //p' bin/helm-push.txt)
+          # A push that printed no digest, or a garbled one, must not put a bad reference into digests.txt.
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "helm push printed no sha256 Digest: line: ${digest}" >&2; exit 1; }
+          echo "ghcr.io/maeshinshin/charts/ichor@${digest}" >> bin/digests.txt
 
       - name: Resolve the digests
         id: digests

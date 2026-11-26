@@ -7,6 +7,11 @@ on:
 
 permissions: {}
 
+# bash adds -o pipefail: without it a pipe hides the failure of every command but its last. The default shell is bash -e.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test-e2e:
     permissions:
@@ -34,41 +39,24 @@ jobs:
       - name: Cache npm downloads
         uses: ./.github/actions/npm-cache
 
-      # Pinned version and checksum (the runner is linux/amd64); Renovate does not bump this, change both together.
-      - name: Install kind
-        env:
-          KIND_VERSION: v0.33.0
-          KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
-        run: |
-          curl -fsSLo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
-          echo "${KIND_SHA256}  kind" | sha256sum --check
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-      - name: Verify kind installation
-        run: kind version
-
       - name: Create kind cluster
-        run: kind create cluster
+        run: nix develop --command kind create cluster
 
       - name: Prepare ichor
         run: |
           nix develop --command bash -c "go mod tidy -diff && go mod verify"
           nix develop --command make images-kind
 
-      - name: Install Helm
-        run: make install-helm
-
       - name: Lint Helm Chart
         run: |
-          helm lint ./dist/chart --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443
+          nix develop --command helm lint ./dist/chart --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443
 
       # No cert-manager install step: it is off by default, the
       # webhook serving certificate is generated in-process by cert-controller.
 
       - name: Deploy manager via Helm
         run: |
-          make helm-deploy HELM_EXTRA_ARGS="--set ichorUI.image.repository=${IMG_UI%:*} --set ichorUI.image.tag=${IMG_UI##*:} --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443"
+          nix develop --command make helm-deploy HELM_EXTRA_ARGS="--set ichorUI.image.repository=${IMG_UI%:*} --set ichorUI.image.tag=${IMG_UI##*:} --set ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443"
 
       # Runs only after a failed deploy. It prints what the namespace holds: the pods and jobs, each pod's
       # description and recent logs (a failing container's stderr shows only there), the events and the Helm
@@ -83,8 +71,8 @@ jobs:
             kubectl -n "$ns" logs "$p" --all-containers --tail=200 --prefix || true
           done
           kubectl -n "$ns" get events --sort-by=.lastTimestamp || true
-          make helm-status || true
+          nix develop --command make helm-status || true
 
       - name: Check Helm release status
         run: |
-          make helm-status
+          nix develop --command make helm-status

@@ -506,12 +506,8 @@ HELM_CHART_DIR ?= dist/chart
 HELM_EXTRA_ARGS ?=
 
 .PHONY: install-helm
-install-helm: ## Install the latest version of Helm.
-	@# command -v fails when helm is absent, which the install below handles
-	@command -v $(HELM) >/dev/null 2>&1 || { \
-		echo "Installing Helm..." && \
-		curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | bash; \
-	}
+install-helm: ## Check that Helm is on the PATH; the dev shell provides it.
+	@command -v $(HELM) >/dev/null 2>&1 || { echo "helm not found: run inside nix develop" >&2; exit 1; }
 
 .PHONY: helm-deploy
 helm-deploy: install-helm ## Deploy manager to the K8s cluster via Helm. Specify an image with IMG.

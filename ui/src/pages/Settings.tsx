@@ -33,6 +33,7 @@ import {
   REFRESH_LIFETIME_PRESETS,
   sourceOf,
   TOKEN_TTL_PRESETS,
+  updateCheckStart,
   usersProblem,
   type AutoPatchForm,
   type Form,
@@ -267,7 +268,7 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
 function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
   const info = useLoad(() => operationClient.getIchorInstallation({}), []).data
   const effective = res.effective?.updateCheck
-  const start = effective?.value === 'false' ? 'off' : 'on'
+  const start = updateCheckStart(res)
   const [choice, setChoice] = useState<string>(start)
   const { busy, error, save } = useSave(onSaved)
   const locked = lockedReason(res) !== null
@@ -314,7 +315,7 @@ function AutoPatchCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r
   const changes = autoPatchChanges(start, form)
   const problem = autoPatchProblem(form)
   const halted = res.autoPatchHaltedOperation
-  const mayClear = res.readOnly || res.canEditSettings
+  const mayClear = res.canEditSettings
   const componentLabel = (c: string) =>
     t(c === 'talos' ? 'settings.autoPatchComponent.talos' : c === 'cilium' ? 'settings.autoPatchComponent.cilium' : 'settings.autoPatchComponent.kubernetes')
 

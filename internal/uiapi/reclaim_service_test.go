@@ -287,7 +287,7 @@ func TestConfirmReclaimStoresTheInspectedUUIDWhenOnlyTheCaseDiffers(t *testing.T
 	before := &ichorv1alpha1.MachineReclaim{
 		Namespace: testNS, Name: "r",
 		Spec:   ichorv1alpha1.MachineReclaimSpec{Address: testReclaimAddr, CredentialSecretRef: "s"},
-		Status: ichorv1alpha1.MachineReclaimStatus{Inspection: &ichorv1alpha1.MachineReclaimInspection{UUID: "abc"}},
+		Status: ichorv1alpha1.MachineReclaimStatus{Inspection: &ichorv1alpha1.MachineReclaimInspection{UUID: "0a1b-c2"}},
 	}
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(before.DeepCopy()).Build()
 	s := &Server{Client: k8s, ControllerNamespace: testNS,
@@ -296,7 +296,7 @@ func TestConfirmReclaimStoresTheInspectedUUIDWhenOnlyTheCaseDiffers(t *testing.T
 		}}
 
 	if _, err := s.ConfirmReclaim(ContextWithIdentity(context.Background(), Identity{User: bgUser}), connect.NewRequest(&pb.ConfirmReclaimRequest{
-		Reclaim: objectRef(testNS, "r"), Uuid: "ABC",
+		Reclaim: objectRef(testNS, "r"), Uuid: "0A1B-C2",
 	})); err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestConfirmReclaimStoresTheInspectedUUIDWhenOnlyTheCaseDiffers(t *testing.T
 		t.Fatal(err)
 	}
 
-	if got.Spec.ConfirmUUID != "abc" {
-		t.Fatalf("ConfirmUUID %q, want the inspected %q", got.Spec.ConfirmUUID, "abc")
+	if got.Spec.ConfirmUUID != "0a1b-c2" {
+		t.Fatalf("ConfirmUUID %q, want the inspected %q", got.Spec.ConfirmUUID, "0a1b-c2")
 	}
 }

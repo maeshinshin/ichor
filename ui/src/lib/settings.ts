@@ -52,11 +52,12 @@ export type Fields = {
   refreshLifetime?: string
   driftPolicy?: string
   autoPatchEnabled?: boolean
+  updateCheckEnabled?: boolean
   autoPatchComponents?: string
   autoPatchWindow?: string
   autoPatchAcknowledgedHalt?: string
 }
-type Effective = { tokenTtl?: Value; refreshLifetime?: Value; driftPolicy?: Value; autoPatch?: Value; autoPatchComponents?: Value; autoPatchWindow?: Value }
+type Effective = { tokenTtl?: Value; refreshLifetime?: Value; driftPolicy?: Value; autoPatch?: Value; autoPatchComponents?: Value; autoPatchWindow?: Value; updateCheck?: Value }
 
 export type SettingsView = {
   readOnly: boolean
@@ -118,16 +119,22 @@ export const AUTO_PATCH_COMPONENTS = ['talos', 'cilium', 'kubernetes']
 
 export type AutoPatchForm = { enabled: boolean; components: string[]; window: string }
 
-// autoPatchFormOf is what the controls show: what the controller reports in force (status.effective), else what the
-// spec sets, else off with every component and no window.
+// autoPatchFormOf is what the controls show: what the spec sets, else what the controller reports in force
+// (status.effective), else off with every component and no window. The spec wins so a saved value shows at once.
 export function autoPatchFormOf(s: SettingsView): AutoPatchForm {
   const eff = s.effective
-  const comps = eff?.autoPatchComponents?.value ?? s.spec?.autoPatchComponents ?? ''
+  const comps = s.spec?.autoPatchComponents ?? eff?.autoPatchComponents?.value ?? ''
   return {
-    enabled: eff?.autoPatch ? eff.autoPatch.value === 'true' : (s.spec?.autoPatchEnabled ?? false),
+    enabled: s.spec?.autoPatchEnabled ?? (eff?.autoPatch ? eff.autoPatch.value === 'true' : false),
     components: comps === '' ? [...AUTO_PATCH_COMPONENTS] : AUTO_PATCH_COMPONENTS.filter((c) => comps.split(',').includes(c)),
-    window: eff?.autoPatchWindow?.value ?? s.spec?.autoPatchWindow ?? '',
+    window: s.spec?.autoPatchWindow ?? eff?.autoPatchWindow?.value ?? '',
   }
+}
+
+// updateCheckStart is the update-check switch's starting choice: the spec when it sets it, else what is in force.
+export function updateCheckStart(s: SettingsView): 'on' | 'off' {
+  const on = s.spec?.updateCheckEnabled ?? s.effective?.updateCheck?.value !== 'false'
+  return on ? 'on' : 'off'
 }
 
 // autoPatchSource says where the switch's value comes from.

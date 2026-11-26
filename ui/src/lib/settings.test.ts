@@ -6,6 +6,7 @@ import {
   autoPatchProblem,
   autoPatchSource,
   toggleComponent,
+  updateCheckStart,
   changesOf,
   type Form,
   durationOptions,
@@ -142,4 +143,23 @@ test('resettable lists only the keys the spec sets', () => {
     'autoPatch.enabled',
   ])
   assert.deepEqual(resettable({}, ['users.tokenTTL']), [])
+})
+
+test('the automatic patch form shows a set spec over what was in force before the save', () => {
+  const stale = { autoPatch: { value: 'false', source: 'deployment' }, autoPatchComponents: { value: 'talos', source: 'deployment' }, autoPatchWindow: { value: '01:00-02:00', source: 'deployment' } }
+  const form = autoPatchFormOf({
+    readOnly: false,
+    canEditSettings: true,
+    spec: { autoPatchEnabled: true, autoPatchComponents: 'cilium', autoPatchWindow: '02:00-05:00' },
+    effective: stale,
+  })
+  assert.deepEqual(form, { enabled: true, components: ['cilium'], window: '02:00-05:00' })
+})
+
+test('the update check starts from a set spec over what was in force before the save', () => {
+  const view = { readOnly: false, canEditSettings: true }
+  assert.equal(updateCheckStart({ ...view, spec: { updateCheckEnabled: true }, effective: { updateCheck: { value: 'false', source: 'deployment' } } }), 'on')
+  assert.equal(updateCheckStart({ ...view, spec: { updateCheckEnabled: false }, effective: { updateCheck: { value: 'true', source: 'deployment' } } }), 'off')
+  assert.equal(updateCheckStart({ ...view, effective: { updateCheck: { value: 'false', source: 'deployment' } } }), 'off')
+  assert.equal(updateCheckStart(view), 'on')
 })

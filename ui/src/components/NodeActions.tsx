@@ -120,7 +120,7 @@ export function NodeActions({
     const id = toast.loading(t('actions.working', { what: t(`actions.what.${req.kind}`) }), { duration: Infinity })
     try {
       if (req.kind === 'etcd-snapshot') {
-        await saveEtcdSnapshot(req.machine)
+        await saveEtcdSnapshot(req.machine, (reason) => toast.error(t('actions.failed'), { id, description: reason, duration: 15000 }))
         return toast.success(t('actions.saving'), { id, duration: 8000 })
       }
       const file = await download(req, controller.signal)

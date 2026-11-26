@@ -6,6 +6,7 @@ import { diagnosticsClient, operationClient, userClient } from '@/lib/connect'
 import { downloadName } from '@/lib/users'
 import { collect, etcdSnapshotForm, etcdSnapshotPath, fileNameOf } from '@/lib/diagnostics'
 import { storedToken } from '@/lib/oidc'
+import { refusalWithin } from '@/lib/snapshot'
 import type { CapturePacketsRequest } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 
 type Ref = { namespace: string; name: string }
@@ -72,7 +73,8 @@ export async function downloadKubeconfig(): Promise<string> {
 // saveEtcdSnapshot hands the snapshot to the browser as a form post to a hidden frame, so the browser writes
 // the response to disk as it arrives and neither the page nor ichor-ui holds the file, whatever its size.
 // The frame stays empty while a download runs; if the server refuses, it shows the reason, which is thrown.
-export async function saveEtcdSnapshot(machine: Ref): Promise<void> {
+// `late` gets a refusal that arrives after the wait, which the server can send after 20 s without credentials.
+export async function saveEtcdSnapshot(machine: Ref, late: (reason: string) => void): Promise<void> {
   // A cheap call first: it refreshes an expired ID token, which a form post cannot do.
   await userClient.whoAmI({})
   const frame = document.createElement('iframe')
@@ -95,7 +97,10 @@ export async function saveEtcdSnapshot(machine: Ref): Promise<void> {
   })
   document.body.append(frame, form)
   form.submit()
-  const reason = await Promise.race([refused, new Promise<null>((r) => setTimeout(() => r(null), 15_000))])
+  const reason = await refusalWithin(refused, 15_000, (r) => {
+    frame.remove()
+    late(r)
+  })
   form.remove()
   // The frame stays: removing it would cancel a download still running.
   if (reason) {

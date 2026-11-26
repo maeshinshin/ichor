@@ -43,3 +43,33 @@ func TestTalosStorageRefusesAnInvalidSelector(t *testing.T) {
 		t.Errorf("a valid selector is refused: %v", err)
 	}
 }
+
+// A TalosStorage being deleted is still read by the controller: an invalid selector set while it is deleting
+// is refused, a finalizer-only change is admitted.
+func TestTalosStorageValidatesASpecChangeWhileDeleting(t *testing.T) {
+	t.Parallel()
+
+	v := &TalosStorageCustomValidator{}
+	now := metav1.Now()
+
+	deleting := func(sel metav1.LabelSelector) *ichorv1alpha1.TalosStorage {
+		return &ichorv1alpha1.TalosStorage{
+			ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &now, Finalizers: []string{"example.com/foreign"}},
+			Spec:       ichorv1alpha1.TalosStorageSpec{Nodes: sel},
+		}
+	}
+
+	for name, sel := range badSelectors() {
+		if _, err := v.ValidateUpdate(context.Background(), deleting(metav1.LabelSelector{}), deleting(*sel)); err == nil {
+			t.Errorf("%s: a deleting TalosStorage was admitted with an invalid spec.nodes", name)
+		}
+	}
+
+	same := deleting(*badSelectors()["operator Equals"])
+	noFinalizer := same.DeepCopy()
+	noFinalizer.Finalizers = nil
+
+	if _, err := v.ValidateUpdate(context.Background(), same, noFinalizer); err != nil {
+		t.Errorf("a finalizer-only change while deleting was refused: %v", err)
+	}
+}

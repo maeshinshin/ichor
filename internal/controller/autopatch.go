@@ -24,6 +24,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -354,6 +355,11 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 	op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = from
 
 	if err := p.Actor.Create(ctx, op.DeepCopy(), client.DryRunAll); err != nil {
+		if apierrors.IsForbidden(err) {
+			p.Recorder.Eventf(inst, corev1.EventTypeWarning, "AutoPatchForbidden",
+				"Automatic patching cannot start: the ichor-auto-patch identity may not act (the chart creates it only with webhook.enabled=true): %v", err)
+		}
+
 		return fmt.Errorf("the %s operation could not be created: %w", op.Spec.Kind, err)
 	}
 

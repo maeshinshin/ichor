@@ -93,8 +93,8 @@ func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichor
 
 // ValidateUpdate implements admission.Validator.
 func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
-	if !newObj.DeletionTimestamp.IsZero() {
-		return nil, nil // a finalizer removal must not be refused
+	if !newObj.DeletionTimestamp.IsZero() && apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return nil, nil // a finalizer removal must not be refused; a spec change while deleting is validated
 	}
 
 	if err := checkPatchSelector(newObj); err != nil {

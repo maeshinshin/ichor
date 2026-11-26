@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,9 +51,9 @@ func (v *TalosStorageCustomValidator) ValidateCreate(_ context.Context, obj *ich
 }
 
 // ValidateUpdate implements admission.Validator.
-func (v *TalosStorageCustomValidator) ValidateUpdate(_ context.Context, _, newObj *ichorv1alpha1.TalosStorage) (admission.Warnings, error) {
-	if !newObj.DeletionTimestamp.IsZero() {
-		return nil, nil // a finalizer removal must not be refused
+func (v *TalosStorageCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *ichorv1alpha1.TalosStorage) (admission.Warnings, error) {
+	if !newObj.DeletionTimestamp.IsZero() && apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return nil, nil // a finalizer removal must not be refused; a spec change while deleting is validated
 	}
 
 	return nil, checkLabelSelector("spec.nodes", &newObj.Spec.Nodes)

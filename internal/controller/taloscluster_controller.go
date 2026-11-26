@@ -24,6 +24,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -102,7 +103,13 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	if err := sweepKubeProxyConsent(ctx, r.Client, r.Actor, &cluster); err != nil {
+	if err := sweepKubeProxyConsent(ctx, r.Client, r.Actor, &cluster); apierrors.IsForbidden(err) {
+		// The ichor-consent-sweep identity does not exist (webhook.enabled=false): say so and reconcile on.
+		if r.Discovery != nil && r.Discovery.Recorder != nil {
+			r.Discovery.Recorder.Eventf(&cluster, corev1.EventTypeWarning, "ConsentSweepForbidden",
+				"The kube-proxy switch consent annotation was not removed: the ichor-consent-sweep identity may not write it (the chart creates it only with webhook.enabled=true): %v", err)
+		}
+	} else if err != nil {
 		return ctrl.Result{}, err
 	}
 

@@ -152,7 +152,13 @@ func (r *TalosStorageReconciler) ensureExtensions(
 	case id:
 	case upgrade.DefaultSchematic:
 		patch := fmt.Sprintf(`{"spec":{"schematic":{"id":%q}}}`, id)
-		if err := r.Actor.Patch(ctx, &cluster, client.RawPatch(types.MergePatchType, []byte(patch))); err != nil {
+		if err := r.Actor.Patch(ctx, &cluster, client.RawPatch(types.MergePatchType, []byte(patch))); apierrors.IsForbidden(err) {
+			// The ichor-storage-extensions identity does not exist (webhook.enabled=false): a condition, not a retry loop.
+			return reasonStorageSchematicNotMergeable, fmt.Sprintf(
+				"%s: %s. Ichor may not write spec.schematic.id (the chart creates the ichor-storage-extensions identity only with webhook.enabled=true): %v. "+
+					"Set spec.schematic.id to a schematic that includes %s and run ichor upgrade talos",
+				ts.Spec.DiskPreset, problems, err, strings.Join(want, ", ")), nil
+		} else if err != nil {
 			return "", "", fmt.Errorf("writing spec.schematic.id: %w", err)
 		}
 	default:

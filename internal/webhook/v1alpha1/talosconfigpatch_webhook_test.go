@@ -10,6 +10,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -307,5 +308,35 @@ func TestTalosConfigPatchRefusesAnInvalidSelector(t *testing.T) {
 		if _, err := v.ValidateUpdate(ctx, configPatch("sel", nil), p); err == nil {
 			t.Errorf("%s: update admitted", name)
 		}
+	}
+}
+
+// A patch being deleted (a foreign finalizer holds it) is still rendered, so a spec change on it is validated;
+// only an update that leaves the spec alone, as a finalizer removal does, is admitted without it.
+func TestTalosConfigPatchValidatesASpecChangeWhileDeleting(t *testing.T) {
+	ctx := context.Background()
+	v := dryRenderValidator(t)
+	now := metav1.Now()
+
+	deleting := func(p *ichorv1alpha1.TalosConfigPatch) *ichorv1alpha1.TalosConfigPatch {
+		p.DeletionTimestamp, p.Finalizers = &now, []string{"example.com/foreign"}
+
+		return p
+	}
+
+	added := configPatch("old", nil)
+	added.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
+		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
+	}}
+
+	if _, err := v.ValidateUpdate(ctx, deleting(configPatch("old", nil)), deleting(added)); err == nil {
+		t.Error("a deleting patch was admitted with a newly added spec.documents")
+	}
+
+	finalizerOnly := deleting(configPatch("old", nil))
+	finalizerOnly.Finalizers = nil
+
+	if _, err := v.ValidateUpdate(ctx, deleting(configPatch("old", nil)), finalizerOnly); err != nil {
+		t.Errorf("a finalizer-only change while deleting was refused: %v", err)
 	}
 }

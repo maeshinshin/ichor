@@ -148,6 +148,26 @@ func TestAPipeRunsUnderPipefail(t *testing.T) {
 	}
 }
 
+// earlyExit is a pipe into a reader that can quit before the writer is done: the writer then dies of SIGPIPE and
+// pipefail turns that into a failure of the whole pipeline.
+var earlyExit = regexp.MustCompile(`\|\s*(head\b|grep\b[^|\n]*\s(-[a-zA-Z]*[qm]|--quiet|--max-count))`)
+
+// shortcut: any step that names pipefail anywhere counts as running under it, even if only an inner shell does.
+func TestNoEarlyExitReaderUnderPipefail(t *testing.T) {
+	for _, p := range paths(t) {
+		for _, s := range runSteps(t, p) {
+			if s.shell != "bash" && !strings.Contains(s.shell, "pipefail") && !strings.Contains(s.run, "pipefail") {
+				continue
+			}
+
+			if l := slices.IndexFunc(code(s.run), earlyExit.MatchString); l >= 0 {
+				t.Errorf("%s job %q step %q pipes into a reader that exits early (%q): under pipefail the writer's SIGPIPE fails the step; capture the output (`test -n \"$(...)\"`) or use a here-string",
+					s.file, s.job, s.name, code(s.run)[l])
+			}
+		}
+	}
+}
+
 var innerShell = regexp.MustCompile(`\b(?:ba)?sh\b[^|\n]*? -c\b`)
 
 // A `bash -c` / `sh -c` starts a new shell that does not inherit pipefail from the step's shell.

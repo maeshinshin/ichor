@@ -57,7 +57,7 @@ jobs:
             want=$(sed -n "s/^go //p" go.mod)
             # local: auto would download go.mods version and the check could never fail
             have=$(GOTOOLCHAIN=local go env GOVERSION | sed "s/^go//")
-            if ! echo "$have" | grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+$"; then
+            if ! grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+$" <<<"$have"; then
               echo "devShell Go \"$have\" is not a plain release (pre-release/rc?), cannot compare to the go.mod floor of $want" >&2
               exit 1
             fi

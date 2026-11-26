@@ -32,7 +32,8 @@ ichor migrate patches [flags]
 ### Options
 
 ```text
-  -h, --help   help for patches
+  -h, --help                     help for patches
+      --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
 ```
 
 ### Options inherited from parent commands

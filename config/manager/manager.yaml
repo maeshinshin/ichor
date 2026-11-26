@@ -3,6 +3,8 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
+    # Refused for DELETE by the ichor-protected-namespace policy until ichor.maesh.dev/allow-delete is set.
+    ichor.maesh.dev/protected: "true"
     app.kubernetes.io/name: ichor
     app.kubernetes.io/managed-by: kustomize
     # Pod Security Admission: every pod in this namespace already meets "restricted"

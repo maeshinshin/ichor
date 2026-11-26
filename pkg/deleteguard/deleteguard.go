@@ -41,9 +41,10 @@ const AllowDeleteAnnotation = "ichor.maesh.dev/allow-delete"
 // AllowDeleteValue is the only AllowDeleteAnnotation value that permits deletion.
 const AllowDeleteValue = "true"
 
-// ProtectedLabel marks a Secret whose loss costs a cluster its PKI or its access (the secrets bundle). The
-// ichor-protected-secrets ValidatingAdmissionPolicy refuses its DELETE unless the Secret also carries
-// AllowDeleteAnnotation=AllowDeleteValue. Every writer of such a Secret sets it to ProtectedValue.
+// ProtectedLabel marks a Secret whose loss costs a cluster its PKI or its access (the secrets bundle), and
+// the namespace that holds them. The ichor-protected-secrets and ichor-protected-namespace
+// ValidatingAdmissionPolicies refuse its DELETE unless the object also carries
+// AllowDeleteAnnotation=AllowDeleteValue. Every writer of such an object sets it to ProtectedValue.
 const ProtectedLabel = "ichor.maesh.dev/protected"
 
 // ProtectedValue is the value writers give ProtectedLabel; the policy matches the label's presence.

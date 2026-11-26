@@ -21,6 +21,15 @@ rules:
   - patch
 - apiGroups:
   - ""
+  resourceNames:
+  - ichor-system
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - ""
   resources:
   - nodes
   verbs:

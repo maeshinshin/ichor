@@ -1,0 +1,39 @@
+{{- if .Values.admission.enabled }}
+# Mirrors config/admission/protected-namespace-policy.yaml: refuses deleting the Namespace labelled
+# ichor.maesh.dev/protected unless it carries ichor.maesh.dev/allow-delete=true.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ichor-protected-namespace
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["namespaces"]
+  # Only a labelled Namespace is looked at; every other Namespace in the cluster is admitted without evaluating a validation.
+  matchConditions:
+    - name: protected
+      expression: >-
+        has(oldObject.metadata.labels) && "ichor.maesh.dev/protected" in oldObject.metadata.labels
+  validations:
+    - expression: >-
+        has(oldObject.metadata.annotations) && "ichor.maesh.dev/allow-delete" in oldObject.metadata.annotations &&
+        oldObject.metadata.annotations["ichor.maesh.dev/allow-delete"] == "true"
+      message: >-
+        this namespace holds Ichor and its managed clusters' secrets, and deleting it destroys them and leaves the
+        clusters unmanaged; uninstall on purpose: remove the TalosClusters or export the bundle
+        (ichor export bundle), then set the annotation ichor.maesh.dev/allow-delete=true on the namespace and
+        delete it again
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ichor-protected-namespace-binding
+spec:
+  policyName: ichor-protected-namespace
+  validationActions: ["Deny"]
+{{- end }}

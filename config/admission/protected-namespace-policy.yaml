@@ -1,0 +1,45 @@
+# The namespace Ichor runs in carries the label ichor.maesh.dev/protected, set by the controller at start-up
+# (and by the installer's manifest). Deleting it makes the namespace controller delete the controller, its Service
+# and the webhooks' backend in parallel with the custom resources, so every guard fails closed and the
+# namespace stays Terminating for good. This policy refuses that DELETE unless the Namespace carries the annotation
+# ichor.maesh.dev/allow-delete=true. A ValidatingAdmissionPolicy is enforced by the apiserver itself, so it holds
+# while the controller is down.
+#
+# Hand-maintained, mirrored byte-for-byte below the metadata into
+# dist/chart/templates/admission/protected-namespace-policy.yaml. Fixed names: cluster-scoped, one
+# installation per cluster.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ichor-protected-namespace
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["namespaces"]
+  # Only a labelled Namespace is looked at; every other Namespace in the cluster is admitted without evaluating a validation.
+  matchConditions:
+    - name: protected
+      expression: >-
+        has(oldObject.metadata.labels) && "ichor.maesh.dev/protected" in oldObject.metadata.labels
+  validations:
+    - expression: >-
+        has(oldObject.metadata.annotations) && "ichor.maesh.dev/allow-delete" in oldObject.metadata.annotations &&
+        oldObject.metadata.annotations["ichor.maesh.dev/allow-delete"] == "true"
+      message: >-
+        this namespace holds Ichor and its managed clusters' secrets, and deleting it destroys them and leaves the
+        clusters unmanaged; uninstall on purpose: remove the TalosClusters or export the bundle
+        (ichor export bundle), then set the annotation ichor.maesh.dev/allow-delete=true on the namespace and
+        delete it again
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ichor-protected-namespace-binding
+spec:
+  policyName: ichor-protected-namespace
+  validationActions: ["Deny"]

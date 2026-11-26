@@ -98,3 +98,28 @@ jobs:
 
             Merging does not move any cluster: a cluster's Cilium only moves to the chart embedded in the running Ichor, so this reaches users with the next Ichor release (CONTRIBUTING.md, "Cilium patch bumps").
           delete-branch: true
+
+  # A red scheduled run is seen by nobody; keep one open issue that links the latest failed run.
+  report:
+    name: Report a failed run
+    needs: bump
+    if: failure()
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Cilium patch bot failed"
+          body="The scheduled Cilium patch run failed: $RUN_URL"
+          n=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

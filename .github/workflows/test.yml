@@ -80,6 +80,10 @@ jobs:
       - name: Helm release record is under the Secret limit
         run: nix develop --command make check-release-record
 
+      # The Cilium patch bot's rewrite half on a made-up patch, so a pull request cannot break the daily bot unseen.
+      - name: Cilium patch bump still passes its tests
+        run: nix develop --command make check-cilium-bump
+
       # Known-vulnerable Go and npm dependencies fail the build.
       - name: govulncheck
         run: nix develop --command govulncheck ./...

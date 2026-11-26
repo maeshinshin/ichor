@@ -281,6 +281,7 @@ var nixExempt = map[string]string{
 	".github/workflows/release.yml: Generate the SBOMs":                                                "a loop whose body is nix develop --command syft",
 	".github/workflows/release.yml: Verify the signatures as the controller does":                      "bin/verifyimage is built by this workflow",
 	".github/workflows/test-chart.yml: Show why the deploy failed":                                     "failure diagnostics; every line is best effort",
+	".github/workflows/cilium-patch.yml: Open or update the issue":                                     "a job without a checkout; it only runs the runner's gh",
 	".github/actions/nix/action.yml: Free disk space":                                                  "runs before Nix exists",
 	".github/actions/nix/action.yml: Keep the devShell and the flake inputs out of garbage collection": "builds the dev shell profile itself",
 }

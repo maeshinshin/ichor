@@ -6,7 +6,7 @@ import { diagnosticsClient, operationClient, userClient } from '@/lib/connect'
 import { downloadName } from '@/lib/users'
 import { collect, etcdSnapshotForm, etcdSnapshotPath, fileNameOf } from '@/lib/diagnostics'
 import { storedToken } from '@/lib/oidc'
-import { refusalWithin } from '@/lib/snapshot'
+import { refusalOf, refusalWithin } from '@/lib/snapshot'
 import type { CapturePacketsRequest } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 
 type Ref = { namespace: string; name: string }
@@ -92,8 +92,14 @@ export async function saveEtcdSnapshot(machine: Ref, late: (reason: string) => v
     form.append(input)
   }
   const refused = new Promise<string>((resolve) => {
-    // A download fires no load event; a refusal is a page, and its text is the reason.
-    frame.addEventListener('load', () => resolve(frame.contentDocument?.body?.innerText.trim() ?? ''))
+    // A download fires no load event; a refusal is a page, and its text is the reason. The frame's own first
+    // load (about:blank, on append) says nothing, so the loads are read by refusalOf.
+    const loads: { href: string; text: string }[] = []
+    frame.addEventListener('load', () => {
+      loads.push({ href: frame.contentWindow?.location.href ?? '', text: frame.contentDocument?.body?.innerText.trim() ?? '' })
+      const reason = refusalOf(loads)
+      if (reason !== null) resolve(reason)
+    })
   })
   document.body.append(frame, form)
   form.submit()

@@ -9,3 +9,7 @@ export async function refusalWithin(refused: Promise<string>, ms: number, late: 
   if (reason === null) void refused.then((r) => r && late(r))
   return reason ?? ''
 }
+
+// refusalOf reads the frame's load events: appending an iframe fires a load for its initial about:blank document, which
+// is not an answer; the first load of any other page is the server's refusal, and its text the reason. null: no answer yet.
+export const refusalOf = (loads: { href: string; text: string }[]): string | null => loads.find((l) => l.href !== 'about:blank')?.text ?? null

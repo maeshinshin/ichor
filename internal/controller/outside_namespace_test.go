@@ -40,8 +40,13 @@ var _ = Describe("OutsideNamespaceReconciler", func() {
 
 	It("flags a cluster outside the namespace and leaves its reconciling alone", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")
-		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{testAddr}}
+		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{outsideNSAddr}}
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		// A machine already at testAddr, as other specs leave one: discovery must not depend on it.
+		neighbour := newTestMachine(cluster.Name, false)
+		neighbour.Spec.Endpoint = testAddr
+		Expect(k8sClient.Update(ctx, neighbour)).To(Succeed())
 
 		got := reconcileOutside("ichor-system-elsewhere", cluster)
 
@@ -52,7 +57,7 @@ var _ = Describe("OutsideNamespaceReconciler", func() {
 
 		// The ordinary reconcile still runs on it.
 		factory := func(context.Context, string) (MaintenanceClient, error) {
-			return &fakeMaintenanceClient{identity: HardwareIdentity{UUID: uuidOutsideNS, Serial: "S1", MACAddresses: []string{testMAC}}}, nil
+			return &fakeMaintenanceClient{identity: HardwareIdentity{UUID: uuidOutsideNS, Serial: "S-outside", MACAddresses: []string{"de:ad:be:ef:00:91"}}}, nil
 		}
 		_, err := reconcileCluster(newDiscoveryReconciler(factory), cluster)
 		Expect(err).NotTo(HaveOccurred())
@@ -68,3 +73,7 @@ var _ = Describe("OutsideNamespaceReconciler", func() {
 })
 
 const uuidOutsideNS = "91919191-9191-9191-9191-919191919191"
+
+// outsideNSAddr is an address no other spec registers a machine at: discovery skips an address a TalosMachine of the
+// namespace already has (knownHosts), so testAddr, shared with other specs, made this one depend on spec order.
+const outsideNSAddr = "198.51.100.91"

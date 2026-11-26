@@ -397,3 +397,8 @@ func init() {
 	rotateCACmd.Flags().BoolVar(&clusterRotateCAAll, "all", false, "replace all four CAs")
 	markWrites(rotateCACmd)
 }
+
+// rotateCAOperation is the operation watchCARotation follows: the one in apiOpts.Namespace, which the hand-off uses too.
+func rotateCAOperation(ref *pb.ObjectRef) types.NamespacedName {
+	return types.NamespacedName{Namespace: ref.GetNamespace(), Name: ref.GetName()}
+}

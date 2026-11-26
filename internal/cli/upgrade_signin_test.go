@@ -460,3 +460,43 @@ func TestUpgradeSignIn_AHealthyInstallWithAnotherAdminIsLeftAlone(t *testing.T) 
 		t.Errorf("the issuer was turned back on: %v %+v", err, c.Spec.Authentication)
 	}
 }
+
+// With --ichor-namespace other, the sign-in step reads ichor-ui and the clusters in other, and writes the first
+// administrator, its credentials Secret and the authenticator there, and nothing in the default namespace.
+func TestUpgradeSignIn_UsesTheEffectiveControllerNamespace(t *testing.T) {
+	const other = "other"
+
+	old := apiOpts.IchorNamespace
+	apiOpts.IchorNamespace = other
+
+	t.Cleanup(func() { apiOpts.IchorNamespace = old })
+
+	cluster := newTestCluster()
+	cluster.Namespace, cluster.Spec.VersionContract = other, testVersionContract
+
+	objs := slices.Concat(uiObjects(), []client.Object{cluster})
+	for _, o := range objs {
+		o.SetNamespace(other)
+	}
+
+	k := reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build())
+
+	if _, _, err := ensureSignIn(context.Background(), k, strings.NewReader(""), io.Discard, initOptions{}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	var u ichorv1alpha1.IchorUser
+	if err := k.Get(context.Background(), types.NamespacedName{Namespace: other, Name: defaultAdminUser}, &u); err != nil {
+		t.Fatalf("no administrator in %s: %v", other, err)
+	}
+
+	var c ichorv1alpha1.TalosCluster
+	if err := k.Get(context.Background(), client.ObjectKeyFromObject(cluster), &c); err != nil || c.Spec.Authentication == nil {
+		t.Fatalf("the cluster in %s has no authenticator: %v", other, err)
+	}
+
+	var users ichorv1alpha1.IchorUserList
+	if err := k.List(context.Background(), &users, client.InNamespace(ichorControllerNamespace)); err != nil || len(users.Items) != 0 {
+		t.Fatalf("users in %s: %v %v", ichorControllerNamespace, users.Items, err)
+	}
+}

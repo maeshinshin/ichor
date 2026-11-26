@@ -633,6 +633,36 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(kubeProxyExists()).To(BeTrue())
 	})
 
+	It("replaced: a cluster whose detected CNI is flannel gets no Job and a ForeignCNI refusal", func() {
+		newCilium("true", true)
+
+		cluster := cniSwitchCluster(modeReplaced)
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: cniFlannel}
+
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{}, &fakeKubeProxyAdmin{})
+		op := &ichorv1alpha1.TalosOperation{}
+
+		_, err := adv.requireCilium(ctx, cluster, op, cni.KubeProxyReplaced)
+		var foreign *ForeignCNIError
+		Expect(err).To(MatchError(ContainSubstring("unmanaged")))
+		Expect(errors.As(err, &foreign)).To(BeTrue(), "got %v", err)
+		Expect(pauseReason(err)).To(Equal(reasonCNIForeign))
+		Expect(cniJobExists(cluster)).To(BeFalse())
+	})
+
+	It("replaced: a cluster whose detected CNI is cilium starts its Job", func() {
+		newCilium("true", true)
+
+		cluster := cniSwitchCluster(modeReplaced)
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: ciliumName}
+
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{}, &fakeKubeProxyAdmin{})
+
+		_, err := adv.requireCilium(ctx, cluster, &ichorv1alpha1.TalosOperation{}, cni.KubeProxyReplaced)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cniJobExists(cluster)).To(BeTrue())
+	})
+
 	It("enabled: a Job for the same values finished before the operation (init's, or an earlier switch) is replaced, not taken as done", func() {
 		newCilium("true", true)
 

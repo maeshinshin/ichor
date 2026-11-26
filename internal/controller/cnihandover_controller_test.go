@@ -287,6 +287,25 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(cniJobCount(cluster)).To(BeZero())
 	})
 
+	It("refuses to start a Job on a cluster whose detected CNI is flannel, and says so", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+
+		got := getCluster(cluster)
+		got.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: cniFlannel}
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+		result := reconcileHandoverOK(r, cluster)
+		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
+
+		cond := conditionOf(cluster, render.ConditionCNIHandover)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonCNIForeign))
+		Expect(cond.Message).To(ContainSubstring("flannel"))
+		Expect(cond.Message).To(ContainSubstring("unmanaged"))
+		Expect(cniJobCount(cluster)).To(BeZero())
+	})
+
 	It("completes the hand-over after the Job succeeded, the release is deployed and the DaemonSet is ready", func() {
 		cluster := newTestCiliumCluster()
 		setReady := ciliumDaemonSet()

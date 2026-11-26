@@ -209,6 +209,26 @@ func (e *CNIInvalidValuesError) Error() string {
 
 func (e *CNIInvalidValuesError) Unwrap() error { return e.Err }
 
+// ForeignCNIError is what AdvanceCNIHelmJob returns, without starting a Job, for a cluster whose
+// status.cni.detected names a CNI other than Cilium: installing Cilium next to it, taking the release
+// over, would break the cluster's networking.
+type ForeignCNIError struct{ Detected string }
+
+func (e *ForeignCNIError) Error() string {
+	return fmt.Sprintf("the cluster runs the %q CNI, not Cilium; no Cilium Helm Job was started. "+
+		"Use spec.cni.preset unmanaged to leave the CNI to the cluster", e.Detected)
+}
+
+// foreignCNI is the detected CNI when it is a running one other than Cilium; "none" and unset are not.
+func foreignCNI(cluster *ichorv1alpha1.TalosCluster) string {
+	switch d := detectedCNI(cluster); d {
+	case cniFlannel, cniCalico, cniOther:
+		return d
+	}
+
+	return ""
+}
+
 // cniValuesCheck is the check a caller of AdvanceCNIHelmJob passes: cilium.ValidateValues on the cluster's
 // values with the same facts the UI reads (cnifacts), the machine configuration rendered from the real
 // secrets bundle in ns.
@@ -249,6 +269,7 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // that ended before since (the install's, or an earlier switch's, within its 24 h TTL) is not its
 // run. It is deleted and the next call starts a new one. A zero since takes any Job as it is.
 //
+// A cluster whose detected CNI is not Cilium is refused with a *ForeignCNIError before anything else, and no Job starts.
 // check (nil: none) runs before a Job is created, never for one that exists; its error is returned as a
 // *CNIInvalidValuesError and no Job is started. The installer image is then pinned to
 // a verified digest by images (cniJobImage); a refusal is an *installerImageError and no Job is started.
@@ -275,6 +296,10 @@ func AdvanceCNIHelmJob(
 
 	switch {
 	case apierrors.IsNotFound(err):
+		if d := foreignCNI(cluster); d != "" {
+			return false, &ForeignCNIError{Detected: d}
+		}
+
 		if check != nil {
 			if err := check(ctx); err != nil {
 				return false, &CNIInvalidValuesError{Err: err}

@@ -91,6 +91,7 @@ const (
 	reasonCNIWaitingForLock        = "WaitingForLock"
 	reasonCNIWaitingForRelease     = "WaitingForRelease"
 	reasonCNIInvalidValues         = "InvalidValues"
+	reasonCNIForeign               = "ForeignCNI"
 	reasonCNIApplied               = "Applied"
 	reasonCNITunnelMismatch        = "TunnelMismatch"
 	tunnelMode                     = "tunnel"
@@ -337,6 +338,8 @@ func (r *CNIHandoverReconciler) runJob(
 
 	var invalid *CNIInvalidValuesError
 
+	var foreign *ForeignCNIError
+
 	var image *installerImageError
 
 	switch {
@@ -348,6 +351,12 @@ func (r *CNIHandoverReconciler) runJob(
 		}
 
 		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, image.reason, image.Error())
+	case errors.As(err, &foreign):
+		if err := lock.Release(ctx, cniHelmLockIdentity); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIForeign, foreign.Error())
 	case errors.As(err, &invalid):
 		// Nothing was started: let go of the lock and wait for an edit (of the values or of what they are
 		// checked against) to make them valid. The spec is not touched.

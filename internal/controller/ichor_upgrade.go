@@ -112,6 +112,10 @@ func pauseReason(err error) string {
 		return reasonCNIInvalidValues
 	}
 
+	if _, ok := errors.AsType[*ForeignCNIError](err); ok {
+		return reasonCNIForeign
+	}
+
 	if _, ok := errors.AsType[*CNIHelmJobFailedError](err); ok {
 		return reasonCNIJobFailed
 	}

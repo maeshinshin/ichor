@@ -928,7 +928,7 @@ func (r *TalosOperationReconciler) releaseLock(ctx context.Context, op *ichorv1a
 func isStepFailure(reason string) bool {
 	switch reason {
 	case reasonOperationStepFailed, reasonInstallerImageUnresolved, reasonInstallerImageUnverified,
-		reasonCNIInvalidValues, reasonCNIJobFailed:
+		reasonCNIInvalidValues, reasonCNIForeign, reasonCNIJobFailed:
 		return true
 	}
 

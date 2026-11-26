@@ -403,3 +403,26 @@ func TestInstallerSourceWithoutAnIchorInstallation(t *testing.T) {
 		t.Fatalf("with an IchorInstallation = %+v, %v; want its own spec", got, err)
 	}
 }
+
+func TestAdvanceCNIHelmJobRefusesAForeignCNI(t *testing.T) {
+	for _, tc := range []struct {
+		detected string
+		refused  bool
+	}{{cniFlannel, true}, {cniCalico, true}, {cniOther, true}, {ciliumName, false}, {"none", false}, {"", false}} {
+		c := cniFakeClient(t)
+		cluster := cniTestCluster("")
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: tc.detected}
+
+		_, err := advanceTestJob(c, cluster)
+
+		var foreign *ForeignCNIError
+		if got := errors.As(err, &foreign); got != tc.refused || (!tc.refused && err != nil) {
+			t.Errorf("detected %q: err = %v, refused = %t, want refused = %t", tc.detected, err, got, tc.refused)
+		}
+
+		var jobs batchv1.JobList
+		if err := c.List(context.Background(), &jobs); err != nil || (len(jobs.Items) == 0) != tc.refused {
+			t.Errorf("detected %q: %d Jobs (%v), want none only when refused", tc.detected, len(jobs.Items), err)
+		}
+	}
+}

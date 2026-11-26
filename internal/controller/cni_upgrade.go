@@ -147,7 +147,7 @@ func (r *CNIHandoverReconciler) dropPatchImages(ctx context.Context, cluster *ic
 	orig := cluster.DeepCopy()
 	cluster.Status.CNI.ImageOverride = nil
 
-	return r.Status().Patch(ctx, cluster, client.MergeFrom(orig))
+	return r.Status().Patch(ctx, cluster, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 // machineless reports whether op's executor touches no machine (an Ichor self-upgrade, a Cilium

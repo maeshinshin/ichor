@@ -109,7 +109,7 @@ func (r *CNIDetectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return res, nil
 	}
 
-	return res, r.Status().Patch(ctx, &cluster, client.MergeFrom(orig))
+	return res, r.Status().Patch(ctx, &cluster, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 // DetectCNI names the CNI the kube-system DaemonSets say is running, and the image tag of its

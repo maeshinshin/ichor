@@ -262,7 +262,7 @@ func (p *AutoPatcher) patchStatus(ctx context.Context, inst *ichorv1alpha1.Ichor
 
 	mutate(&inst.Status)
 
-	return p.Client.Status().Patch(ctx, inst, client.MergeFrom(orig))
+	return p.Client.Status().Patch(ctx, inst, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 // passCluster decides for one cluster and starts what the decision says.

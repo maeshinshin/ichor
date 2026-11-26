@@ -234,8 +234,13 @@ func TestUnverifiedInstallerImageConditionIsSticky(t *testing.T) {
 	run := func(verification string) {
 		t.Helper()
 
+		var cur ichorv1alpha1.IchorInstallation
+		if err := c.Get(t.Context(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &cur); err != nil {
+			t.Fatal(err)
+		}
+
 		img := pinnedInstallerImage{Digest: testInstallerDigest, Verification: verification}
-		if err := recordInstallerImage(t.Context(), c, inst.DeepCopy(), img, nil); err != nil {
+		if err := recordInstallerImage(t.Context(), c, &cur, img, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

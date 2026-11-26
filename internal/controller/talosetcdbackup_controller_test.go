@@ -35,12 +35,15 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
@@ -156,9 +159,12 @@ func (c *fakeEtcdClient) EtcdSnapshot(context.Context) (io.ReadCloser, error) {
 type memStore struct {
 	objects map[string][]byte
 	putErr  error
+	puts    int
 }
 
 func (s *memStore) Put(_ context.Context, key string, r io.Reader, size int64) error {
+	s.puts++
+
 	if s.putErr != nil {
 		return s.putErr
 	}
@@ -410,6 +416,34 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 		_, got := f.reconcile(bk)
 		Expect(f.nodes.total()).To(Equal(2))
 		Expect(got.Status.LastSnapshot.Key).To(Equal(testBackupBase + "/" + etcdbackup.ObjectName(testBackupNow.Add(30*time.Minute))))
+	})
+
+	It("does not take a second snapshot when a conflicting write meets the status write of a finished backup", func() {
+		f := newBackupFixture()
+		f.addControlPlane("41", 2)
+
+		conflicts := 1
+		f.r.Client = interceptor.NewClient(watchClient(), interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				if conflicts > 0 {
+					conflicts--
+
+					return apierrors.NewConflict(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosetcdbackups"}, obj.GetName(), errors.New("modified"))
+				}
+
+				return c.SubResource(sub).Update(ctx, obj, opts...)
+			},
+		})
+
+		bk := f.newBackup(nil)
+		req := ctrl.Request{NamespacedName: client.ObjectKeyFromObject(bk)}
+
+		_, _ = f.r.Reconcile(ctx, req)
+		_, err := f.r.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(f.store.puts).To(Equal(1))
+		Expect(f.nodes.total()).To(Equal(1))
 	})
 
 	It("takes one snapshot outside the schedule for a backup-now request newer than lastManualBackup, and ignores a stale one", func() {

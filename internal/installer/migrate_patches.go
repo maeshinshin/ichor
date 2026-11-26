@@ -262,7 +262,7 @@ func setMigrated(ctx context.Context, c client.Client, p *unstructured.Unstructu
 		return err
 	}
 
-	return c.Status().Patch(ctx, p, client.MergeFrom(orig))
+	return c.Status().Patch(ctx, p, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 // normalized is a condition as JSON would hold it (numbers as int64), so a stored one compares with a built one.

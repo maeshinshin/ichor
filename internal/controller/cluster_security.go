@@ -88,7 +88,7 @@ func (r *BootSecurityReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.Status().Patch(ctx, &cluster, client.MergeFrom(base)); err != nil {
+	if err := r.Status().Patch(ctx, &cluster, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
 		return ctrl.Result{}, fmt.Errorf("writing the boot security conditions: %w", err)
 	}
 

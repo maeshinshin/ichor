@@ -246,7 +246,7 @@ func (a *cniKubeProxyAdvancer) setTalosSide(
 	base := cluster.DeepCopy()
 	cniStatus(cluster).KubeProxy = string(target)
 
-	if err := a.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
+	if err := a.Status().Patch(ctx, cluster, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
 		return fmt.Errorf("recording the Talos-side kube-proxy mode: %w", err)
 	}
 

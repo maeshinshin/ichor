@@ -170,7 +170,7 @@ func (r *CertExpiryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	if changed {
-		if err := r.Status().Patch(ctx, &cluster, client.MergeFrom(base)); err != nil {
+		if err := r.Status().Patch(ctx, &cluster, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
 			return ctrl.Result{}, fmt.Errorf("publishing certificate expiry: %w", err)
 		}
 	}
@@ -251,13 +251,13 @@ func (r *CertExpiryReconciler) clearBundleBackupStale(
 		return nil //nolint:nilerr // an unreadable bundle keeps the condition up; the expiry path reports it
 	}
 
-	base := cluster.DeepCopy()
-	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type: ichorv1alpha1.ConditionBundleBackupStale, Status: metav1.ConditionFalse, Reason: "Exported",
-		Message: "the current secrets bundle has been exported", ObservedGeneration: cluster.Generation,
+	err = patchClusterConditions(ctx, r.Client, cluster, func(c *ichorv1alpha1.TalosCluster) {
+		apimeta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
+			Type: ichorv1alpha1.ConditionBundleBackupStale, Status: metav1.ConditionFalse, Reason: "Exported",
+			Message: "the current secrets bundle has been exported", ObservedGeneration: c.Generation,
+		})
 	})
-
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
+	if err != nil {
 		return fmt.Errorf("clearing BundleBackupStale: %w", err)
 	}
 

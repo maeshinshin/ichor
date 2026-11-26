@@ -132,18 +132,20 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	base := bk.DeepCopy()
+
 	r.noteStoreLocation(ctx, &bk)
 	r.noteSharedDestination(ctx, &bk)
 
 	if bk.Spec.Suspend {
-		return ctrl.Result{}, r.setReady(ctx, &bk, metav1.ConditionUnknown, ichorv1alpha1.TalosEtcdBackupReasonSuspended,
+		return ctrl.Result{}, r.setReady(ctx, &bk, base, metav1.ConditionUnknown, ichorv1alpha1.TalosEtcdBackupReasonSuspended,
 			"spec.suspend is true; no snapshots are taken and none are pruned")
 	}
 
 	sched, err := cron.ParseStandard(bk.Spec.Schedule)
 	if err != nil {
 		// A spec edit re-queues; retrying the same bad expression would not help.
-		return ctrl.Result{}, r.setReady(ctx, &bk, metav1.ConditionFalse, ichorv1alpha1.TalosEtcdBackupReasonFailed,
+		return ctrl.Result{}, r.setReady(ctx, &bk, base, metav1.ConditionFalse, ichorv1alpha1.TalosEtcdBackupReasonFailed,
 			fmt.Sprintf("spec.schedule is not a valid cron expression: %v", err))
 	}
 
@@ -154,7 +156,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if wait := r.untilDue(&bk, sched, now); wait > 0 && !manual {
 		r.refreshStaleness(&bk, sched, now)
 
-		return ctrl.Result{RequeueAfter: wait}, r.Status().Update(ctx, &bk)
+		return ctrl.Result{RequeueAfter: wait}, r.patchStatus(ctx, &bk, base)
 	}
 
 	start := now
@@ -173,7 +175,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		log.Info("etcd backup failed", "namespace", bk.Namespace, "name", bk.Name, "error", msg)
 		setReadyCondition(&bk, metav1.ConditionFalse, ichorv1alpha1.TalosEtcdBackupReasonFailed, msg)
 
-		return ctrl.Result{RequeueAfter: backupRetryInterval}, r.Status().Update(ctx, &bk)
+		return ctrl.Result{RequeueAfter: backupRetryInterval}, r.patchStatus(ctx, &bk, base)
 	}
 
 	done := metav1.NewTime(nowFrom(r.Now))
@@ -181,7 +183,6 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	bk.Status.LastSnapshot = snap
 	bk.Status.Snapshots = stored
 	bk.Status.ConsecutiveFailures = 0
-	backupLastSuccess.WithLabelValues(bk.Namespace, bk.Name).Set(float64(done.Unix()))
 
 	msg := "stored " + snap.Key
 	if pruneErr != nil {
@@ -190,7 +191,23 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	setReadyCondition(&bk, metav1.ConditionTrue, ichorv1alpha1.TalosEtcdBackupReasonSucceeded, msg)
 
-	return ctrl.Result{RequeueAfter: max(sched.Next(start).Sub(nowFrom(r.Now)), time.Second)}, r.Status().Update(ctx, &bk)
+	res := ctrl.Result{RequeueAfter: max(sched.Next(start).Sub(nowFrom(r.Now)), time.Second)}
+	if err := r.patchStatus(ctx, &bk, base); err != nil {
+		return res, err
+	}
+
+	// After the write, so the metric never reports a success the status does not hold.
+	backupLastSuccess.WithLabelValues(bk.Namespace, bk.Name).Set(float64(done.Unix()))
+
+	return res, nil
+}
+
+// patchStatus writes bk's status as a merge patch against base, with no resourceVersion. A spec or annotation
+// write (Back up now, a keepLast edit) during a run must not make the write conflict: the snapshot is already
+// uploaded and pruned, and a lost status makes the next reconcile take a second one. This controller is the only
+// writer of TalosEtcdBackup status, so replacing its lists whole (snapshots, conditions) loses nothing.
+func (r *TalosEtcdBackupReconciler) patchStatus(ctx context.Context, bk, base *ichorv1alpha1.TalosEtcdBackup) error {
+	return r.Status().Patch(ctx, bk, client.MergeFrom(base))
 }
 
 // noteStoreLocation sets the warning condition StoreInCluster while the destination is inside the
@@ -598,11 +615,11 @@ func setReadyCondition(bk *ichorv1alpha1.TalosEtcdBackup, status metav1.Conditio
 }
 
 func (r *TalosEtcdBackupReconciler) setReady(
-	ctx context.Context, bk *ichorv1alpha1.TalosEtcdBackup, status metav1.ConditionStatus, reason, msg string,
+	ctx context.Context, bk, base *ichorv1alpha1.TalosEtcdBackup, status metav1.ConditionStatus, reason, msg string,
 ) error {
 	setReadyCondition(bk, status, reason, msg)
 
-	return r.Status().Update(ctx, bk)
+	return r.patchStatus(ctx, bk, base)
 }
 
 // SetupWithManager sets up the controller with the Manager.

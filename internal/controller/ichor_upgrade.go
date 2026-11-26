@@ -394,8 +394,7 @@ func recordInstallerImage(
 
 	// Sticky: a verified run rewrites installerImage above but never touches this condition, and
 	// SetStatusCondition keeps lastTransitionTime, so it still dates the first unchecked run.
-	// shortcut: the Patch is a merge patch of the whole conditions list; a writer with a stale copy
-	// can drop it until the next skipped run sets it again. Drop it with an optimistic lock if that bites.
+	// The Patch carries an optimistic lock: a merge patch sends the whole conditions list, so a stale copy would drop this one.
 	if img.Verification == ichorv1alpha1.InstallerImageSkipped {
 		apimeta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
 			Type: ichorv1alpha1.ConditionInstallerImageUnverified, Status: metav1.ConditionTrue, Reason: "SignatureSkipped",
@@ -404,7 +403,7 @@ func recordInstallerImage(
 		})
 	}
 
-	if err := c.Status().Patch(ctx, inst, client.MergeFrom(orig)); err != nil {
+	if err := c.Status().Patch(ctx, inst, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
 		return fmt.Errorf("recording the installer image in IchorInstallation status: %w", err)
 	}
 

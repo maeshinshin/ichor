@@ -64,6 +64,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -1076,6 +1077,33 @@ func (c *caRun) markBundleBackupStale(ctx context.Context) error {
 		c.cluster.Name))
 }
 
+// patchClusterConditions applies mutate to a fresh copy of the cluster and patches its status under an
+// optimistic lock, retrying on conflict. A merge patch replaces the conditions array whole, so a write
+// from a stale copy would erase a condition another controller raised since; the lock turns that into a
+// conflict, and the re-read lets mutate change only its own condition. cluster is refreshed from the result.
+func patchClusterConditions(
+	ctx context.Context, c client.Client, cluster *ichorv1alpha1.TalosCluster, mutate func(*ichorv1alpha1.TalosCluster),
+) error {
+	return retry.RetryOnConflict(machineStatusBackoff, func() error {
+		var fresh ichorv1alpha1.TalosCluster
+		if err := c.Get(ctx, client.ObjectKeyFromObject(cluster), &fresh); err != nil {
+			return err
+		}
+
+		base := fresh.DeepCopy()
+
+		mutate(&fresh)
+
+		if err := c.Status().Patch(ctx, &fresh, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
+			return err
+		}
+
+		fresh.DeepCopyInto(cluster)
+
+		return nil
+	})
+}
+
 // raiseBundleBackupStale raises BundleBackupStale on the cluster, and an Event the first time.
 func (r *TalosOperationReconciler) raiseBundleBackupStale(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, reason, message string,
@@ -1084,13 +1112,13 @@ func (r *TalosOperationReconciler) raiseBundleBackupStale(
 		return nil
 	}
 
-	base := cluster.DeepCopy()
-	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type: ichorv1alpha1.ConditionBundleBackupStale, Status: metav1.ConditionTrue,
-		Reason: reason, Message: message, ObservedGeneration: cluster.Generation,
+	err := patchClusterConditions(ctx, r.Client, cluster, func(c *ichorv1alpha1.TalosCluster) {
+		apimeta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
+			Type: ichorv1alpha1.ConditionBundleBackupStale, Status: metav1.ConditionTrue,
+			Reason: reason, Message: message, ObservedGeneration: c.Generation,
+		})
 	})
-
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
+	if err != nil {
 		return fmt.Errorf("raising BundleBackupStale: %w", err)
 	}
 
@@ -1148,10 +1176,10 @@ func (c *caRun) setClientsNotRestarted(ctx context.Context, notBack bool, messag
 		cond.Status, cond.Reason, cond.Message = metav1.ConditionTrue, bundleStaleReason, c.scrub.clean(message)
 	}
 
-	base := c.cluster.DeepCopy()
-	apimeta.SetStatusCondition(&c.cluster.Status.Conditions, cond)
-
-	if err := c.r.Status().Patch(ctx, c.cluster, client.MergeFrom(base)); err != nil {
+	err := patchClusterConditions(ctx, c.r.Client, c.cluster, func(cl *ichorv1alpha1.TalosCluster) {
+		apimeta.SetStatusCondition(&cl.Status.Conditions, cond)
+	})
+	if err != nil {
 		return fmt.Errorf("setting CAClientsNotRestarted: %w", err)
 	}
 

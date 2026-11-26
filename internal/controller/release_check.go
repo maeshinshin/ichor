@@ -319,7 +319,7 @@ func (r *ReleaseCheck) record(ctx context.Context, update func(inst *ichorv1alph
 
 	update(&inst, metav1.Now())
 
-	if err := r.Client.Status().Patch(ctx, &inst, client.MergeFrom(orig)); err != nil {
+	if err := r.Client.Status().Patch(ctx, &inst, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
 		log.Info("Recording the release check failed", "error", err.Error())
 
 		return false

@@ -564,7 +564,7 @@ func (r *IssuerTrustReconciler) setUserStatus(ctx context.Context, u *ichorv1alp
 		return nil
 	}
 
-	if err := r.Status().Patch(ctx, u, client.MergeFrom(base)); client.IgnoreNotFound(err) != nil {
+	if err := r.Status().Patch(ctx, u, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("setting status of IchorUser %s: %w", u.Name, err)
 	}
 

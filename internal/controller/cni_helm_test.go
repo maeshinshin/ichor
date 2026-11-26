@@ -43,6 +43,7 @@ const cniTestName = "home"
 
 func cniTestInstallation() *ichorv1alpha1.IchorInstallation {
 	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
+	inst.ResourceVersion = "999" // what the fake client stores; a status patch under an optimistic lock needs one
 	inst.Spec.Version = "v0.9.0"
 	inst.Spec.InstallerRepository = "ghcr.io/maeshinshin/ichor-installer"
 

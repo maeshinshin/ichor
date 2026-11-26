@@ -90,6 +90,18 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: ichor-migrate-patches
+      {{- with .Values.manager.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.manager.tolerations }}
+      tolerations: {{ toYaml . | nindent 10 }}
+      {{- end }}
+      {{- with .Values.manager.affinity }}
+      affinity: {{ toYaml . | nindent 10 }}
+      {{- end }}
+      {{- with .Values.manager.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 10 }}
+      {{- end }}
       {{- with .Values.manager.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

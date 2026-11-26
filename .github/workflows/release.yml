@@ -63,7 +63,8 @@ jobs:
       # Before anything is pushed: a tag with no notes must fail here, not in the cli job after publish.
       - name: CHANGELOG.md has a section for the tag
         run: |
-          awk -v h="## ${GITHUB_REF_NAME} " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md | grep -q . ||
+          # no pipe into grep -q: it exits at the first line and pipefail fails the step on awk's SIGPIPE
+          test -n "$(awk -v h="## ${GITHUB_REF_NAME} " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md)" ||
             { echo "CHANGELOG.md has no section for ${GITHUB_REF_NAME}" >&2; exit 1; }
 
       - name: Verify go.mod, go.sum and the module cache

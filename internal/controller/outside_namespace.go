@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -119,7 +120,7 @@ func (r *OutsideNamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// conflict requeues and the next pass reads the object again.
 	if err := r.Status().Patch(ctx, obj, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
 		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: time.Second}, nil
 		}
 
 		return ctrl.Result{}, fmt.Errorf("writing the %s condition: %w", ichorv1alpha1.ConditionOutsideControllerNamespace, err)

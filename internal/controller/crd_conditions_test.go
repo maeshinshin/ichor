@@ -84,7 +84,7 @@ var conditionTypesSetBy = map[string][]string{
 	"VerifyingNewSide":           {kindOperation},
 	"Paused":                     {kindOperation},
 	"DeletionHeld":               {kindOperation},
-	"OutsideControllerNamespace": nil,
+	"OutsideControllerNamespace": {kindUser, kindBackup, kindMachine, kindStorage, kindCluster, kindOperation, kindPatch, reclaimKind},
 }
 
 // scanConditionTypes returns the value of every string constant named by the Type of a metav1.Condition literal in

@@ -59,7 +59,8 @@ const (
 
 // IchorUserStatus defines the observed state of IchorUser. Only the controller writes it.
 type IchorUserStatus struct {
-	// conditions: Ready and PasswordSet.
+	// conditions: Ready, PasswordSet and OutsideControllerNamespace. OutsideControllerNamespace is True while the object is
+	// outside the controller's namespace; it is informational.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

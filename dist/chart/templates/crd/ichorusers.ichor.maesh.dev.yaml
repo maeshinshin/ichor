@@ -88,7 +88,9 @@ spec:
             description: status defines the observed state of IchorUser
             properties:
               conditions:
-                description: 'conditions: Ready and PasswordSet.'
+                description: |-
+                  conditions: Ready, PasswordSet and OutsideControllerNamespace. OutsideControllerNamespace is True while the object is
+                  outside the controller's namespace; it is informational.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

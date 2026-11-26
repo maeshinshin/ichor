@@ -197,9 +197,11 @@ type TalosEtcdBackupStatus struct {
 	// +optional
 	ConsecutiveFailures int32 `json:"consecutiveFailures,omitempty"`
 
-	// conditions: Ready, StoreInCluster and SharedDestination. Ready is True while the newest snapshot is fresher than
-	// twice the schedule interval. StoreInCluster is True while the destination is inside the cluster being backed
-	// up. SharedDestination is True while another TalosEtcdBackup writes the same endpoint, bucket and prefix.
+	// conditions: Ready, StoreInCluster, SharedDestination and OutsideControllerNamespace. Ready is True while the newest
+	// snapshot is fresher than twice the schedule interval. StoreInCluster is True while the destination is inside the
+	// cluster being backed up. SharedDestination is True while another TalosEtcdBackup writes the same endpoint, bucket
+	// and prefix. OutsideControllerNamespace is True while the object is outside the controller's namespace; it is
+	// informational.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

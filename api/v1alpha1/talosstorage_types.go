@@ -70,6 +70,7 @@ type TalosStorageStatus struct {
 	// it until this is true (design section "Storage"). ExtensionsPresent is whether every node it governs runs the
 	// Talos system extensions its preset needs; a node that lacks one holds Ready False. StorageSystemConsistent is
 	// informational and never gates Ready: whether the storage system itself is present and configured to match.
+	// OutsideControllerNamespace is True while the object is outside the controller's namespace; it is informational.
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

@@ -96,7 +96,7 @@ func TestControllerJobImageFollowsTheIchorInstallation(t *testing.T) {
 
 	job := func(name, image string) *unstructured.Unstructured {
 		return &unstructured.Unstructured{Object: map[string]any{
-			kAPIVer: "batch/v1", kKindKey: "Job",
+			kAPIVer: "batch/v1", kKindKey: kindJob,
 			kMeta: map[string]any{kNameKey: name, "namespace": "kube-system"},
 			specKey: map[string]any{
 				"activeDeadlineSeconds": int64(1500),

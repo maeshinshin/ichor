@@ -44,9 +44,9 @@ func TestJobBuildersTolerateControlPlane(t *testing.T) {
 	inst := &ichorv1alpha1.IchorInstallation{}
 	cluster := &ichorv1alpha1.TalosCluster{}
 	jobs := map[string]*batchv1.Job{
-		"installer": newInstallerJob("ichor-system", "r", &ichorv1alpha1.TalosOperation{}, inst, "sha256:x", "", false),
-		"check":     NewInstallerCheckJob("ichor-system", "c", inst, "sha256:x", "", false, false),
-		"cni-helm":  newCNIHelmJob("ichor-system", "j", cluster, cni.KubeProxyEnabled, testCNIImage, "h", false, 0),
+		"run":      newInstallerJob("ichor-system", "r", &ichorv1alpha1.TalosOperation{}, inst, "sha256:x", "", false),
+		"check":    NewInstallerCheckJob("ichor-system", "c", inst, "sha256:x", "", false, false),
+		"cni-helm": newCNIHelmJob("ichor-system", "j", cluster, cni.KubeProxyEnabled, testCNIImage, "h", false, 0),
 	}
 
 	taint := corev1.Taint{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule}

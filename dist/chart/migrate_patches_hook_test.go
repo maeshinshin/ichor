@@ -27,7 +27,7 @@ func TestMigratePatchesHook(t *testing.T) {
 
 	for _, d := range []struct{ kind, name string }{
 		{kindServiceAccount, migrateHookName}, {kindClusterRole, migrateHookName},
-		{kindClusterRoleBinding, migrateHookName}, {"Job", migrateHookName},
+		{kindClusterRoleBinding, migrateHookName}, {kindJob, migrateHookName},
 	} {
 		doc := find(docs, d.kind, d.name)
 		if doc == nil {
@@ -39,7 +39,7 @@ func TestMigratePatchesHook(t *testing.T) {
 		}
 	}
 
-	job := find(docs, "Job", migrateHookName)
+	job := find(docs, kindJob, migrateHookName)
 	pod := job["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
 
 	if pod["serviceAccountName"] != migrateHookName || pod["restartPolicy"] != "Never" {

@@ -3,6 +3,7 @@ package chart
 import "testing"
 
 const cpTaintKey = "node-role.kubernetes.io/control-plane"
+const kindJob = "Job"
 
 // podTemplates returns the name and pod spec of every pod template the chart renders (Deployment, Job, DaemonSet,
 // StatefulSet, and a CronJob's Job template), hooks included.
@@ -18,7 +19,7 @@ func podTemplates(docs []map[string]any) map[string]map[string]any {
 		}
 
 		switch kind {
-		case "Deployment", "Job", "DaemonSet", "StatefulSet", "CronJob":
+		case "Deployment", kindJob, "DaemonSet", "StatefulSet", "CronJob":
 			tpl, _ := spec["template"].(map[string]any)
 			pod, _ := tpl["spec"].(map[string]any)
 			meta, _ := d["metadata"].(map[string]any)

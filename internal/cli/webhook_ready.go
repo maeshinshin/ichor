@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -104,7 +105,7 @@ var waitForUI = waitForUIRollout
 // first CLI calls after init do not find no ready ichor-ui pod.
 func waitForUIRollout(ctx context.Context, c client.Reader, timeout, interval time.Duration, progress io.Writer) error {
 	return pollWhile(ctx, timeout, interval, progress, "ichor-ui to roll out", func(ctx context.Context) error {
-		d, err := findDeploymentByLabel(ctx, c, ichorControllerNamespace, uiComponentLabel, uiComponentValue)
+		d, err := findDeploymentByLabel(ctx, c, cmp.Or(apiOpts.IchorNamespace, ichorControllerNamespace), uiComponentLabel, uiComponentValue)
 		if err != nil {
 			return err
 		}

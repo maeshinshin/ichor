@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -66,8 +67,9 @@ func runInstallerCheck(ctx context.Context, k client.Client, images controller.I
 // runCheckJob runs the check Job of the pinned image and waits for it; the Job is deleted on every way out.
 func runCheckJob(ctx context.Context, k client.Client, errw io.Writer, want *ichorv1alpha1.IchorInstallation, pinned string, signInPending bool) error {
 	name := "ichor-installer-check-" + rand.String(5)
-	job := controller.NewInstallerCheckJob(ichorControllerNamespace, name, want, pinned, "", false, signInPending)
-	controller.InheritManagerScheduling(ctx, k, ichorControllerNamespace, job)
+	ns := cmp.Or(apiOpts.IchorNamespace, ichorControllerNamespace) // --ichor-namespace: where the controller runs
+	job := controller.NewInstallerCheckJob(ns, name, want, pinned, "", false, signInPending)
+	controller.InheritManagerScheduling(ctx, k, ns, job)
 
 	if err := k.Create(ctx, job); err != nil {
 		return fmt.Errorf("upgrade: starting the check Job: %w", err)
@@ -97,7 +99,7 @@ func runCheckJob(ctx context.Context, k client.Client, errw io.Writer, want *ich
 		}
 
 		if time.Now().After(deadline) {
-			return fmt.Errorf("upgrade: the check Job %s did not finish in %s (see its pod in %s); nothing was written", name, installerCheckWait, ichorControllerNamespace)
+			return fmt.Errorf("upgrade: the check Job %s did not finish in %s (see its pod in %s); nothing was written", name, installerCheckWait, ns)
 		}
 
 		select {

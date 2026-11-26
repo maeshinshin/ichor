@@ -10,8 +10,8 @@ IMG_INSTALLER ?= ichor-installer:latest
 # VERSION is linked into every Ichor binary (internal/version); "dev" means unversioned.
 VERSION ?= dev
 LDFLAGS := -X github.com/maeshinshin/ichor/internal/version.Version=$(VERSION)
-# YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
-YEAR ?= $(shell date +%Y)
+# YEAR is pinned: it lands in committed zz_generated headers, so the clock must not drive it.
+YEAR ?= 2026
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

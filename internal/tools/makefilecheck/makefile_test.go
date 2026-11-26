@@ -296,3 +296,18 @@ func TestRemoteGateHelpNamesItsCluster(t *testing.T) {
 
 	t.Errorf("make help has no remote-gate line:\n%s", out)
 }
+
+// TestYearIsNotTakenFromTheClock: YEAR lands in the committed zz_generated headers, so a value read from `date`
+// turns every regen check red on 1 January.
+func TestYearIsNotTakenFromTheClock(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for l := range strings.SplitSeq(string(b), "\n") {
+		if strings.HasPrefix(l, "YEAR") && strings.Contains(l, "date") {
+			t.Errorf("Makefile sets YEAR from the clock: %q", l)
+		}
+	}
+}

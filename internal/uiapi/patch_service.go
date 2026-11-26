@@ -17,6 +17,7 @@ limitations under the License.
 package uiapi
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -118,7 +119,8 @@ func (s *Server) CreatePatch(
 	}
 
 	p := &ichorv1alpha1.TalosConfigPatch{}
-	p.Namespace = ref.GetNamespace()
+	// Every Ichor object lives in the controller's namespace (ADR 0175), whatever namespace the request names.
+	p.Namespace = cmp.Or(s.ControllerNamespace, ref.GetNamespace())
 	p.Name = ref.GetName()
 
 	if err := applyPatchSpec(&p.Spec, wire); err != nil {

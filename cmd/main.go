@@ -677,6 +677,7 @@ func main() {
 	must((&controller.TalosCredentialRequestReconciler{
 		Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ControllerNamespace: ns,
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "taloscredentialrequest")
+	must(controller.SetupOutsideNamespaceControllers(mgr, ns), "Failed to create controller", "controller", "outsidenamespace")
 	// +kubebuilder:scaffold:builder
 
 	must(mgr.AddHealthzCheck("healthz", healthz.Ping), "Failed to set up health check")

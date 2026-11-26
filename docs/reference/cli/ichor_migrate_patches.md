@@ -26,14 +26,13 @@ ichor migrate patches [flags]
 
 ```sh
   ichor migrate patches
-  ichor migrate patches --namespace ichor-system
+  ichor migrate patches
 ```
 
 ### Options
 
 ```text
-  -h, --help               help for patches
-  -n, --namespace string   only the patches of this namespace (default: all)
+  -h, --help   help for patches
 ```
 
 ### Options inherited from parent commands

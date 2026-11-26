@@ -35,7 +35,6 @@ ichor defrag etcd --node CONTROL_PLANE [flags]
   -h, --help                     help for etcd
       --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
       --local                    do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string         namespace of the Ichor resources the command names (default "ichor-system")
       --node string              the control plane node (required)
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --tls-server-name string   name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)

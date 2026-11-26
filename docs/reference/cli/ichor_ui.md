@@ -32,10 +32,9 @@ ichor ui [flags]
 ### Options
 
 ```text
-  -h, --help               help for ui
-      --local-port int     local port to forward to (defaults to the Service's own port)
-  -n, --namespace string   namespace ichor-ui runs in (default "ichor-system")
-      --open-browser       open the default web browser once the port-forward is ready (default true)
+  -h, --help             help for ui
+      --local-port int   local port to forward to (defaults to the Service's own port)
+      --open-browser     open the default web browser once the port-forward is ready (default true)
 ```
 
 ### Options inherited from parent commands

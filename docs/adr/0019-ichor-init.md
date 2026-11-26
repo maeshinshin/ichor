@@ -234,3 +234,9 @@ names a Ichor resource through the shared API flags (`get`, `describe`, `patch`,
 "The CRD's four endpoint types (`vip`, `loadBalancer`, `dns`, `node`)" is out of date. `dns` was removed from
 `spec.endpoint.type` in v0.3.0 (b81348264), so `buildInitPlan` accepts `vip`, `loadBalancer` and `node`, and still only
 warns when the type is not `vip`.
+
+## Amendment (2026-11-26): every command, not only init and adopt
+
+ADR 0175 puts every Ichor object in the controller's namespace. The 2026-11-25 amendment's last sentence no longer holds: the
+shared API flags and `migrate patches` also hide `-n/--namespace`, mark it deprecated, and accept only the controller's
+namespace. `ichor ui` does the same; the installer's own `--namespace` is hidden and still read, because the controller's Job passes it.

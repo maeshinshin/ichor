@@ -42,7 +42,6 @@ ichor approve node NAME --role controlplane|worker [flags]
       --install-image string      installer image (default: the booted schematic's; the cluster's SecureBoot installer when spec.security.secureBoot.mode is Preferred or Required)
       --label stringToString      node label KEY=VALUE (repeatable) (default [])
       --local                     do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string          namespace of the Ichor resources the command names (default "ichor-system")
       --nic string                primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff); a name is looked up among the links the node reported and only its MAC is kept; alone it means DHCP; needed for a control plane of a cluster whose endpoint is a vip
       --override                  incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --role string               controlplane or worker (required)

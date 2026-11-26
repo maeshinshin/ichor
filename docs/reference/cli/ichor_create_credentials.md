@@ -68,7 +68,6 @@ ichor create credentials NAME [flags]
       --kube-server string        the Kubernetes API server URL for the kubeconfig, for example https://10.0.0.2:6443 (default: the cluster's endpoint on port 6443)
       --kubeconfig-out string     where to write the kubeconfig (default: your current kubeconfig's path plus .ichor-new)
       --local                     do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string          namespace of the Ichor resources the command names (default "ichor-system")
       --operation string          with --acknowledge: the CA rotation operation to acknowledge
       --override                  incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --read-only                 make the talosconfig an os:reader client (read-only Talos API access) instead of os:admin

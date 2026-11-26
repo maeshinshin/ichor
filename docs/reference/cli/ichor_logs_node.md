@@ -41,7 +41,6 @@ ichor logs node NAME... [flags]
       --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
       --idle-timeout duration    without --follow, also stop after this long without a new line (for an ichor-ui older than this CLI); 0 is off
       --local                    do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string         namespace of the Ichor resources the command names (default "ichor-system")
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --resume-token string      resume token from an earlier run (opaque)
       --service string           Talos service whose log to read (kubelet, etcd, ...); empty means the kernel log

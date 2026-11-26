@@ -32,7 +32,6 @@ ichor snapshot etcd --node CONTROL_PLANE [flags]
   -h, --help                     help for etcd
       --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
       --local                    do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string         namespace of the Ichor resources the command names (default "ichor-system")
       --node string              control plane TalosMachine to take the snapshot from
       --out string               file to write (mode 0600); default the name the server suggests; - for standard output
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local

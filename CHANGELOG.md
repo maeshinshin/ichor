@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Behaviour change
+
+- **Every Ichor object lives in the controller's namespace.** The validating webhook
+  refuses to create a `TalosCluster`, `TalosMachine`, `TalosConfigPatch`,
+  `TalosOperation`, `TalosEtcdBackup`, `TalosStorage`, `TalosCredentialRequest`,
+  `MachineReclaim` or `IchorUser` anywhere else, naming the controller's namespace
+  (ADR 0175). Updates and deletes are still allowed. An object already outside keeps
+  reconciling and gets the informational condition `OutsideControllerNamespace`; it
+  is never moved or deleted, but a new operation, backup or patch beside it cannot be
+  created, so recreate such objects in the controller's namespace.
+- **`-n/--namespace` is hidden and deprecated on every command**, and accepts only the
+  controller's namespace. A script passing another value now fails before anything is
+  written.
+
 ## v0.3.3 (2026-11-26)
 
 A patch release of fixes to v0.3.2: registry credentials reach the mirror, a Helm

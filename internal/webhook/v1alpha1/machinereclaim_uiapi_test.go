@@ -44,7 +44,7 @@ import (
 // committed credential policy (unit 14), in envtest.
 var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func() {
 	const (
-		ns     = "ichor-system"
+		ns     = testNamespace
 		holder = "reclaimer-alice"
 		plain  = "plain-bob"
 		addr   = "10.9.9.9"

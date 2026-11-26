@@ -51,7 +51,6 @@ ichor create etcd-backup NAME --cluster CLUSTER --s3-endpoint URL --s3-bucket BU
       --ichor-namespace string      namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
       --keep-last int32             how many snapshots to keep (default 24)
       --local                       do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string            namespace of the Ichor resources the command names (default "ichor-system")
       --override                    incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --s3-bucket string            S3 bucket, which must already exist (required)
       --s3-ca-file string           PEM file with the CA that signs the S3 endpoint, kept in the Secret as ca.crt

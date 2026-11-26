@@ -41,7 +41,6 @@ ichor create talosconfig NAME [flags]
   -h, --help                      help for talosconfig
       --ichor-namespace string    namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
       --local                     do not use ichor-ui; compute from the Kubernetes API directly
-  -n, --namespace string          namespace of the Ichor resources the command names (default "ichor-system")
       --out string                where to write the talosconfig (default: your current talosconfig's path plus .ichor-reader)
       --override                  incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --talos-endpoints strings   the Talos API endpoints for the talosconfig (default: the cluster's control-plane nodes, else your current talosconfig's)

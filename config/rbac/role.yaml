@@ -176,6 +176,7 @@ rules:
   - ichorusers/status
   - machinereclaims/status
   - talosclusters/status
+  - talosconfigpatches/status
   - taloscredentialrequests/status
   - talosetcdbackups/status
   - talosmachines/status

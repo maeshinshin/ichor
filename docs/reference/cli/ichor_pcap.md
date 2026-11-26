@@ -41,7 +41,6 @@ ichor pcap NODE [flags]
       --interface string         interface to capture on (default "eth0")
       --local                    do not use ichor-ui; compute from the Kubernetes API directly
       --max-size int             stop after this many bytes (default and maximum 100 MiB)
-  -n, --namespace string         namespace of the Ichor resources the command names (default "ichor-system")
       --out string               file to write (mode 0600); default the name the server suggests; - for standard output
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --tls-server-name string   name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)

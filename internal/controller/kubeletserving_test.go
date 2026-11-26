@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 const (
@@ -400,12 +401,12 @@ func TestKubeletServingLatchReachesTheMachines(t *testing.T) {
 
 	m := &ichorv1alpha1.TalosMachine{}
 
-	before, err := desiredInputsHash(mk(false), m, nil, nil, "")
+	before, err := desiredInputsHash(mk(false), m, nil, &render.SystemInputs{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	after, err := desiredInputsHash(mk(true), m, nil, nil, "")
+	after, err := desiredInputsHash(mk(true), m, nil, &render.SystemInputs{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -91,12 +91,12 @@ func TestDesiredInputsHashFollowsRegistryAuth(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{}
 	m := &ichorv1alpha1.TalosMachine{}
 
-	base, err := desiredInputsHash(cluster, m, nil, nil, "")
+	base, err := desiredInputsHash(cluster, m, nil, &render.SystemInputs{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	withAuth, err := desiredInputsHash(cluster, m, nil, nil, "sha256:abc")
+	withAuth, err := desiredInputsHash(cluster, m, nil, &render.SystemInputs{RegistryAuth: map[string]render.RegistryAuth{"h": {Password: "x"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

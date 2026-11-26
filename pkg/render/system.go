@@ -82,7 +82,7 @@ func ResolveSystemInputs(
 		return nil, fmt.Errorf("listing TalosStorages: %w", err)
 	}
 
-	trust, err := resolveOIDCTrust(ctx, c, secretNamespace, cluster)
+	trust, err := ResolveOIDCTrust(ctx, c, secretNamespace, cluster)
 	if err != nil {
 		return nil, err
 	}

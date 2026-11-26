@@ -34,6 +34,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -325,7 +326,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// inputsHash fingerprints every object that just fed Render. previousInputsHash is what was recorded the
 	// last time the node was confirmed to match the render; empty on a first reconcile.
-	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items, sys.Storage, registryAuthFingerprint(sys.RegistryAuth))
+	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items, sys)
 	if err != nil {
 		log.Error(err, "hashing render inputs")
 
@@ -594,7 +595,7 @@ var renderVersion = render.Version
 // so a patch unrelated to m never perturbs it. The result is a hash only (principle 3).
 func desiredInputsHash(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
-	storages []ichorv1alpha1.TalosStorage, registryAuth string,
+	sys *render.SystemInputs,
 ) (string, error) {
 	applicable, err := render.SelectPatches(cluster, m, candidates)
 	if err != nil {
@@ -611,7 +612,7 @@ func desiredInputsHash(
 
 	// The TalosStorage governing m feeds the render too; a change to it must read as
 	// a desired-state change, not as drift.
-	chosen, err := render.StorageFor(cluster, m, storages)
+	chosen, err := render.StorageFor(cluster, m, sys.Storage)
 	if err != nil {
 		return "", fmt.Errorf("selecting governing TalosStorage: %w", err)
 	}
@@ -621,10 +622,34 @@ func desiredInputsHash(
 	}
 
 	// The registry credentials feed the render too: a changed password reads as a
-	// desired-state change. registryAuth is registryAuthFingerprint's hash, never the data; empty
+	// desired-state change. registryAuthFingerprint's hash, never the data; empty
 	// when no registry names a Secret, which leaves the hash as it was.
-	if registryAuth != "" {
+	if registryAuth := registryAuthFingerprint(sys.RegistryAuth); registryAuth != "" {
 		parts = append(parts, "registryauth="+registryAuth)
+	}
+
+	// The rest of render.SystemInputs, so that every field of it reaches the hash (a gate test walks
+	// the struct). Each is hashed from its JSON, never kept as data; nil leaves the hash as it was.
+	for _, in := range []struct {
+		name string
+		v    any
+		set  bool
+	}{
+		{"oidctrust", sys.OIDCTrust, sys.OIDCTrust != nil},
+		{"carotation", sys.CARotation, sys.CARotation != nil},
+		{"keyrotation", sys.KeyRotation, sys.KeyRotation != nil},
+		{"staged", sys.Staged, sys.Staged != nil},
+	} {
+		if !in.set {
+			continue
+		}
+
+		raw, err := json.Marshal(in.v)
+		if err != nil {
+			return "", fmt.Errorf("hashing %s: %w", in.name, err)
+		}
+
+		parts = append(parts, in.name+"="+render.Hash(raw))
 	}
 
 	// Two TalosCluster.status values feed the render as well: the CNI

@@ -235,7 +235,9 @@ func (r *TalosStorageReconciler) readyCondition(
 	// The same credentials the machine controller fingerprints. Unresolvable ones
 	// leave the fingerprint empty, which cannot equal a converged machine's, so they read as pending.
 	auth, _ := render.ResolveRegistryAuth(ctx, r.Client, r.ControllerNamespace, &cluster)
-	authHash := registryAuthFingerprint(auth)
+	// The OIDC trust feeds the render too, so it is part of the fingerprint; unresolvable reads as pending as above.
+	trust, _ := render.ResolveOIDCTrust(ctx, r.Client, r.ControllerNamespace, &cluster)
+	sys := &render.SystemInputs{RegistryAuth: auth, Storage: storages.Items, OIDCTrust: trust}
 
 	machines, err := deleteguard.ApprovedMachines(ctx, r.Client, ts.Namespace, cluster.Name, deleteguard.MachineFilter{})
 	if err != nil {
@@ -261,7 +263,7 @@ func (r *TalosStorageReconciler) readyCondition(
 
 		governed = append(governed, m)
 
-		want, err := desiredInputsHash(&cluster, m, patches.Items, storages.Items, authHash)
+		want, err := desiredInputsHash(&cluster, m, patches.Items, sys)
 		if err != nil {
 			return cond, nil, err
 		}

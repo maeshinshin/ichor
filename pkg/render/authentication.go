@@ -64,9 +64,9 @@ type OIDCTrust struct {
 	CAPEM string
 }
 
-// resolveOIDCTrust reads OIDCTrustConfigMap when cluster enables Ichor's issuer. A missing
+// ResolveOIDCTrust reads OIDCTrustConfigMap when cluster enables Ichor's issuer. A missing
 // ConfigMap is not an error here (nil result): the render says so, with the cluster in hand.
-func resolveOIDCTrust(
+func ResolveOIDCTrust(
 	ctx context.Context, c client.Client, namespace string, cluster *ichorv1alpha1.TalosCluster,
 ) (*OIDCTrust, error) {
 	if !ichorIssuerEnabled(cluster) {

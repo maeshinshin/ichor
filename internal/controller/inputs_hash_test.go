@@ -33,7 +33,7 @@ func inputsHashFor(t *testing.T, sys *render.SystemInputs) string {
 	cluster := &ichorv1alpha1.TalosCluster{}
 	cluster.Name = "c"
 	m := &ichorv1alpha1.TalosMachine{}
-	m.Spec.NodeLabels = map[string]string{"role": "storage"}
+	m.Spec.NodeLabels = map[string]string{testStorageLabelKey: testStorageLabelValue}
 
 	h, err := desiredInputsHash(cluster, m, nil, sys)
 	if err != nil {
@@ -61,9 +61,10 @@ func TestEverySystemInputsFieldMovesInputsHash(t *testing.T) {
 	set := map[string]func(*render.SystemInputs){
 		"RegistryAuth": func(s *render.SystemInputs) { s.RegistryAuth = map[string]render.RegistryAuth{"h": {Password: "x"}} },
 		"Storage": func(s *render.SystemInputs) {
-			st := ichorv1alpha1.TalosStorage{ObjectMeta: metav1.ObjectMeta{Name: "s", Generation: 3}}
+			st := ichorv1alpha1.TalosStorage{}
+			st.Name, st.Generation = "s", 3
 			st.Spec.ClusterRef.Name = "c"
-			st.Spec.Nodes = metav1.LabelSelector{MatchLabels: map[string]string{"role": "storage"}}
+			st.Spec.Nodes = metav1.LabelSelector{MatchLabels: map[string]string{testStorageLabelKey: testStorageLabelValue}}
 			s.Storage = []ichorv1alpha1.TalosStorage{st}
 		},
 		"CARotation": func(s *render.SystemInputs) {
@@ -79,8 +80,8 @@ func TestEverySystemInputsFieldMovesInputsHash(t *testing.T) {
 	base := inputsHashFor(t, &render.SystemInputs{})
 	ty := reflect.TypeFor[render.SystemInputs]()
 
-	for i := range ty.NumField() {
-		name := ty.Field(i).Name
+	for f := range ty.Fields() {
+		name := f.Name
 
 		fn, ok := set[name]
 		if !ok {

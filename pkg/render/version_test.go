@@ -41,6 +41,17 @@ import (
 // pinnedVersion and pinnedFingerprint hold Version and the output fingerprint it was last bumped
 // for. They move together: a render change updates the fingerprint and bumps Version.
 const (
+	fpReader     = "os:reader"
+	fpDNS1       = "1.1.1.1"
+	fpDNS2       = "9.9.9.9"
+	fpWWID       = "naa.1"
+	fpByID       = "/dev/disk/by-id/x"
+	fpStaged     = "v1.36.1"
+	fpTPM        = "tpm"
+	fpKMS        = "kms"
+	fpRestricted = "restricted"
+	fpEnabled    = "enabled"
+
 	kubeProxyReplaced = "replaced"
 
 	pinnedVersion     = 2
@@ -117,10 +128,11 @@ func fingerprintCluster() *ichorv1alpha1.TalosCluster {
 
 	c := testCluster("false")
 	c.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
-		Host: "docker.io", Endpoints: []string{"http://192.168.0.8:5000"},
+		Host: dockerIO, Endpoints: []string{"http://192.168.0.8:5000"},
 		AuthSecretRef: &corev1.LocalObjectReference{Name: "creds"},
 	}, {
-		Host: "ghcr.io", Endpoints: []string{"https://mirror.example.test"}, Username: "puller", SkipFallback: true, OverridePath: true,
+		Host: "ghcr.io", Endpoints: []string{"https://mirror.example.test"},
+		Username: "puller", SkipFallback: true, OverridePath: true,
 	}}
 	c.Spec.CNI.Tunnel = "geneve"
 	c.Spec.CNI.KubeProxy = kubeProxyReplaced
@@ -128,11 +140,13 @@ func fingerprintCluster() *ichorv1alpha1.TalosCluster {
 	c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: ports}
 	c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{
 		PodSecurity: &ichorv1alpha1.TalosClusterPodSecurity{
-			Enforce: "baseline", Audit: "restricted", Warn: "restricted", ExemptNamespaces: []string{"kube-system", "observability", "observability"},
+			Enforce: "baseline", Audit: fpRestricted, Warn: fpRestricted,
+			ExemptNamespaces: []string{"kube-system", "observability", "observability"},
 		},
 		WireGuard: &ichorv1alpha1.TalosClusterWireGuard{Enabled: true, NodeEncryption: true},
 		Firewall: &ichorv1alpha1.TalosClusterFirewall{
-			Enabled: true, ControllerCIDRs: []string{"192.0.2.0/24"}, ControlPlaneCIDRs: []string{"10.2.0.0/16"}, NodeCIDRs: []string{"10.0.0.0/24"},
+			Enabled: true, ControllerCIDRs: []string{"192.0.2.0/24"}, ControlPlaneCIDRs: []string{"10.2.0.0/16"},
+			NodeCIDRs:     []string{"10.0.0.0/24"},
 			TalosAPICIDRs: []string{"172.20.0.0/14"}, APIServerCIDRs: []string{"198.51.100.0/24"}, KubeSpan: true,
 			Allow: []ichorv1alpha1.TalosClusterFirewallRule{
 				{Name: "ingress", Protocol: "udp", Ports: []string{"80", "9000-9100"}, CIDRs: []string{"0.0.0.0/0"}},
@@ -140,12 +154,16 @@ func fingerprintCluster() *ichorv1alpha1.TalosCluster {
 		},
 		Audit:                      &ichorv1alpha1.TalosClusterAudit{Policy: ichorv1alpha1.AuditPolicyWrites},
 		KubeletServingCertificates: &ichorv1alpha1.TalosClusterKubeletServing{Enabled: true},
-		DiskEncryption:             &ichorv1alpha1.TalosClusterDiskEncryption{Type: "tpm", RequireSecureBoot: &off},
+		DiskEncryption:             &ichorv1alpha1.TalosClusterDiskEncryption{Type: fpTPM, RequireSecureBoot: &off},
 		SecureBoot:                 &ichorv1alpha1.TalosClusterSecureBoot{Mode: ichorv1alpha1.SecureBootRequired},
 	}
 	c.Spec.Containerd = &ichorv1alpha1.TalosClusterContainerd{DeviceOwnershipFromSecurityContext: true}
-	c.Spec.ControlPlaneMetrics = &ichorv1alpha1.TalosClusterControlPlaneMetrics{Enabled: true, AllowedCIDRs: []string{"10.1.0.0/16"}}
-	c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: []string{"10.50.0.0/16"}, ServiceSubnets: []string{"10.60.0.0/16"}}
+	c.Spec.ControlPlaneMetrics = &ichorv1alpha1.TalosClusterControlPlaneMetrics{
+		Enabled: true, AllowedCIDRs: []string{"10.1.0.0/16"},
+	}
+	c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{
+		PodSubnets: []string{"10.50.0.0/16"}, ServiceSubnets: []string{"10.60.0.0/16"},
+	}
 	c.Spec.CertSANs = []string{"api.example.test"}
 	c.Spec.ControlPlane.OmitDefaultNodeLabels = true
 	c.Spec.Authentication = &ichorv1alpha1.TalosClusterAuthentication{
@@ -160,7 +178,7 @@ func fingerprintCluster() *ichorv1alpha1.TalosCluster {
 // fingerprintSystem is the system layer's inputs of every case that is not the legacy one.
 func fingerprintSystem() *SystemInputs {
 	return &SystemInputs{
-		RegistryAuth: map[string]RegistryAuth{"docker.io": {Password: "pw"}},
+		RegistryAuth: map[string]RegistryAuth{dockerIO: {Password: "pw"}},
 		OIDCTrust:    &OIDCTrust{DiscoveryURL: "https://10.96.0.10", CAPEM: fingerprintCA},
 		Storage:      []ichorv1alpha1.TalosStorage{testStorage("longhorn", map[string]string{labelEnv: "fingerprint"})},
 	}
@@ -173,14 +191,18 @@ func fingerprintMachine(role string, install ichorv1alpha1.TalosMachineDisk) *ic
 	m.Spec.Hostname = "node-" + role
 	m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{
 		MAC: testNICMAC, Addressing: ichorv1alpha1.MachineAddressingStatic, Addresses: []string{"10.0.0.10/24"},
-		Gateway: "10.0.0.1", DNSServers: []string{"1.1.1.1", "9.9.9.9"}, VLANID: 100,
+		Gateway: "10.0.0.1", DNSServers: []string{fpDNS1, fpDNS2}, VLANID: 100,
 	}
 	m.Spec.Disks = []ichorv1alpha1.TalosMachineDiskRole{
 		{Role: ichorv1alpha1.MachineDiskRoleEphemeral, Disk: ichorv1alpha1.TalosMachineDisk{Serial: "EPH1"}},
-		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "data", MaxSize: "200GiB", Disk: ichorv1alpha1.TalosMachineDisk{WWID: "naa.1"}},
-		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "scratch", Disk: ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/x"}},
-		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "fast", Disk: ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/sdb"}},
-		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "bulk", Disk: ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1"}},
+		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "data", MaxSize: "200GiB",
+			Disk: ichorv1alpha1.TalosMachineDisk{WWID: fpWWID}},
+		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "scratch",
+			Disk: ichorv1alpha1.TalosMachineDisk{ByIDPath: fpByID}},
+		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "fast",
+			Disk: ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/sdb"}},
+		{Role: ichorv1alpha1.MachineDiskRoleUserVolume, Name: "bulk",
+			Disk: ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1"}},
 	}
 	m.Spec.Install = &ichorv1alpha1.TalosMachineInstall{
 		Disk: install, Image: "factory.talos.dev/metal-installer/abc:v1.14.3", Wipe: true,
@@ -198,7 +220,7 @@ func fingerprintCases(t *testing.T, newBundle func(contract, shift string) *secr
 
 	on := true
 	access := &ichorconfig.MachineFeaturesKubernetesTalosAPIAccess{
-		Enabled: &on, AllowedRoles: []string{"os:reader"}, AllowedKubernetesNamespaces: []string{"ops"},
+		Enabled: &on, AllowedRoles: []string{fpReader}, AllowedKubernetesNamespaces: []string{"ops"},
 	}
 	sysctl := sysctlPatch("p", layerCluster, 0, nil, "1")
 
@@ -206,10 +228,10 @@ func fingerprintCases(t *testing.T, newBundle func(contract, shift string) *secr
 	statusDriven := fingerprintCluster()
 	statusDriven.Spec.Security.KubeletServingCertificates.VerifyFromAPIServer = true
 	statusDriven.Status.Conditions = []metav1.Condition{
-		{Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Done"},
-		{Type: ichorv1alpha1.ConditionKubeletServingVerified, Status: metav1.ConditionTrue, Reason: "Done"},
+		{Type: ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: "Reached"},
+		{Type: ichorv1alpha1.ConditionKubeletServingVerified, Status: metav1.ConditionTrue, Reason: "Reached"},
 	}
-	statusDriven.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{KubeProxy: "enabled"}
+	statusDriven.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{KubeProxy: fpEnabled}
 
 	legacy := fingerprintCluster()
 	legacy.Spec.VersionContract = contractV113
@@ -218,15 +240,17 @@ func fingerprintCases(t *testing.T, newBundle func(contract, shift string) *secr
 	legacy.Spec.ControlPlaneMetrics = nil
 	legacy.Spec.Containerd = nil
 
-	diskByID := ichorv1alpha1.TalosMachineDisk{ByIDPath: "/dev/disk/by-id/x"}
-	diskWWID := ichorv1alpha1.TalosMachineDisk{WWID: "naa.1"}
+	diskByID := ichorv1alpha1.TalosMachineDisk{ByIDPath: fpByID}
+	diskWWID := ichorv1alpha1.TalosMachineDisk{WWID: fpWWID}
 	diskSerial := ichorv1alpha1.TalosMachineDisk{Serial: "SN1"}
 	diskDev := ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/sda"}
 	diskBus := ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata2"}
 
 	// A worker takes the other disk-encryption key source, and a control plane the unmanaged CNI.
 	kms := fingerprintCluster()
-	kms.Spec.Security.DiskEncryption = &ichorv1alpha1.TalosClusterDiskEncryption{Type: "kms", KMSEndpoint: "https://kms.example.test"}
+	kms.Spec.Security.DiskEncryption = &ichorv1alpha1.TalosClusterDiskEncryption{
+		Type: fpKMS, KMSEndpoint: "https://kms.example.test",
+	}
 
 	unmanaged := fingerprintCluster()
 	unmanaged.Spec.CNI.Preset = ichorv1alpha1.TalosClusterCNIPresetUnmanaged
@@ -237,35 +261,36 @@ func fingerprintCases(t *testing.T, newBundle func(contract, shift string) *secr
 
 	var out []fingerprintCase
 
-	add := func(name, role string, c *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+	add := func(name string, c *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 		sys *SystemInputs, patches ...ichorv1alpha1.TalosConfigPatch,
 	) {
 		a, b := cur()
 		out = append(out, fingerprintCase{name, c, m, a, b, patches, sys})
 	}
 
-	add("cp", roleControlPlane, fingerprintCluster(), fingerprintMachine(roleControlPlane, diskByID), fingerprintSystem(), sysctl)
-	add("worker", roleWorker, fingerprintCluster(), fingerprintMachine(roleWorker, diskWWID), fingerprintSystem(), sysctl)
-	add("cp-status", roleControlPlane, statusDriven, fingerprintMachine(roleControlPlane, diskSerial), fingerprintSystem())
-	add("worker-api-access", roleWorker, fingerprintCluster(), fingerprintMachine(roleWorker, diskDev), fingerprintSystem(),
+	add("cp", fingerprintCluster(), fingerprintMachine(roleControlPlane, diskByID), fingerprintSystem(), sysctl)
+	add("worker", fingerprintCluster(), fingerprintMachine(roleWorker, diskWWID), fingerprintSystem(), sysctl)
+	add("cp-status", statusDriven, fingerprintMachine(roleControlPlane, diskSerial), fingerprintSystem())
+	add("worker-api-access", fingerprintCluster(), fingerprintMachine(roleWorker, diskDev), fingerprintSystem(),
 		configPatch("access", &ichorconfig.Config{Machine: &ichorconfig.Machine{
 			Features: &ichorconfig.MachineFeatures{KubernetesTalosAPIAccess: access},
 		}}))
-	add("worker-kms", roleWorker, kms, fingerprintMachine(roleWorker, diskByID), fingerprintSystem())
-	add("cp-unmanaged-cni", roleControlPlane, unmanaged, fingerprintMachine(roleControlPlane, diskByID), fingerprintSystem())
-	add("cp-staged", roleControlPlane, fingerprintCluster(), fingerprintMachine(roleControlPlane, diskByID), func() *SystemInputs {
+	add("worker-kms", kms, fingerprintMachine(roleWorker, diskByID), fingerprintSystem())
+	add("cp-unmanaged-cni", unmanaged, fingerprintMachine(roleControlPlane, diskByID), fingerprintSystem())
+	add("cp-staged", fingerprintCluster(), fingerprintMachine(roleControlPlane, diskByID), func() *SystemInputs {
 		sys := fingerprintSystem()
 		sys.Staged = &StagedKubernetes{
-			ControllerManagerVersion: "v1.36.1", SchedulerVersion: "v1.36.1", KubeletVersion: "v1.36.1", KubeProxyVersion: "v1.36.1",
+			ControllerManagerVersion: fpStaged, SchedulerVersion: fpStaged,
+			KubeletVersion: fpStaged, KubeProxyVersion: fpStaged,
 		}
 
 		return sys
 	}())
-	add("cp-api-access", roleControlPlane, fingerprintCluster(), fingerprintMachine(roleControlPlane, diskBus), fingerprintSystem(),
+	add("cp-api-access", fingerprintCluster(), fingerprintMachine(roleControlPlane, diskBus), fingerprintSystem(),
 		configPatch("access", &ichorconfig.Config{Machine: &ichorconfig.Machine{
 			Features: &ichorconfig.MachineFeatures{KubernetesTalosAPIAccess: access},
 		}}))
-	add("cp-apiserver-port", roleControlPlane, fingerprintCluster(), fingerprintMachine(roleControlPlane, diskByID), fingerprintSystem(),
+	add("cp-apiserver-port", fingerprintCluster(), fingerprintMachine(roleControlPlane, diskByID), fingerprintSystem(),
 		configPatch("port", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{
 			ControlPlane: &ichorconfig.ClusterControlPlane{LocalAPIServerPort: 7443},
 		}}))
@@ -274,7 +299,7 @@ func fingerprintCases(t *testing.T, newBundle func(contract, shift string) *secr
 		"legacy-contract", legacy, fingerprintMachine(roleControlPlane, diskByID),
 		newBundle(contractV113, "0h"), newBundle(contractV113, "1h"),
 		[]ichorv1alpha1.TalosConfigPatch{storedDocumentsPatch(t, timeServersDocument)},
-		&SystemInputs{RegistryAuth: map[string]RegistryAuth{"docker.io": {Password: "pw"}}},
+		&SystemInputs{RegistryAuth: map[string]RegistryAuth{dockerIO: {Password: "pw"}}},
 	})
 
 	return out
@@ -349,28 +374,53 @@ func TestRenderVersionMatchesOutput(t *testing.T) {
 
 // fingerprintUnaffecting lists the input fields no fixture sets because they cannot change the
 // render. Every entry names why; a field that is not here must be set by a case of fingerprintCases.
+const (
+	reasonApproval  = "an audit record of the approval; Render does not read it"
+	reasonCustomCNI = "the custom CNI is installed by the controller's Helm path, not rendered into the machine config"
+)
+
 var fingerprintUnaffecting = map[string]string{
-	"TalosMachineSpec.ApprovalState":                    "the approval gate acts before a render; Render does not read it",
-	"TalosMachineSpec.ApprovalDecision.Actor":           "an audit record of the approval; Render does not read it",
-	"TalosMachineSpec.ApprovalDecision.Reason":          "an audit record of the approval; Render does not read it",
-	"TalosMachineSpec.ApprovalDecision.At":              "an audit record of the approval; Render does not read it",
-	"TalosMachineSpec.Identity.Serial":                  "matches a discovered machine to this object in the controller; Render does not read it",
-	"TalosMachineSpec.Identity.MACAddresses":            "matches a discovered machine to this object in the controller; Render does not read it",
-	"TalosClusterSpec.DriftPolicy":                      "decides what the controller does with drift, not what is rendered",
-	"TalosClusterSpec.ImageFactoryURL":                  "the controller builds installer images from it; Render does not read it",
-	"TalosClusterSpec.Schematic.ID":                     "the controller builds installer images from it; Render does not read it",
-	"TalosClusterSpec.Discovery.Addresses":              "read by pkg/endpointguard, not by Render",
-	"TalosClusterSpec.Discovery.CIDRs":                  "read by pkg/endpointguard, not by Render",
-	"TalosClusterSpec.Security.KernelLockdown":          "read by pkg/secureboot's status check and the schematic, not by Render",
-	"TalosClusterSpec.CNI.Custom.Source.RepoURL":        "the custom CNI is installed by the controller's Helm path, not rendered into the machine configuration",
-	"TalosClusterSpec.CNI.Custom.Source.TargetRevision": "as RepoURL",
-	"TalosClusterSpec.CNI.Custom.Source.Path":           "as RepoURL",
-	"TalosClusterSpec.CNI.Custom.Source.Chart":          "as RepoURL",
-	"SystemInputs.Storage[].Spec.EvacuationTimeout":     "read by the node-operation hook (layer 4); layer 1 does not read it",
-	"SystemInputs.CARotation.Stage":                     "the CA rotation executor's input: its New is generated key material that changes every run, and its own tests cover it",
-	"SystemInputs.CARotation.New":                       "as Stage",
-	"SystemInputs.KeyRotation.Stage":                    "the key rotation executor's input: New is generated key material, and its own tests cover it",
-	"SystemInputs.KeyRotation.New":                      "as Stage",
+	"TalosMachineSpec.ApprovalState": "the approval gate acts before a render; Render does not read it",
+
+	"TalosMachineSpec.ApprovalDecision.Actor": reasonApproval,
+
+	"TalosMachineSpec.ApprovalDecision.Reason": reasonApproval,
+
+	"TalosMachineSpec.ApprovalDecision.At": reasonApproval,
+
+	"TalosMachineSpec.Identity.Serial": "matches a discovered machine in the controller, not in Render",
+
+	"TalosMachineSpec.Identity.MACAddresses": "matches a discovered machine in the controller, not in Render",
+
+	"TalosClusterSpec.DriftPolicy": "decides what the controller does with drift, not what is rendered",
+
+	"TalosClusterSpec.ImageFactoryURL": "the controller builds installer images from it; Render does not read it",
+
+	"TalosClusterSpec.Schematic.ID": "the controller builds installer images from it; Render does not read it",
+
+	"TalosClusterSpec.Discovery.Addresses": "read by pkg/endpointguard, not by Render",
+
+	"TalosClusterSpec.Discovery.CIDRs": "read by pkg/endpointguard, not by Render",
+
+	"TalosClusterSpec.Security.KernelLockdown": "read by pkg/secureboot's status check and the schematic, not by Render",
+
+	"TalosClusterSpec.CNI.Custom.Source.RepoURL": reasonCustomCNI,
+
+	"TalosClusterSpec.CNI.Custom.Source.TargetRevision": reasonCustomCNI,
+
+	"TalosClusterSpec.CNI.Custom.Source.Path": reasonCustomCNI,
+
+	"TalosClusterSpec.CNI.Custom.Source.Chart": reasonCustomCNI,
+
+	"SystemInputs.Storage[].Spec.EvacuationTimeout": "read by the node-operation hook (layer 4); layer 1 does not read it",
+
+	"SystemInputs.CARotation.Stage": "the CA rotation executor's input; New is key material generated per run",
+
+	"SystemInputs.CARotation.New": "as Stage",
+
+	"SystemInputs.KeyRotation.Stage": "the key rotation executor's input; New is generated key material",
+
+	"SystemInputs.KeyRotation.New": "as Stage",
 }
 
 // fingerprintCoverage walks v's type and returns, for every leaf field, whether v sets it.
@@ -419,7 +469,8 @@ func fingerprintCoverage(v reflect.Value, path string, out map[string]bool) {
 }
 
 func descends(ty reflect.Type) bool {
-	return strings.HasPrefix(ty.PkgPath(), "github.com/maeshinshin/ichor/api/") || ty.PkgPath() == reflect.TypeFor[SystemInputs]().PkgPath()
+	return strings.HasPrefix(ty.PkgPath(), "github.com/maeshinshin/ichor/api/") ||
+		ty.PkgPath() == reflect.TypeFor[SystemInputs]().PkgPath()
 }
 
 // TestFingerprintCoversEveryInput: a field of the cluster spec, the machine spec or SystemInputs

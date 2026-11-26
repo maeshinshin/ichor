@@ -643,9 +643,12 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		op := &ichorv1alpha1.TalosOperation{}
 
 		_, err := adv.requireCilium(ctx, cluster, op, cni.KubeProxyReplaced)
-		var foreign *ForeignCNIError
 		Expect(err).To(MatchError(ContainSubstring("unmanaged")))
-		Expect(errors.As(err, &foreign)).To(BeTrue(), "got %v", err)
+		Expect(err).To(MatchError(func(err error) bool {
+			_, ok := errors.AsType[*ForeignCNIError](err)
+
+			return ok
+		}, "is a ForeignCNIError"))
 		Expect(pauseReason(err)).To(Equal(reasonCNIForeign))
 		Expect(cniJobExists(cluster)).To(BeFalse())
 	})

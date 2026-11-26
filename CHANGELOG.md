@@ -1,5 +1,91 @@
 # Changelog
 
+## v0.3.5 (2026-11-27)
+
+A patch release of fixes to v0.3.4: deleting the controller namespace is refused until
+you consent, a Cilium private key can no longer be embedded in a TalosCluster or taken
+over from an existing install, the takeover keeps a Helm record that changed after its
+backup, and the Cilium agents are not Ready while a rollout is still running. No CRD
+field is added or removed.
+
+### Upgrade notes
+
+- **Deleting the controller namespace is refused until it carries
+  `ichor.maesh.dev/allow-delete=true`.** A new `ichor-protected-namespace`
+  ValidatingAdmissionPolicy (the chart with `admission.enabled`, and
+  `config/admission`) refuses the DELETE of a Namespace labelled
+  `ichor.maesh.dev/protected`. The controller labels its own namespace at start-up, and
+  the install manifest's Namespace carries the label. Deleting the namespace used to
+  take the controller and the webhook Service down while the clusters were still there,
+  and left the namespace `Terminating` for good. To remove Ichor on purpose, follow the
+  uninstall steps in the [Helm upgrade guide](docs/guides/install-with-helm/upgrade.md):
+  export each bundle, remove the clusters, annotate every Secret labelled
+  `ichor.maesh.dev/protected`, annotate the namespace, then delete it.
+- **The controller's ClusterRole gains `get` and `patch` on its own Namespace.** The
+  rule is limited by `resourceNames` to that one namespace; the chart writes the release
+  namespace. The write is metadata only.
+- **A TalosCluster whose `spec.cni.cilium.values` already holds a private key keeps
+  working, and gets a warning on update.** A new or changed key is refused. The paths
+  are `tls.ca.key`, `hubble.tls.server.key`, `hubble.metrics.tls.server.key`,
+  `hubble.relay.tls.client.key`, `hubble.relay.tls.server.key` and
+  `hubble.ui.tls.client.key`. Move the key to a Secret and set the sibling
+  `existingSecret` (for example `hubble.tls.server.existingSecret`) to its name; for
+  `tls.ca`, remove the key and let the chart generate the CA
+  (`hubble.tls.auto.method: helm`, `cronJob` or `certmanager`).
+- **Adopting a Cilium whose Helm values hold a private key is refused until the key
+  moves to a Secret.** The takeover would copy the key into `spec.cni.cilium.values`.
+  Move it with `helm upgrade` on the existing release, then run adopt again.
+- **A stuck namespace has a documented way out.** A namespace already `Terminating`
+  from an earlier version is not recovered by this release; see "Recover a namespace
+  stuck in Terminating" in the troubleshooting guide, which brings the cluster back
+  with `ichor adopt --secrets-bundle`.
+
+### Controller
+
+- `ProtectNamespace` labels the controller's own namespace with
+  `ichor.maesh.dev/protected` at start-up, retrying until the API answers, and writes
+  nothing when the label is there. It patches metadata only.
+- `CheckAgentsReady` waits for a RollingUpdate rollout: the Cilium agent DaemonSet is
+  not Ready while fewer agents are updated than desired. An `OnDelete` DaemonSet is
+  exempt, since it never updates pods by itself.
+- The `controller-jobs-policy` message names the release namespace instead of
+  `ichor-system`.
+
+### CLI
+
+- `ichor adopt` refuses a foreign Cilium whose Helm values hold a private key, in the
+  preflight, and names the chart's Secret-based alternative.
+- The Cilium takeover retires the foreign Helm release record only at the
+  resourceVersion it backed up. A record that changed after the backup is kept, and
+  the message says to run the command again.
+- The CNI version message reads "Ichor never moves the CNI to a lower minor" in place
+  of "never downgrades a CNI".
+- `--cilium-values` refuses a private key, as the webhook does.
+
+### Webhooks
+
+- The `TalosCluster` webhook refuses a private key in `spec.cni.cilium.values`. A key
+  an existing object already stores unchanged passes on update, with a warning that
+  names the paths.
+
+### Chart
+
+- The `ichor-protected-namespace` policy and its binding are added under
+  `admission.enabled`.
+- The manager role may `get` and `patch` the release namespace.
+- The `controller-jobs-policy` message names `{{ .Release.Namespace }}`.
+
+### Docs
+
+- The Helm upgrade guide gives the uninstall steps: export the bundles, remove the
+  clusters, annotate the Secrets labelled `ichor.maesh.dev/protected` with one
+  `kubectl annotate -l` command, annotate the namespace, delete it.
+- The troubleshooting guide recovers a namespace stuck in `Terminating` and brings the
+  cluster back with `ichor adopt --secrets-bundle`, says what adopt does with the old
+  install's cluster-scoped objects, and says `ichor restore cluster` is for a cluster
+  whose control planes and etcd data are gone.
+- ADR 0010 is amended for the protected namespace.
+
 ## v0.3.4 (2026-11-26)
 
 A patch release of fixes to v0.3.3: a cluster stored without `spec.cni` reads as

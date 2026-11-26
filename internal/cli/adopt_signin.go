@@ -97,6 +97,12 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		return nil
 	}
 
+	if present.Installation != nil && present.Deployment == nil {
+		return fmt.Errorf("adopt: the IchorInstallation %q is left over from a removed install (no Ichor controller Deployment exists): "+
+			"remove it with `kubectl delete ichorinstallation %s` and run adopt again",
+			present.Installation.Name, present.Installation.Name)
+	}
+
 	plan := &signInPlan{opts: opts, users: true}
 
 	if present.Present() {

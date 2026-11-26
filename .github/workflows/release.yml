@@ -89,6 +89,9 @@ jobs:
       - name: Helm release record is under the Secret limit
         run: nix develop --command make check-release-record
 
+      - name: Cilium patch bump still passes its tests
+        run: nix develop --command make check-cilium-bump
+
       - name: Regenerate manifests and mirror types
         run: nix develop --command make manifests generate fmt docs-reference third-party-notices
 

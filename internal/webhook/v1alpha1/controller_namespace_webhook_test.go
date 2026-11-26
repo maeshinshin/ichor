@@ -29,11 +29,11 @@ import (
 const controllerNS = "ichor-system"
 
 func nsRequest(op admissionv1.Operation, resource, namespace, user string) admission.Request {
-	return admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
+	return admission.Request{
 		Operation: op, Namespace: namespace, Name: "x",
 		Resource: metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resource},
 		UserInfo: authenticationv1.UserInfo{Username: user},
-	}}
+	}
 }
 
 // A new Ichor object outside the controller's namespace is refused, naming that namespace; the same create

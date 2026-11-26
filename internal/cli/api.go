@@ -34,6 +34,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	authv1 "k8s.io/api/authentication/v1"
@@ -99,10 +100,43 @@ func overrideOf(opts apiOptions) *pb.Override {
 	return &pb.Override{}
 }
 
+// controllerNamespaceValue is the value of every -n/--namespace flag: it accepts only the controller's namespace
+// (ADR 0175), so a command never reaches for an Ichor object anywhere else.
+type controllerNamespaceValue struct{ p *string }
+
+func (v controllerNamespaceValue) String() string {
+	if v.p == nil {
+		return ""
+	}
+
+	return *v.p
+}
+
+func (v controllerNamespaceValue) Set(s string) error {
+	if s != ichorControllerNamespace {
+		return fmt.Errorf("--namespace %q is not %q: every Ichor object lives in the namespace of Ichor's controller, %q; nothing was written",
+			s, ichorControllerNamespace, ichorControllerNamespace)
+	}
+
+	*v.p = s
+
+	return nil
+}
+
+func (controllerNamespaceValue) Type() string { return "string" }
+
+// bindControllerNamespaceFlag registers a hidden, deprecated -n/--namespace that only accepts the controller's
+// namespace; def is its default ("" where the command's own default is every namespace).
+func bindControllerNamespaceFlag(f *pflag.FlagSet, p *string, def string) {
+	*p = def
+	f.VarP(controllerNamespaceValue{p}, "namespace", "n", "namespace of the Ichor resources; only \""+ichorControllerNamespace+"\", the controller's, is accepted")
+	_ = f.MarkDeprecated("namespace", "every Ichor object lives in the controller's namespace (\""+ichorControllerNamespace+"\"); the flag only accepts that value")
+}
+
 // addAPIFlags registers the shared flags on a command group.
 func addAPIFlags(cmd *cobra.Command) {
 	f := cmd.PersistentFlags()
-	f.StringVarP(&apiOpts.Namespace, "namespace", "n", ichorControllerNamespace, "namespace of the Ichor resources the command names")
+	bindControllerNamespaceFlag(f, &apiOpts.Namespace, ichorControllerNamespace)
 	f.StringVar(&apiOpts.IchorNamespace, "ichor-namespace", ichorControllerNamespace,
 		"namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives)")
 	f.BoolVar(&apiOpts.Local, "local", false, "do not use ichor-ui; compute from the Kubernetes API directly")

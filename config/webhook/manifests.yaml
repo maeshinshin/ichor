@@ -122,6 +122,34 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-ichor-maesh-dev-v1alpha1-namespace
+  failurePolicy: Fail
+  name: vnamespace-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - talosclusters
+    - talosmachines
+    - talosconfigpatches
+    - talosoperations
+    - talosetcdbackups
+    - talosstorages
+    - taloscredentialrequests
+    - machinereclaims
+    - ichorusers
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-ichor-maesh-dev-v1alpha1-override
   failurePolicy: Fail
   name: voverride-v1alpha1.kb.io

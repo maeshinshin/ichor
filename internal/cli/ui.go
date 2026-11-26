@@ -144,7 +144,7 @@ func init() {
 	rootCmd.AddCommand(uiCmd)
 
 	flags := uiCmd.Flags()
-	flags.StringVarP(&uiOpts.Namespace, "namespace", "n", ichorControllerNamespace, "namespace ichor-ui runs in")
+	bindControllerNamespaceFlag(flags, &uiOpts.Namespace, ichorControllerNamespace)
 	flags.IntVar(&uiOpts.LocalPort, "local-port", 0, "local port to forward to (defaults to the Service's own port)")
 	flags.BoolVar(&uiOpts.OpenBrowser, "open-browser", true, "open the default web browser once the port-forward is ready")
 }

@@ -48,7 +48,7 @@ A patch with a setting spec.config has no place for is left as it is, listed wit
 Migrated=False. Write those settings in spec.config by hand and clear spec.documents. Running the command again
 changes nothing that is already migrated.`,
 	Example: `  ichor migrate patches
-  ichor migrate patches --namespace ichor-system`,
+  ichor migrate patches`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		c, err := newKubeClient(kubeconfigPath)
@@ -78,6 +78,7 @@ changes nothing that is already migrated.`,
 func init() {
 	rootCmd.AddCommand(migrateCmd)
 	migrateCmd.AddCommand(migratePatchesCmd)
-	migratePatchesCmd.Flags().StringVarP(&migratePatchesNamespace, "namespace", "n", "", "only the patches of this namespace (default: all)")
+	// Default "": every namespace, so a patch an older release left outside the controller's namespace is migrated too.
+	bindControllerNamespaceFlag(migratePatchesCmd.Flags(), &migratePatchesNamespace, "")
 	markWrites(migratePatchesCmd)
 }

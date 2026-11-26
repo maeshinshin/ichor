@@ -142,6 +142,9 @@ var _ = BeforeSuite(func() {
 	err = SetupTalosStorageWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupControllerNamespaceWebhookWithManager(mgr, testNamespace, []string{testControllerUser})
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

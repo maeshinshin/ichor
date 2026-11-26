@@ -156,10 +156,12 @@ func init() {
 	f.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected; Ichor's CiliumNetworkPolicies are applied only for cilium")
 	f.BoolVar(&installerRunOpts.NoPolicies, "no-cilium-policies", false, "skip Ichor's CiliumNetworkPolicies even on Cilium (operator opt-out)")
 	_ = installerRunCmd.MarkFlagRequired("run-id")
+	_ = installerRunCmd.Flags().MarkHidden("namespace") // the Job passes the namespace the controller really runs in
 
 	c := installerCheckCmd.Flags()
 	c.StringVar(&installerRunOpts.Namespace, "namespace", ichorControllerNamespace, "namespace Ichor is installed in")
 	c.StringVar(&installerRunOpts.CNIDetected, "cni-detected", "", "TalosCluster status.cni.detected")
 	c.BoolVar(&installerRunOpts.NoPolicies, "no-cilium-policies", false, "as for run")
+	_ = installerCheckCmd.Flags().MarkHidden("namespace")
 	c.BoolVar(&installerCheckSignInPending, "sign-in-pending", false, "the caller turns Ichor's sign-in on before it starts the upgrade, so an ichor-ui with none is not a refusal")
 }

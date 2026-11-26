@@ -18,6 +18,8 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
+	"slices"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -42,6 +44,14 @@ func SetupControllerNamespaceWebhookWithManager(mgr ctrl.Manager, namespace stri
 }
 
 // Handle implements admission.Handler.
-func (h *ControllerNamespaceHandler) Handle(_ context.Context, _ admission.Request) admission.Response {
-	return admission.Allowed("")
+//
+// Only creates are checked: an update or delete of an object an older release left elsewhere must still work, and
+// Ichor's own controller (exempt) keeps creating the children of such an object where it lives.
+func (h *ControllerNamespaceHandler) Handle(_ context.Context, req admission.Request) admission.Response {
+	if req.Operation != opCreate || req.Namespace == h.Namespace || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
+		return admission.Allowed("")
+	}
+
+	return admission.Denied(fmt.Sprintf("a new %s cannot be created in namespace %q: every Ichor object lives in the namespace of "+
+		"Ichor's controller, %q; create it there", req.Resource.Resource, req.Namespace, h.Namespace))
 }

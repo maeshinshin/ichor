@@ -295,3 +295,46 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		Expect(patchCount(kc)).To(Equal(map[string]int{corednsPatchKey: 1, uiPatchKey: 1}))
 	})
 })
+
+var _ = Describe("TalosOperation one-shot cluster conditions", func() {
+	// staleAndOther returns a copy of the cluster read before another writer raised other on the server.
+	staleAndOther := func(f *caRotFixture, other string) *ichorv1alpha1.TalosCluster {
+		key := types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}
+		stale := &ichorv1alpha1.TalosCluster{}
+		Expect(k8sClient.Get(ctx, key, stale)).To(Succeed())
+
+		var live ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, key, &live)).To(Succeed())
+		apimeta.SetStatusCondition(&live.Status.Conditions, metav1.Condition{
+			Type: other, Status: metav1.ConditionTrue, Reason: "Other", Message: "raised by another writer",
+		})
+		Expect(k8sClient.Status().Update(ctx, &live)).To(Succeed())
+
+		return stale
+	}
+	serverHas := func(f *caRotFixture, typ string) bool {
+		var live ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &live)).To(Succeed())
+
+		return apimeta.IsStatusConditionTrue(live.Status.Conditions, typ)
+	}
+
+	It("setClientsNotRestarted keeps a condition another writer raised after the cluster was read", func() {
+		f, _ := restartFixture(ciliumNodes)
+		stale := staleAndOther(f, ichorv1alpha1.ConditionBundleBackupStale)
+		run := &caRun{r: f.newReconciler(), cluster: stale, op: &ichorv1alpha1.TalosOperation{}}
+
+		Expect(run.setClientsNotRestarted(ctx, true, "a client is not back")).To(Succeed())
+		Expect(serverHas(f, ichorv1alpha1.ConditionCAClientsNotRestarted)).To(BeTrue())
+		Expect(serverHas(f, ichorv1alpha1.ConditionBundleBackupStale)).To(BeTrue())
+	})
+
+	It("raiseBundleBackupStale keeps a condition another writer raised after the cluster was read", func() {
+		f, _ := restartFixture(ciliumNodes)
+		stale := staleAndOther(f, ichorv1alpha1.ConditionCAClientsNotRestarted)
+
+		Expect(f.newReconciler().raiseBundleBackupStale(ctx, stale, "Stale", "export the bundle")).To(Succeed())
+		Expect(serverHas(f, ichorv1alpha1.ConditionBundleBackupStale)).To(BeTrue())
+		Expect(serverHas(f, ichorv1alpha1.ConditionCAClientsNotRestarted)).To(BeTrue())
+	})
+})

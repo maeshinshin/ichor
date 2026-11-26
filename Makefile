@@ -90,9 +90,11 @@ FOREIGN_CILIUM_CHART_VERSION ?= 1.19.10
 FOREIGN_CILIUM_CHART_SHA256 ?= b7252afca3413a33e2b987c954e52441e96979e411e1495ecc6aefe8cd258863
 
 .PHONY: foreign-cilium-chart
-foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster e2e tests install and verify its SHA-256.
-	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz
-	echo "$(FOREIGN_CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz" | sha256sum -c -
+foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster e2e tests install and verify its SHA-256 (a no-op when the file is already there and matches).
+	@f=pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz; \
+	if echo "$(FOREIGN_CILIUM_CHART_SHA256)  $$f" | sha256sum -c --status -; then exit 0; fi; \
+	curl -fsSL -o $$f https://helm.cilium.io/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz && \
+	echo "$(FOREIGN_CILIUM_CHART_SHA256)  $$f" | sha256sum -c -
 
 # TestA6Refused installs this chart, two minors below the embedded 1.20.4. The digest is the one helm.cilium.io's
 # index.yaml lists for it.

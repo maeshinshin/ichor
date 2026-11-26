@@ -125,6 +125,9 @@ subst pkg/cni/cilium/render.go "s#^//go:embed chart/cilium-$oldre\.tgz#//go:embe
 must_have pkg/cni/cilium/render.go "//go:embed chart/cilium-$new.tgz"
 subst pkg/cni/cilium/values.go "s/^\([[:space:]]*ChartVersion = \)\"$oldre\"/\1\"$new\"/"
 must_have pkg/cni/cilium/values.go "ChartVersion = \"$new\""
+# The embedded archive is the one chart .gitignore does not ignore (the foreign test chart is fetched, not tracked).
+subst .gitignore "s#^!/pkg/cni/cilium/chart/cilium-$oldre\.tgz#!/pkg/cni/cilium/chart/cilium-$new.tgz#"
+must_have .gitignore "!/pkg/cni/cilium/chart/cilium-$new.tgz"
 [ "$old" = "$(makefile_var FOREIGN_CILIUM_CHART_VERSION)" ] || rm -f "$chart_dir/cilium-$old.tgz"
 
 # 3. Prose and hardware-test checks that name the embedded version. Not touched: CHANGELOG.md (a release

@@ -72,6 +72,7 @@ jobs:
           branch: chore/cilium-patch
           sign-commits: true
           add-paths: |
+            .gitignore
             Makefile
             README.md
             THIRD-PARTY-NOTICES

@@ -111,7 +111,7 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		plan.users = plan.switchUI
 
 		if !plan.users {
-			if plan.users, err = signInUnfinished(ctx, deps.K8s); err != nil {
+			if plan.users, err = signInUnfinished(ctx, deps.K8s, ichorControllerNamespace); err != nil {
 				return err
 			}
 		}

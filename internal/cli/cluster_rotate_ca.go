@@ -186,7 +186,7 @@ func afterRotateCAWithoutHandoff(ctx context.Context, cmd *cobra.Command, cluste
 			ref.GetName(), err, ref.GetName())
 	}
 
-	if err := watchCARotation(ctx, k8s, ref.GetNamespace(), ref.GetName(), errw, nil); err != nil {
+	if err := watchCARotation(ctx, k8s, rotateCAOperation(ref).Namespace, ref.GetName(), errw, nil); err != nil {
 		return err
 	}
 
@@ -246,7 +246,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 		return err
 	}
 
-	if err := watchCARotation(ctx, newClient, ref.GetNamespace(), ref.GetName(), errw, progress); err != nil {
+	if err := watchCARotation(ctx, newClient, rotateCAOperation(ref).Namespace, ref.GetName(), errw, progress); err != nil {
 		return err
 	}
 
@@ -400,5 +400,5 @@ func init() {
 
 // rotateCAOperation is the operation watchCARotation follows: the one in apiOpts.Namespace, which the hand-off uses too.
 func rotateCAOperation(ref *pb.ObjectRef) types.NamespacedName {
-	return types.NamespacedName{Namespace: ref.GetNamespace(), Name: ref.GetName()}
+	return types.NamespacedName{Namespace: apiOpts.Namespace, Name: ref.GetName()}
 }

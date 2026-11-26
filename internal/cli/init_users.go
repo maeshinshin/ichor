@@ -238,9 +238,9 @@ func setClusterAuthentication(
 
 // checkAuthenticationAccess asks, read-only, whether the caller may update talosclusters/authentication, the
 // right setClusterAuthentication needs, so a denial refuses before the first write.
-func checkAuthenticationAccess(ctx context.Context, k client.Client) error {
+func checkAuthenticationAccess(ctx context.Context, k client.Client, ns string) error {
 	ssar := &authzv1.SelfSubjectAccessReview{Spec: authzv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authzv1.ResourceAttributes{
-		Namespace: ichorControllerNamespace, Verb: "update", Group: ichorv1alpha1.GroupVersion.Group,
+		Namespace: ns, Verb: "update", Group: ichorv1alpha1.GroupVersion.Group,
 		Resource: "talosclusters", Subresource: "authentication",
 	}}}
 	if err := k.Create(ctx, ssar); err != nil {
@@ -256,10 +256,10 @@ func checkAuthenticationAccess(ctx context.Context, k client.Client) error {
 }
 
 // adminState reports whether the IchorUser name and its entry in the credentials Secret exist.
-func adminState(ctx context.Context, k client.Reader, name string) (user, credential bool, err error) {
+func adminState(ctx context.Context, k client.Reader, ns, name string) (user, credential bool, err error) {
 	var u ichorv1alpha1.IchorUser
 
-	switch err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: name}, &u); {
+	switch err := k.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &u); {
 	case err == nil:
 		user = true
 	case !apierrors.IsNotFound(err):
@@ -268,7 +268,7 @@ func adminState(ctx context.Context, k client.Reader, name string) (user, creden
 
 	var sec corev1.Secret
 
-	switch err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}, &sec); {
+	switch err := k.Get(ctx, types.NamespacedName{Namespace: ns, Name: ichorauth.CredentialsSecretName}, &sec); {
 	case err == nil:
 		credential = len(sec.Data[name]) > 0
 	case !apierrors.IsNotFound(err):
@@ -280,9 +280,9 @@ func adminState(ctx context.Context, k client.Reader, name string) (user, creden
 
 // signInUnfinished is the evidence of a part-failed sign-in run on an ichor-ui that has users on: no IchorUser
 // holds the admin role at all (whatever its name), or the credentials Secret is missing.
-func signInUnfinished(ctx context.Context, k client.Reader) (bool, error) {
+func signInUnfinished(ctx context.Context, k client.Reader, ns string) (bool, error) {
 	var users ichorv1alpha1.IchorUserList
-	if err := k.List(ctx, &users, client.InNamespace(ichorControllerNamespace)); err != nil {
+	if err := k.List(ctx, &users, client.InNamespace(ns)); err != nil {
 		return false, fmt.Errorf("sign-in: listing the IchorUsers: %w", err)
 	}
 
@@ -290,7 +290,7 @@ func signInUnfinished(ctx context.Context, k client.Reader) (bool, error) {
 		return true, nil
 	}
 
-	err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: ichorauth.CredentialsSecretName}, &corev1.Secret{})
+	err := k.Get(ctx, types.NamespacedName{Namespace: ns, Name: ichorauth.CredentialsSecretName}, &corev1.Secret{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return false, fmt.Errorf("sign-in: reading the credentials Secret: %w", err)
 	}
@@ -300,8 +300,8 @@ func signInUnfinished(ctx context.Context, k client.Reader) (bool, error) {
 
 // ensureAdmin makes the first administrator whole and returns the generated password, or "" when the
 // administrator already has its password (a re-run after a part-failed run reuses it, never resets it).
-func ensureAdmin(ctx context.Context, k client.Client, name string, errw io.Writer) (string, error) {
-	user, credential, err := adminState(ctx, k, name)
+func ensureAdmin(ctx context.Context, k client.Client, ns, name string, errw io.Writer) (string, error) {
+	user, credential, err := adminState(ctx, k, ns, name)
 	if err != nil {
 		return "", err
 	}
@@ -323,7 +323,7 @@ func ensureAdmin(ctx context.Context, k client.Client, name string, errw io.Writ
 			return "", fmt.Errorf("sign-in: hashing the admin password: %w", err)
 		}
 
-		if err := patchCredential(ctx, k, ichorControllerNamespace, name, cred); err != nil {
+		if err := patchCredential(ctx, k, ns, name, cred); err != nil {
 			return "", fmt.Errorf("sign-in: storing the admin password: %w", err)
 		}
 
@@ -331,7 +331,7 @@ func ensureAdmin(ctx context.Context, k client.Client, name string, errw io.Writ
 	}
 
 	spec := userSpec{Name: name, DisplayName: name, Roles: []string{ichorauth.RoleAdmin}}
-	if err := createUserWithPassword(ctx, k, spec, password, time.Now(), errw); err != nil {
+	if err := createUserWithPassword(ctx, k, ns, spec, password, time.Now(), errw); err != nil {
 		return "", fmt.Errorf("sign-in: creating the first admin: %w", err)
 	}
 
@@ -342,25 +342,27 @@ func ensureAdmin(ctx context.Context, k client.Client, name string, errw io.Writ
 // the TalosCluster exists: credentials Secret, first admin (before the switch,
 // so nobody is locked out), then the switch. It returns the generated password.
 func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.Writer) (password string, err error) {
+	ns := opts.ichorNS()
+
 	// Everything that can fail on the cluster's shape is checked before the first write.
-	targets, err := prepareUITargets(ctx, k, ichorControllerNamespace, opts.uiSettings())
+	targets, err := prepareUITargets(ctx, k, ns, opts.uiSettings())
 	if err != nil {
 		return "", err
 	}
 
-	if err := checkUITLSSecret(ctx, k, ichorControllerNamespace, opts); err != nil {
+	if err := checkUITLSSecret(ctx, k, ns, opts); err != nil {
 		return "", err
 	}
 
-	if err := storeUITLSSecret(ctx, k, ichorControllerNamespace, opts, errw); err != nil {
+	if err := storeUITLSSecret(ctx, k, ns, opts, errw); err != nil {
 		return "", err
 	}
 
-	if err := ensureCredentialsSecret(ctx, k, ichorControllerNamespace, errw); err != nil {
+	if err := ensureCredentialsSecret(ctx, k, ns, errw); err != nil {
 		return "", err
 	}
 
-	password, err = ensureAdmin(ctx, k, opts.AdminUser, errw)
+	password, err = ensureAdmin(ctx, k, ns, opts.AdminUser, errw)
 	if err != nil {
 		return "", err
 	}
@@ -450,3 +452,7 @@ func refuseRemovedOpenMode(cmd *cobra.Command) error {
 
 // who is the command the refusals name: init, unless adopt set the sign-in up.
 func (o initOptions) who() string { return cmp.Or(o.cmd, "init") }
+
+// ichorNS is the namespace of Ichor's controller for these options: init and adopt keep the default, an upgrade sets
+// Namespace from --ichor-namespace.
+func (o initOptions) ichorNS() string { return cmp.Or(o.Namespace, ichorControllerNamespace) }

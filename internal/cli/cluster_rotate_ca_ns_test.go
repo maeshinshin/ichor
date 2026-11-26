@@ -22,16 +22,19 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+// testOtherNS is a controller namespace other than the default.
+const testOtherNS = "other"
+
 // rotate ca hands off credentials in apiOpts.Namespace and must follow the operation in that same namespace, not in
 // whichever namespace the created operation's ref happens to carry.
 func TestRotateCAFollowsTheOperationInTheNamespaceItHandsOffIn(t *testing.T) {
 	old := apiOpts.Namespace
-	apiOpts.Namespace = "other"
+	apiOpts.Namespace = testOtherNS
 
 	t.Cleanup(func() { apiOpts.Namespace = old })
 
 	got := rotateCAOperation(&pb.ObjectRef{Namespace: ichorControllerNamespace, Name: "op"})
-	if got.Namespace != "other" || got.Name != "op" {
+	if got.Namespace != testOtherNS || got.Name != "op" {
 		t.Fatalf("follows %s/%s, want other/op", got.Namespace, got.Name)
 	}
 }

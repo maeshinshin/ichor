@@ -28,7 +28,10 @@ var upgradeSignIn initOptions
 // has a sign-in already. clusters are the TalosClusters that get the authenticator: those that can carry
 // Ichor's issuer and do not have it.
 func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*signInPlan, []ichorv1alpha1.TalosCluster, error) {
-	ui, err := findDeploymentByLabel(ctx, k, ichorControllerNamespace, uiComponentLabel, uiComponentValue)
+	// The effective controller namespace, the one --ichor-namespace names, is where ichor-ui, the users and the clusters are.
+	opts.Namespace = cmp.Or(apiOpts.IchorNamespace, ichorControllerNamespace)
+
+	ui, err := findDeploymentByLabel(ctx, k, opts.Namespace, uiComponentLabel, uiComponentValue)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,14 +65,14 @@ func signInPlanFor(ctx context.Context, k client.Client, opts initOptions) (*sig
 	users := switchUI
 
 	if finishing {
-		users, err = signInUnfinished(ctx, k)
+		users, err = signInUnfinished(ctx, k, opts.Namespace)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	var list ichorv1alpha1.TalosClusterList
-	if err := k.List(ctx, &list, client.InNamespace(ichorControllerNamespace)); err != nil {
+	if err := k.List(ctx, &list, client.InNamespace(opts.Namespace)); err != nil {
 		return nil, nil, fmt.Errorf("upgrade: listing the TalosClusters: %w", err)
 	}
 
@@ -109,7 +112,7 @@ func ensureSignIn(ctx context.Context, k client.Client, in io.Reader, errw io.Wr
 	_, _ = fmt.Fprintf(errw, "upgrade: %s. The upgrade will first %s\n", why, plan.describe())
 
 	if len(clusters) > 0 {
-		if err := checkAuthenticationAccess(ctx, k); err != nil {
+		if err := checkAuthenticationAccess(ctx, k, plan.opts.ichorNS()); err != nil {
 			return "", "", err
 		}
 	}

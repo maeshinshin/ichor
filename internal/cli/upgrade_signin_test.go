@@ -464,7 +464,7 @@ func TestUpgradeSignIn_AHealthyInstallWithAnotherAdminIsLeftAlone(t *testing.T) 
 // With --ichor-namespace other, the sign-in step reads ichor-ui and the clusters in other, and writes the first
 // administrator, its credentials Secret and the authenticator there, and nothing in the default namespace.
 func TestUpgradeSignIn_UsesTheEffectiveControllerNamespace(t *testing.T) {
-	const other = "other"
+	const other = testOtherNS
 
 	old := apiOpts.IchorNamespace
 	apiOpts.IchorNamespace = other

@@ -1,3 +1,4 @@
+{{- if .Values.webhook.enabled }}
 # Mirrors config/rbac/ichor-auto-patch/. Fixed names, because the controller impersonates the
 # username system:serviceaccount:<namespace>:ichor-auto-patch. The controller never writes a TalosCluster
 # spec; this identity does, for the newer patch of the running minor and the operation that goes with it.
@@ -78,3 +79,4 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "ichor.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}

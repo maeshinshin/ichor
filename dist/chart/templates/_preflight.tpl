@@ -24,6 +24,9 @@ ichor.preflight fails the install on a cluster with no pod network. lookup retur
 `helm template` and `--dry-run`, so the check passes there; preflight.cni=false turns it off.
 */}}
 {{- define "ichor.preflight" -}}
+{{- if .Values.rbac.namespaced -}}
+{{- fail "rbac.namespaced=true is not supported: the controller watches its resources cluster-wide and needs cluster-scoped permissions. Leave rbac.namespaced at false." -}}
+{{- end -}}
 {{- if .Values.preflight.cni -}}
 {{- $nodes := lookup "v1" "Node" "" "" -}}
 {{- if and $nodes $nodes.items (eq (include "ichor.preflight.noCNI" $nodes.items) "true") -}}

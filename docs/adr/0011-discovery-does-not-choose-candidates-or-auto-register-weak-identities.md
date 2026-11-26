@@ -1,6 +1,6 @@
 # 0011. Discovery does not choose its own candidates, and never auto-registers a weak identity
 
-Status: Accepted · Date: 2026-10-25 · Design section: "Nodes" (discovery and approval)
+Status: Accepted, amended · Date: 2026-10-25 · Design section: "Nodes" (discovery and approval)
 
 Decided: Made `TalosMachineSpec.Role` optional; discovery never picks a role or auto-registers a weak identity
 
@@ -330,3 +330,7 @@ decision, not implied by anything settled here.
 
 - Addendum (ADR 0086): the same identity answering in maintenance mode at a new address is recorded in `status.observedEndpoint`, never in `spec.endpoint`.
 - Addendum (ADR 0108): a `TalosMachine`'s `spec.endpoint` must be an address of `spec.discovery` (or the user needs `update` on `talosmachines/endpoint`), and approving needs `approve` on `talosmachines/approval`. Discovery-created machines are unaffected.
+
+## Amendment (2026-11-26): `rbac.namespaced=true` is refused
+
+The paragraph that says `rbac.namespaced` scopes every rule in `manager-role` to the release namespace describes a mode that does not work: the controller watches Ichor's resources cluster-wide and needs permissions on cluster-scoped resources. The chart now fails on `rbac.namespaced=true`, and the key is deprecated. The other statements in this ADR are unchanged.

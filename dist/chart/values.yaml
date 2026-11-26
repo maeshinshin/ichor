@@ -428,9 +428,9 @@ ichorUI:
 ## RBAC configuration
 ##
 rbac:
-  ## RBAC resource scope
-  ## - false (default): ClusterRole/ClusterRoleBinding (all namespaces)
-  ## - true: Role/RoleBinding (release namespace only)
+  ## DEPRECATED. true is not supported and the chart refuses it: the controller watches its
+  ## resources cluster-wide and needs cluster-scoped permissions. Leave it false (ClusterRole and
+  ## ClusterRoleBinding). The key stays so existing values files still load.
   ##
   namespaced: false
 
@@ -508,6 +508,9 @@ metricsCert:
 ## the webhook server is not started before the file is mounted (cold-start
 ## amendment).
 ##
+## false drops the validating and mutating webhooks, and with them the three impersonated identities
+## (ichor-auto-patch, ichor-storage-extensions, ichor-consent-sweep): their limits live in the webhook,
+## so auto-patch, the storage-preset schematic change and the kube-proxy consent sweep need it on.
 webhook:
   enabled: true
   # Webhook server port

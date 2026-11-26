@@ -1,3 +1,4 @@
+{{- if .Values.webhook.enabled }}
 # Mirrors config/rbac/ichor-storage-extensions/. Fixed names, because the controller impersonates the
 # username system:serviceaccount:<namespace>:ichor-storage-extensions. The controller never writes a TalosCluster
 # spec; this identity writes spec.schematic.id (ADR 0173) and nothing else.
@@ -71,3 +72,4 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "ichor.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}

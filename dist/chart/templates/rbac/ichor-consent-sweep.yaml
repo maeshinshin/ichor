@@ -1,3 +1,4 @@
+{{- if .Values.webhook.enabled }}
 # Mirrors config/rbac/ichor-consent-sweep/. Fixed names, because the controller impersonates the
 # username system:serviceaccount:<namespace>:ichor-consent-sweep. The controller never writes a TalosCluster;
 # this identity removes the kube-proxy switch consent annotation (ADR 0066) and nothing else.
@@ -71,3 +72,4 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "ichor.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}

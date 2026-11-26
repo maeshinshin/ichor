@@ -148,6 +148,28 @@ func TestAPipeRunsUnderPipefail(t *testing.T) {
 	}
 }
 
+var innerShell = regexp.MustCompile(`\b(?:ba)?sh\b[^|\n]*? -c\b`)
+
+// A `bash -c` / `sh -c` starts a new shell that does not inherit pipefail from the step's shell.
+// shortcut: everything after the -c in the step counts as its argument; narrow it when a step mixes a pipe-free bash -c with a later pipe.
+func TestAnInnerShellWithAPipeSetsPipefail(t *testing.T) {
+	for _, p := range paths(t) {
+		for _, s := range runSteps(t, p) {
+			var text strings.Builder
+			for _, l := range code(s.run) {
+				text.WriteString(l + "\n")
+			}
+
+			if loc := innerShell.FindStringIndex(text.String()); loc != nil {
+				rest := text.String()[loc[1]:]
+				if pipe.MatchString(rest) && !strings.Contains(rest, "pipefail") && !strings.Contains(text.String()[loc[0]:loc[1]], "pipefail") {
+					t.Errorf("%s step %q: a bash -c / sh -c holds a pipe without pipefail: use `bash -o pipefail -c`", p, s.name)
+				}
+			}
+		}
+	}
+}
+
 func TestReleaseReplacesExistingArtifacts(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(repoRoot, ".goreleaser.yaml"))
 	if err != nil {

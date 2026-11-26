@@ -27,7 +27,8 @@ import (
 // PrivateKeyPaths are the chart values that hold private key material: a string leaf named "key" that sits
 // beside a string leaf named "cert" in the chart's own defaults (tls.ca, hubble.tls.server, ...). Settings that
 // only name a Secret entry (tls.caBundle.key, k8sServiceHostRef.key) have no "cert" sibling. Derived, so a
-// chart upgrade that adds one is covered; "Secrets are referenced, never embedded" (docs/design/architecture/principles.md).
+// chart upgrade that adds one is covered; "Secrets are referenced, never embedded"
+// (docs/design/architecture/principles.md).
 func PrivateKeyPaths() ([]string, error) {
 	ch, err := loadChart()
 	if err != nil {
@@ -112,7 +113,8 @@ func checkPrivateKeys(user map[string]any, kept []string) error {
 
 	for _, p := range set {
 		if !slices.Contains(kept, p) {
-			msgs = append(msgs, fmt.Sprintf("%s holds a private key, and Secrets are referenced, never embedded in a TalosCluster: %s",
+			msgs = append(msgs, fmt.Sprintf(
+				"%s holds a private key, and Secrets are referenced, never embedded in a TalosCluster: %s",
 				p, privateKeyAdvice(p)))
 		}
 	}

@@ -90,7 +90,9 @@ func ValidateValues(user map[string]any, c ValidationContext) error {
 
 	effective := values.Effective(defaults, user, owned)
 
-	if err := errors.Join(checkPrivateKeys(user, c.KeptPrivateKeys), spec.Check(user, effective), guards(effective, c)); err != nil {
+	keys := checkPrivateKeys(user, c.KeptPrivateKeys)
+
+	if err := errors.Join(keys, spec.Check(user, effective), guards(effective, c)); err != nil {
 		return err
 	}
 

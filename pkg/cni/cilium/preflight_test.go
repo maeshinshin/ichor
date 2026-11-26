@@ -273,7 +273,7 @@ func TestCheckAgentsReady_RolloutInProgressIsNotReady(t *testing.T) {
 func TestPreflight_RefusesAPrivateKeyInTheForeignRecord(t *testing.T) {
 	kube := fake.NewSimpleClientset(agentDaemonSet("quay.io/cilium/cilium:v"+ChartVersion), operatorDeployment())
 	storeRecord(t, kube, kubeSystem, foreignRelease(t, 1, release.StatusDeployed, ChartVersion,
-		map[string]any{"hubble": map[string]any{"tls": map[string]any{"server": map[string]any{"key": "c2VjcmV0"}}}}))
+		keyAt(hubbleServerKey)))
 
 	rep, err := Preflight(t.Context(), preflightInput(t, kube))
 	if err != nil {
@@ -281,7 +281,8 @@ func TestPreflight_RefusesAPrivateKeyInTheForeignRecord(t *testing.T) {
 	}
 
 	err = rep.Err(true, true)
-	if err == nil || !strings.Contains(err.Error(), "hubble.tls.server.key") || !strings.Contains(err.Error(), "hubble.tls.server.existingSecret") {
-		t.Fatalf("Err = %v, want a refusal naming hubble.tls.server.key and its existingSecret", err)
+	if err == nil || !strings.Contains(err.Error(), hubbleServerKey) ||
+		!strings.Contains(err.Error(), "hubble.tls.server.existingSecret") {
+		t.Fatalf("Err = %v, want a refusal naming %s and its existingSecret", err, hubbleServerKey)
 	}
 }

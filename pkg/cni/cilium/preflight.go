@@ -181,7 +181,8 @@ func agentImage(ctx context.Context, kube kubernetes.Interface) (string, error) 
 // the diff were accepted (--accept-cilium-changes, --accept-cilium-diff).
 func (r *PreflightReport) Err(acceptChanges, acceptDiff bool) error {
 	errs := []error{
-		r.ForeignErr, r.KeysErr, r.VersionErr, r.CRDsErr, r.AgentsErr, r.KubePrismErr, AcceptConflicts(r.Conflicts, acceptChanges),
+		r.ForeignErr, r.KeysErr, r.VersionErr, r.CRDsErr, r.AgentsErr, r.KubePrismErr,
+		AcceptConflicts(r.Conflicts, acceptChanges),
 	}
 
 	if len(r.Differences) > 0 && !acceptDiff {
@@ -195,8 +196,9 @@ func (r *PreflightReport) Err(acceptChanges, acceptDiff bool) error {
 // checkTakeoverKeys refuses user values that hold a private key, naming the chart's Secret-based alternative.
 func checkTakeoverKeys(user map[string]any) error {
 	if err := checkPrivateKeys(user, nil); err != nil {
-		return fmt.Errorf("cilium: the existing Cilium's Helm values hold a private key, which would be copied into the "+
-			"TalosCluster. Move it to the chart's Secret mechanism with `helm upgrade` on the existing release, then run adopt again:\n%w", err)
+		return fmt.Errorf("cilium: the existing Cilium's Helm values hold a private key, which would be copied into "+
+			"the TalosCluster. Move it to the chart's Secret mechanism with `helm upgrade` on the existing release, "+
+			"then run adopt again:\n%w", err)
 	}
 
 	return nil

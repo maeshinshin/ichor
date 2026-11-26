@@ -128,8 +128,9 @@ var _ = Describe("TalosCluster Webhook: spec.cni through the API server", func()
 			Expect(k8sClient.Create(ctx, obj)).To(Succeed())
 		})
 
-		It("refuses a JSON patch that nulls spec.cni, because the default makes the preset cilium", func() {
-			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":null}]`)).To(MatchError(ContainSubstring("cni.preset cannot change")))
+		It("admits a JSON patch that nulls spec.cni, because the default restores cilium", func() {
+			Expect(patch(`[{"op":"replace","path":"/spec/cni","value":null}]`)).To(Succeed())
+			Expect(presetOf()).To(Equal(ciliumPreset))
 		})
 
 		It("admits a JSON patch that replaces spec.cni with {}, because the preset default restores cilium", func() {

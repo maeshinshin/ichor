@@ -528,7 +528,7 @@ func TestAuthAudienceIsRequestedAndChecked(t *testing.T) {
 	var opened int
 
 	f, _ := newTestFlow(t, iss, &opened)
-	f.Audience = "ichor-kube"
+	f.Audience = defaultAuthAudience
 
 	if err := f.loginAndSave(context.Background()); err != nil {
 		t.Fatal(err)

@@ -525,7 +525,7 @@ func (r *CNIHandoverReconciler) finish(
 			fmt.Sprintf("the Helm Job completed but release %s has status %q, not deployed", cilium.ReleaseName, rel.Status))
 	}
 
-	if ready, why, err := r.ciliumReady(ctx); err != nil {
+	if ready, why, err := r.ciliumReadyWith(ctx, cilium.DaemonSetRunsCurrentTemplate); err != nil {
 		return ctrl.Result{}, err
 	} else if !ready {
 		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonHandoverWaitingForCilium, why)
@@ -674,7 +674,14 @@ func (r *CNIHandoverReconciler) lastLogLine(ctx context.Context, jobName string)
 }
 
 // ciliumReady reports whether the cilium DaemonSet in kube-system is fully rolled out.
+// This is the health question (OnDelete counts as rolled out); finish asks whether its Job's change reached the agents.
 func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, why string, err error) {
+	return r.ciliumReadyWith(ctx, cilium.DaemonSetRolledOut)
+}
+
+func (r *CNIHandoverReconciler) ciliumReadyWith(
+	ctx context.Context, rolled func(*appsv1.DaemonSet) (bool, string),
+) (ready bool, why string, err error) {
 	var ds appsv1.DaemonSet
 
 	err = r.reader().Get(ctx, types.NamespacedName{Namespace: cilium.ReleaseNamespace, Name: ciliumName}, &ds)
@@ -686,7 +693,7 @@ func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, wh
 		return false, "", err
 	}
 
-	if ok, why := cilium.DaemonSetRolledOut(&ds); !ok {
+	if ok, why := rolled(&ds); !ok {
 		return false, why, nil
 	}
 

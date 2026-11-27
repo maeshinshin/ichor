@@ -193,7 +193,7 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 	}
 
 	if rel.Status == helmStatusDeployed && rel.ChartVersion == target {
-		return a.ciliumRolledOut(ctx, op)
+		return a.ciliumRunsNewConfig(ctx, op)
 	}
 
 	if rel.ChartVersion != "" {
@@ -219,5 +219,5 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 			"the Cilium Helm Job finished but the release is %q at chart %q, not deployed at %s yet", rel.Status, rel.ChartVersion, target))
 	}
 
-	return a.ciliumRolledOut(ctx, op)
+	return a.ciliumRunsNewConfig(ctx, op)
 }

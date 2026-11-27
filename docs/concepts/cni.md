@@ -60,6 +60,14 @@ kube-proxy replacement).
   chart is never stepped back. Helm rolls back a failed upgrade.
 - `ichor set kube-proxy` switches between Talos's kube-proxy and Cilium's
   replacement, as an operation.
+  Switching to `replaced` breaks long-lived connections to Service IPs that
+  a pod opened before the switch, when the Cilium agent on its node restarts.
+  Clients that reconnect recover, and new connections are unaffected. The
+  ichor-controller is such a client: it restarts once, about 1.5 to 2 minutes
+  in, and the operation continues. Run the switch in a maintenance window if
+  workloads hold long-lived Service connections that do not reconnect. See
+  [Cilium: kube-proxy-free quick start](https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/),
+  the warning that existing connections break when the replacement is added to a running cluster.
 - Once Cilium is ready, Ichor's own namespace is locked down with
   CiliumNetworkPolicies.
 

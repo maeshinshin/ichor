@@ -19,6 +19,7 @@ package cilium
 import (
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -64,33 +65,44 @@ func PrivateKeyPaths() ([]string, error) {
 	return paths, nil
 }
 
-// EmbeddedPrivateKeys are the private-key paths of PrivateKeyPaths that user sets to a non-empty value.
+// EmbeddedPrivateKeys are the private-key paths of PrivateKeyPaths that user sets to a non-empty value, and
+// the key material found anywhere else in user (see userKeyMaterial).
 func EmbeddedPrivateKeys(user map[string]any) ([]string, error) {
+	m, err := EmbeddedPrivateKeyValues(user)
+	if err != nil {
+		return nil, err
+	}
+
+	return slices.Sorted(maps.Keys(m)), nil
+}
+
+// EmbeddedPrivateKeyValues is EmbeddedPrivateKeys with the value at each path, so a caller can tell a key that
+// is unchanged from one that is new or changed, including a key inside a list.
+func EmbeddedPrivateKeyValues(user map[string]any) (map[string]any, error) {
 	all, err := PrivateKeyPaths()
 	if err != nil {
 		return nil, err
 	}
 
-	var set []string
+	set := map[string]any{}
 
 	for _, p := range all {
 		if v, ok := values.Get(user, p); ok && v != nil && v != "" {
-			set = append(set, p)
+			set[p] = v
 		}
 	}
 
 	// The chart's defaults do not reach list-typed values (clustermesh.config.clusters, whose entries carry
 	// tls.key), so the user's own values are walked as well.
-	set = append(set, userKeyMaterial("", user)...)
-	slices.Sort(set)
+	maps.Copy(set, userKeyMaterial("", user))
 
-	return slices.Compact(set), nil
+	return set, nil
 }
 
 // userKeyMaterial walks maps and lists in v: a non-empty "key" string beside a "cert" or "caCert" string, or
 // any string that is a PEM private key (raw or base64), is key material. List entries are named name[i].
-func userKeyMaterial(prefix string, v any) []string {
-	var out []string
+func userKeyMaterial(prefix string, v any) map[string]any {
+	out := map[string]any{}
 
 	switch t := v.(type) {
 	case map[string]any:
@@ -104,21 +116,21 @@ func userKeyMaterial(prefix string, v any) []string {
 			}
 
 			if s, ok := c.(string); ok && s != "" && (k == "key" && (hasCert || hasCA) || isPEMPrivateKey(s)) {
-				out = append(out, p)
+				out[p] = s
 				continue
 			}
 
-			out = append(out, userKeyMaterial(p, c)...)
+			maps.Copy(out, userKeyMaterial(p, c))
 		}
 	case []any:
 		for i, c := range t {
 			p := fmt.Sprintf("%s[%d]", prefix, i)
 			if s, ok := c.(string); ok && isPEMPrivateKey(s) {
-				out = append(out, p)
+				out[p] = s
 				continue
 			}
 
-			out = append(out, userKeyMaterial(p, c)...)
+			maps.Copy(out, userKeyMaterial(p, c))
 		}
 	}
 

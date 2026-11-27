@@ -156,7 +156,7 @@ type adoptState struct {
 func (st *adoptState) own(n *adoptNode) ownership {
 	o := ownership{
 		Managed: !st.unmanaged, KubeProxyReplaced: st.kubeProxy == kubeProxyReplaced,
-		IchorAuthenticator: st.signIn != nil && st.signIn.authenticator,
+		IchorAuthenticator: (st.signIn != nil && st.signIn.authenticator) || ichorSignInEnabled(st.cluster),
 	}
 
 	if n.Facts != nil {
@@ -165,6 +165,13 @@ func (st *adoptState) own(n *adoptNode) ownership {
 	}
 
 	return o
+}
+
+// ichorSignInEnabled: the TalosCluster already has spec.authentication.ichor on, so the render carries Ichor's authenticator.
+func ichorSignInEnabled(c *ichorv1alpha1.TalosCluster) bool {
+	a := c.Spec.Authentication
+
+	return a != nil && a.Ichor != nil && a.Ichor.Enabled
 }
 
 // needsTakeover: a managed Cilium that Ichor did not install itself.

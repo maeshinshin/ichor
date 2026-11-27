@@ -304,7 +304,7 @@ func TestBuildAdoptPlan_AcceptsTheIssuerTheClusterItselfRenders(t *testing.T) {
 	}
 
 	sys := &render.SystemInputs{OIDCTrust: &render.OIDCTrust{
-		DiscoveryURL: "https://ichor-ui-service.ichor-system.svc:8444/.well-known/openid-configuration", CAPEM: string(caPEM),
+		DiscoveryURL: testDiscoveryURL, CAPEM: string(caPEM),
 	}}
 
 	currentCfg, _, err := render.Render(cluster, machine, bundle, nil, sys)

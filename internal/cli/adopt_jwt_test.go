@@ -31,7 +31,10 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-const oidcPrefix = "oidc:"
+const (
+	oidcPrefix       = "oidc:"
+	testDiscoveryURL = "https://ichor-ui-service.ichor-system.svc:8444/.well-known/openid-configuration"
+)
 
 // TestBuildAdoptPlan_RefusesJWTAuthenticators: a node whose KubeAuthenticationConfig already has
 // jwt entries would lose them to the render, so adopt refuses instead of dropping them.
@@ -84,7 +87,7 @@ func liveWithAuth(t *testing.T, auth *ichorv1alpha1.TalosClusterAuthentication) 
 	}
 
 	sys := &render.SystemInputs{OIDCTrust: &render.OIDCTrust{
-		DiscoveryURL: "https://ichor-ui-service.ichor-system.svc:8444/.well-known/openid-configuration", CAPEM: string(caPEM),
+		DiscoveryURL: testDiscoveryURL, CAPEM: string(caPEM),
 	}}
 
 	cfg, _, err := render.Render(live, machine, bundle, nil, sys)
@@ -194,5 +197,46 @@ func TestAdoptPlan_DropsTheAuthenticatorWhenSignInIsTurnedOn(t *testing.T) {
 
 	if !strings.Contains(said, "turns sign-in on again") {
 		t.Errorf("adopt said:\n%s\nwant the \"turns sign-in on again\" line", said)
+	}
+}
+
+// A re-run of adopt on a cluster whose spec.authentication.ichor is already enabled: the node carries Ichor's
+// authenticator, rendered earlier with another CA than the issuer publishes now, so it differs from the
+// baseline although the issuer URL is the same. It is Ichor's own and the render replaces it: not blocked, no refusal line.
+func TestAdoptPlan_RerunWithSignInAlreadyOnIsNotBlocked(t *testing.T) {
+	_, _, cfg := liveWithAuth(t, ichorOwnIssuer())
+	cluster, machine, _ := liveWithAuth(t, nil)
+	cluster.Spec.Authentication = ichorOwnIssuer()
+
+	cert, _, _ := writeTestKeyPair(t)
+
+	ca, err := os.ReadFile(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sys := &render.SystemInputs{OIDCTrust: &render.OIDCTrust{
+		DiscoveryURL: testDiscoveryURL,
+		CAPEM:        string(ca) + "# reissued\n",
+	}}
+
+	var out bytes.Buffer
+
+	st := &adoptState{cluster: cluster}
+	deps := adoptDeps{K8s: fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build(), Stderr: &out, Ichor: &adoptWriteIchor{}, UIURL: defaultUIURL, AdminUser: defaultAdminUser}
+
+	if err := st.planSignIn(context.Background(), deps); err != nil {
+		t.Fatalf("planSignIn: %v", err)
+	}
+
+	plan, err := buildAdoptPlan(cluster, machine, newTestBundle(t), nil, cfg, sys, st.own(&adoptNode{}))
+	if err != nil {
+		t.Fatalf("buildAdoptPlan: %v", err)
+	}
+
+	reportPlans(deps.say, []*adoptPlan{plan})
+
+	if len(plan.UnrepresentablePaths) > 0 || plan.AuthenticatorRefused || strings.Contains(out.String(), "adopt refuses the node") {
+		t.Errorf("plan = %+v, adopt said:\n%s\nwant the node not blocked and no refusal line", plan, out.String())
 	}
 }

@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -37,6 +38,27 @@ func sysctlPatchWire(name, clusterName string) *pb.Patch {
 }
 
 var _ = Describe("PatchService", func() {
+	It("TestCreatePatchRefusesClusterOutsideControllerNamespace", func() {
+		s := &Server{Client: k8sClient, ControllerNamespace: "ichor-system"}
+
+		wire := sysctlPatchWire("patch-outside-ns", "home")
+		wire.Ref = objectRef("legacy", "patch-outside-ns")
+		_, err := s.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: wire}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))
+		Expect(err.Error()).To(ContainSubstring("ADR 0175"))
+
+		list := &ichorv1alpha1.TalosConfigPatchList{}
+		Expect(k8sClient.List(ctx, list)).To(Succeed())
+		for _, p := range list.Items {
+			Expect(p.Name).NotTo(Equal("patch-outside-ns"))
+		}
+
+		// A ref in the controller's namespace still creates the patch.
+		s.ControllerNamespace = testNamespace
+		_, err = s.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: sysctlPatchWire("patch-inside-ns", "home")}))
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	Describe("CreatePatch, GetPatch, ListPatches, DeletePatch", func() {
 		It("round-trips layer, cluster, config and the generated name through the wire", func() {
 			cluster := newTestCluster("does-not-exist")

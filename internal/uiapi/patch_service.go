@@ -118,9 +118,18 @@ func (s *Server) CreatePatch(
 		return nil, invalid("patch.ref.namespace and patch.ref.name are required")
 	}
 
+	// Every Ichor object lives in the controller's namespace (ADR 0175): a patch for a cluster outside it is refused,
+	// not written there, where it would find no cluster (or another one of the same name).
+	ns := cmp.Or(s.ControllerNamespace, ref.GetNamespace())
+	if ns != ref.GetNamespace() {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+			"patch %s is outside the controller's namespace %q: it would be created there and could not "+
+				"find its cluster; the cluster must be recreated in %s (every Ichor object lives in the controller's namespace, ADR 0175)",
+			namespacedName(ref), s.ControllerNamespace, s.ControllerNamespace))
+	}
+
 	p := &ichorv1alpha1.TalosConfigPatch{}
-	// Every Ichor object lives in the controller's namespace (ADR 0175), whatever namespace the request names.
-	p.Namespace = cmp.Or(s.ControllerNamespace, ref.GetNamespace())
+	p.Namespace = ns
 	p.Name = ref.GetName()
 
 	if err := applyPatchSpec(&p.Spec, wire); err != nil {

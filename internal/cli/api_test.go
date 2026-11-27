@@ -672,6 +672,7 @@ func TestPatchApplyWithAForbiddenReadCreates(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 
 	cluster := newTestCluster()
+	cluster.Namespace = ichorControllerNamespace
 	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
 	k8s := interceptor.NewClient(base, interceptor.Funcs{
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
@@ -685,7 +686,7 @@ func TestPatchApplyWithAForbiddenReadCreates(t *testing.T) {
 	c := localClients(apiOpts, apiDeps{K8s: reviewAs(true, k8s)})
 
 	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
-	p.Name = testPatchName
+	p.Name, p.Namespace = testPatchName, ichorControllerNamespace
 	p.Spec.Layer = cniPatchLayer
 
 	var out bytes.Buffer

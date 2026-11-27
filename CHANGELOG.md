@@ -54,6 +54,24 @@ field is added or removed.
 - **`ichor adopt` refuses while a leftover IchorInstallation exists.** With no Ichor
   controller Deployment, it names the object and says to run
   `kubectl delete ichorinstallation ichor`, then adopt again.
+- **Uninstall deletes the TalosCluster first, then its machines, and the nodes keep
+  running.** The quorum and last-control-plane checks apply only while the machine's
+  TalosCluster exists and is not being deleted. Once it is gone or deleting, its
+  machines, with `ichor.maesh.dev/allow-delete=true` set, are released without
+  draining the node, resetting it or removing its etcd member. Before, deleting the
+  TalosCluster left the machines in place and the guard refused the last control
+  planes, so the documented uninstall could not finish. The uninstall steps and
+  ADR 0010 say the new order.
+- **A fresh Helm install no longer blocks other Jobs.** The `controller-job-image`
+  policy binding matches only Jobs labelled `app.kubernetes.io/name` `ichor-installer`
+  or `ichor-cni`, so a Job anywhere is no longer refused while no IchorInstallation
+  exists. The structural policy now requires that label, equal to the Job's
+  ServiceAccount, on the controller's Jobs; the controller's own Jobs carry it.
+  A Job you create under those ServiceAccounts must carry it too.
+- **Installing over an earlier install updates its cluster-scoped objects.** `ichor
+  init` and `ichor adopt` server-side apply Ichor's own manifest objects (CRDs,
+  ClusterRoles, bindings, webhook configurations, ValidatingAdmissionPolicies) in
+  place of keeping what an earlier install left. A Deployment is still only created.
 
 ### Controller
 
@@ -65,6 +83,16 @@ field is added or removed.
   exempt, since it never updates pods by itself.
 - The `controller-jobs-policy` message names the release namespace instead of
   `ichor-system`.
+- A completed Cilium Helm Job with no release record that an earlier install left in
+  `kube-system` (it predates the TalosCluster) is deleted in the foreground and a new
+  one runs. A Job of the cluster's own that completed and wrote no release is not
+  replaced, which would run it again every pass: the condition reason is
+  `JobCompletedWithoutRelease` and says to read the Job's log and delete it to run it
+  again. A Job being deleted is neither done nor failed.
+- The namespace label is retried with a growing wait, from 5 seconds to 5 minutes, and
+  a failure is logged once per distinct message.
+- A TalosMachine of a TalosCluster that is gone or being deleted is released by its
+  removal finalizer without touching the node.
 
 ### CLI
 
@@ -81,12 +109,20 @@ field is added or removed.
   each node, and turns sign-in on again.
 - `ichor adopt` names a leftover IchorInstallation when no controller Deployment
   exists, and how to delete it.
+- `ichor adopt` no longer waits on a machine that reports `APIServerRestartRequired`,
+  as it does not wait on `RebootRequired`. It goes on, and ends with one step:
+  `ichor rollout config --cluster NAME --follow`, which restarts kube-apiserver on each
+  control plane in turn and applies both changes.
+- `ichor init` and `ichor adopt` apply Ichor's own manifest objects as the installer
+  does (see the upgrade notes).
 
 ### Webhooks
 
 - The `TalosCluster` webhook refuses a private key in `spec.cni.cilium.values`. A key
   an existing object already stores unchanged passes on update, with a warning that
   names the paths.
+- The `TalosMachine` webhook skips the quorum and last-control-plane checks when its
+  TalosCluster is gone or deleting; the `allow-delete` annotation is still required.
 
 ### Chart
 
@@ -103,6 +139,9 @@ field is added or removed.
   controller sets.
 - The deepcopy header year is pinned to 2026, so the regenerate-and-diff check does
   not fail on 1 January.
+- The `controller-jobs-policy` structural policy requires the
+  `app.kubernetes.io/name` label on the controller's Jobs, and the image policy's
+  binding selects by it (see the upgrade notes).
 
 ### Docs
 
@@ -119,6 +158,13 @@ field is added or removed.
   `--recover-secrets --recover-from`), and says what adopt does with Ichor's own
   sign-in entry.
 - ADR 0106 is amended for the optional fields.
+- The uninstall steps delete the TalosCluster first, then its TalosMachines, and say
+  the nodes keep running. The control-plane replacement guide says the same for the
+  last control plane. ADR 0010 is amended for it.
+- The recovery guide names the talosconfig adopt needs (`--talosconfig`, or one written
+  with `ichor create credentials --bundle`), `--accept-cilium-diff` for a cluster whose
+  Cilium record was lost with the namespace, and the closing
+  `ichor rollout config --cluster NAME --follow`.
 
 ## v0.3.4 (2026-11-26)
 

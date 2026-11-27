@@ -71,3 +71,15 @@ func TestUninstallCoversEveryKindWithADeleteWebhook(t *testing.T) {
 		t.Fatal("no DELETE webhook found in " + webhookCfg + ": the pattern no longer reads it")
 	}
 }
+
+// install.yaml is a release asset from v0.3.6 on. Every object name in v0.3.0 to v0.3.5 is still in
+// v0.3.6's, so its file deletes an older install too; both places that send a user to it must say so.
+func TestInstallYamlStepSaysWhatOlderReleasesTake(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range []string{upgradeDoc, repoRoot + "/docs/guides/troubleshooting.md"} {
+		if !strings.Contains(read(t, p), "a release asset from v0.3.6 on; for v0.3.0 to v0.3.5 take the v0.3.6 one") {
+			t.Errorf("%s sends the user to install.yaml but does not say that v0.3.0 to v0.3.5 take the v0.3.6 asset", p)
+		}
+	}
+}

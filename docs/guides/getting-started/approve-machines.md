@@ -28,11 +28,20 @@ a refusal: the disk, disk role or NIC was not among those discovery recorded.
 `approve` also takes a hostname, labels, a static address and extra disk roles
 (`ichor approve node --help`). A machine with no UUID, serial or permanent MAC is refused.
 
+A node approved without `--install-disk` and with no disk in its configuration
+stays `Ready=False/InstallDiskUnknown`, and nothing is applied to it. `ichor approve node`
+refuses a node that is already approved, so there is no CLI command to set the disk
+afterwards. Set it in the UI (the machine's install disk) or write it on the
+TalosMachine: `kubectl -n ichor-system patch talosmachine NAME --type merge -p
+'{"spec":{"install":{"disk":{"devPath":"/dev/sda"}}}}'`. It only works until the
+machine has an applied configuration.
+
 After approval the controller renders and applies the configuration; the node
 installs Talos, reboots and joins.
 
 > [!NOTE]
-> The `single` preset has nothing to approve: skip this step. With `standard`,
+> The `single` preset has nothing to approve: skip this step. With `compact-ha`, approve
+> the two further control planes with `--role controlplane`, as for `standard`. With `standard`,
 > approve the two further control planes first with `--role controlplane` (see
 > [Virtual IP](create-the-cluster/vip.md#flags)), then workers.
 

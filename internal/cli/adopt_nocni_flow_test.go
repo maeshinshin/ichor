@@ -352,6 +352,7 @@ func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 // again (an upgrade to the same values), nothing already written is written twice, and a third
 // run on the finished cluster does nothing.
 func TestAdoptNoCNI_RerunAfterAFailureFinishes(t *testing.T) {
+	setVersion(t, testReleasedVersion)
 	f := newNoCNIFlow(t)
 	good := f.deps.Ichor
 	f.deps.Ichor = &adoptWriteIchor{Namespace: ichorControllerNamespace, Manifest: []byte("kind: [not a manifest")}

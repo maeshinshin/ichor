@@ -267,10 +267,14 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return err
 	}
 
-	if present.Present() {
+	if present.Complete() {
 		w.skipInstall(present, ichor)
 
 		return nil
+	}
+
+	if present.Present() {
+		w.note("completing an earlier, partial install of Ichor: applying what it left out and creating the IchorInstallation")
 	}
 
 	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr, ichor.DetectedCNI == cniCilium, ichor.UI); err != nil {

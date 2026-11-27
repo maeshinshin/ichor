@@ -422,6 +422,7 @@ func TestAdoptSignIn_RerunAfterAStopBeforeTheAdministratorCreatesIt(t *testing.T
 // TestAdoptSignIn_RerunOnAHealthyInstallWithAnotherAdminChangesNothing: adopt again on an install whose
 // administrator is not called admin makes no admin, keeps ichor-ui as it is, and leaves a disabled issuer disabled.
 func TestAdoptSignIn_RerunOnAHealthyInstallWithAnotherAdminChangesNothing(t *testing.T) {
+	setVersion(t, testReleasedVersion)
 	f := signInFlow(t)
 	ctx := context.Background()
 

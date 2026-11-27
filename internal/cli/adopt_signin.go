@@ -105,7 +105,8 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 
 	plan := &signInPlan{opts: opts, users: true}
 
-	if present.Present() {
+	// A partial install has no IchorInstallation yet and may lack ichor-ui: adopt's install finishes it, as on a first adopt.
+	if present.Complete() {
 		ui, err := findDeploymentByLabel(ctx, deps.K8s, ichorControllerNamespace, uiComponentLabel, uiComponentValue)
 		if err != nil {
 			return err

@@ -57,7 +57,7 @@ The reminder to back up a recovered secrets bundle is also a `!` line.
 
 | Phase | What happens |
 |---|---|
-| 1 | Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held), the patches and, if Ichor is not running, its install manifest. With no CNI, Cilium is installed first. A held machine has the annotation `ichor.maesh.dev/hold-apply`; the controller reports its drift (condition `AdoptionHeld`) and applies nothing. |
+| 1 | Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held), the patches and, if Ichor is not installed or its install is partial, its install manifest. A running Ichor of another version than the CLI is refused with nothing written: move it with `ichor upgrade ichor`. With no CNI, Cilium is installed first. A held machine has the annotation `ichor.maesh.dev/hold-apply`; the controller reports its drift (condition `AdoptionHeld`) and applies nothing. |
 | 2 | Takes over Cilium and waits for the `CNIHandover` condition. Skipped with `--cni-unmanaged`. |
 | 3 | Releases the holds machine by machine, control planes first, each only after a live zero-drift check. The controller applies the first render. |
 | 4 | Finishes sign-in once every hold is released (see [Sign-in](sign-in.md)): the first administrator, then `spec.authentication.ichor`. ichor-ui is installed with sign-in on in phase 1. |

@@ -439,9 +439,7 @@ func TestWriteAdopt_InstallsIchorOnlyWhenItIsNotRunning(t *testing.T) {
 		t.Fatalf("IchorInstallation: %v", err)
 	}
 
-	// Running now: a second run neither fails on a manifest it does not even look at nor reinstalls.
-	in.Ichor = &adoptWriteIchor{Manifest: []byte("not a manifest: [")}
-
+	// Running now: a second run applies the manifest again and creates nothing.
 	res, err := writeAdopt(ctx, c, in)
 	if err != nil || len(res.Created) != 0 {
 		t.Fatalf("second run: created %v, err %v", res.Created, err)

@@ -98,8 +98,9 @@ func TestInstallIchor_CompletesAPartialInstall(t *testing.T) {
 	}
 }
 
-// A complete install (its IchorInstallation exists) is left alone.
-func TestInstallIchor_SkipsACompleteInstall(t *testing.T) {
+// The controller seeds the IchorInstallation (no pin) as soon as it runs, so an install interrupted after
+// its Deployments still has one: the next adopt applies what was left out and pins what the seed lacks.
+func TestInstallIchor_FinishesAnInstallTheControllerSeeded(t *testing.T) {
 	setVersion(t, testReleasedVersion)
 
 	c := newWriteFake(t)
@@ -107,6 +108,59 @@ func TestInstallIchor_SkipsACompleteInstall(t *testing.T) {
 
 	if err := c.Create(context.Background(), &ichorv1alpha1.IchorInstallation{
 		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version:    testReleasedVersion,
+			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+
+	w := partialWriter(c, &out)
+	w.in.Ichor.Pin = installerPin{Digest: "sha256:" + strings.Repeat("a", 64), SkipSignature: true}
+
+	if err := w.installIchor(context.Background()); err != nil {
+		t.Fatalf("installIchor: %v\n%s", err, out.String())
+	}
+
+	for _, o := range []struct{ kind, apiVersion, name string }{
+		{"ValidatingWebhookConfiguration", "admissionregistration.k8s.io/v1", partialWebhookName},
+	} {
+		u := &unstructured.Unstructured{}
+		u.SetAPIVersion(o.apiVersion)
+		u.SetKind(o.kind)
+
+		if err := c.Get(context.Background(), types.NamespacedName{Name: o.name}, u); err != nil {
+			t.Errorf("%s %s was not applied: %v", o.kind, o.name, err)
+		}
+	}
+
+	var inst ichorv1alpha1.IchorInstallation
+	if err := c.Get(context.Background(), types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		t.Fatal(err)
+	}
+
+	if inst.Spec.InstallerDigest != w.in.Ichor.Pin.Digest || inst.Spec.InstallerSignature == nil ||
+		inst.Spec.InstallerSignature.Mode != ichorv1alpha1.InstallerSignatureSkip {
+		t.Errorf("the pin was not set on the seeded installation: %+v", inst.Spec)
+	}
+}
+
+// A Helm-managed install is left alone: nothing is applied and no IchorInstallation is made.
+func TestInstallIchor_SkipsAHelmManagedInstall(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	c := newWriteFake(t)
+	seedDeployments(t, c, true)
+
+	if err := c.Create(context.Background(), &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version:    testReleasedVersion,
+			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -120,6 +174,14 @@ func TestInstallIchor_SkipsACompleteInstall(t *testing.T) {
 
 	if !slices.Equal(w.res.Unchanged, []string{"Ichor installation"}) || len(w.res.Created) != 0 {
 		t.Errorf("created %v, unchanged %v; want the install Unchanged", w.res.Created, w.res.Unchanged)
+	}
+
+	vwc := &unstructured.Unstructured{}
+	vwc.SetAPIVersion("admissionregistration.k8s.io/v1")
+	vwc.SetKind("ValidatingWebhookConfiguration")
+
+	if err := c.Get(context.Background(), types.NamespacedName{Name: partialWebhookName}, vwc); err == nil {
+		t.Error("the manifest was applied to a Helm-managed install")
 	}
 }
 

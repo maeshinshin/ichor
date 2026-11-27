@@ -267,13 +267,16 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return err
 	}
 
-	if present.Complete() {
+	if present.HelmManaged() {
 		w.skipInstall(present, ichor)
 
 		return nil
 	}
 
-	if present.Present() {
+	// The controller seeds the IchorInstallation as soon as it runs, so its presence says nothing about
+	// the webhooks and policies applied after the Deployments: a non-Helm install is always applied
+	// (server-side apply, Deployments create-only), and a re-run finishes a stopped one.
+	if present.Installation == nil && present.Present() {
 		w.note("completing an earlier, partial install of Ichor: applying what it left out and creating the IchorInstallation")
 	}
 
@@ -281,11 +284,23 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := createIchorInstallation(ctx, w.c, w.in.Stderr, cmp.Or(w.in.WebhookWait, defaultAdoptWebhookWait), ichor.Pin); err != nil {
-		return err
-	}
+	if present.Installation == nil {
+		if _, err := createIchorInstallation(ctx, w.c, w.in.Stderr, cmp.Or(w.in.WebhookWait, defaultAdoptWebhookWait), ichor.Pin); err != nil {
+			return err
+		}
 
-	w.res.Created = append(w.res.Created, "Ichor installation")
+		w.res.Created = append(w.res.Created, "Ichor installation")
+	} else {
+		// shortcut: ApplyOne does not say whether it changed anything, so an existing install is reported as applied, never Unchanged.
+		w.note("applied Ichor's install manifest to the existing install")
+
+		// Only the pin fields the object lacks are set; an unpinned run touches nothing.
+		if ichor.Pin != (installerPin{}) {
+			if err := pinInstallation(ctx, w.c, ichor.Pin, w.in.Stderr); err != nil {
+				return err
+			}
+		}
+	}
 
 	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
 		if len(ichor.NetworkPolicies) > 0 {

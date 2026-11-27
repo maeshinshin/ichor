@@ -195,3 +195,107 @@ func TestAdoptSignIn_PartialInstallWithoutUIDoesNotFailThePlan(t *testing.T) {
 		t.Fatalf("runAdopt: %v", err)
 	}
 }
+
+// seedRunningIchor seeds a non-Helm Ichor that runs at running: its IchorInstallation with the version
+// the controller reports and the controller Deployment.
+func seedRunningIchor(t *testing.T, c client.Client, running string) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	if err := c.Create(ctx, &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version:    running,
+			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
+		},
+		Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: running},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Create(ctx, &appsv1.Deployment{
+		Name: controllerDeploymentName, Namespace: ichorControllerNamespace,
+		Labels: map[string]string{controllerLabel: controllerLabelValue},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func webhookApplied(t *testing.T, c client.Client) bool {
+	t.Helper()
+
+	vwc := &unstructured.Unstructured{}
+	vwc.SetAPIVersion("admissionregistration.k8s.io/v1")
+	vwc.SetKind("ValidatingWebhookConfiguration")
+
+	return c.Get(context.Background(), types.NamespacedName{Name: partialWebhookName}, vwc) == nil
+}
+
+// A running Ichor newer than the CLI is not overwritten with the CLI's older CRDs and webhooks, by the
+// early check or by the write step.
+func TestInstallIchor_RefusesARunningIchorNewerThanTheCLI(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	c := newWriteFake(t)
+	seedRunningIchor(t, c, "v0.3.7")
+
+	var out bytes.Buffer
+
+	err := partialWriter(c, &out).installIchor(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "v0.3.7") || !strings.Contains(err.Error(), testReleasedVersion) {
+		t.Fatalf("installIchor = %v; want a refusal naming v0.3.7 and %s", err, testReleasedVersion)
+	}
+
+	if webhookApplied(t, c) {
+		t.Error("the install manifest was applied over a newer Ichor")
+	}
+
+	if err := checkIchorPresence(context.Background(), c, &out, testReleasedVersion, false); err == nil {
+		t.Error("checkIchorPresence let adopt start against a newer running Ichor")
+	}
+}
+
+// adopt does not upgrade a running Ichor either: that is `ichor upgrade ichor`.
+func TestInstallIchor_RefusesARunningIchorOlderThanTheCLI(t *testing.T) {
+	setVersion(t, "v0.3.7")
+
+	c := newWriteFake(t)
+	seedRunningIchor(t, c, testReleasedVersion)
+
+	err := partialWriter(c, &bytes.Buffer{}).installIchor(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "ichor upgrade ichor") {
+		t.Fatalf("installIchor = %v; want a refusal pointing at ichor upgrade ichor", err)
+	}
+
+	if webhookApplied(t, c) {
+		t.Error("the install manifest was applied over an older running Ichor")
+	}
+}
+
+func TestInstallIchor_AppliesToARunningIchorOfTheSameVersion(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	c := newWriteFake(t)
+	seedRunningIchor(t, c, testReleasedVersion)
+
+	if err := partialWriter(c, &bytes.Buffer{}).installIchor(context.Background()); err != nil {
+		t.Fatalf("installIchor: %v", err)
+	}
+
+	if !webhookApplied(t, c) {
+		t.Error("the install manifest was not applied to an Ichor of the same version")
+	}
+}
+
+// With no IchorInstallation the install is partial, whatever version the CLI is: it is finished.
+func TestInstallIchor_AppliesToAPartialInstallOfAnyVersion(t *testing.T) {
+	setVersion(t, testReleasedVersion)
+
+	c := newWriteFake(t)
+	seedDeployments(t, c, true)
+
+	if err := partialWriter(c, &bytes.Buffer{}).installIchor(context.Background()); err != nil || !webhookApplied(t, c) {
+		t.Fatalf("installIchor = %v, applied %v; want the partial install finished", err, webhookApplied(t, c))
+	}
+}

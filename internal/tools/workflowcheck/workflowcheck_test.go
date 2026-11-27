@@ -210,6 +210,37 @@ func TestReleaseReplacesExistingArtifacts(t *testing.T) {
 	}
 }
 
+// The uninstall guide sends manifest installs to the release's install.yaml, so the release must carry it, and the
+// signed checksums must cover it: a file outside them is not covered by `cosign verify-blob` of the checksums.
+func TestReleaseAttachesAndChecksumsInstallYaml(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot, ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type extra struct {
+		Glob string `yaml:"glob"`
+	}
+
+	var c struct {
+		Checksum struct {
+			ExtraFiles []extra `yaml:"extra_files"`
+		} `yaml:"checksum"`
+		Release struct {
+			ExtraFiles []extra `yaml:"extra_files"`
+		} `yaml:"release"`
+	}
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, l := range map[string][]extra{"release.extra_files": c.Release.ExtraFiles, "checksum.extra_files": c.Checksum.ExtraFiles} {
+		if !slices.ContainsFunc(l, func(e extra) bool { return e.Glob == "./dist/install.yaml" }) {
+			t.Errorf(".goreleaser.yaml %s lacks ./dist/install.yaml", name)
+		}
+	}
+}
+
 // prOnly are PR commands the release verify job does not run, with the reason. Empty today: every make target,
 // goreleaser check and actionlint a PR job runs is also run by verify.
 var prOnly = map[string]string{}
@@ -272,7 +303,7 @@ var nixExempt = map[string]string{
 	".github/workflows/test.yml: Fail if regenerating produced a diff":                                 "git diff",
 	".github/workflows/release.yml: Fail if regenerating produced a diff":                              "git diff",
 	".github/workflows/release.yml: CHANGELOG.md has a section for the tag":                            "awk and grep",
-	".github/workflows/release.yml: Take the release notes from CHANGELOG.md":                          "awk",
+	".github/workflows/release.yml: Take the release notes from CHANGELOG.md":                          "awk, then the releasenotes tool in nix develop",
 	".github/workflows/release.yml: Check that the tag was not cut from main":                          "git",
 	".github/workflows/release.yml: Add the changelog section":                                         "git and hack/add-release-section.sh",
 	".github/workflows/release.yml: Set the README's version":                                          "sync-main installs no Nix; make release-prep edits text only",

@@ -17,6 +17,7 @@ limitations under the License.
 package cilium
 
 import (
+	"encoding/base64"
 	"fmt"
 	"slices"
 	"strings"
@@ -78,7 +79,60 @@ func EmbeddedPrivateKeys(user map[string]any) ([]string, error) {
 		}
 	}
 
-	return set, nil
+	// The chart's defaults do not reach list-typed values (clustermesh.config.clusters, whose entries carry
+	// tls.key), so the user's own values are walked as well.
+	set = append(set, userKeyMaterial("", user)...)
+	slices.Sort(set)
+
+	return slices.Compact(set), nil
+}
+
+// userKeyMaterial walks maps and lists in v: a non-empty "key" string beside a "cert" or "caCert" string, or
+// any string that is a PEM private key (raw or base64), is key material. List entries are named name[i].
+func userKeyMaterial(prefix string, v any) []string {
+	var out []string
+
+	switch t := v.(type) {
+	case map[string]any:
+		_, hasCert := t["cert"].(string)
+		_, hasCA := t["caCert"].(string)
+
+		for k, c := range t {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+
+			if s, ok := c.(string); ok && s != "" && (k == "key" && (hasCert || hasCA) || isPEMPrivateKey(s)) {
+				out = append(out, p)
+				continue
+			}
+
+			out = append(out, userKeyMaterial(p, c)...)
+		}
+	case []any:
+		for i, c := range t {
+			p := fmt.Sprintf("%s[%d]", prefix, i)
+			if s, ok := c.(string); ok && isPEMPrivateKey(s) {
+				out = append(out, p)
+				continue
+			}
+
+			out = append(out, userKeyMaterial(p, c)...)
+		}
+	}
+
+	return out
+}
+
+func isPEMPrivateKey(s string) bool {
+	if strings.Contains(s, "PRIVATE KEY-----") {
+		return true
+	}
+
+	b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+
+	return err == nil && strings.Contains(string(b), "PRIVATE KEY-----")
 }
 
 // privateKeyAdvice names what the chart offers in place of the embedded key: the sibling existingSecret where

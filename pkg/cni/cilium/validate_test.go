@@ -17,6 +17,7 @@ limitations under the License.
 package cilium
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"slices"
@@ -401,5 +402,60 @@ func TestValidateValuesRefusesEmbeddedPrivateKeys(t *testing.T) {
 	kept := ValidationContext{KubeProxy: cni.KubeProxyEnabled, KeptPrivateKeys: []string{"tls.ca.key"}}
 	if err := ValidateValues(keyAt("tls.ca.key"), kept); err != nil {
 		t.Errorf("kept key: %v", err)
+	}
+}
+
+const (
+	peerTLSKey = "tls"
+	peerCertK  = "cert"
+	peerCert   = "Y2VydA=="
+)
+
+func TestClusterMeshPeerTLSKeyIsRefused(t *testing.T) {
+	ctx := ValidationContext{KubeProxy: cni.KubeProxyEnabled}
+	pem := "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n"
+
+	mk := func(clusters any) map[string]any {
+		return map[string]any{"clustermesh": map[string]any{"config": map[string]any{"clusters": clusters}}}
+	}
+	peer := func(peerTLS map[string]any) map[string]any {
+		return map[string]any{"id": "b", peerTLSKey: peerTLS}
+	}
+
+	for name, u := range map[string]map[string]any{
+		"list": mk([]any{peer(map[string]any{peerCertK: peerCert, "key": "c2VjcmV0", "caCert": peerCert})}),
+		"dict": mk(map[string]any{"b": map[string]any{
+			peerTLSKey: map[string]any{peerCertK: peerCert, "key": "c2VjcmV0"}}}),
+		"pem raw":    mk([]any{map[string]any{"id": "b", "note": pem}}),
+		"pem base64": mk([]any{map[string]any{"id": "b", "note": base64.StdEncoding.EncodeToString([]byte(pem))}}),
+	} {
+		err := ValidateValues(u, ctx)
+		if err == nil || !strings.Contains(err.Error(), "clustermesh.config.clusters") {
+			t.Errorf("%s: err = %v, want a refusal naming clustermesh.config.clusters", name, err)
+		} else if strings.HasPrefix(name, "pem") == strings.Contains(err.Error(), "tls.key") {
+			t.Errorf("%s: err = %v, tls.key named only for the key leaf", name, err)
+		}
+
+		if err != nil && (strings.Contains(err.Error(), "c2VjcmV0") || strings.Contains(err.Error(), "AAAA")) {
+			t.Errorf("%s: the error echoes key bytes: %v", name, err)
+		}
+
+		if err := checkTakeoverKeys(u); err == nil {
+			t.Errorf("%s: the takeover preflight accepted it", name)
+		}
+	}
+
+	// A cert with no key, and a peer that names a Secret, pass.
+	for name, u := range map[string]map[string]any{
+		"cert only":  mk([]any{peer(map[string]any{peerCertK: peerCert})}),
+		"secret ref": mk([]any{map[string]any{"id": "b", peerTLSKey: map[string]any{"existingSecret": "peer-b"}}}),
+	} {
+		if err := ValidateValues(u, ctx); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+
+		if err := checkTakeoverKeys(u); err != nil {
+			t.Errorf("%s: takeover: %v", name, err)
+		}
 	}
 }

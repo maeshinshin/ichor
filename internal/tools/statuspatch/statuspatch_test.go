@@ -30,6 +30,8 @@ var allowed = map[site]string{
 	{"internal/controller/talosetcdbackup_controller.go", "patchStatus"}: "the TalosEtcdBackup controller is the only writer of that status " +
 		"(no CLI, UI or other controller writes it), and a resourceVersion would lose the status of a finished backup to a concurrent " +
 		"spec or annotation write; its lists are replaced whole on purpose",
+	{"internal/controller/cni_kubeproxy_switch.go", "setTalosSide"}: "TalosCluster status.cni.kubeProxy is one string, " +
+		"written only here; the patch sends no array, and a spec edit made just before must not pause the switch",
 }
 
 func TestNoUnlockedStatusMergePatch(t *testing.T) {

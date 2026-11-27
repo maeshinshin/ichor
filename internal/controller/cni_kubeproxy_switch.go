@@ -238,15 +238,16 @@ func verifiableCNI(cluster *ichorv1alpha1.TalosCluster) error {
 	return nil
 }
 
-// setTalosSide records the Talos-side mode on status. A merge patch, so a concurrent status write
-// by another controller is not a conflict that would pause the operation.
+// setTalosSide records the Talos-side mode on status. A merge patch without an optimistic lock: it
+// sends only status.cni.kubeProxy, so a concurrent write to the cluster (a spec edit, another status
+// writer) is not a conflict that would pause the operation.
 func (a *cniKubeProxyAdvancer) setTalosSide(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, target cni.KubeProxyMode,
 ) error {
 	base := cluster.DeepCopy()
 	cniStatus(cluster).KubeProxy = string(target)
 
-	if err := a.Status().Patch(ctx, cluster, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{})); err != nil {
+	if err := a.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("recording the Talos-side kube-proxy mode: %w", err)
 	}
 

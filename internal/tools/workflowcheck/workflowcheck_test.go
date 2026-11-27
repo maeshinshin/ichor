@@ -460,9 +460,7 @@ func TestNixRetryStartsFromAnEmptyStore(t *testing.T) {
 }
 
 // writeJobsMayRun lists the jobs that hold a write permission and still run repository code, keyed "file: job id".
-var writeJobsMayRun = map[string]string{
-	".github/workflows/release.yml: cli": "tag-triggered, runs only goreleaser and the release-notes tool of the tagged tree it publishes",
-}
+var writeJobsMayRun = map[string]string{}
 
 var repoCode = regexp.MustCompile(`\bmake (test|lint)\b|\bgo (test|run)\b`)
 

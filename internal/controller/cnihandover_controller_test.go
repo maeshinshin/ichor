@@ -449,6 +449,32 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(got.Status.CNI.TakenOverInlineManifest).To(Equal("my-cilium"))
 	})
 
+	It("runs the hand-over Job for an adopted cluster whose OnDelete cilium DaemonSet has old pods", func() {
+		cluster := newTestCiliumCluster()
+		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: strconv.FormatBool(true)}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		ciliumDaemonSet()(true)
+
+		var ds appsv1.DaemonSet
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: kubeSystemNamespace, Name: ciliumName}, &ds)).To(Succeed())
+		ds.Spec.UpdateStrategy.Type = appsv1.OnDeleteDaemonSetStrategyType
+		Expect(k8sClient.Update(ctx, &ds)).To(Succeed())
+
+		ds.Status = appsv1.DaemonSetStatus{
+			ObservedGeneration: ds.Generation, DesiredNumberScheduled: 3, CurrentNumberScheduled: 3,
+			NumberReady: 3, UpdatedNumberScheduled: 1,
+		}
+		Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
+
+		reconcileHandoverOK(r, cluster)
+
+		Expect(cniJobCount(cluster)).To(Equal(1))
+
+		if cond := conditionOf(cluster, render.ConditionCNIHandover); cond != nil {
+			Expect(cond.Reason).NotTo(Equal(reasonHandoverWaitingForCilium))
+		}
+	})
+
 	// `ichor adopt` installed Cilium itself, so Ichor's release is already deployed at
 	// the effective values when the TalosCluster appears. Hand-over needs no Job and nothing to remove.
 	It("hands over without a Job when Ichor's release is already deployed at the cluster's values", func() {

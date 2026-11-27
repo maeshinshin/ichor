@@ -686,8 +686,8 @@ func (r *CNIHandoverReconciler) ciliumReady(ctx context.Context) (ready bool, wh
 		return false, "", err
 	}
 
-	if !daemonSetRolledOut(&ds) {
-		return false, fmt.Sprintf("the cilium DaemonSet has %d of %d pods ready", ds.Status.NumberReady, ds.Status.DesiredNumberScheduled), nil
+	if ok, why := cilium.DaemonSetRolledOut(&ds); !ok {
+		return false, why, nil
 	}
 
 	return true, "", nil

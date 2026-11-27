@@ -571,24 +571,13 @@ func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1a
 		return false, fmt.Errorf("reading the cilium DaemonSet: %w", err)
 	}
 
-	if !daemonSetRolledOut(&ds) {
-		return false, waitOn(op, reasonNewSideNotReady,
-			fmt.Sprintf("the Cilium agents are rolling out: %d/%d updated and ready",
-				min(ds.Status.UpdatedNumberScheduled, ds.Status.NumberReady), ds.Status.DesiredNumberScheduled))
+	if ok, why := cilium.DaemonSetRolledOut(&ds); !ok {
+		return false, waitOn(op, reasonNewSideNotReady, why)
 	}
 
 	clearWait(op)
 
 	return true, nil
-}
-
-// daemonSetRolledOut reports whether ds runs its current generation, scheduled somewhere, with
-// every pod updated and ready.
-func daemonSetRolledOut(ds *appsv1.DaemonSet) bool {
-	want := ds.Status.DesiredNumberScheduled
-
-	return ds.Status.ObservedGeneration >= ds.Generation && want > 0 &&
-		ds.Status.UpdatedNumberScheduled >= want && ds.Status.NumberReady >= want
 }
 
 // ciliumReplaces reads cilium-config's kube-proxy-replacement: "true" (and the pre-1.14 "strict")

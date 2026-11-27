@@ -19,6 +19,7 @@ export type Attention =
   | { kind: 'release'; version: string }
   | { kind: 'autoPatchHalted'; operation: string }
   | { kind: 'installerUnverified' }
+  | { kind: 'installationUnreadable' }
 
 // attentionItems lists, in order, only what applies to the cluster now.
 export function attentionItems(i: {
@@ -36,12 +37,15 @@ export function attentionItems(i: {
   autoPatchHalted?: string
   // installerUnverified is true when the installer image's signature was not checked.
   installerUnverified?: boolean
+  // installationError is true when the installation could not be read: the two items above are then unknown, not absent.
+  installationError?: boolean
 }): Attention[] {
   const out: Attention[] = []
   if (i.opState === 'failed') out.push({ kind: 'opFailed' })
   if (i.opState === 'paused' || i.opState === 'blocked') out.push({ kind: 'opPaused' })
   if (i.autoPatchHalted) out.push({ kind: 'autoPatchHalted', operation: i.autoPatchHalted })
   if (i.installerUnverified) out.push({ kind: 'installerUnverified' })
+  if (i.installationError) out.push({ kind: 'installationUnreadable' })
   const certs = activeCondition(i.conditions, 'CertificatesExpiring')
   if (certs !== null) out.push({ kind: 'certs', message: certs })
   const stale = activeCondition(i.conditions, 'BundleBackupStale')

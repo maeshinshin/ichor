@@ -1107,6 +1107,8 @@ export const en = {
   'home.attnPending': 'Nodes waiting for approval: {n}.',
   'home.attnConfig': 'Nodes with configuration waiting for a reboot: {n}.',
   'home.attnApiRestart': 'Nodes with configuration waiting for an API server restart: {n}.',
+  'home.attnInstallationUnreadable': 'The Ichor installation could not be read',
+  'home.attnInstallationUnreadableHint': 'The automatic-patching halt and the installer check are unknown, so their warnings may be missing. Reload the page to read it again.',
   'home.attnInstallerUnverified': 'The installer image was not verified',
   'home.attnInstallerUnverifiedHint': 'An installer image ran, or will run, without its signature checked, and the cluster keeps that record. The installer holds nearly cluster-admin rights. Run the next Ichor upgrade without skipping the check.',
   'home.attnRelease': 'Ichor {version} is available.',

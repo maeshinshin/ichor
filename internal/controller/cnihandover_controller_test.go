@@ -364,6 +364,27 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(result).To(Equal(ctrl.Result{}))
 	})
 
+	It("does not record the hand-over while an OnDelete cilium DaemonSet has agents on the old template, and says how to restart them", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		onDeleteCiliumWithOldPods()
+
+		reconcileHandoverOK(r, cluster)
+		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
+		helmRelease(1, "deployed", effectiveValues(cluster))
+
+		reconcileHandoverOK(r, cluster)
+
+		cond := conditionOf(cluster, render.ConditionCNIHandover)
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(reasonHandoverWaitingForCilium))
+		Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system rollout restart ds/cilium"))
+
+		setCiliumRollout(true)
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
+	})
+
 	// The Job's name is a hash of the values, so a completed Job an earlier install left in kube-system is
 	// found as this cluster's own, while the release record went with the Ichor namespace.
 	It("replaces a completed Job that predates the cluster and has no release", func() {

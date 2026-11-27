@@ -292,6 +292,24 @@ var _ = Describe("Cilium chart upgrade", func() {
 			Expect(held).To(BeFalse())
 		})
 
+		It("waits while an OnDelete DaemonSet has agents on the old template, names the restart, then completes", func() {
+			onDeleteCiliumWithOldPods()
+			helmReleaseAt(1, "deployed", cilium.ChartVersion, effectiveValues(cluster))
+			start(cilium.ChartVersion)
+
+			mustReconcileOperation(r, op)
+			op = fetchOperation(op)
+			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+			cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system rollout restart ds/cilium"))
+
+			setCiliumRollout(true)
+			mustReconcileOperation(r, op)
+			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+		})
+
 		It("pauses with the Job's reason when the Job fails", func() {
 			helmReleaseAt(1, "deployed", olderMinor, effectiveValues(cluster))
 			start(cilium.ChartVersion)

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 // The role-grant and last-admin rules of the UI backend (internal/uiapi guardGrant and
@@ -145,6 +146,13 @@ func TestIchorUserLastAdmin(t *testing.T) {
 		return u
 	}
 
+	allowed := func(u *ichorv1alpha1.IchorUser) *ichorv1alpha1.IchorUser {
+		u = u.DeepCopy()
+		u.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
+
+		return u
+	}
+
 	boss := []string{"ichor:admin"}
 
 	type update struct{ old, new *ichorv1alpha1.IchorUser }
@@ -179,6 +187,8 @@ func TestIchorUserLastAdmin(t *testing.T) {
 			upd: &update{root, iuser("root", false, "admin", "viewer")}},
 		{name: "enabling a disabled admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
 			upd: &update{iuser("off", true, "admin"), iuser("off", false, "admin")}},
+		{name: "the last admin carrying the uninstall annotation may be deleted", user: userBoss, groups: boss,
+			stored: []*ichorv1alpha1.IchorUser{root}, del: allowed(root)},
 		{name: "the override certificate may remove the last admin", user: "admin", groups: []string{"system:masters"},
 			stored: []*ichorv1alpha1.IchorUser{root}, del: root},
 		{name: "the override certificate may demote the last admin", user: "admin", groups: []string{"system:masters"},
@@ -256,6 +266,16 @@ var _ = Describe("IchorUser Webhook through the API server", func() {
 		disabled := root.DeepCopy()
 		disabled.Spec.Disabled = true
 		Expect(asBoss.Update(ctx, disabled)).To(MatchError(ContainSubstring("last enabled admin")))
+
+		// The uninstall steps annotate every object, then delete it: the annotation admits the last admin.
+		annotated := root.DeepCopy()
+		annotated.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
+		Expect(k8sClient.Update(ctx, annotated)).To(Succeed())
+		Expect(asBoss.Delete(ctx, annotated.DeepCopy())).To(Succeed())
+
+		root = user("last-admin", "admin")
+		Expect(k8sClient.Create(ctx, root)).To(Succeed())
+		Expect(asBoss.Delete(ctx, root.DeepCopy())).To(MatchError(ContainSubstring("last enabled admin")))
 
 		// With a second enabled admin the first can go.
 		second := user("second-admin", "admin")

@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
@@ -137,7 +138,9 @@ func (v *IchorUserCustomValidator) ValidateUpdate(ctx context.Context, oldObj, n
 func (v *IchorUserCustomValidator) ValidateDelete(ctx context.Context, obj *ichorv1alpha1.IchorUser) (admission.Warnings, error) {
 	ichoruserlog.Info("Validation for IchorUser upon deletion", "name", obj.GetName())
 
-	if !ichorauth.IsEnabledAdmin(obj.Spec.Roles, obj.Spec.Disabled) {
+	// The allow-delete annotation is the uninstall step that removes every Ichor object before the namespace
+	// goes: once the namespace is deleting, the webhook Service is gone and no delete can pass.
+	if !ichorauth.IsEnabledAdmin(obj.Spec.Roles, obj.Spec.Disabled) || deleteguard.CheckDelete(obj.GetAnnotations()) == nil {
 		return nil, nil
 	}
 

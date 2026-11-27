@@ -28,7 +28,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 // ciliumUserValues is spec.cni.cilium.values as a map; nil when unset.
@@ -116,16 +115,20 @@ func keptPrivateKeys(oldObj *ichorv1alpha1.TalosCluster, user map[string]any) ([
 		return nil, nil //nolint:nilerr // a stored object that does not decode keeps nothing
 	}
 
-	set, err := cilium.EmbeddedPrivateKeys(user)
+	set, err := cilium.EmbeddedPrivateKeyValues(user)
+	if err != nil {
+		return nil, err
+	}
+
+	oldSet, err := cilium.EmbeddedPrivateKeyValues(old)
 	if err != nil {
 		return nil, err
 	}
 
 	var kept []string
 
-	for _, p := range set {
-		nv, _ := values.Get(user, p)
-		if ov, ok := values.Get(old, p); ok && ov == nv {
+	for p, nv := range set {
+		if ov, ok := oldSet[p]; ok && ov == nv {
 			kept = append(kept, p)
 		}
 	}

@@ -167,4 +167,34 @@ var _ = Describe("TalosCluster Webhook: Cilium values", func() {
 		_, err = v.ValidateUpdate(ctx, added, withValues(keyed))
 		Expect(err).To(MatchError(ContainSubstring("hubble.tls.server.key")))
 	})
+
+	// A list-form ClusterMesh peer key is kept the same way: stored and unchanged passes, new or changed does not.
+	It("keeps a stored list-form ClusterMesh peer key editable, and refuses a new or changed one", func() {
+		peer := func(key string) string {
+			return `{"debug":{"enabled":true},"clustermesh":{"config":{"clusters":[` + key + `]}}}`
+		}
+		const (
+			one = `{"name":"a","tls":{"cert":"Y2VydA==","key":"c2VjcmV0"}}`
+			two = `{"name":"b","tls":{"cert":"Y2VydA==","key":"c2VjcmV0"}}`
+		)
+
+		old := withValues(peer(one))
+
+		unrelated := old.DeepCopy()
+		unrelated.Spec.CNI.Cilium.Values.Raw = []byte(
+			`{"debug":{"enabled":false},"clustermesh":{"config":{"clusters":[` + one + `]}}}`)
+		_, err := v.ValidateUpdate(ctx, old, unrelated)
+		Expect(err).NotTo(HaveOccurred())
+
+		added := old.DeepCopy()
+		added.Spec.CNI.Cilium.Values.Raw = []byte(peer(one + "," + two))
+		_, err = v.ValidateUpdate(ctx, old, added)
+		Expect(err).To(MatchError(ContainSubstring("clustermesh.config.clusters[1].tls.key")))
+
+		changed := old.DeepCopy()
+		changed.Spec.CNI.Cilium.Values.Raw = []byte(peer(
+			`{"name":"a","tls":{"cert":"Y2VydA==","key":"b3RoZXI="}}`))
+		_, err = v.ValidateUpdate(ctx, old, changed)
+		Expect(err).To(MatchError(ContainSubstring("clustermesh.config.clusters[0].tls.key")))
+	})
 })

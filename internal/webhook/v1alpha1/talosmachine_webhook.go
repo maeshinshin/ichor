@@ -319,6 +319,13 @@ func (v *TalosMachineCustomValidator) ValidateDelete(ctx context.Context, obj *i
 		return nil, nil
 	}
 
+	// The quorum guard protects a cluster that still exists (ADR 0010). With its TalosCluster gone or
+	// deleting, nothing is managed any more and the machine is released: the allow-delete check above
+	// is all that applies. getCluster answers nil for both.
+	if cluster, err := v.getCluster(ctx, obj); err != nil || cluster == nil {
+		return nil, err
+	}
+
 	// Note: two concurrent deletes of different control planes in the
 	// same cluster can both List before either delete commits, so both see
 	// the pre-deletion count and both get admitted, together breaking

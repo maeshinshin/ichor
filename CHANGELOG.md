@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.3.6 (2026-11-27)
+
+A patch release of fixes to v0.3.5: `ichor adopt` finishes an Ichor install that an
+earlier run stopped partway and no longer lets a rollout remove Ichor's sign-in
+authenticator, and the Overview page shows a failed installation read instead of an
+all-clear. No CRD field is added or removed.
+
+### Upgrade notes
+
+- **A re-run of `ichor adopt` finishes an Ichor install that an earlier run stopped
+  partway.** A non-Helm install with no IchorInstallation is taken as incomplete:
+  adopt applies the rest of the manifest, creates the IchorInstallation and says so.
+  Before, it took any Ichor it found for installed and installed nothing.
+- **When adopt does not turn sign-in on, a node that carries Ichor's authenticator is
+  refused.** That is a Helm-managed Ichor, or `spec.authentication.ichor` with
+  `enabled: false`. The message says to set `spec.authentication.ichor` (`enabled: true`,
+  `url`) on the TalosCluster, in the chart values and on the TalosCluster for a
+  Helm-managed Ichor, and to run adopt again; adopt has no flag that turns sign-in on.
+  Before, the authenticator was dropped from the plan, so the rollout that adopt
+  advised could remove it.
+
+### CLI
+
+- `ichor adopt` treats a non-Helm install without an IchorInstallation as partial and
+  finishes it, in the sign-in step and in the write step, which notes "completing an
+  earlier, partial install of Ichor".
+- `ichor adopt` keeps a node's Ichor authenticator in the plan unless this adopt turns
+  sign-in on, and refuses the node with a message naming the ways forward.
+
+### UI
+
+- The Overview page shows an attention item, "The Ichor installation could not be
+  read", when the IchorInstallation read fails. The auto-patch halt and the installer
+  check are then unknown, and their warnings were hidden before; the auto-patch badge
+  is hidden as unknown.
+
 ## v0.3.5 (2026-11-27)
 
 A patch release of fixes to v0.3.4: deleting the controller namespace is refused until

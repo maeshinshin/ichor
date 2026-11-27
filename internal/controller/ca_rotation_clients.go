@@ -24,6 +24,8 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -169,6 +171,7 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 
 	var (
 		template  *metav1.ObjectMeta
+		ds        *appsv1.DaemonSet
 		available bool
 		patch     func([]byte) error
 	)
@@ -192,7 +195,7 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 			return apierrors.IsNotFound(gerr), client.IgnoreNotFound(gerr)
 		}
 
-		template, available = &d.Spec.Template.ObjectMeta, daemonSetAvailable(d)
+		ds, template, available = d, &d.Spec.Template.ObjectMeta, daemonSetAvailable(d)
 		patch = func(b []byte) (perr error) {
 			_, perr = kc.AppsV1().DaemonSets(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, b, metav1.PatchOptions{})
 
@@ -201,11 +204,68 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 	}
 
 	if template.Annotations[caRestartMarker] == token {
+		if ds != nil && ds.Spec.UpdateStrategy.Type == appsv1.OnDeleteDaemonSetStrategyType {
+			return c.replaceOnDeletePods(ctx, ds, token)
+		}
+
 		return available, nil
 	}
 
 	// The patch just made the rollout; whatever status was read describes the previous one.
 	return false, patch(restartPatch(caRestartMarker, token))
+}
+
+// replaceOnDeletePods finishes the restart of an OnDelete DaemonSet, which replaces only the pods that are evicted:
+// it evicts one pod still on the old template (no token on it) once no replacement is in flight, and reports the
+// DaemonSet restarted when none is left. One node at a time keeps the other agents serving. Old pods may be not Ready
+// (they no longer trust the API server's CA), so only a replacement (token on it) or a terminating pod is waited for.
+// A refused eviction (429, a PodDisruptionBudget) is asked again on the next poll.
+func (c *caRun) replaceOnDeletePods(ctx context.Context, ds *appsv1.DaemonSet, token string) (bool, error) {
+	sel, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
+	if err != nil {
+		return false, err
+	}
+
+	pods, err := c.r.KubeClient.CoreV1().Pods(ds.Namespace).List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
+	if err != nil {
+		return false, err
+	}
+
+	var old *corev1.Pod
+
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		replacement := p.Annotations[caRestartMarker] == token
+
+		if p.DeletionTimestamp != nil || (replacement && !podIsReady(p)) {
+			return false, nil // the previous replacement is not back yet
+		}
+
+		if old == nil && !replacement {
+			old = p
+		}
+	}
+
+	if old == nil {
+		return daemonSetAvailable(ds), nil
+	}
+
+	err = newDrainHelper(ctx, c.r.KubeClient, 0).EvictPod(*old, policyv1.SchemeGroupVersion)
+	if apierrors.IsTooManyRequests(err) {
+		return false, nil
+	}
+
+	return false, client.IgnoreNotFound(err)
+}
+
+func podIsReady(p *corev1.Pod) bool {
+	for _, c := range p.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
 }
 
 // restartPatch is the strategic merge patch that rolls a workload once: restartedAt and the operation's

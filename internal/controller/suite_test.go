@@ -103,6 +103,12 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	// A discovery probe, creating its TalosMachine included, has discoveryDialTimeout (2s) in production. The first
+	// Create of a kind on a fresh, loaded apiserver can take longer, so the specs that run one would fail
+	// depending on which ran first. Create and delete one here, where nothing is bounded.
+	warm := newTestMachine("warm-up", false)
+	Expect(k8sClient.Delete(ctx, warm)).To(Succeed())
 })
 
 var _ = AfterSuite(func() {

@@ -11,7 +11,7 @@ Create a scheduled, encrypted etcd backup to an S3 bucket: the TalosEtcdBackup a
 
 etcd-backup writes the two objects a scheduled etcd backup needs: a Secret with the S3 credentials, in
 the controller's namespace (--ichor-namespace, where the controller reads it), and the TalosEtcdBackup
-NAME in --namespace that names it. It does not create the bucket: the bucket must already exist, and
+NAME that names it, both in the controller's namespace. It does not create the bucket: the bucket must already exist, and
 should be outside the cluster, because a restore takes the cluster's own Kubernetes API down and an
 in-cluster store with it.
 

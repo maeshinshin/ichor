@@ -58,7 +58,7 @@ var cniHelmApplyOpts struct {
 var cniHelmApplyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "Make Helm release cilium match the TalosCluster's effective Cilium values",
-	Long: `apply reads the TalosCluster named by --cluster (in --namespace), computes Cilium's effective
+	Long: `apply reads the TalosCluster named by --cluster in the controller's namespace (--ichor-namespace, default ichor-system), computes Cilium's effective
 values from it, and runs the pinned chart as Helm release cilium in kube-system: it adopts the
 bootstrapped objects into revision 1 when no release exists, and otherwise upgrades (which
 prunes, and rolls back on failure). It then waits for the workloads to roll out.
@@ -189,7 +189,7 @@ func init() {
 	cniHelmCmd.AddCommand(cniHelmApplyCmd)
 
 	f := cniHelmApplyCmd.Flags()
-	f.StringVar(&cniHelmApplyOpts.Cluster, "cluster", "", "name of the TalosCluster whose Cilium values apply (in --namespace)")
+	f.StringVar(&cniHelmApplyOpts.Cluster, "cluster", "", "name of the TalosCluster whose Cilium values apply in the controller's namespace (--ichor-namespace, default ichor-system)")
 	f.StringVar(&cniHelmApplyOpts.StorageNamespace, "storage-namespace", ichorControllerNamespace, "namespace Helm keeps the release record (a Secret) in")
 	f.StringVar(&cniHelmApplyOpts.KubeProxy, "kube-proxy", "", "kube-proxy mode to apply (enabled or replaced); default the cluster's spec.cni.kubeProxy")
 	f.BoolVar(&cniHelmApplyOpts.Takeover, "takeover", false, "the Cilium being installed over was installed by someone else (an adopted cluster): retire its Helm release record after the rollout")

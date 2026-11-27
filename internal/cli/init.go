@@ -396,7 +396,7 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 
 	flags.StringVar(&o.UIURL, "ui-url", "",
 		"the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
-			"left out, the issuer is "+defaultUIURL+", where ichor ui reaches it; needs --version-contract v1.14 or later")
+			"left out, the issuer is "+defaultUIURL+", where ichor ui reaches it; needs Talos v1.14 or later")
 	bindRemovedOpenMode(flags)
 	flags.StringVar(&o.AdminUser, "admin-user", "",
 		"with sign-in: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+

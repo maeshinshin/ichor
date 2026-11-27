@@ -115,7 +115,7 @@ ichor init [flags]
       --ui-tls-cert string                 with sign-in: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret
       --ui-tls-key string                  with --ui-tls-cert: PEM private key file (never printed)
       --ui-tls-secret string               with sign-in: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in ichor-system (chart: ichorUI.tls.secretName)
-      --ui-url string                      the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; left out, the issuer is https://localhost:8443, where ichor ui reaches it; needs --version-contract v1.14 or later
+      --ui-url string                      the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; left out, the issuer is https://localhost:8443, where ichor ui reaches it; needs Talos v1.14 or later
       --user-volume-disk-selector string   CEL disk selector for a UserVolumeConfig disk
       --user-volume-name string            name for --user-volume-disk-selector's volume (default "data")
       --vlan int32                         VLAN ID (1-4094) to put the first node's addressing on

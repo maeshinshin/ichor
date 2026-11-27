@@ -392,6 +392,6 @@ func init() {
 	fl.StringVar(&machineReclaimFlags.ConfirmCluster, "confirm-cluster", "", "the foreign cluster's name, the second confirmation --force needs")
 	fl.BoolVar(&machineReclaimFlags.Force, "force", false, "allow a control plane whose removal breaks etcd quorum, or is the last one")
 	fl.BoolVar(&machineReclaimFlags.ForceUngraceful, "force-ungraceful", false, "reset without cordon, drain and etcd leave, for a dead cluster")
-	fl.StringVar(&machineReclaimFlags.Cluster, "cluster", "", "TalosCluster (in --namespace) whose discovery addresses get the node's address afterwards")
+	fl.StringVar(&machineReclaimFlags.Cluster, "cluster", "", "TalosCluster in the controller's namespace (--ichor-namespace, default ichor-system) whose discovery addresses get the node's address afterwards")
 	fl.DurationVar(&machineReclaimFlags.Wait, "wait", 10*time.Minute, "how long to wait for maintenance mode (0 to not wait)")
 }

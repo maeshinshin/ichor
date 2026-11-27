@@ -182,6 +182,6 @@ func init() {
 	addAPIFlags(discoveryCmd)
 	discoveryCmd.AddCommand(discoveryListCmd, discoveryAddCmd, discoveryRemoveCmd)
 	discoveryCmd.PersistentFlags().StringVar(&clusterDiscoveryCluster, "cluster", "",
-		"TalosCluster (in --namespace) to edit; optional when the namespace has exactly one")
+		"TalosCluster in the controller's namespace (--ichor-namespace, default ichor-system) to edit; optional when there is exactly one")
 	markWrites(discoveryAddCmd, discoveryRemoveCmd)
 }

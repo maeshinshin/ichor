@@ -79,6 +79,6 @@ func init() {
 	addAPIFlags(setContainerdDeviceOwnershipCmd)
 	setCmd.AddCommand(setContainerdDeviceOwnershipCmd)
 	setContainerdDeviceOwnershipCmd.Flags().StringVar(&setContainerdCluster, "cluster", "",
-		"TalosCluster (in --namespace) to change; optional when the namespace has exactly one")
+		"TalosCluster in the controller's namespace (--ichor-namespace, default ichor-system) to change; optional when there is exactly one")
 	markWrites(setContainerdDeviceOwnershipCmd)
 }

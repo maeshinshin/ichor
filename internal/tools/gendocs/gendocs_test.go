@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/maeshinshin/ichor/internal/cli"
 )
@@ -167,5 +170,93 @@ func TestDeprecatedMarksOnlyDeprecatedFields(t *testing.T) {
 
 	if !strings.Contains(string(b), "`spec.documents` **(deprecated)**") {
 		t.Error("spec.documents is no longer marked (deprecated)")
+	}
+}
+
+var (
+	flagMention = regexp.MustCompile(`(?:^|[^\w-])--([a-z][a-z0-9-]*)`)
+	flagDefined = regexp.MustCompile(`(?m)^\s+(?:-\w, )?--([a-z][a-z0-9-]*)`)
+)
+
+// A page that names a --flag in its synopsis or in another flag's usage must list that flag under
+// Options or inherited Options; a hidden flag is listed nowhere, so naming it sends the reader to
+// something the page cannot explain.
+func TestNamedFlagsAreListed(t *testing.T) {
+	dir := t.TempDir()
+	if err := generateCLI(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	pages, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil || len(pages) == 0 {
+		t.Fatalf("no generated pages: %v", err)
+	}
+
+	// A group page names its subcommands' flags, and a few pages name another tool's or command's
+	// flag in quotes; both are skipped, the second by page and flag.
+	groups := map[string]bool{}
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		if c.HasSubCommands() {
+			groups[strings.ReplaceAll(c.CommandPath(), " ", "_")+".md"] = true
+		}
+
+		for _, sc := range c.Commands() {
+			walk(sc)
+		}
+	}
+	walk(cli.RootCommand())
+
+	foreign := map[string]bool{
+		"ichor_restore_cluster.md/recover-from": true, // quotes 'talosctl bootstrap --recover-from'
+		"ichor_rotate_ca.md/acknowledge":        true,
+		"ichor_rotate_ca.md/bundle":             true, // quotes the command line of `ichor create credentials`
+		"ichor_rotate_ca.md/kube-server":        true,
+		"ichor_rotate_ca.md/talos-endpoints":    true,
+	}
+
+	for _, p := range pages {
+		if groups[filepath.Base(p)] {
+			continue
+		}
+
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		page := string(b)
+		synopsis, options := "", ""
+
+		if i := strings.Index(page, "### Synopsis"); i >= 0 {
+			synopsis = page[i:]
+			if j := strings.Index(synopsis, "\n### Examples"); j >= 0 {
+				synopsis = synopsis[:j]
+			} else if j := strings.Index(synopsis, "\n### Options"); j >= 0 {
+				synopsis = synopsis[:j]
+			}
+		}
+
+		if i := strings.Index(page, "### Options"); i >= 0 {
+			options = page[i:]
+			if j := strings.Index(options, "### SEE ALSO"); j >= 0 {
+				options = options[:j]
+			}
+		}
+
+		listed := map[string]bool{}
+		for _, m := range flagDefined.FindAllStringSubmatch(options, -1) {
+			listed[m[1]] = true
+		}
+
+		for _, text := range []string{synopsis, options} {
+			for _, m := range flagMention.FindAllStringSubmatch(text, -1) {
+				if !listed[m[1]] && !foreign[filepath.Base(p)+"/"+m[1]] {
+					t.Errorf("%s names --%s, which its Options do not list", filepath.Base(p), m[1])
+				}
+			}
+		}
 	}
 }

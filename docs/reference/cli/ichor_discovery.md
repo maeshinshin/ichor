@@ -22,7 +22,7 @@ ichor discovery [command]
 
 ```text
       --ca-file string           PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
-      --cluster string           TalosCluster (in --namespace) to edit; optional when the namespace has exactly one
+      --cluster string           TalosCluster in the controller's namespace (--ichor-namespace, default ichor-system) to edit; optional when there is exactly one
   -h, --help                     help for discovery
       --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
       --local                    do not use ichor-ui; compute from the Kubernetes API directly

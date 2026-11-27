@@ -35,7 +35,7 @@ ichor create etcd-backup nightly --cluster prod \
 ```
 
 This writes the Secret `nightly-s3` in `--ichor-namespace` (`ichor-system`, where
-the controller reads it) and the `TalosEtcdBackup` `nightly` in `--namespace`.
+the controller reads it) and the `TalosEtcdBackup` `nightly` beside it.
 It validates first, never overwrites, and removes the Secret if the backup is refused.
 
 | Flag | Default |
@@ -83,7 +83,7 @@ spec:
 kubectl -n ichor-system get talosetcdbackup nightly -o yaml
 ```
 
-`ichor create etcd-backup` writes into `--namespace` (default `ichor-system`). A
+`ichor create etcd-backup` writes into the controller's namespace (`--ichor-namespace`, default `ichor-system`). A
 backup you write by hand lives in the namespace you gave it; use that one here.
 
 - `Ready` is `True` (`Succeeded`) while the newest snapshot is fresher than

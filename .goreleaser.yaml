@@ -64,6 +64,12 @@ signs:
     signature: "${artifact}.sigstore.json"
     args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
 
+# install.yaml is the install manifest that pins this release's image digests (the one the CLI embeds). It is in
+# the checksums, so the signed checksums file covers it, and it is a release asset: the uninstall guide deletes with it.
+checksum:
+  extra_files:
+    - glob: ./dist/install.yaml
+
 # The release body is the tag's section of CHANGELOG.md, which the release workflow passes with
 # --release-notes. There is no changelog block on purpose: disabling the changelog would make
 # goreleaser ignore that flag too. goreleaser 2.17.1 (internal/pipe/git/git.go, previousTagSha) takes the
@@ -72,6 +78,8 @@ signs:
 # and a generated commit log would span whatever ancestor tag is nearest, or be empty with a warning.
 
 release:
+  extra_files:
+    - glob: ./dist/install.yaml
   # A re-run after a partial upload replaces the files already on the release instead of failing on them.
   replace_existing_artifacts: true
   # Name the repo explicitly so goreleaser doesn't need to read it from

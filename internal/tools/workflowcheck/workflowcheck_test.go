@@ -29,15 +29,17 @@ type defaults struct {
 }
 
 type job struct {
-	Defaults defaults `yaml:"defaults"`
-	Steps    []step   `yaml:"steps"`
+	Permissions map[string]string `yaml:"permissions"`
+	Defaults    defaults          `yaml:"defaults"`
+	Steps       []step            `yaml:"steps"`
 }
 
 // file is a workflow (jobs) or a composite action (runs.steps).
 type file struct {
-	Defaults defaults       `yaml:"defaults"`
-	Jobs     map[string]job `yaml:"jobs"`
-	Runs     struct {
+	Permissions map[string]string `yaml:"permissions"`
+	Defaults    defaults          `yaml:"defaults"`
+	Jobs        map[string]job    `yaml:"jobs"`
+	Runs        struct {
 		Steps []step `yaml:"steps"`
 	} `yaml:"runs"`
 }
@@ -315,6 +317,7 @@ var nixExempt = map[string]string{
 	".github/workflows/test-chart.yml: Show why the deploy failed":                                     "failure diagnostics; every line is best effort",
 	".github/workflows/cilium-patch.yml: Open or update the issue":                                     "a job without a checkout; it only runs the runner's gh",
 	".github/actions/nix/action.yml: Empty /nix before the second attempt":                             "runs before Nix exists",
+	".github/workflows/cilium-patch.yml: Apply the patch":                                              "a job without Nix; it only runs git, to keep repository code away from the write token",
 	".github/actions/nix/action.yml: Free disk space":                                                  "runs before Nix exists",
 	".github/actions/nix/action.yml: Keep the devShell and the flake inputs out of garbage collection": "builds the dev shell profile itself",
 }
@@ -454,4 +457,48 @@ func TestNixRetryStartsFromAnEmptyStore(t *testing.T) {
 	if prev.If != steps[retry].If || !strings.Contains(prev.Run, "sudo rm -rf /nix") {
 		t.Errorf("the step before the second attempt is %q (if %q): want `sudo rm -rf /nix` under the same if as the attempt (%q)", prev.Name, prev.If, steps[retry].If)
 	}
+}
+
+// writeJobsMayRun lists the jobs that hold a write permission and still run repository code, keyed "file: job id".
+var writeJobsMayRun = map[string]string{
+	".github/workflows/release.yml: cli": "tag-triggered, runs only goreleaser and the release-notes tool of the tagged tree it publishes",
+}
+
+var repoCode = regexp.MustCompile(`\bmake (test|lint)\b|\bgo (test|run)\b`)
+
+// A job with a write token must not run the repository's tests, linter or Go code: that code, and what it downloads, would
+// hold the token. Such work goes in a job with read-only permissions that hands its result on as an artifact.
+func TestAWriteTokenJobRunsNoRepositoryCode(t *testing.T) {
+	for _, p := range paths(t) {
+		f := load(t, p)
+		for id, j := range f.Jobs {
+			perms := j.Permissions
+			if perms == nil {
+				perms = f.Permissions
+			}
+
+			if !slices.Contains(mapValues(perms), "write") {
+				continue
+			}
+
+			if _, ok := writeJobsMayRun[p+": "+id]; ok {
+				continue
+			}
+
+			for _, s := range j.Steps {
+				if m := repoCode.FindString(strings.Join(code(s.Run), "\n")); m != "" {
+					t.Errorf("%s job %q has a write permission and step %q runs %q", p, id, s.Name, m)
+				}
+			}
+		}
+	}
+}
+
+func mapValues(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for _, v := range m {
+		out = append(out, v)
+	}
+
+	return out
 }

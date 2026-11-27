@@ -452,7 +452,8 @@ jobs:
   # there. A tag that is already in main's history (cut from main) needs nothing.
   # The pull request is the only write to main, and a person merges it. continue-on-error keeps a failure here from
   # marking a release that published correctly as failed; the job still shows red.
-  # A pull request opened with the default GITHUB_TOKEN does not start other workflows, and only opens at all while
+  # A pull request opened with the default GITHUB_TOKEN does not trigger Tests, Lint and PR Title: GitHub creates their
+  # runs but leaves them waiting in action_required until a person approves them. It only opens at all while
   # "Allow GitHub Actions to create and approve pull requests" is on. Set the RELEASE_SYNC_PR_TOKEN secret (a
   # fine-grained token with contents and pull requests write) to have Tests, Lint and PR Title run on it as on any
   # other pull request.

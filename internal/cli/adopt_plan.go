@@ -63,8 +63,8 @@ type adoptPlan struct {
 
 	// IchorAuthenticator: the node carries Ichor's own authenticator, which adopt replaces by turning sign-in on.
 	IchorAuthenticator bool
-	// AuthenticatorKept: adopt is not turning sign-in on, so the node's authenticator stays in the drift.
-	AuthenticatorKept bool
+	// AuthenticatorRefused: adopt is not turning sign-in on, so the node's authenticator stays in the drift and adopt refuses the node.
+	AuthenticatorRefused bool
 
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
@@ -178,7 +178,7 @@ func buildAdoptPlan(
 		paths = slices.DeleteFunc(paths, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
 	}
 
-	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth, AuthenticatorKept: ichorAuth && !dropAuth}
+	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth, AuthenticatorRefused: ichorAuth && !dropAuth}
 
 	if len(paths) == 0 {
 		return plan, nil

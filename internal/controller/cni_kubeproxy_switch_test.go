@@ -321,6 +321,27 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		})
 	})
 
+	It("TestSetTalosSideSurvivesAConcurrentWrite: a spec edit between the read and the status write is not a conflict that pauses the operation", func() {
+		cluster := cniSwitchCluster(modeReplaced)
+		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{}, &fakeKubeProxyAdmin{})
+
+		// The user edits the cluster after the advancer read it: its copy now has a stale resourceVersion.
+		edit := cluster.DeepCopy()
+		edit.Annotations = map[string]string{"test/edited": "1"}
+		Expect(k8sClient.Patch(ctx, edit, client.MergeFrom(cluster))).To(Succeed())
+
+		Expect(adv.setTalosSide(ctx, cluster, cni.KubeProxyReplaced)).To(Succeed())
+
+		var got ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &got)).To(Succeed())
+		Expect(got.Status.CNI).NotTo(BeNil())
+		Expect(got.Status.CNI.KubeProxy).To(Equal(string(cni.KubeProxyReplaced)))
+
+		// Positive control: an error that is not a conflict still surfaces.
+		Expect(k8sClient.Delete(ctx, &got)).To(Succeed())
+		Eventually(func() error { return adv.setTalosSide(ctx, cluster, cni.KubeProxyEnabled) }).Should(HaveOccurred())
+	})
+
 	It("replaced: runs the Cilium Helm Job first and touches nothing else until cilium-config verifies", func() {
 		newCilium("false", true)
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)

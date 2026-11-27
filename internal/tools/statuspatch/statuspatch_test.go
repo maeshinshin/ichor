@@ -27,6 +27,8 @@ type site struct{ file, fn string }
 var allowed = map[site]string{
 	{"internal/controller/kubeletserving.go", "recordIssued"}: "TalosMachine status.kubeletServingCertificate is one pointer, " +
 		"written only here; the patch sends no array",
+	{"internal/controller/cni_kubeproxy_switch.go", "setTalosSide"}: "TalosCluster status.cni.kubeProxy is one string, " +
+		"written only here; the patch sends no array, and a spec edit made just before must not pause the switch",
 }
 
 func TestNoUnlockedStatusMergePatch(t *testing.T) {

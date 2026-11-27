@@ -434,7 +434,9 @@ jobs:
 
       - name: Take the release notes from CHANGELOG.md
         run: |
-          awk -v h="## ${GITHUB_REF_NAME} " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          # The links are rewritten to the tagged tree: a relative one 404s from the release page.
+          awk -v h="## ${GITHUB_REF_NAME} " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md |
+            nix develop --command go run ./internal/tools/releasenotes "${GITHUB_REF_NAME}" > "$RUNNER_TEMP/release-notes.md"
           test -s "$RUNNER_TEMP/release-notes.md" || { echo "CHANGELOG.md has no section for ${GITHUB_REF_NAME}" >&2; exit 1; }
 
       - name: Build, sign the checksums and publish the CLI

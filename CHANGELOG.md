@@ -16,6 +16,211 @@
   controller's namespace. A script passing another value now fails before anything is
   written.
 
+## v0.3.5 (2026-11-27)
+
+A patch release of fixes to v0.3.4: deleting the controller namespace is refused until
+you consent, a Cilium private key can no longer be embedded in a TalosCluster or taken
+over from an existing install, the takeover keeps a Helm record that changed after its
+backup, and the Cilium agents are not Ready while a rollout is still running. No CRD
+field is added or removed.
+
+### Upgrade notes
+
+- **Deleting the controller namespace is refused until it carries
+  `ichor.maesh.dev/allow-delete=true`.** A new `ichor-protected-namespace`
+  ValidatingAdmissionPolicy (the chart with `admission.enabled`, and
+  `config/admission`) refuses the DELETE of a Namespace labelled
+  `ichor.maesh.dev/protected`. The controller labels its own namespace at start-up, and
+  the install manifest's Namespace carries the label. Deleting the namespace used to
+  take the controller and the webhook Service down while the clusters were still there,
+  and left the namespace `Terminating` for good. To remove Ichor on purpose, follow the
+  uninstall steps in the [Helm upgrade guide](docs/guides/install-with-helm/upgrade.md):
+  export each bundle, remove the clusters, annotate every Secret labelled
+  `ichor.maesh.dev/protected`, annotate the namespace, then delete it.
+- **The controller's ClusterRole gains `get` and `patch` on its own Namespace.** The
+  rule is limited by `resourceNames` to that one namespace; the chart writes the release
+  namespace. The write is metadata only.
+- **A TalosCluster whose `spec.cni.cilium.values` already holds a private key keeps
+  working, and gets a warning on update.** A new or changed key is refused. The paths
+  are `tls.ca.key`, `hubble.tls.server.key`, `hubble.metrics.tls.server.key`,
+  `hubble.relay.tls.client.key`, `hubble.relay.tls.server.key` and
+  `hubble.ui.tls.client.key`. Move the key to a Secret and set the sibling
+  `existingSecret` (for example `hubble.tls.server.existingSecret`) to its name; for
+  `tls.ca`, remove the key and let the chart generate the CA
+  (`hubble.tls.auto.method: helm`, `cronJob` or `certmanager`).
+- **Adopting a Cilium whose Helm values hold a private key is refused until the key
+  moves to a Secret.** The takeover would copy the key into `spec.cni.cilium.values`.
+  Move it with `helm upgrade` on the existing release, then run adopt again.
+- **A stuck namespace has a documented way out.** A namespace already `Terminating`
+  from an earlier version is not recovered by this release; see "Recover a namespace
+  stuck in Terminating" in the troubleshooting guide, which brings the cluster back
+  with `ichor adopt --secrets-bundle`.
+- **A TalosConfigPatch may omit `machine.install.wipe`, a route's `gateway`,
+  `routeMetric`, a VLAN's `routes` and both `dnsDomain` fields.** Talos documents each
+  as optional or defaulted, and the CRD marked them required, so
+  `machine.install: {extraKernelArgs: [...]}` was refused with `wipe: Required value`.
+  The change only relaxes validation: nothing stored changes, and no field is added or
+  removed.
+- **`ichor adopt` accepts Ichor's own sign-in authenticator on a node.** A jwt
+  authenticator whose only audience is `ichor-kube` and whose username and groups
+  prefixes are `ichor:` is taken as Ichor's, from an install that was removed. Adopt
+  turns sign-in on again and replaces the entry with one for the new install's issuer
+  and CA. An identity provider of your own is still refused; put it in
+  `spec.authentication.external` first.
+- **`ichor adopt` refuses while a leftover IchorInstallation exists.** With no Ichor
+  controller Deployment, it names the object and says to run
+  `kubectl delete ichorinstallation ichor`, then adopt again.
+- **Uninstall deletes the TalosCluster first, then its machines, and the nodes keep
+  running.** The quorum and last-control-plane checks apply only while the machine's
+  TalosCluster exists and is not being deleted. Once it is gone or deleting, its
+  machines, with `ichor.maesh.dev/allow-delete=true` set, are released without
+  draining the node, resetting it or removing its etcd member. Before, deleting the
+  TalosCluster left the machines in place and the guard refused the last control
+  planes, so the documented uninstall could not finish. The uninstall steps and
+  ADR 0010 say the new order, and the steps now delete every Ichor object in the
+  namespace first (found with `kubectl api-resources --api-group=ichor.maesh.dev`),
+  before the Secrets and the namespace: once the namespace is deleting, the webhook is
+  gone and no delete can pass, so the IchorUser `admin` that `ichor init` and
+  `ichor adopt` create kept it `Terminating`.
+  The steps also delete the cluster-scoped IchorInstallation before the namespace, and
+  name `--bundle-passphrase-file` (or `--bundle-plaintext`, unencrypted) for the bundle
+  export, which with no terminal needs one of the two. A manifest install leaves its
+  cluster-scoped objects (the webhook configurations, which refuse every later write
+  to an Ichor kind once their Service is gone, the admission policies and bindings,
+  ClusterRoles, ClusterRoleBindings and the PriorityClass); `kubectl delete -f
+  install.yaml --ignore-not-found`, with the `install.yaml` of the release you
+  installed, removes them and also the CRDs and every Ichor object left, which is
+  optional. `helm uninstall` removes all of those except the CRDs.
+- **An IchorUser carrying `ichor.maesh.dev/allow-delete=true` can be deleted, even when
+  it is the last enabled admin.** The last-admin check no longer applies to it; the
+  uninstall steps rely on this.
+- **A fresh Helm install no longer blocks other Jobs.** The `controller-job-image`
+  policy binding matches only Jobs labelled `app.kubernetes.io/name` `ichor-installer`
+  or `ichor-cni`, so a Job anywhere is no longer refused while no IchorInstallation
+  exists. The structural policy now requires that label, equal to the Job's
+  ServiceAccount, on the controller's Jobs; the controller's own Jobs carry it.
+  A Job you create under those ServiceAccounts must carry it too.
+- **Installing over an earlier install updates its cluster-scoped objects.** `ichor
+  init` and `ichor adopt` server-side apply Ichor's own manifest objects (CRDs,
+  ClusterRoles, bindings, webhook configurations, ValidatingAdmissionPolicies) in
+  place of keeping what an earlier install left. A Deployment is still only created.
+
+### Controller
+
+- `ProtectNamespace` labels the controller's own namespace with
+  `ichor.maesh.dev/protected` at start-up, retrying until the API answers, and writes
+  nothing when the label is there. It patches metadata only.
+- `CheckAgentsReady` waits for a RollingUpdate rollout: the Cilium agent DaemonSet is
+  not Ready while fewer agents are updated than desired. An `OnDelete` DaemonSet is
+  exempt, since it never updates pods by itself.
+- The `controller-jobs-policy` message names the release namespace instead of
+  `ichor-system`.
+- A completed Cilium Helm Job with no release record that an earlier install left in
+  `kube-system` (it predates the TalosCluster) is deleted in the foreground and a new
+  one runs. A Job of the cluster's own that completed and wrote no release is not
+  replaced, which would run it again every pass: the condition reason is
+  `JobCompletedWithoutRelease` and says to read the Job's log and delete it to run it
+  again. A Job being deleted is neither done nor failed.
+- The namespace label is retried with a growing wait, from 5 seconds to 5 minutes, and
+  a failure is logged once per distinct message.
+- A TalosMachine of a TalosCluster that is gone or being deleted is released by its
+  removal finalizer without touching the node.
+- A Talos node that refuses an apply because another apply is in progress is retried
+  inside the step, with waits from 0.5 to 8 seconds and five retries, so `ichor init`
+  and config rollouts no longer pause on it. Any other error is returned as it was.
+- The controller treats an `OnDelete` Cilium DaemonSet with older pods as ready, as
+  `ichor adopt` does: the agent check is one shared function. The CNI hand-over, the
+  values Job and the kube-proxy switch no longer wait at `WaitingForCilium`, and the
+  waiting message says what the DaemonSet waits for.
+
+### CLI
+
+- `ichor adopt` refuses a foreign Cilium whose Helm values hold a private key, in the
+  preflight, and names the chart's Secret-based alternative.
+- The Cilium takeover retires the foreign Helm release record only at the
+  resourceVersion it backed up. A record that changed after the backup is kept, and
+  the message says to run the command again.
+- The CNI version message reads "Ichor never moves the CNI to a lower minor" in place
+  of "never downgrades a CNI".
+- `--cilium-values` refuses a private key, as the webhook does.
+- `ichor adopt` recognises Ichor's own jwt authenticator (audience `ichor-kube`,
+  `ichor:` username and groups prefixes), does not capture it as drift, says so for
+  each node, and turns sign-in on again.
+- `ichor adopt` names a leftover IchorInstallation when no controller Deployment
+  exists, and how to delete it.
+- `ichor adopt` no longer waits on a machine that reports `APIServerRestartRequired`,
+  as it does not wait on `RebootRequired`. It goes on, and ends with one step:
+  `ichor rollout config --cluster NAME --follow`, which restarts kube-apiserver on each
+  control plane in turn and applies both changes.
+- `ichor init` and `ichor adopt` apply Ichor's own manifest objects as the installer
+  does (see the upgrade notes).
+
+### Webhooks
+
+- The `TalosCluster` webhook refuses a private key in `spec.cni.cilium.values`. A key
+  an existing object already stores unchanged passes on update, with a warning that
+  names the paths.
+- The `TalosMachine` webhook skips the quorum and last-control-plane checks when its
+  TalosCluster is gone or deleting; the `allow-delete` annotation is still required.
+- The `IchorUser` webhook admits the DELETE of an object that carries the
+  `ichor.maesh.dev/allow-delete` annotation, the last enabled admin included.
+
+### Chart
+
+- The `ichor-protected-namespace` policy and its binding are added under
+  `admission.enabled`.
+- The manager role may `get` and `patch` the release namespace.
+- The `controller-jobs-policy` message names `{{ .Release.Namespace }}`.
+- The CRD no longer requires `machine.install.wipe`, a route's `gateway`,
+  `routeMetric`, a VLAN's `routes` and the `dnsDomain` of `ClusterNetworkConfig` and
+  `KubeNetworkConfig` in `TalosConfigPatch`; the mirror generator leaves them out
+  because Talos documents them as optional or defaulted.
+- The `status.conditions` descriptions of `TalosMachine`, `TalosStorage`,
+  `TalosEtcdBackup`, `IchorInstallation` and `IchorUser` list every condition type the
+  controller sets.
+- The deepcopy header year is pinned to 2026, so the regenerate-and-diff check does
+  not fail on 1 January.
+- The `controller-jobs-policy` structural policy requires the
+  `app.kubernetes.io/name` label on the controller's Jobs, and the image policy's
+  binding selects by it (see the upgrade notes).
+
+### Docs
+
+- The Helm upgrade guide gives the uninstall steps: export the bundles, remove the
+  clusters, annotate the Secrets labelled `ichor.maesh.dev/protected` with one
+  `kubectl annotate -l` command, annotate the namespace, delete it.
+- The troubleshooting guide recovers a namespace stuck in `Terminating` and brings the
+  cluster back with `ichor adopt --secrets-bundle`, says what adopt does with the old
+  install's cluster-scoped objects, and says `ichor restore cluster` is for a cluster
+  whose control planes and etcd data are gone.
+- ADR 0010 is amended for the protected namespace.
+- The stuck-namespace recovery guide deletes the IchorInstallation before adopt, says
+  what to do when the bundle Secret is gone (use a bundle exported earlier, or
+  `--recover-secrets --recover-from`), and says what adopt does with Ichor's own
+  sign-in entry.
+- ADR 0106 is amended for the optional fields.
+- The uninstall steps delete the TalosCluster first, then its TalosMachines, and say
+  the nodes keep running. The control-plane replacement guide says the same for the
+  last control plane. ADR 0010 is amended for it.
+- The recovery guide names the talosconfig adopt needs (`--talosconfig`, or one written
+  with `ichor create credentials --bundle`), `--accept-cilium-diff` for a cluster whose
+  Cilium record was lost with the namespace, and the closing
+  `ichor rollout config --cluster NAME --follow`.
+- The uninstall steps delete every Ichor object in the namespace before the namespace,
+  and say they apply to a manifest install too. The recovery guide names a stuck
+  IchorUser as one the validating-webhook deletion unblocks, says adopt asks for
+  confirmation (`--yes` skips it), and says adopt server-side applies the old install's
+  cluster-scoped objects, as `ichor init` does.
+- The uninstall guide names the bundle passphrase flag, deletes the IchorInstallation
+  before the namespace, and says how a manifest install and a Helm install remove their
+  cluster-scoped objects. The recovery guide gives the same `kubectl delete -f
+  install.yaml` for a manifest install that is not adopted again.
+- The approve-machines guide explains `InstallDiskUnknown`: a node approved without
+  `--install-disk` and with no disk in its configuration applies nothing, and the disk
+  is set in the UI install-disk dialog or by patching `spec.install.disk.devPath`
+  until the machine has an applied configuration. It says `compact-ha` approves its
+  two further control planes with `--role controlplane`.
+
 ## v0.3.4 (2026-11-26)
 
 A patch release of fixes to v0.3.3: a cluster stored without `spec.cni` reads as

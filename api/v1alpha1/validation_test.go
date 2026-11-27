@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -503,6 +504,23 @@ var _ = Describe("TalosCluster", func() {
 		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
 	})
 
+	It("accepts a bracketed IPv6 host, with and without a port", func() {
+		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+		c.Spec.Registries = []TalosClusterRegistry{
+			{Host: "[fd00::1]:5000", Endpoints: []string{testMirrorEndpoint}},
+			{Host: "[fd00::2]", Endpoints: []string{testMirrorEndpoint + "-b"}},
+		}
+		Expect(k8sClient.Create(context.Background(), c)).To(Succeed())
+	})
+
+	It("rejects an unbracketed or unclosed IPv6 host", func() {
+		for _, h := range []string{"fd00::1", "[fd00::1", "[]:5000", "[fd00::1]x"} {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.Registries = []TalosClusterRegistry{{Host: h, Endpoints: []string{testMirrorEndpoint}}}
+			Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed(), h)
+		}
+	})
+
 	It("rejects a host that is neither \"*\" nor a hostname[:port]", func() {
 		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 		c.Spec.Registries = []TalosClusterRegistry{{Host: "not a host/with slash", Endpoints: []string{testMirrorEndpoint}}}
@@ -843,7 +861,22 @@ var _ = Describe("TalosMachine", func() {
 		Entry("a leading hyphen", "-node", false),
 		Entry("a trailing dot", "node.", false),
 		Entry("a space", "node 1", false),
+		Entry("a label of 63 characters", strings.Repeat("a", 63), true),
+		Entry("a label over 63 characters", strings.Repeat("a", 64), false),
+		Entry("a dotted name with a 63-character label", strings.Repeat("a", 63)+".lab.example", true),
+		Entry("a dotted name with a label over 63 characters", strings.Repeat("a", 64)+".lab.example", false),
+		Entry("a later label over 63 characters", "node."+strings.Repeat("a", 64), false),
 	)
+
+	It("keeps an unchanged hostname editable and refuses a new one with a long label", func() {
+		ctx := context.Background()
+		m := newMachine()
+		m.Spec.Hostname = "node-1"
+		Expect(k8sClient.Create(ctx, m)).To(Succeed())
+
+		m.Spec.Hostname = strings.Repeat("a", 64)
+		Expect(k8sClient.Update(ctx, m)).NotTo(Succeed())
+	})
 
 	DescribeTable("install.disk",
 		func(disk *TalosMachineDisk, accepted bool) {

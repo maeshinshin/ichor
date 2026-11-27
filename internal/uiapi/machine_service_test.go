@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"reflect"
+	"strings"
 
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
@@ -128,6 +129,8 @@ var _ = Describe("MachineService", func() {
 			for _, bad := range []*pb.ApproveMachineRequest{
 				{Hostname: "てすと"},
 				{Hostname: "Node_1"},
+				{Hostname: strings.Repeat("a", 64)},
+				{Hostname: strings.Repeat("a", 64) + ".lab.example"},
 				{Install: &pb.MachineInstall{}},
 				{Install: &pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w", Serial: "s"}}},
 			} {

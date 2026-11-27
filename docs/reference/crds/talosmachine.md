@@ -44,7 +44,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.disks[].name` | `string` | no | name is the user volume's name; it is mounted at /var/mnt/\<name>. |
 | `spec.disks[].role` | `string` | yes | role is ephemeral (EPHEMERAL on this disk) or userVolume (a user volume on it). Allowed values: `ephemeral`, `userVolume`. |
 | `spec.endpoint` | `string` | yes | endpoint is the machine's Talos API address. |
-| `spec.hostname` | `string` | no | hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset. It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.'). |
+| `spec.hostname` | `string` | no | hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset. It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.'), each label at most 63 characters. |
 | `spec.identity` | `object` | yes | identity identifies the physical machine backing this resource. |
 | `spec.identity.macAddresses` | `[]string` | no | macAddresses are the machine's NIC MAC addresses, used as an identity hint. |
 | `spec.identity.serial` | `string` | no | serial is the machine's SMBIOS serial number, used as an identity hint. |

@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -50,9 +49,6 @@ type adoptNode struct {
 	// plain device path).
 	InstallDisk string
 }
-
-// hostnameRE is the pattern of TalosMachine.spec.hostname.
-var hostnameRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
 
 func (n *adoptNode) controlPlane() bool { return n.M.Spec.Role == roleControlPlane }
 
@@ -270,7 +266,7 @@ func completeNode(n *adoptNode, warn func(format string, args ...any)) error {
 
 	// spec.hostname is an RFC 1123 name; one the CRD would reject is left as drift, not a failed create.
 	if h := n.Facts.Hostname; n.M.Spec.Hostname == "" && h != "" {
-		if hostnameRE.MatchString(h) && len(h) <= 253 {
+		if len(ichorv1alpha1.CheckMachineHostname(h)) == 0 {
 			n.M.Spec.Hostname = h
 		} else {
 			warn("node %q: its hostname %q is not an RFC 1123 name, so it is not taken into spec.hostname and stays as drift", n.M.Name, h)

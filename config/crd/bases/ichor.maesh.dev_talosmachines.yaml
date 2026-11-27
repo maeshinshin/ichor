@@ -210,10 +210,14 @@ spec:
               hostname:
                 description: |-
                   hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset.
-                  It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.').
+                  It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.'), each label at most 63 characters.
                 maxLength: 253
                 pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
+                x-kubernetes-validations:
+                - message: each dot-separated label of hostname must be at most 63
+                    characters
+                  rule: self.split('.').all(l, size(l) <= 63)
               identity:
                 description: identity identifies the physical machine backing this
                   resource.

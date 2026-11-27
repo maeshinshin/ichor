@@ -25,7 +25,6 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -245,7 +244,7 @@ func (s *Server) ApproveMachine(
 
 	// Checked here so the caller gets the reason, not a bare admission error.
 	if h := req.Msg.GetHostname(); h != "" {
-		if errs := validation.IsDNS1123Subdomain(h); len(errs) > 0 {
+		if errs := ichorv1alpha1.CheckMachineHostname(h); len(errs) > 0 {
 			return nil, invalid("hostname %q is not a valid RFC 1123 name: %s", h, strings.Join(errs, "; "))
 		}
 	}

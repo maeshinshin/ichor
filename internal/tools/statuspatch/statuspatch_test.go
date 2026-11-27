@@ -27,9 +27,6 @@ type site struct{ file, fn string }
 var allowed = map[site]string{
 	{"internal/controller/kubeletserving.go", "recordIssued"}: "TalosMachine status.kubeletServingCertificate is one pointer, " +
 		"written only here; the patch sends no array",
-	{"internal/controller/talosetcdbackup_controller.go", "patchStatus"}: "the TalosEtcdBackup controller is the only writer of that status " +
-		"(no CLI, UI or other controller writes it), and a resourceVersion would lose the status of a finished backup to a concurrent " +
-		"spec or annotation write; its lists are replaced whole on purpose",
 }
 
 func TestNoUnlockedStatusMergePatch(t *testing.T) {

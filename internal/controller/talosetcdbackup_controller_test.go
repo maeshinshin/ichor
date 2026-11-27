@@ -160,10 +160,16 @@ type memStore struct {
 	objects map[string][]byte
 	putErr  error
 	puts    int
+	// duringPut runs inside Put, while the backup run holds a status copy read before it.
+	duringPut func()
 }
 
 func (s *memStore) Put(_ context.Context, key string, r io.Reader, size int64) error {
 	s.puts++
+
+	if s.duringPut != nil {
+		s.duringPut()
+	}
 
 	if s.putErr != nil {
 		return s.putErr
@@ -444,6 +450,27 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 
 		Expect(f.store.puts).To(Equal(1))
 		Expect(f.nodes.total()).To(Equal(1))
+	})
+
+	It("a backup run does not erase OutsideControllerNamespace", func() {
+		f := newBackupFixture()
+		f.addControlPlane("41", 2)
+
+		bk := f.newBackup(nil)
+		f.store.duringPut = func() {
+			var cur ichorv1alpha1.TalosEtcdBackup
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bk), &cur)).To(Succeed())
+			apimeta.SetStatusCondition(&cur.Status.Conditions, metav1.Condition{
+				Type: ichorv1alpha1.ConditionOutsideControllerNamespace, Status: metav1.ConditionTrue, Reason: "OutsideControllerNamespace",
+			})
+			Expect(k8sClient.Status().Update(ctx, &cur)).To(Succeed())
+		}
+
+		_, got := f.reconcile(bk)
+
+		Expect(f.store.puts).To(Equal(1))
+		Expect(readyOf(got).Reason).To(Equal(ichorv1alpha1.TalosEtcdBackupReasonSucceeded))
+		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, ichorv1alpha1.ConditionOutsideControllerNamespace)).To(BeTrue())
 	})
 
 	It("takes one snapshot outside the schedule for a backup-now request newer than lastManualBackup, and ignores a stale one", func() {

@@ -59,8 +59,9 @@ Four phases; nothing is applied to a node until the last.
    machine's live config.
 2. **Write**, after consent: the bundle Secret, the `TalosCluster` (annotation
    `ichor.maesh.dev/adopted`), the `TalosMachine`s (identity read over the
-   authenticated API), the `TalosConfigPatch`es and, if Ichor is not running,
-   its install manifest. Every `TalosMachine` carries
+   authenticated API), the `TalosConfigPatch`es and, if Ichor is not installed or its install is partial, its
+   install manifest. A running Ichor of another version than the CLI is refused
+   with nothing written; `ichor upgrade ichor` moves it. Every `TalosMachine` carries
    `ichor.maesh.dev/hold-apply`: the reconciler computes and reports drift
    (`AdoptionHeld`) and never applies.
 3. **Cilium takeover** (see [Cilium](cilium.md)), skipped for an unmanaged CNI.

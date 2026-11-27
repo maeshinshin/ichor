@@ -18,8 +18,29 @@ is added or removed.
 - **The kube-proxy switch, the Cilium chart upgrade and the hand-over after a values
   Job wait until every Cilium agent runs the current pod template.** The agents read
   these settings only at start. On an `OnDelete` DaemonSet the old pods are not
-  replaced by themselves, and the waiting message names
-  `kubectl -n kube-system rollout restart ds/cilium`.
+  replaced by themselves, and `rollout restart` restarts none of them. The waiting
+  message says to delete the agent pod of one node at a time
+  (`kubectl -n kube-system delete pod -l k8s-app=cilium --field-selector spec.nodeName=<node>`),
+  and after each to wait until the new agent is Ready and `kubectl get --raw /readyz`
+  answers before the next node.
+- **Switching kube-proxy to `replaced` breaks long-lived Service connections opened
+  before the switch.** They break when the Cilium agent on a pod's node restarts;
+  clients that reconnect recover and new connections are unaffected. The
+  ichor-controller is such a client: it restarts once, about 1.5 to 2 minutes in, and
+  the operation continues. Run the switch in a maintenance window if workloads hold
+  long-lived Service connections that do not reconnect. The CNI concept page says so.
+- **`install.yaml` is a release asset from v0.3.6 on.** It is the install manifest that
+  pins the release's image digests, and `ichor_X.Y.Z_checksums.txt`, which is signed,
+  lists its sha256. The uninstall and recovery guides download it for a manifest
+  install: `curl -fsSLO https://github.com/maeshinshin/ichor/releases/download/vX.Y.Z/install.yaml`,
+  then `kubectl delete -f install.yaml --ignore-not-found`. Use the release you
+  installed; an earlier release has no such asset.
+- **`TalosMachine.spec.hostname` refuses a label over 63 characters.** Each
+  dot-separated label must be at most 63 characters, as Talos requires; the CRD says so
+  at admission, so a longer one is refused when a machine is created or its hostname
+  is set.
+- **`spec.registries[].host` accepts a bracketed IPv6 address**, with an optional
+  `:port`. This only relaxes validation.
 - **A re-run of `ichor adopt` finishes an Ichor install that an earlier run stopped
   partway.** On a non-Helm install adopt applies Ichor's install manifest again, even
   after the controller has seeded the IchorInstallation, and creates the
@@ -50,6 +71,14 @@ is added or removed.
 - The kube-proxy switch, the Cilium upgrade and the hand-over's finish check agents
   against the current pod template; the hand-over's health check still counts an
   `OnDelete` DaemonSet as ready.
+- A CA rotation on an `OnDelete` Cilium DaemonSet evicts the agent pods itself, one
+  node at a time. It waits for a replacement or a terminating pod, asks again after a
+  refused eviction (429, a PodDisruptionBudget), and is not blocked by old agents that
+  are not Ready, since they no longer trust the API server's CA. Before, it patched the
+  template, restarted nothing and gave up after 5 minutes.
+- Recording the Talos-side kube-proxy mode on status is a merge patch without an
+  optimistic lock, so a concurrent write to the cluster no longer pauses the switch
+  with a write conflict (`ichor set kube-proxy enabled`).
 - A secrets bundle that decodes with a missing member is refused with an error that
   names the field and never carries the bytes.
 
@@ -58,6 +87,8 @@ is added or removed.
 - `ichor adopt` applies the install manifest again on a non-Helm install, in the
   sign-in step and in the write step, and notes "applied Ichor's install manifest to
   the existing install" when the IchorInstallation exists.
+- `ichor adopt` discovery applies the hostname check the CRD does (each label at most
+  63 characters) and skips a name that fails it.
 - `ichor adopt` keeps a node's Ichor authenticator in the plan unless the cluster has
   sign-in on or this adopt turns it on, and refuses the node with a message naming
   the ways forward.
@@ -67,8 +98,24 @@ is added or removed.
 
 ### Webhooks
 
+- `TalosMachine.spec.hostname` refuses a label over 63 characters (a CRD rule), and the
+  UI approve path applies the same check. `spec.registries[].host` accepts a bracketed
+  IPv6 address.
 - A private key in a list-typed Cilium value is refused. An update keeps a stored
   list-form key editable.
+
+### Docs
+
+- The CNI concept page says that switching kube-proxy to `replaced` breaks long-lived
+  Service connections opened before the switch, and that the ichor-controller restarts
+  once.
+- The uninstall and recovery guides give the `install.yaml` download command.
+
+### CI
+
+- The GitHub release body's relative links point at the tagged tree: the release
+  workflow runs the section through `internal/tools/releasenotes`.
+- `install.yaml` is attached to the release and covered by the signed checksums.
 
 ### UI
 

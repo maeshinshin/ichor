@@ -41,6 +41,8 @@ func TestAdoptTakesTheNodesHostnameIntoTheSpec(t *testing.T) {
 		{"static hostname", "auto: off\nhostname: node-1.example.test", "node-1.example.test", false, ""},
 		{"no hostname document value", generatedAuto, "", false, ""},
 		{"hostname that is not RFC 1123", "auto: off\nhostname: Node_1", "", true, `its hostname "Node_1" is not an RFC 1123 name`},
+		{"hostname with a label over 63 characters", "auto: off\nhostname: " + strings.Repeat("a", 64) + ".lab.example", "", true, "is not an RFC 1123 name"},
+		{"hostname with a 63-character label", "auto: off\nhostname: " + strings.Repeat("a", 63), strings.Repeat("a", 63), false, ""},
 	}
 
 	for _, tc := range cases {

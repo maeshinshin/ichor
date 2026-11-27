@@ -18,10 +18,12 @@ package v1alpha1
 
 import (
 	"net"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // TalosMachineIdentity identifies the physical machine backing a TalosMachine.
@@ -99,9 +101,10 @@ type TalosMachineSpec struct {
 	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
 
 	// hostname overrides the Kubernetes Node name; Talos derives one from the machine if unset.
-	// It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.').
+	// It must be an RFC 1123 DNS label or subdomain (lower-case alphanumerics, '-' and '.'), each label at most 63 characters.
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	// +kubebuilder:validation:XValidation:rule="self.split('.').all(l, size(l) <= 63)",message="each dot-separated label of hostname must be at most 63 characters"
 	// +optional
 	Hostname string `json:"hostname,omitempty"`
 
@@ -564,3 +567,15 @@ const TalosMachineHoldApplyAnnotation = "ichor.maesh.dev/hold-apply"
 // an operator has checked and accepts for an approved machine that has not been provisioned yet. It
 // takes the place of status.maintenanceFingerprint.
 const TalosMachineTrustMaintenanceFingerprintAnnotation = "ichor.maesh.dev/trust-maintenance-fingerprint"
+
+// CheckMachineHostname returns why h is not a valid spec.hostname, or nil: an RFC 1123 subdomain whose every
+// dot-separated label is also a label (at most 63 characters), as Talos requires. The UI approve path and
+// the CLI adoption call it, so they agree with the CRD rule on the field.
+func CheckMachineHostname(h string) []string {
+	errs := validation.IsDNS1123Subdomain(h)
+	for l := range strings.SplitSeq(h, ".") {
+		errs = append(errs, validation.IsDNS1123Label(l)...)
+	}
+
+	return errs
+}

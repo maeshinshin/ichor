@@ -34,7 +34,7 @@ func read(t *testing.T, p string) string {
 	return string(b)
 }
 
-func TestUninstallCoversEveryNamespacedKindWithADeleteWebhook(t *testing.T) {
+func TestUninstallCoversEveryKindWithADeleteWebhook(t *testing.T) {
 	t.Parallel()
 
 	doc := read(t, upgradeDoc)
@@ -50,7 +50,14 @@ func TestUninstallCoversEveryNamespacedKindWithADeleteWebhook(t *testing.T) {
 
 			crd := read(t, crdDir+"ichor.maesh.dev_"+r+".yaml")
 			if !strings.Contains(crd, "scope: Namespaced") {
-				continue // cluster-scoped: it outlives the namespace and the namespace delete never meets it
+				// Cluster-scoped: the namespace delete never meets it, so it outlives the namespace and the
+				// webhook with it. The steps must delete it by name while the webhook still runs.
+				if one := strings.TrimSuffix(r, "s"); !strings.Contains(doc, "delete "+one+" ") {
+					t.Errorf("%s is cluster-scoped with a DELETE webhook and outlives the namespace, but the uninstall steps in %s never run \"kubectl delete %s NAME\"",
+						r, upgradeDoc, one)
+				}
+
+				continue
 			}
 
 			if !strings.Contains(doc, allKinds) && !strings.Contains(doc, r) {

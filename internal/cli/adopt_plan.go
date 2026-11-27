@@ -65,6 +65,10 @@ type adoptPlan struct {
 	IchorAuthenticator bool
 	// AuthenticatorRefused: adopt is not turning sign-in on, so the node's authenticator stays in the drift and adopt refuses the node.
 	AuthenticatorRefused bool
+	// AuthenticatorReplaced: the node's Ichor authenticator differs from the render and the render replaces it.
+	AuthenticatorReplaced bool
+	// SignInTurnedOn: this adopt is the one that turns sign-in on.
+	SignInTurnedOn bool
 
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
@@ -81,6 +85,8 @@ type ownership struct {
 	CiliumInline bool
 	// IchorAuthenticator: this adopt turns sign-in on, or the cluster already has spec.authentication.ichor enabled, so Ichor renders its own authenticator and the node's is not drift.
 	IchorAuthenticator bool
+	// SignInTurnedOn: this adopt turns sign-in on (IchorAuthenticator is also true when it was already on).
+	SignInTurnedOn bool
 }
 
 var (
@@ -174,11 +180,14 @@ func buildAdoptPlan(
 	// otherwise nothing renders it, and the patch keeps it.
 	dropAuth := ichorAuth && own.IchorAuthenticator
 
+	replaced := dropAuth && slices.ContainsFunc(paths, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
+
 	if dropAuth {
 		paths = slices.DeleteFunc(paths, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
 	}
 
-	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth, AuthenticatorRefused: ichorAuth && !dropAuth}
+	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth, AuthenticatorRefused: ichorAuth && !dropAuth,
+		AuthenticatorReplaced: replaced, SignInTurnedOn: own.SignInTurnedOn}
 
 	if len(paths) == 0 {
 		return plan, nil

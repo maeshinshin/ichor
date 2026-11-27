@@ -71,6 +71,19 @@ func ichorOwnIssuer() *ichorv1alpha1.TalosClusterAuthentication {
 func liveWithAuth(t *testing.T, auth *ichorv1alpha1.TalosClusterAuthentication) (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, []byte) {
 	t.Helper()
 
+	certFile, _, _ := writeTestKeyPair(t)
+
+	caPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return liveWithAuthCA(t, auth, string(caPEM))
+}
+
+func liveWithAuthCA(t *testing.T, auth *ichorv1alpha1.TalosClusterAuthentication, caPEM string) (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, []byte) {
+	t.Helper()
+
 	bundle := newTestBundle(t)
 	cluster := newTestCluster()
 	machine := newTestMachine(cluster.Name)
@@ -79,15 +92,8 @@ func liveWithAuth(t *testing.T, auth *ichorv1alpha1.TalosClusterAuthentication) 
 	live := cluster.DeepCopy()
 	live.Spec.Authentication = auth
 
-	certFile, _, _ := writeTestKeyPair(t)
-
-	caPEM, err := os.ReadFile(certFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	sys := &render.SystemInputs{OIDCTrust: &render.OIDCTrust{
-		DiscoveryURL: testDiscoveryURL, CAPEM: string(caPEM),
+		DiscoveryURL: testDiscoveryURL, CAPEM: caPEM,
 	}}
 
 	cfg, _, err := render.Render(live, machine, bundle, nil, sys)
@@ -238,5 +244,67 @@ func TestAdoptPlan_RerunWithSignInAlreadyOnIsNotBlocked(t *testing.T) {
 
 	if len(plan.UnrepresentablePaths) > 0 || plan.AuthenticatorRefused || strings.Contains(out.String(), "adopt refuses the node") {
 		t.Errorf("plan = %+v, adopt said:\n%s\nwant the node not blocked and no refusal line", plan, out.String())
+	}
+}
+
+// rerunSaid plans a re-run of adopt on a cluster whose sign-in is already on; the node's authenticator was rendered with
+// the CA nodeCA while the issuer publishes issuerCA now.
+func rerunSaid(t *testing.T, nodeCA, issuerCA string) string {
+	t.Helper()
+
+	_, _, cfg := liveWithAuthCA(t, ichorOwnIssuer(), nodeCA)
+	cluster, machine, _ := liveWithAuthCA(t, nil, "")
+	cluster.Spec.Authentication = ichorOwnIssuer()
+
+	sys := &render.SystemInputs{OIDCTrust: &render.OIDCTrust{DiscoveryURL: testDiscoveryURL, CAPEM: issuerCA}}
+
+	var out bytes.Buffer
+
+	st := &adoptState{cluster: cluster}
+	deps := adoptDeps{K8s: fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build(), Stderr: &out, Ichor: &adoptWriteIchor{}, UIURL: defaultUIURL, AdminUser: defaultAdminUser}
+
+	if err := st.planSignIn(context.Background(), deps); err != nil {
+		t.Fatalf("planSignIn: %v", err)
+	}
+
+	plan, err := buildAdoptPlan(cluster, machine, newTestBundle(t), nil, cfg, sys, st.own(&adoptNode{}))
+	if err != nil {
+		t.Fatalf("buildAdoptPlan: %v", err)
+	}
+
+	reportPlans(deps.say, []*adoptPlan{plan})
+
+	return out.String()
+}
+
+func testCA(t *testing.T) string {
+	t.Helper()
+
+	cert, _, _ := writeTestKeyPair(t)
+
+	ca, err := os.ReadFile(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(ca)
+}
+
+// Sign-in already on and the node already matches the render: nothing is replaced, so adopt says nothing about it.
+func TestAdoptPlan_RerunWithSignInOnAndNodeMatchingSaysNothingExtra(t *testing.T) {
+	ca := testCA(t)
+	said := rerunSaid(t, ca, ca)
+
+	if strings.Contains(said, "turns sign-in on again") || strings.Contains(said, "authenticator is updated") || !strings.Contains(said, "already matches a fresh render") {
+		t.Errorf("adopt said:\n%s\nwant only the \"already matches\" line", said)
+	}
+}
+
+// Sign-in already on and the node's entry carries another CA: adopt says the entry is updated, not that it turns sign-in on.
+func TestAdoptPlan_RerunWithSignInOnAndOtherCASaysUpdated(t *testing.T) {
+	said := rerunSaid(t, testCA(t), testCA(t))
+
+	if strings.Contains(said, "turns sign-in on again") || !strings.Contains(said, "Ichor sign-in authenticator is updated to this install's issuer and CA") {
+		t.Errorf("adopt said:\n%s\nwant the \"updated\" line and not \"turns sign-in on again\"", said)
 	}
 }

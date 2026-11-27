@@ -154,9 +154,11 @@ type adoptState struct {
 
 // own is the class B definition for one node.
 func (st *adoptState) own(n *adoptNode) ownership {
+	turnsOn := st.signIn != nil && st.signIn.authenticator
+
 	o := ownership{
 		Managed: !st.unmanaged, KubeProxyReplaced: st.kubeProxy == kubeProxyReplaced,
-		IchorAuthenticator: (st.signIn != nil && st.signIn.authenticator) || ichorSignInEnabled(st.cluster),
+		IchorAuthenticator: turnsOn || ichorSignInEnabled(st.cluster), SignInTurnedOn: turnsOn,
 	}
 
 	if n.Facts != nil {
@@ -1512,9 +1514,11 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 			say(adoptWarn, "node %q: carries Ichor's sign-in authenticator and this adopt is not turning sign-in on, so adopt refuses the node rather than remove it; "+
 				"set spec.authentication.ichor (enabled: true, url) on the TalosCluster (on a Helm-managed Ichor, configure sign-in in the chart values and set it there too) and run adopt again; "+
 				"adopt has no flag that turns sign-in on", p.Machine)
-		} else if p.IchorAuthenticator {
+		} else if p.AuthenticatorReplaced && p.SignInTurnedOn {
 			say(adoptInfo, "node %q: carries an Ichor sign-in authenticator from an earlier install; adopt turns sign-in on again "+
 				"and the node's entry is replaced by one for this install's issuer and CA", p.Machine)
+		} else if p.AuthenticatorReplaced {
+			say(adoptInfo, "node %q: the node's Ichor sign-in authenticator is updated to this install's issuer and CA", p.Machine)
 		}
 
 		switch {

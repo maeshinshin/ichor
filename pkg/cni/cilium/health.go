@@ -48,14 +48,13 @@ func CheckAgentsReady(ctx context.Context, kube kubernetes.Interface) (notReady,
 		return nil, err
 	}
 
-	if st := ds.Status; st.DesiredNumberScheduled == 0 || st.NumberReady != st.DesiredNumberScheduled || len(bad) > 0 {
-		errs = append(errs, fmt.Errorf("the DaemonSet %s is not Ready on all nodes (%d of %d agents Ready%s)",
-			ReleaseName, st.NumberReady, st.DesiredNumberScheduled, listed(bad)))
-	} else if ds.Spec.UpdateStrategy.Type != appsv1.OnDeleteDaemonSetStrategyType &&
-		st.UpdatedNumberScheduled != st.DesiredNumberScheduled {
-		// OnDelete never updates pods by itself (new pods only when old ones are deleted), so it never counts up.
-		errs = append(errs, fmt.Errorf("the DaemonSet %s is still rolling out (%d of %d agents updated)",
-			ReleaseName, st.UpdatedNumberScheduled, st.DesiredNumberScheduled))
+	if ok, why := DaemonSetRolledOut(ds); !ok || len(bad) > 0 {
+		if ok {
+			why = fmt.Sprintf("the DaemonSet %s is not Ready on all nodes (%d of %d agents Ready)",
+				ReleaseName, ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+		}
+
+		errs = append(errs, errors.New(why+listed(bad)))
 	}
 
 	op, err := kube.AppsV1().Deployments(ReleaseNamespace).Get(ctx, operatorName, metav1.GetOptions{})
@@ -78,6 +77,27 @@ func CheckAgentsReady(ctx context.Context, kube kubernetes.Interface) (notReady,
 	}
 
 	return notReady, nil
+}
+
+// DaemonSetRolledOut reports whether ds runs its current generation, scheduled somewhere, with an
+// agent Ready on every node; why says what it waits for otherwise. OnDelete never updates pods by
+// itself (new pods only when old ones are deleted), so its updated count is not a rollout and is ignored.
+// The adopt preflight and the controller share this one answer.
+func DaemonSetRolledOut(ds *appsv1.DaemonSet) (ok bool, why string) {
+	st, want := ds.Status, ds.Status.DesiredNumberScheduled
+
+	switch {
+	case st.ObservedGeneration < ds.Generation:
+		return false, fmt.Sprintf("the DaemonSet %s has not yet seen its latest spec", ds.Name)
+	case want == 0 || st.NumberReady < want:
+		return false, fmt.Sprintf("the DaemonSet %s is not Ready on all nodes (%d of %d agents Ready)",
+			ds.Name, st.NumberReady, want)
+	case ds.Spec.UpdateStrategy.Type != appsv1.OnDeleteDaemonSetStrategyType && st.UpdatedNumberScheduled < want:
+		return false, fmt.Sprintf("the DaemonSet %s is still rolling out (%d of %d agents updated)",
+			ds.Name, st.UpdatedNumberScheduled, want)
+	}
+
+	return true, ""
 }
 
 func listed(bad []string) string {

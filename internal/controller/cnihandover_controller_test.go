@@ -378,7 +378,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cond := conditionOf(cluster, render.ConditionCNIHandover)
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal(reasonHandoverWaitingForCilium))
-		Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system rollout restart ds/cilium"))
+		Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system delete pod -l k8s-app=cilium"))
 
 		setCiliumRollout(true)
 		reconcileHandoverOK(r, cluster)

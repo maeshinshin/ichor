@@ -16,7 +16,7 @@ import (
 func TestAgentTemplateDiffersByKubeProxyMode(t *testing.T) {
 	t.Parallel()
 
-	user := map[string]any{"k8sServiceHost": "localhost", "k8sServicePort": 7445}
+	user := map[string]any{"k8sServiceHost": valLocalhost, "k8sServicePort": 7445}
 
 	render := func(mode cni.KubeProxyMode, user map[string]any) []byte {
 		vals, err := EffectiveValues(user, mode, "", 0)
@@ -49,7 +49,7 @@ func renderedAgentDS(t *testing.T, manifest []byte) []byte {
 			} `json:"metadata"`
 		}
 
-		if sigsyaml.Unmarshal([]byte(doc), &obj) == nil && obj.Kind == "DaemonSet" && obj.Metadata.Name == "cilium" {
+		if sigsyaml.Unmarshal([]byte(doc), &obj) == nil && obj.Kind == kindDaemonSet && obj.Metadata.Name == ChartName {
 			return []byte(doc)
 		}
 	}

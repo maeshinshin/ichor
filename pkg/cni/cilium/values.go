@@ -36,6 +36,12 @@ const (
 // 7445").
 const kubePrismPort = 7445
 
+// kubeProxyModeAnnotation is an agent pod annotation, present only when kube-proxy is replaced. The agents read
+// kube-proxy-replacement only at start, so a switch must change their pod template or nothing restarts them: an
+// enabled cluster whose user set the KubePrism address renders the same DaemonSet as a replaced one otherwise.
+// Only replaced carries it, so an enabled cluster's template is as it was.
+const kubeProxyModeAnnotation = "ichor.maesh.dev/kube-proxy-mode"
+
 // securityContextCapabilities is cilium.securityContext.capabilities: the
 // Linux capabilities Cilium needs instead of running privileged
 // (docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium, Talos v1.14
@@ -108,15 +114,16 @@ type toleration struct {
 // blocks (kube-proxy kept, then kube-proxy replaced) so a diff against it
 // stays easy to read.
 type Values struct {
-	IPAM                 ipam            `json:"ipam"`
-	KubeProxyReplacement bool            `json:"kubeProxyReplacement"`
-	K8sServiceHost       string          `json:"k8sServiceHost,omitempty"`
-	K8sServicePort       int             `json:"k8sServicePort,omitempty"`
-	SecurityContext      securityContext `json:"securityContext"`
-	Cgroup               cgroup          `json:"cgroup"`
-	Hubble               hubble          `json:"hubble"`
-	TunnelProtocol       string          `json:"tunnelProtocol,omitempty"`
-	Certgen              certgen         `json:"certgen"`
+	IPAM                 ipam              `json:"ipam"`
+	KubeProxyReplacement bool              `json:"kubeProxyReplacement"`
+	K8sServiceHost       string            `json:"k8sServiceHost,omitempty"`
+	K8sServicePort       int               `json:"k8sServicePort,omitempty"`
+	PodAnnotations       map[string]string `json:"podAnnotations,omitempty"`
+	SecurityContext      securityContext   `json:"securityContext"`
+	Cgroup               cgroup            `json:"cgroup"`
+	Hubble               hubble            `json:"hubble"`
+	TunnelProtocol       string            `json:"tunnelProtocol,omitempty"`
+	Certgen              certgen           `json:"certgen"`
 	// Operator is omitted for more than one control plane: the chart's default replica count applies.
 	Operator *operator `json:"operator,omitempty"`
 	// The five secretsNamespace names are pinned to Cilium's own namespace.
@@ -207,6 +214,7 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 		v.KubeProxyReplacement = true
 		v.K8sServiceHost = "localhost"
 		v.K8sServicePort = kubePrismPort
+		v.PodAnnotations = map[string]string{kubeProxyModeAnnotation: string(kubeProxy)}
 	}
 
 	if p.controlPlanes == 1 || p.nodes == 1 {

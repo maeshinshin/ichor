@@ -208,7 +208,7 @@ func TestWriteAdopt_HelmInstalledIchorGivesNoAdviceWhenNotNeeded(t *testing.T) {
 }
 
 func TestWriteAdopt_ExistingControllerDeploymentSkipsInstall(t *testing.T) {
-	c := presenceClient(t, controllerDeployment(false))
+	c := presenceClient(t, controllerDeployment(false), &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName})
 	in := fullWriteInput(t)
 	in.Ichor = &adoptWriteIchor{Manifest: []byte("not a manifest: [")}
 	in.Interval = time.Millisecond

@@ -669,3 +669,11 @@ The Secret policy above left the namespace deletable. `kubectl delete namespace 
 - **The label.** The controller labels its own namespace at start-up with a metadata-only patch, and does nothing when the label is there. Its ClusterRole `manager-role` holds `get` and `patch` on `namespaces` with `resourceNames` set to that one namespace (the chart writes the release namespace). The rule sits in `manager-role` because an upgrade runs under the previous release's installer role, which holds `escalate` only on the roles it already names. The install manifest's Namespace carries the label too, so `ichor init` and `ichor upgrade ichor` end up with it; the chart cannot render the Namespace, because `--create-namespace` makes Helm refuse an object it did not create, so the controller's patch is the path there. CLAUDE.md's rule is "The controller never mutates `spec`", which concerns custom resource specs; Namespace metadata is not one.
 - **Existing stuck namespaces.** A namespace already `Terminating` is not recovered by this; the troubleshooting guide describes the way out.
 
+
+## Amendment (2026-11-27): the quorum guard protects a cluster that still exists
+
+The guard counted a cluster's control planes without asking whether the TalosCluster was still there. A TalosCluster has no finalizer and no cascade, and a machine has no owner reference, so deleting the TalosCluster left every machine in place and the guard then refused the last control planes: the documented uninstall (delete the clusters, then the namespace) could not finish, and the first control plane it did admit drained the node and removed its etcd member from a running cluster.
+
+- **The rule.** The quorum and last-control-plane checks apply only while the machine's TalosCluster exists and is not being deleted. Once it is gone or deleting, its machines are released: the `allow-delete` annotation, through `checkDelete`, is still required, and nothing else is.
+- **The removal path.** `reconcileRemoval` drops the machine's finalizer without touching the node when the TalosCluster is NotFound, and now does the same when it carries a `deletionTimestamp`. An uninstall never drains, resets or removes an etcd member; the nodes keep running, unmanaged.
+- **The order.** Annotate and delete the TalosCluster first, then its TalosMachines.

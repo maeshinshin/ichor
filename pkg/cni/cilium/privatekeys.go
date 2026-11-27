@@ -150,12 +150,31 @@ func isPEMPrivateKey(s string) bool {
 // privateKeyAdvice names what the chart offers in place of the embedded key: the sibling existingSecret where
 // the chart has one, else (tls.ca) the chart's own generation, hubble.tls.auto.method.
 func privateKeyAdvice(path string) string {
+	// A peer's tls.cert and tls.key are deprecated in the chart: with a CA shared across the clusters they are
+	// omitted, and the chart uses the "remote" certificate it generates (the clustermesh-apiserver-remote-cert
+	// Secret).
+	if strings.HasPrefix(path, "clustermesh.config.clusters") && strings.HasSuffix(path, ".tls.key") {
+		return "remove the peer's tls.cert and tls.key (and tls.caCert if the CA is shared): the chart then uses the " +
+			"remote certificate it generates when clustermesh.useAPIServer is true and " +
+			"clustermesh.apiserver.tls.auto.enabled is true"
+	}
+
+	if !slices.Contains(chartKeyPaths(), path) {
+		return "move the key into a Secret and reference that Secret; check the chart for the Secret option of that setting"
+	}
+
 	parent := strings.TrimSuffix(path, ".key")
 	if _, ok := values.Get(chartDefaults(), parent+".existingSecret"); ok {
 		return "set " + parent + ".existingSecret to the name of a Secret that holds the certificate and key"
 	}
 
 	return "remove it and let the chart generate the CA (hubble.tls.auto.method: helm, cronJob or certmanager)"
+}
+
+func chartKeyPaths() []string {
+	p, _ := PrivateKeyPaths()
+
+	return p
 }
 
 func chartDefaults() map[string]any {

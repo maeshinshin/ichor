@@ -979,6 +979,7 @@ spec:
   template:
     metadata:
       annotations:
+        ichor.maesh.dev/kube-proxy-mode: replaced
         kubectl.kubernetes.io/default-container: cilium-agent
       labels:
         app.kubernetes.io/name: cilium-agent

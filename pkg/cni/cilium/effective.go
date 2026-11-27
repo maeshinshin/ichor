@@ -153,7 +153,15 @@ func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	return values.Effective(defaults, p.user, owned), nil
+	eff := values.Effective(defaults, p.user, owned)
+
+	// valuesFor puts the kube-proxy annotation among the defaults (see kubeProxyModeAnnotation); a user value for it
+	// is overwritten here, the rest of podAnnotations is the user's. The merge returned a fresh map.
+	if kubeProxy == cni.KubeProxyReplaced {
+		eff["podAnnotations"].(map[string]any)[kubeProxyModeAnnotation] = string(kubeProxy)
+	}
+
+	return eff, nil
 }
 
 // newPreset is the Preset for a kube-proxy mode, tunnel and control-plane count, the mode and tunnel

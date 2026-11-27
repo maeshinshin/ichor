@@ -530,7 +530,7 @@ func (a *cniKubeProxyAdvancer) requireCilium(
 			fmt.Sprintf("the Cilium Helm Job finished but cilium-config does not match yet: %v", err))
 	}
 
-	return a.ciliumRolledOut(ctx, op)
+	return a.ciliumRunsNewConfig(ctx, op)
 }
 
 // runCiliumJob advances the Cilium Helm Job (salted as AdvanceCNIHelmJob says) and reports whether
@@ -566,12 +566,24 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 // ciliumRolledOut reports whether every Cilium agent runs the current DaemonSet generation and is
 // ready; until then it waits on the verification clock.
 func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
+	return a.ciliumRolled(ctx, op, cilium.DaemonSetRolledOut)
+}
+
+// ciliumRunsNewConfig is ciliumRolledOut for the kube-proxy switch: the agents read the mode only at start, so
+// every one must run the current template even when the DaemonSet never replaces pods itself (OnDelete).
+func (a *cniKubeProxyAdvancer) ciliumRunsNewConfig(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
+	return a.ciliumRolled(ctx, op, cilium.DaemonSetRunsCurrentTemplate)
+}
+
+func (a *cniKubeProxyAdvancer) ciliumRolled(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, rolled func(*appsv1.DaemonSet) (bool, string),
+) (bool, error) {
 	var ds appsv1.DaemonSet
 	if err := a.Reader.Get(ctx, types.NamespacedName{Namespace: kubeSystemNamespace, Name: ciliumName}, &ds); err != nil {
 		return false, fmt.Errorf("reading the cilium DaemonSet: %w", err)
 	}
 
-	if ok, why := cilium.DaemonSetRolledOut(&ds); !ok {
+	if ok, why := rolled(&ds); !ok {
 		return false, waitOn(op, reasonNewSideNotReady, why)
 	}
 

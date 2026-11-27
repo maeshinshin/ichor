@@ -100,6 +100,25 @@ func DaemonSetRolledOut(ds *appsv1.DaemonSet) (ok bool, why string) {
 	return true, ""
 }
 
+// DaemonSetRunsCurrentTemplate is DaemonSetRolledOut for a change the agents read only at start (the
+// kube-proxy switch): every scheduled agent must run the current pod template, whatever the update strategy.
+// An OnDelete DaemonSet with old pods is healthy but has not applied the change until its pods are restarted.
+func DaemonSetRunsCurrentTemplate(ds *appsv1.DaemonSet) (ok bool, why string) {
+	if ok, why = DaemonSetRolledOut(ds); !ok {
+		return false, why
+	}
+
+	if st := ds.Status; st.UpdatedNumberScheduled < st.DesiredNumberScheduled {
+		return false, fmt.Sprintf("the DaemonSet %s has %d of %d agents on its current template and its update "+
+			"strategy (%s) does not restart the others: restart the Cilium agents with "+
+			"`kubectl -n %s rollout restart ds/%s` (or delete the cilium pods one node at a time)",
+			ds.Name, st.UpdatedNumberScheduled, st.DesiredNumberScheduled,
+			ds.Spec.UpdateStrategy.Type, ds.Namespace, ds.Name)
+	}
+
+	return true, ""
+}
+
 func listed(bad []string) string {
 	if len(bad) == 0 {
 		return ""

@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,8 +25,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -167,6 +173,36 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		op, _ = f.runUntil(op, completed)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).NotTo(ContainSubstring("not back"))
+	})
+
+	It("on an OnDelete cilium DaemonSet evicts the old agent pods, which are not Ready, one node at a time", func() {
+		kc, op, replaced, maxGone := onDeleteRotation(0)
+
+		Expect(completed(op)).To(BeTrue())
+		Expect(replaced).To(Equal(ciliumNodes), "every agent pod was replaced before the rotation completed")
+		Expect(maxGone).To(Equal(1), "one node at a time")
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).NotTo(ContainSubstring("not back"))
+
+		for _, a := range kc.Actions() {
+			Expect(a.Matches("delete", "pods")).To(BeFalse(), "a pod is evicted, never deleted")
+		}
+	})
+
+	It("waits while a PodDisruptionBudget refuses the first eviction, then completes", func() {
+		kc, op, replaced, _ := onDeleteRotation(2)
+
+		Expect(completed(op)).To(BeTrue())
+		Expect(replaced).To(Equal(ciliumNodes))
+
+		refused := 0
+
+		for _, a := range kc.Actions() {
+			if a.Matches("create", "pods") && a.GetSubresource() == evictionSubresource {
+				refused++
+			}
+		}
+
+		Expect(refused).To(BeNumerically(">", ciliumNodes), "the refused evictions were asked again")
 	})
 
 	It("restarts nothing while a Node is not Ready, and rolls out the CNI before CoreDNS before ichor-ui", func() {
@@ -338,3 +374,86 @@ var _ = Describe("TalosOperation one-shot cluster conditions", func() {
 		Expect(serverHas(f, ichorv1alpha1.ConditionCAClientsNotRestarted)).To(BeTrue())
 	})
 })
+
+// onDeleteRotation runs a CA rotation over an OnDelete cilium DaemonSet whose old pods are not Ready (the old agents
+// do not trust the new CA). The fake has no DaemonSet controller: an evicted pod is deleted, and recreated on the new
+// template, Ready. The first refuse evictions answer 429, as a PodDisruptionBudget does.
+func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOperation, replaced, maxGone int) {
+	f, kc := restartFixture(ciliumNodes)
+	sel := map[string]string{"k8s-app": ciliumName}
+
+	ds, err := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, ciliumName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	ds.Spec.UpdateStrategy.Type = appsv1.OnDeleteDaemonSetStrategyType
+	ds.Spec.Selector = &metav1.LabelSelector{MatchLabels: sel}
+	ds.Status.UpdatedNumberScheduled = 0 // what the template patch leaves: no pod matches it
+	_, err = kc.AppsV1().DaemonSets(kubeSystemNamespace).Update(ctx, ds, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	newPod := func(name, token string) *corev1.Pod {
+		ready := corev1.ConditionFalse
+		if token != "" {
+			ready = corev1.ConditionTrue
+		}
+
+		p := &corev1.Pod{Namespace: kubeSystemNamespace, Name: name, Labels: sel,
+			Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: ready}}}}
+		if token != "" {
+			p.Annotations = map[string]string{caRestartMarker: token}
+		}
+
+		return p
+	}
+
+	for i := range ciliumNodes {
+		_, err = kc.CoreV1().Pods(kubeSystemNamespace).Create(ctx, newPod(fmt.Sprintf("cilium-%d", i), ""), metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	kc.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
+		{Name: "pods/eviction", Kind: "Eviction", Group: "policy", Version: "v1"},
+	}}}
+	kc.PrependReactor("create", "pods", func(a clienttesting.Action) (bool, runtime.Object, error) {
+		ev, ok := a.(clienttesting.CreateAction).GetObject().(*policyv1.Eviction)
+		if a.GetSubresource() != evictionSubresource || !ok {
+			return false, nil, nil
+		}
+
+		if refuse > 0 {
+			refuse--
+
+			return true, nil, apierrors.NewTooManyRequests("disruption budget", 1)
+		}
+
+		return true, nil, kc.Tracker().Delete(schema.GroupVersionResource{Version: "v1", Resource: "pods"}, ev.Namespace, ev.Name)
+	})
+
+	op = f.newOp()
+
+	for range 80 {
+		op = f.step(op)
+
+		pods, lerr := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{})
+		Expect(lerr).NotTo(HaveOccurred())
+		maxGone = max(maxGone, ciliumNodes-len(pods.Items))
+
+		for i := len(pods.Items); i < ciliumNodes; i++ {
+			_, err = kc.CoreV1().Pods(kubeSystemNamespace).Create(ctx, newPod(fmt.Sprintf("cilium-new-%d", replaced), string(op.UID)), metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			replaced++
+
+			d, _ := kc.AppsV1().DaemonSets(kubeSystemNamespace).Get(ctx, ciliumName, metav1.GetOptions{})
+			d.Status.UpdatedNumberScheduled = int32(replaced)
+			_, err = kc.AppsV1().DaemonSets(kubeSystemNamespace).UpdateStatus(ctx, d, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		if completed(op) {
+			break
+		}
+	}
+
+	return kc, op, replaced, maxGone
+}

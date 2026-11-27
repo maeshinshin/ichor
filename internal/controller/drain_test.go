@@ -67,6 +67,8 @@ func drainTestPod(name, node, ownerKind string, mirror bool) *corev1.Pod {
 	return p
 }
 
+const evictionSubresource = "eviction"
+
 // drainFake is a fake clientset where evicting a pod deletes it, as a real API server does once
 // the PodDisruptionBudgets allow. blocked names pods whose eviction a budget refuses (429), and
 // an eviction that arrives after the reboot was requested fails the spec.
@@ -84,7 +86,7 @@ func newDrainFake(rebootCalls func() int, objs ...runtime.Object) *drainFake {
 	}}}
 
 	f.PrependReactor("create", "pods", func(a ktesting.Action) (bool, runtime.Object, error) {
-		if a.GetSubresource() != "eviction" {
+		if a.GetSubresource() != evictionSubresource {
 			return false, nil, nil
 		}
 

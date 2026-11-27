@@ -11,6 +11,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,4 +88,89 @@ func referenced(n ast.Node) string {
 	}
 
 	return ""
+}
+
+// restartersWithoutOnDeleteWait returns the functions in src that restart a workload by patching its pod template
+// (restartPatch, restartedAt) on a DaemonSet without handling OnDelete: an OnDelete DaemonSet restarts nothing on a template patch.
+func restartersWithoutOnDeleteWait(t *testing.T, name, src string) []string {
+	f, err := parser.ParseFile(token.NewFileSet(), name, src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var bad []string
+
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil || fn.Name.Name == "restartPatch" {
+			continue
+		}
+
+		restarts, waits, daemonSet := false, false, false
+
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			if name := referenced(n); strings.HasPrefix(name, "DaemonSet") || name == "kindDaemonSet" {
+				daemonSet = true
+			}
+
+			switch referenced(n) {
+			case "restartPatch", "restartedAtAnnotation":
+				restarts = true
+			case "replaceOnDeletePods", "DaemonSetRunsCurrentTemplate":
+				waits = true
+			}
+
+			if l, ok := n.(*ast.BasicLit); ok && strings.Contains(l.Value, "restartedAt") {
+				restarts = true
+			}
+
+			return true
+		})
+
+		if restarts && daemonSet && !waits {
+			bad = append(bad, fn.Name.Name)
+		}
+	}
+
+	return bad
+}
+
+func TestTemplatePatchRestartsHandleOnDelete(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+
+	for _, dir := range []string{"internal", "pkg", "cmd"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return err
+			}
+
+			b, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return rerr
+			}
+
+			for _, fn := range restartersWithoutOnDeleteWait(t, path, string(b)) {
+				t.Errorf("%s:%s restarts a workload by patching its pod template and never waits with "+
+					"DaemonSetRunsCurrentTemplate or evicts the pods (replaceOnDeletePods): an OnDelete DaemonSet restarts nothing", path, fn)
+			}
+
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestRestarterGateSeesAPatchWithoutTheWait(t *testing.T) {
+	bad := "package x\nfunc roll() { _ = restartPatch(\"m\", \"t\"); _ = kindDaemonSet }\n"
+	good := "package x\nfunc roll() { _ = restartPatch(\"m\", \"t\"); _ = kindDaemonSet; replaceOnDeletePods() }\n"
+
+	if got := restartersWithoutOnDeleteWait(t, "bad.go", bad); len(got) != 1 {
+		t.Errorf("a restart with no wait must be flagged, got %v", got)
+	}
+
+	if got := restartersWithoutOnDeleteWait(t, "good.go", good); len(got) != 0 {
+		t.Errorf("a restart with the wait must pass, got %v", got)
+	}
 }

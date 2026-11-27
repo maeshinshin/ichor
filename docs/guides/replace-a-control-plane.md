@@ -58,7 +58,7 @@ first, so the cluster is never below its declared `spec.controlPlane.count`.
 | Case | Why |
 |---|---|
 | Removing one of two control planes | Below etcd quorum. |
-| Removing the last control plane | Delete the `TalosCluster` instead. |
+| Removing the last control plane | Delete the `TalosCluster` instead, then its machines; they are released and the nodes keep running. |
 | Removing a member etcd answers for with a leader | It is healthy. |
 | A node whose etcd member cannot be told apart | Nothing proves it dead. |
 

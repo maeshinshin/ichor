@@ -153,7 +153,7 @@ var setCmd = &cobra.Command{
 	GroupID:     groupChange,
 	RunE:        groupRunE,
 	Annotations: groupingAnnotations(),
-	Short:       "Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings",
+	Short:       "Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings, or a node's install disk",
 	Example: `  ichor set kube-proxy replaced --cluster prod
   ichor set settings updateCheck.enabled=false`,
 }

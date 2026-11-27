@@ -58,5 +58,5 @@ ichor set kube-proxy replaced|enabled [flags]
 
 ### SEE ALSO
 
-* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings
+* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings, or a node's install disk
 

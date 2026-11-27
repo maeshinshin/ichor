@@ -65,7 +65,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.
 * [ichor discovery](ichor_discovery.md)	 - List, add or remove the addresses and ranges Ichor scans for new nodes
 * [ichor edit](ichor_edit.md)	 - Edit an object in $EDITOR, or change a user's fields
 * [ichor rollout](ichor_rollout.md)	 - Roll out pending changes that need a reboot or an API server restart
-* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings
+* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings, or a node's install disk
 
 #### Node and Cluster Lifecycle Commands
 

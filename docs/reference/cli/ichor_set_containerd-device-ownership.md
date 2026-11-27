@@ -51,5 +51,5 @@ ichor set containerd-device-ownership true|false [flags]
 
 ### SEE ALSO
 
-* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings
+* [ichor set](ichor_set.md)	 - Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings, or a node's install disk
 

@@ -1,11 +1,11 @@
 ---
 title: "ichor set"
-description: "Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings"
+description: "Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings, or a node's install disk"
 ---
 
 ## ichor set
 
-Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings
+Change one setting: kube-proxy mode, containerd device ownership or Ichor's runtime settings, or a node's install disk
 
 ```sh
 ichor set [command]
@@ -38,6 +38,7 @@ ichor set [command]
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
 * [ichor set containerd-device-ownership](ichor_set_containerd-device-ownership.md)	 - Let containerd give a pod's block devices to its user and group, so non-root pods can use volumeMode: Block volumes
+* [ichor set install-disk](ichor_set_install-disk.md)	 - Set the install disk of an approved node that has no configuration applied yet
 * [ichor set kube-proxy](ichor_set_kube-proxy.md)	 - Switch kube-proxy between enabled and replaced by the CNI
 * [ichor set settings](ichor_set_settings.md)	 - Change settings (see --help for the keys)
 

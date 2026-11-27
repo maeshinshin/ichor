@@ -111,13 +111,23 @@ var _ = Describe("TalosMachine Webhook", func() {
 	})
 })
 
+// newQuorumCluster creates a three-control-plane TalosCluster and returns its name; the quorum guard
+// protects a cluster that exists, so the specs below need one.
+func newQuorumCluster() *ichorv1alpha1.TalosCluster {
+	c := newTestCluster()
+	c.Spec.ControlPlane.Count = 3
+	Expect(k8sClient.Create(ctx, c)).To(Succeed())
+
+	return c
+}
+
 var _ = Describe("TalosMachine Webhook control-plane quorum", func() {
 	// Each It gets its own cluster name so the control-plane count the
 	// webhook lists is exactly what this test created, regardless of what
 	// other specs left behind.
 
 	It("refuses deleting the last control plane even with the allow-delete annotation", func() {
-		clusterName := "quorum-last"
+		clusterName := newQuorumCluster().Name
 		cp := newTestControlPlane(clusterName, "01")
 		Expect(k8sClient.Create(ctx, cp)).To(Succeed())
 		allowDelete(cp)
@@ -135,7 +145,7 @@ var _ = Describe("TalosMachine Webhook control-plane quorum", func() {
 	})
 
 	It("refuses a deletion that would break quorum, and allows one that doesn't", func() {
-		clusterName := "quorum-3to2to1"
+		clusterName := newQuorumCluster().Name
 		cp1 := newTestControlPlane(clusterName, "11")
 		cp2 := newTestControlPlane(clusterName, "12")
 		cp3 := newTestControlPlane(clusterName, "13")
@@ -158,6 +168,39 @@ var _ = Describe("TalosMachine Webhook control-plane quorum", func() {
 		// cp3 remains the lone survivor; deleting it would also be refused
 		// (it's now the last control plane), so leave it and let the
 		// envtest namespace teardown reclaim it.
+	})
+
+	It("admits deleting every control plane once the TalosCluster is deleted", func() {
+		cluster := newQuorumCluster()
+		cps := []*ichorv1alpha1.TalosMachine{
+			newTestControlPlane(cluster.Name, "31"), newTestControlPlane(cluster.Name, "32"), newTestControlPlane(cluster.Name, "33"),
+		}
+		for _, cp := range cps {
+			Expect(k8sClient.Create(ctx, cp)).To(Succeed())
+			allowDelete(cp)
+			Expect(k8sClient.Update(ctx, cp)).To(Succeed())
+		}
+
+		allowDelete(cluster)
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
+
+		for _, cp := range cps {
+			Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
+		}
+	})
+
+	It("still needs the allow-delete annotation once the TalosCluster is gone", func() {
+		cluster := newQuorumCluster()
+		cp := newTestControlPlane(cluster.Name, "34")
+		Expect(k8sClient.Create(ctx, cp)).To(Succeed())
+		allowDelete(cluster)
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
+
+		err := k8sClient.Delete(ctx, cp)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(deleteguard.AllowDeleteAnnotation))
 	})
 
 	It("does not count an unapproved control plane toward quorum", func() {

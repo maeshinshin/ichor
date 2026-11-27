@@ -291,6 +291,13 @@ func (r *TalosMachineReconciler) refreshTransitioning(
 	return r.updateTransitioning(ctx, cluster, controlPlanes)
 }
 
+// releaseMachine drops m's removal finalizer without touching the node.
+func (r *TalosMachineReconciler) releaseMachine(ctx context.Context, m *ichorv1alpha1.TalosMachine) error {
+	controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)
+
+	return r.Update(ctx, m)
+}
+
 // reconcileRemoval runs when m.DeletionTimestamp is set. A machine without
 // machineRemovalFinalizer was never intercepted (never approved as a
 // control plane) and is left alone -- nothing to coordinate, the API
@@ -309,10 +316,15 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	if err := r.Get(ctx, clusterKey, &cluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Nothing left to coordinate against; let the machine go.
-			controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)
-			return r.Update(ctx, m)
+			return r.releaseMachine(ctx, m)
 		}
 		return err
+	}
+
+	// A cluster being deleted is an uninstall: its machines are released as they are, never drained,
+	// reset or taken out of etcd.
+	if !cluster.DeletionTimestamp.IsZero() {
+		return r.releaseMachine(ctx, m)
 	}
 
 	// completesTransition is true: this removal can bring the live count back to the declared one (3->4->3's

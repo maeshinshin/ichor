@@ -66,6 +66,15 @@ field is added or removed.
   before the Secrets and the namespace: once the namespace is deleting, the webhook is
   gone and no delete can pass, so the IchorUser `admin` that `ichor init` and
   `ichor adopt` create kept it `Terminating`.
+  The steps also delete the cluster-scoped IchorInstallation before the namespace, and
+  name `--bundle-passphrase-file` (or `--bundle-plaintext`, unencrypted) for the bundle
+  export, which with no terminal needs one of the two. A manifest install leaves its
+  cluster-scoped objects (the webhook configurations, which refuse every later write
+  to an Ichor kind once their Service is gone, the admission policies and bindings,
+  ClusterRoles, ClusterRoleBindings and the PriorityClass); `kubectl delete -f
+  install.yaml --ignore-not-found`, with the `install.yaml` of the release you
+  installed, removes them and also the CRDs and every Ichor object left, which is
+  optional. `helm uninstall` removes all of those except the CRDs.
 - **An IchorUser carrying `ichor.maesh.dev/allow-delete=true` can be deleted, even when
   it is the last enabled admin.** The last-admin check no longer applies to it; the
   uninstall steps rely on this.
@@ -186,6 +195,15 @@ field is added or removed.
   IchorUser as one the validating-webhook deletion unblocks, says adopt asks for
   confirmation (`--yes` skips it), and says adopt server-side applies the old install's
   cluster-scoped objects, as `ichor init` does.
+- The uninstall guide names the bundle passphrase flag, deletes the IchorInstallation
+  before the namespace, and says how a manifest install and a Helm install remove their
+  cluster-scoped objects. The recovery guide gives the same `kubectl delete -f
+  install.yaml` for a manifest install that is not adopted again.
+- The approve-machines guide explains `InstallDiskUnknown`: a node approved without
+  `--install-disk` and with no disk in its configuration applies nothing, and the disk
+  is set in the UI install-disk dialog or by patching `spec.install.disk.devPath`
+  until the machine has an applied configuration. It says `compact-ha` approves its
+  two further control planes with `--role controlplane`.
 
 ## v0.3.4 (2026-11-26)
 

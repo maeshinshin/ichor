@@ -1,6 +1,7 @@
 #!/bin/sh
 # Run hack/bump-cilium-rewrite.sh on a made-up next patch (X.Y.Z -> X.Y.99) in a throwaway copy of the
-# working tree, then the tests the bot's pull request has to pass. Needs no network.
+# working tree, then the tests the bot's pull request has to pass. The copy installs its own ui/node_modules
+# (npm ci, through make third-party-notices), so it needs the network or a warm npm cache.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -16,7 +17,6 @@ git ls-files -co --exclude-standard -z | tar --null -T - -cf - | tar -xf - -C "$
 # chart archives are gitignored but embedded
 cp pkg/cni/cilium/chart/cilium-"$old".tgz "$copy/pkg/cni/cilium/chart/"
 ln -s "$PWD/bin" "$copy/bin"
-[ ! -d ui/node_modules ] || ln -s "$PWD/ui/node_modules" "$copy/ui/node_modules"
 # The made-up patch is the current chart with its own version moved, as TestEmbeddedChartMatchesPinnedVersion reads it.
 unpacked=$(mktemp -d)
 trap 'rm -rf "$copy" "$unpacked"' EXIT

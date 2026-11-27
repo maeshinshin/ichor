@@ -137,6 +137,21 @@ func setCiliumRollout(rolledOut bool) {
 	Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
 }
 
+// onDeleteCiliumWithOldPods makes the Cilium DaemonSet OnDelete with no agent on its current template
+// (gen 2, observed 2, desired 3, ready 3, updated 0).
+func onDeleteCiliumWithOldPods() {
+	var ds appsv1.DaemonSet
+	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: ciliumName}, &ds)).To(Succeed())
+
+	ds.Spec.UpdateStrategy.Type = appsv1.OnDeleteDaemonSetStrategyType
+	Expect(k8sClient.Update(ctx, &ds)).To(Succeed())
+
+	setCiliumRollout(true)
+	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: ciliumName}, &ds)).To(Succeed())
+	ds.Status.UpdatedNumberScheduled = 0
+	Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
+}
+
 func setCiliumKPR(kpr string) {
 	var cm corev1.ConfigMap
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: ciliumConfigName}, &cm)).To(Succeed())
@@ -477,6 +492,35 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("timed out"))
 		Expect(fake.applyCalls).To(BeEmpty())
+	})
+
+	It("TestKubeProxySwitchWaitsUntilAgentsRunTheNewConfig: an OnDelete DaemonSet with old pods is not rolled out, a fully updated one is", func() {
+		newCilium("true", true)
+		onDeleteCiliumWithOldPods()
+
+		cluster := cniSwitchCluster(modeReplaced)
+		finishCNIJob(cluster)
+		cp, fake, adv := switchRig(cluster, "kp-ondelete", modeEnabled, &fakeKubeProxyAdmin{})
+		admin := adv.Admin.(*fakeKubeProxyAdmin)
+		newKubeProxyDaemonSet(testK8sOld, 2, 2)
+
+		op := &ichorv1alpha1.TalosOperation{}
+		done, err := adv.Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(done).To(BeFalse())
+		Expect(fake.applyCalls).To(BeEmpty())
+		Expect(admin.calls).To(BeZero())
+		Expect(kubeProxyExists()).To(BeTrue())
+
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system rollout restart ds/cilium"))
+
+		setCiliumRollout(true)
+
+		_, err = adv.Advance(ctx, cluster, cp, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.applyCalls).NotTo(BeEmpty(), "every agent runs the current template: the switch proceeds")
 	})
 
 	It("replaced: pauses when the Helm Job does not finish within the verification window", func() {

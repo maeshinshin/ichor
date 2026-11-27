@@ -1501,8 +1501,10 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	var toCreate []*adoptPlan
 
 	for _, p := range plans {
-		if p.AuthenticatorKept {
-			say(adoptInfo, "node %q: carries an Ichor sign-in authenticator; adopt keeps it as it is, because it is not turning sign-in on", p.Machine)
+		if p.AuthenticatorRefused {
+			say(adoptWarn, "node %q: carries Ichor's sign-in authenticator and this adopt is not turning sign-in on, so adopt refuses the node rather than remove it; "+
+				"set spec.authentication.ichor (enabled: true, url) on the TalosCluster (on a Helm-managed Ichor, configure sign-in in the chart values and set it there too) and run adopt again; "+
+				"adopt has no flag that turns sign-in on", p.Machine)
 		} else if p.IchorAuthenticator {
 			say(adoptInfo, "node %q: carries an Ichor sign-in authenticator from an earlier install; adopt turns sign-in on again "+
 				"and the node's entry is replaced by one for this install's issuer and CA", p.Machine)

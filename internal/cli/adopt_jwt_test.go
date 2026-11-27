@@ -177,8 +177,8 @@ func TestAdoptPlan_KeepsTheAuthenticatorWhenSignInIsNotTurnedOn(t *testing.T) {
 				t.Errorf("plan = %+v, want the KubeAuthenticationConfig kept in the drift", plan)
 			}
 
-			if strings.Contains(said, "turns sign-in on again") || !strings.Contains(said, "keeps it as it is") {
-				t.Errorf("adopt said:\n%s\nwant the kept-as-is line and not \"turns sign-in on again\"", said)
+			if strings.Contains(said, "turns sign-in on again") || !strings.Contains(said, "adopt refuses the node rather than remove it") || !strings.Contains(said, "spec.authentication.ichor") {
+				t.Errorf("adopt said:\n%s\nwant the refusal line and not \"turns sign-in on again\"", said)
 			}
 		})
 	}
@@ -188,7 +188,7 @@ func TestAdoptPlan_KeepsTheAuthenticatorWhenSignInIsNotTurnedOn(t *testing.T) {
 func TestAdoptPlan_DropsTheAuthenticatorWhenSignInIsTurnedOn(t *testing.T) {
 	plan, said := authenticatorPlan(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build(), nil)
 
-	if plan.Patch != nil || plan.AuthenticatorKept {
+	if plan.Patch != nil || plan.AuthenticatorRefused {
 		t.Errorf("plan = %+v, want no patch and the authenticator not kept", plan)
 	}
 

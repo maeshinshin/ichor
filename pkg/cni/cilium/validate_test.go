@@ -381,6 +381,11 @@ func TestValidateValuesRefusesEmbeddedPrivateKeys(t *testing.T) {
 		}
 	}
 
+	if err := ValidateValues(keyAt("tls.ca.key"), ctx); err == nil ||
+		!strings.Contains(err.Error(), "hubble.tls.auto.method") {
+		t.Errorf("err = %v, want the chart-generation alternative", err)
+	}
+
 	if err := ValidateValues(keyAt(hubbleServerKey), ctx); err == nil ||
 		!strings.Contains(err.Error(), "hubble.tls.server.existingSecret") {
 		t.Errorf("err = %v, want the existingSecret alternative", err)
@@ -434,6 +439,17 @@ func TestClusterMeshPeerTLSKeyIsRefused(t *testing.T) {
 			t.Errorf("%s: err = %v, want a refusal naming clustermesh.config.clusters", name, err)
 		} else if strings.HasPrefix(name, "pem") == strings.Contains(err.Error(), "tls.key") {
 			t.Errorf("%s: err = %v, tls.key named only for the key leaf", name, err)
+		}
+
+		if err != nil {
+			want := "clustermesh.apiserver.tls.auto.enabled"
+			if strings.HasPrefix(name, "pem") {
+				want = "check the chart for the Secret option"
+			}
+
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: err = %v, want the advice %q", name, err, want)
+			}
 		}
 
 		if err != nil && (strings.Contains(err.Error(), "c2VjcmV0") || strings.Contains(err.Error(), "AAAA")) {

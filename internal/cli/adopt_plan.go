@@ -63,6 +63,8 @@ type adoptPlan struct {
 
 	// IchorAuthenticator: the node carries Ichor's own authenticator, which adopt replaces by turning sign-in on.
 	IchorAuthenticator bool
+	// AuthenticatorKept: adopt is not turning sign-in on, so the node's authenticator stays in the drift.
+	AuthenticatorKept bool
 
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
@@ -77,6 +79,8 @@ type ownership struct {
 	KubeProxyReplaced bool
 	// CiliumInline makes the inline-manifest paths Ichor's (the node carries a Cilium inline entry).
 	CiliumInline bool
+	// IchorAuthenticator: this adopt turns sign-in on, so Ichor renders its own authenticator and the node's is not drift.
+	IchorAuthenticator bool
 }
 
 var (
@@ -166,12 +170,15 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: diffing node %q's current configuration: %w", m.Name, err)
 	}
 
-	// Ichor's own authenticator is not drift to capture: sign-in is turned on again and the render replaces it.
-	if ichorAuth {
+	// Ichor's own authenticator is not drift to capture when this adopt turns sign-in on and the render replaces it;
+	// otherwise nothing renders it, and the patch keeps it.
+	dropAuth := ichorAuth && own.IchorAuthenticator
+
+	if dropAuth {
 		paths = slices.DeleteFunc(paths, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
 	}
 
-	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth}
+	plan := &adoptPlan{Machine: m.Name, IchorAuthenticator: ichorAuth, AuthenticatorKept: ichorAuth && !dropAuth}
 
 	if len(paths) == 0 {
 		return plan, nil
@@ -236,7 +243,7 @@ func buildAdoptPlan(
 		return nil, fmt.Errorf("adopt: verifying node %q's zero-drift patch: %w", m.Name, err)
 	}
 
-	if ichorAuth {
+	if dropAuth {
 		left = slices.DeleteFunc(left, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) })
 	}
 

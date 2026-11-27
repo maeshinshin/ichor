@@ -17,9 +17,15 @@ limitations under the License.
 package cli
 
 import (
+	"bytes"
+	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -93,7 +99,7 @@ func liveWithAuth(t *testing.T, auth *ichorv1alpha1.TalosClusterAuthentication) 
 func TestBuildAdoptPlan_AcceptsIchorOwnAuthenticator(t *testing.T) {
 	cluster, machine, cfg := liveWithAuth(t, ichorOwnIssuer())
 
-	plan, err := buildAdoptPlan(cluster, machine, newTestBundle(t), nil, cfg, nil, ownership{})
+	plan, err := buildAdoptPlan(cluster, machine, newTestBundle(t), nil, cfg, nil, ownership{IchorAuthenticator: true})
 	if err != nil {
 		t.Fatalf("buildAdoptPlan error = %v, want none", err)
 	}
@@ -114,5 +120,79 @@ func TestBuildAdoptPlan_RefusesForeignBesideIchorOwn(t *testing.T) {
 	_, err := buildAdoptPlan(cluster, machine, newTestBundle(t), nil, cfg, nil, ownership{})
 	if err == nil || !strings.Contains(err.Error(), "has 1 jwt authenticator(s)") {
 		t.Fatalf("buildAdoptPlan error = %v, want a refusal naming only the one foreign authenticator", err)
+	}
+}
+
+// authenticatorPlan plans one node that carries Ichor's authenticator, for a cluster whose spec has none, the way adopt
+// does: the sign-in plan first (against k8s, with an Ichor install), then the node's plan under what that plan owns.
+// It returns the plan and what adopt said about it.
+func authenticatorPlan(t *testing.T, k8s client.Client, auth *ichorv1alpha1.TalosClusterAuthentication) (*adoptPlan, string) {
+	t.Helper()
+
+	_, _, cfg := liveWithAuth(t, ichorOwnIssuer())
+	cluster, machine, _ := liveWithAuth(t, nil)
+	cluster.Spec.Authentication = auth
+
+	var out bytes.Buffer
+
+	st := &adoptState{cluster: cluster}
+	deps := adoptDeps{K8s: k8s, Stderr: &out, Ichor: &adoptWriteIchor{}, UIURL: defaultUIURL, AdminUser: defaultAdminUser}
+
+	if err := st.planSignIn(context.Background(), deps); err != nil {
+		t.Fatalf("planSignIn: %v", err)
+	}
+
+	plan, err := buildAdoptPlan(cluster, machine, newTestBundle(t), nil, cfg, nil, st.own(&adoptNode{}))
+	if err != nil {
+		t.Fatalf("buildAdoptPlan: %v", err)
+	}
+
+	reportPlans(deps.say, []*adoptPlan{plan})
+
+	return plan, out.String()
+}
+
+func helmControllerClient(t *testing.T) client.Client {
+	t.Helper()
+
+	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(controllerDeployment(true)).Build()
+}
+
+// Adopt that does not turn sign-in on (Helm-managed Ichor, or the operator's enabled: false) renders no authenticator,
+// so the node's stays in the patch and adopt does not say it turns sign-in on again.
+func TestAdoptPlan_KeepsTheAuthenticatorWhenSignInIsNotTurnedOn(t *testing.T) {
+	disabled := &ichorv1alpha1.TalosClusterAuthentication{Ichor: &ichorv1alpha1.TalosClusterIchorIssuer{Enabled: false, URL: "https://ichor.example.org"}}
+
+	for name, tc := range map[string]struct {
+		k8s  client.Client
+		auth *ichorv1alpha1.TalosClusterAuthentication
+	}{
+		"helm-managed":  {helmControllerClient(t), nil},
+		"enabled false": {fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build(), disabled},
+	} {
+		t.Run(name, func(t *testing.T) {
+			plan, said := authenticatorPlan(t, tc.k8s, tc.auth)
+
+			if !slices.ContainsFunc(plan.UnrepresentablePaths, func(p string) bool { return underPath(p, kindKubeAuthenticationConfig) }) {
+				t.Errorf("plan = %+v, want the KubeAuthenticationConfig kept in the drift", plan)
+			}
+
+			if strings.Contains(said, "turns sign-in on again") || !strings.Contains(said, "keeps it as it is") {
+				t.Errorf("adopt said:\n%s\nwant the kept-as-is line and not \"turns sign-in on again\"", said)
+			}
+		})
+	}
+}
+
+// A non-Helm adopt turns sign-in on: the node's authenticator is replaced by the render, not captured.
+func TestAdoptPlan_DropsTheAuthenticatorWhenSignInIsTurnedOn(t *testing.T) {
+	plan, said := authenticatorPlan(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build(), nil)
+
+	if plan.Patch != nil || plan.AuthenticatorKept {
+		t.Errorf("plan = %+v, want no patch and the authenticator not kept", plan)
+	}
+
+	if !strings.Contains(said, "turns sign-in on again") {
+		t.Errorf("adopt said:\n%s\nwant the \"turns sign-in on again\" line", said)
 	}
 }

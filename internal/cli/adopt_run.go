@@ -154,7 +154,10 @@ type adoptState struct {
 
 // own is the class B definition for one node.
 func (st *adoptState) own(n *adoptNode) ownership {
-	o := ownership{Managed: !st.unmanaged, KubeProxyReplaced: st.kubeProxy == kubeProxyReplaced}
+	o := ownership{
+		Managed: !st.unmanaged, KubeProxyReplaced: st.kubeProxy == kubeProxyReplaced,
+		IchorAuthenticator: st.signIn != nil && st.signIn.authenticator,
+	}
 
 	if n.Facts != nil {
 		name, _ := cilium.FindInlineManifest(inlineEntries(n.Facts))
@@ -1498,7 +1501,9 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	var toCreate []*adoptPlan
 
 	for _, p := range plans {
-		if p.IchorAuthenticator {
+		if p.AuthenticatorKept {
+			say(adoptInfo, "node %q: carries an Ichor sign-in authenticator; adopt keeps it as it is, because it is not turning sign-in on", p.Machine)
+		} else if p.IchorAuthenticator {
 			say(adoptInfo, "node %q: carries an Ichor sign-in authenticator from an earlier install; adopt turns sign-in on again "+
 				"and the node's entry is replaced by one for this install's issuer and CA", p.Machine)
 		}

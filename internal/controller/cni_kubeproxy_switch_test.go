@@ -514,7 +514,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionVerifyingNewSide)
 		Expect(cond).NotTo(BeNil())
-		Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system rollout restart ds/cilium"))
+		Expect(cond.Message).To(ContainSubstring("kubectl -n kube-system delete pod -l k8s-app=cilium"))
 
 		setCiliumRollout(true)
 

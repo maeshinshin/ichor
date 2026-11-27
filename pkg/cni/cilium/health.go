@@ -110,8 +110,9 @@ func DaemonSetRunsCurrentTemplate(ds *appsv1.DaemonSet) (ok bool, why string) {
 
 	if st := ds.Status; st.UpdatedNumberScheduled < st.DesiredNumberScheduled {
 		return false, fmt.Sprintf("the DaemonSet %s has %d of %d agents on its current template and its update "+
-			"strategy (%s) does not restart the others: restart the Cilium agents with "+
-			"`kubectl -n %s rollout restart ds/%s` (or delete the cilium pods one node at a time)",
+			"strategy (%s) does not restart the others: delete the agent pod of one node at a time; "+
+			"after each, wait until the new agent is Ready and `kubectl get --raw /readyz` answers before the next node: "+
+			"`kubectl -n %s delete pod -l k8s-app=%s --field-selector spec.nodeName=<node>`",
 			ds.Name, st.UpdatedNumberScheduled, st.DesiredNumberScheduled,
 			ds.Spec.UpdateStrategy.Type, ds.Namespace, ds.Name)
 	}

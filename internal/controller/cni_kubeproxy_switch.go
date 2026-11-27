@@ -563,14 +563,9 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 	return true, nil
 }
 
-// ciliumRolledOut reports whether every Cilium agent runs the current DaemonSet generation and is
-// ready; until then it waits on the verification clock.
-func (a *cniKubeProxyAdvancer) ciliumRolledOut(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
-	return a.ciliumRolled(ctx, op, cilium.DaemonSetRolledOut)
-}
-
-// ciliumRunsNewConfig is ciliumRolledOut for the kube-proxy switch: the agents read the mode only at start, so
-// every one must run the current template even when the DaemonSet never replaces pods itself (OnDelete).
+// ciliumRunsNewConfig reports whether every Cilium agent runs the current pod template and is ready; until then it
+// waits on the verification clock. The kube-proxy switch and the Cilium upgrade ask "has my change reached the
+// agents?" (they read it only at start), so even an OnDelete DaemonSet must have replaced its pods.
 func (a *cniKubeProxyAdvancer) ciliumRunsNewConfig(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
 	return a.ciliumRolled(ctx, op, cilium.DaemonSetRunsCurrentTemplate)
 }

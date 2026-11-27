@@ -4,30 +4,71 @@
 
 A patch release of fixes to v0.3.5: `ichor adopt` finishes an Ichor install that an
 earlier run stopped partway and no longer lets a rollout remove Ichor's sign-in
-authenticator, and the Overview page shows a failed installation read instead of an
-all-clear. No CRD field is added or removed.
+authenticator, the kube-proxy switch and the Cilium upgrade wait until every agent
+runs the new configuration, a private key in a Cilium list value is refused, and the
+Overview page shows a failed installation read instead of an all-clear. No CRD field
+is added or removed.
 
 ### Upgrade notes
 
+- **A cluster already on kube-proxy `replaced` restarts its Cilium agents once on
+  upgrade.** The agent pod template gains the `ichor.maesh.dev/kube-proxy-mode`
+  annotation, which is set only while kube-proxy is replaced, so the DaemonSet rolls.
+  A cluster with kube-proxy enabled keeps its template.
+- **The kube-proxy switch, the Cilium chart upgrade and the hand-over after a values
+  Job wait until every Cilium agent runs the current pod template.** The agents read
+  these settings only at start. On an `OnDelete` DaemonSet the old pods are not
+  replaced by themselves, and the waiting message names
+  `kubectl -n kube-system rollout restart ds/cilium`.
 - **A re-run of `ichor adopt` finishes an Ichor install that an earlier run stopped
-  partway.** A non-Helm install with no IchorInstallation is taken as incomplete:
-  adopt applies the rest of the manifest, creates the IchorInstallation and says so.
-  Before, it took any Ichor it found for installed and installed nothing.
-- **When adopt does not turn sign-in on, a node that carries Ichor's authenticator is
-  refused.** That is a Helm-managed Ichor, or `spec.authentication.ichor` with
-  `enabled: false`. The message says to set `spec.authentication.ichor` (`enabled: true`,
-  `url`) on the TalosCluster, in the chart values and on the TalosCluster for a
-  Helm-managed Ichor, and to run adopt again; adopt has no flag that turns sign-in on.
-  Before, the authenticator was dropped from the plan, so the rollout that adopt
-  advised could remove it.
+  partway.** On a non-Helm install adopt applies Ichor's install manifest again, even
+  after the controller has seeded the IchorInstallation, and creates the
+  IchorInstallation only when it is missing. It sets only the pin fields the object
+  lacks, and nothing on an unpinned run. A Helm-managed install is left alone.
+- **A re-run of `ichor adopt` on a cluster whose sign-in is already on is no longer
+  blocked by Ichor's own authenticator.** When this run does not turn sign-in on and
+  `spec.authentication.ichor` is not enabled, a node that carries Ichor's authenticator
+  is refused. That is a Helm-managed Ichor, or `enabled: false`. The message says to set
+  `spec.authentication.ichor` (`enabled: true`, `url`) on the TalosCluster, in the chart
+  values and on the TalosCluster for a Helm-managed Ichor, and to run adopt again;
+  adopt has no flag that turns sign-in on. Before, the authenticator was dropped from
+  the plan, so the rollout that adopt advised could remove it.
+- **A private key in a list value of the Cilium values is refused.** That covers a
+  ClusterMesh peer's TLS (`clustermesh.config.clusters`) and any PEM private key
+  anywhere in `spec.cni.cilium.values`, raw or base64. The message names a remedy for
+  its own setting: for a peer, remove the peer's `tls.cert` and `tls.key` (and
+  `tls.caCert` if the CA is shared) so the chart uses its generated remote
+  certificate; otherwise move the key into a Secret. A key an object already stores
+  unchanged, a list entry included, stays editable.
+- **A secrets bundle missing a required member is refused when read.** The machine
+  waits with `SecretsBundleUnavailable`, and the error names the missing field
+  (`cluster`, `secrets`, `trustdinfo`, `certs` and its members), instead of the
+  controller panicking.
+
+### Controller
+
+- The kube-proxy switch, the Cilium upgrade and the hand-over's finish check agents
+  against the current pod template; the hand-over's health check still counts an
+  `OnDelete` DaemonSet as ready.
+- A secrets bundle that decodes with a missing member is refused with an error that
+  names the field and never carries the bytes.
 
 ### CLI
 
-- `ichor adopt` treats a non-Helm install without an IchorInstallation as partial and
-  finishes it, in the sign-in step and in the write step, which notes "completing an
-  earlier, partial install of Ichor".
-- `ichor adopt` keeps a node's Ichor authenticator in the plan unless this adopt turns
-  sign-in on, and refuses the node with a message naming the ways forward.
+- `ichor adopt` applies the install manifest again on a non-Helm install, in the
+  sign-in step and in the write step, and notes "applied Ichor's install manifest to
+  the existing install" when the IchorInstallation exists.
+- `ichor adopt` keeps a node's Ichor authenticator in the plan unless the cluster has
+  sign-in on or this adopt turns it on, and refuses the node with a message naming
+  the ways forward.
+- `ichor adopt` says it turns sign-in on again only when this run turns it on. When
+  sign-in is already on and only the CA differs, it says the node's authenticator is
+  updated to this install's issuer and CA.
+
+### Webhooks
+
+- A private key in a list-typed Cilium value is refused. An update keeps a stored
+  list-form key editable.
 
 ### UI
 

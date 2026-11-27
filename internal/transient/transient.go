@@ -36,6 +36,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
+// ApplyBusy reports whether err is a Talos node refusing an ApplyConfiguration because another one holds its lock
+// (FailedPrecondition, "another apply configuration is already in progress"): a refusal that clears in seconds.
+func ApplyBusy(err error) bool {
+	return status.Code(err) == codes.FailedPrecondition && strings.Contains(err.Error(), "another apply configuration is already in progress")
+}
+
 // Is reports whether err is the API being briefly unreachable --
 // connection refused/reset, Unavailable, EOF, a timeout, discovery not yet
 // serving a group -- as opposed to an
@@ -43,6 +49,10 @@ import (
 func Is(err error) bool {
 	if err == nil {
 		return false
+	}
+
+	if ApplyBusy(err) {
+		return true
 	}
 
 	if ce, ok := errors.AsType[*connect.Error](err); ok {

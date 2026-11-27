@@ -55,3 +55,17 @@ func TestIsGRPCStatus(t *testing.T) {
 		})
 	}
 }
+
+// A node's apply lock held by another apply is a refusal that clears; any other FailedPrecondition is an answer.
+func TestApplyBusy(t *testing.T) {
+	t.Parallel()
+
+	busy := status.Error(codes.FailedPrecondition, "another apply configuration is already in progress")
+	if !transient.Is(fmt.Errorf("dry-run apply to %q failed: %w", "cp1", busy)) {
+		t.Fatal("a busy apply lock must be transient")
+	}
+
+	if transient.Is(status.Error(codes.FailedPrecondition, "node is in maintenance mode")) {
+		t.Fatal("another FailedPrecondition must stay an answer")
+	}
+}

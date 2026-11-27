@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
@@ -45,6 +46,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/role"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/transient"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -187,9 +189,52 @@ func (t *machineryTalosClient) SecurityState(ctx context.Context) (SecurityState
 	return ReadSecurityState(ctx, t.c.COSI)
 }
 
+// applyConfiguration is ApplyConfiguration that waits out a node still busy with another apply (see retryApplyBusy).
+func (t *machineryTalosClient) applyConfiguration(
+	ctx context.Context, req *machineapi.ApplyConfigurationRequest,
+) (resp *machineapi.ApplyConfigurationResponse, err error) {
+	err = retryApplyBusy(ctx, applyBusyWait, func() error {
+		resp, err = t.c.ApplyConfiguration(ctx, req)
+
+		return err
+	})
+
+	return resp, err
+}
+
+// applyBusyWait is the wait before the first retry of a busy node; it doubles per retry. A variable so tests can shrink it.
+var applyBusyWait = 500 * time.Millisecond
+
+// applyBusyRetries bounds retryApplyBusy: 0.5s+1s+2s+4s+8s, longer than any apply takes.
+const applyBusyRetries = 5
+
+// retryApplyBusy runs call again, with doubling waits, while Talos answers that another apply is in progress: its
+// one apply lock is taken by a concurrent writer (the machine reconciler's dry run racing an operation's apply), and
+// that clears within seconds. Any other error, and the busy one once the retries are spent, is returned as is.
+func retryApplyBusy(ctx context.Context, wait time.Duration, call func() error) error {
+	err := call()
+
+	for range applyBusyRetries {
+		if !transient.ApplyBusy(err) {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(wait):
+		}
+
+		wait *= 2
+		err = call()
+	}
+
+	return err
+}
+
 // DryRunApply validates cfg without applying it and collects every message's warnings.
 func (t *machineryTalosClient) DryRunApply(ctx context.Context, cfg []byte) ([]string, error) {
-	resp, err := t.c.ApplyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
+	resp, err := t.applyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
 		Data: cfg, Mode: machineapi.ApplyConfigurationRequest_NO_REBOOT, DryRun: true,
 	})
 	if err != nil {
@@ -207,7 +252,7 @@ func (t *machineryTalosClient) DryRunApply(ctx context.Context, cfg []byte) ([]s
 
 // ApplyNoReboot applies cfg with ApplyConfigurationRequest_NO_REBOOT.
 func (t *machineryTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) error {
-	_, err := t.c.ApplyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
+	_, err := t.applyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
 		Data: cfg, Mode: machineapi.ApplyConfigurationRequest_NO_REBOOT,
 	})
 
@@ -216,7 +261,7 @@ func (t *machineryTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) er
 
 // ApplyStaged applies cfg with ApplyConfigurationRequest_STAGED. See TalosClient.ApplyStaged.
 func (t *machineryTalosClient) ApplyStaged(ctx context.Context, cfg []byte) error {
-	_, err := t.c.ApplyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
+	_, err := t.applyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
 		Data: cfg, Mode: machineapi.ApplyConfigurationRequest_STAGED,
 	})
 

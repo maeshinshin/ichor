@@ -37,6 +37,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/internal/version"
 )
 
 // annotationTrue is the value of the adoption and hold-apply annotations.
@@ -271,6 +272,10 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		w.skipInstall(present, ichor)
 
 		return nil
+	}
+
+	if err := present.refuseReapply(version.Version); err != nil {
+		return err
 	}
 
 	// The controller seeds the IchorInstallation as soon as it runs, so its presence says nothing about

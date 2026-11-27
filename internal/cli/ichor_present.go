@@ -111,6 +111,31 @@ func (p ichorPresence) Version() string {
 	return ""
 }
 
+// runningVersion is the version of a running, non-Helm Ichor: the IchorInstallation's
+// status.installedVersion (the controller reports its own version there), else the tag of the
+// controller container's image. "" when neither says, or when no controller Deployment exists.
+func (p ichorPresence) runningVersion() string {
+	if p.Installation == nil || p.Deployment == nil {
+		return ""
+	}
+
+	if v := p.Installation.Status.InstalledVersion; v != "" {
+		return v
+	}
+
+	for _, c := range p.Deployment.Spec.Template.Spec.Containers {
+		if c.Name != controllerContainer {
+			continue
+		}
+
+		if img, _, _ := strings.Cut(c.Image, "@"); strings.LastIndex(img, ":") > strings.LastIndex(img, "/") {
+			return img[strings.LastIndex(img, ":")+1:]
+		}
+	}
+
+	return ""
+}
+
 // CiliumPoliciesValue is the release's networkPolicy.cilium.enabled as the user set it: nil when
 // unset (or when no release record is known).
 func (p ichorPresence) CiliumPoliciesValue() *bool {
@@ -232,7 +257,7 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 	}
 
 	if !p.HelmManaged() {
-		return nil
+		return p.refuseReapply(cliVersion)
 	}
 
 	_, _ = fmt.Fprintf(w, "adopt: Ichor is installed by Helm (release %s, version %s); not touching it\n",
@@ -245,6 +270,28 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 
 	return fmt.Errorf("adopt: Ichor %s is installed by Helm (release %q) but this ichor CLI is %s; they must be equal. Run: %s",
 		p.Version(), p.ReleaseName(), cliVersion, p.helmUpgradeCommand(cliVersion))
+}
+
+// refuseReapply is the version guard of adopt's install step on a running, non-Helm Ichor: applying the
+// CLI's manifest over an Ichor of another version would swap its CRDs, webhooks, policies and RBAC for
+// this CLI's. An older CRD schema prunes newer fields on the next write, so a running Ichor is moved only
+// by `ichor upgrade ichor`. A partial install (no IchorInstallation or no controller Deployment), an
+// unknown version and a dev build (semverOf is "", as on the Helm path) are applied.
+func (p ichorPresence) refuseReapply(cliVersion string) error {
+	have, want := semverOf(p.runningVersion()), semverOf(cliVersion)
+	if have == "" || want == "" || semver.Compare(have, want) == 0 {
+		return nil
+	}
+
+	if semver.Compare(have, want) > 0 {
+		return fmt.Errorf("adopt: Ichor %s is running in this cluster and this ichor CLI is %s, which is older; applying its install manifest "+
+			"would replace newer CRDs, webhooks and policies with older ones. Use an ichor CLI of %s or newer; nothing was written",
+			p.runningVersion(), cliVersion, p.runningVersion())
+	}
+
+	return fmt.Errorf("adopt: Ichor %s is running in this cluster and this ichor CLI is %s; adopt does not upgrade a running Ichor. "+
+		"Run `ichor upgrade ichor %s` to move it, then adopt again; nothing was written",
+		p.runningVersion(), cliVersion, cliVersion)
 }
 
 // checkControllerNamespace refuses a --namespace other than the one the controller runs in: it

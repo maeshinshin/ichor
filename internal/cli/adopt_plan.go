@@ -79,7 +79,7 @@ type ownership struct {
 	KubeProxyReplaced bool
 	// CiliumInline makes the inline-manifest paths Ichor's (the node carries a Cilium inline entry).
 	CiliumInline bool
-	// IchorAuthenticator: this adopt turns sign-in on, so Ichor renders its own authenticator and the node's is not drift.
+	// IchorAuthenticator: this adopt turns sign-in on, or the cluster already has spec.authentication.ichor enabled, so Ichor renders its own authenticator and the node's is not drift.
 	IchorAuthenticator bool
 }
 
@@ -284,9 +284,11 @@ func refuseJWTAuthenticators(machine string, currentCfg, baseline []byte) (own b
 
 	for _, e := range have {
 		switch {
-		case slices.ContainsFunc(rendered, func(r jwtEntry) bool { return r.url == e.url }):
+		// Ichor's own, whether or not the render has one for the same issuer: a match by URL can still differ in
+		// the CA the entry was rendered with, and that difference is the render's to replace.
 		case e.ichor:
 			own = true
+		case slices.ContainsFunc(rendered, func(r jwtEntry) bool { return r.url == e.url }):
 		default:
 			foreign++
 		}

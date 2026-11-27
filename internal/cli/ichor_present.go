@@ -63,12 +63,6 @@ func (p ichorPresence) Present() bool {
 	return p.Installation != nil || p.Release != nil || p.Deployment != nil
 }
 
-// Complete reports an install adopt leaves alone: Helm owns it, or the IchorInstallation that
-// adopt's install makes last exists. A non-Helm install without one stopped partway.
-func (p ichorPresence) Complete() bool {
-	return p.HelmManaged() || p.Installation != nil
-}
-
 // HelmManaged reports that Helm owns the install. When the IchorInstallation exists its
 // spec.deployment.manager is authoritative; before the controller has seeded it, and on
 // installs older than that, a deployed release of the chart or a controller Deployment Helm labels

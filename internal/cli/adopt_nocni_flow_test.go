@@ -464,7 +464,10 @@ func TestReadAdoptCiliumValues(t *testing.T) {
 func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
 	f := newNoCNIFlow(t)
 
-	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
+	inst := &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerHelm}},
+	}
 	if err := f.env.k8s.Create(context.Background(), inst); err != nil {
 		t.Fatal(err)
 	}

@@ -61,7 +61,14 @@ field is added or removed.
   draining the node, resetting it or removing its etcd member. Before, deleting the
   TalosCluster left the machines in place and the guard refused the last control
   planes, so the documented uninstall could not finish. The uninstall steps and
-  ADR 0010 say the new order.
+  ADR 0010 say the new order, and the steps now delete every Ichor object in the
+  namespace first (found with `kubectl api-resources --api-group=ichor.maesh.dev`),
+  before the Secrets and the namespace: once the namespace is deleting, the webhook is
+  gone and no delete can pass, so the IchorUser `admin` that `ichor init` and
+  `ichor adopt` create kept it `Terminating`.
+- **An IchorUser carrying `ichor.maesh.dev/allow-delete=true` can be deleted, even when
+  it is the last enabled admin.** The last-admin check no longer applies to it; the
+  uninstall steps rely on this.
 - **A fresh Helm install no longer blocks other Jobs.** The `controller-job-image`
   policy binding matches only Jobs labelled `app.kubernetes.io/name` `ichor-installer`
   or `ichor-cni`, so a Job anywhere is no longer refused while no IchorInstallation
@@ -93,6 +100,13 @@ field is added or removed.
   a failure is logged once per distinct message.
 - A TalosMachine of a TalosCluster that is gone or being deleted is released by its
   removal finalizer without touching the node.
+- A Talos node that refuses an apply because another apply is in progress is retried
+  inside the step, with waits from 0.5 to 8 seconds and five retries, so `ichor init`
+  and config rollouts no longer pause on it. Any other error is returned as it was.
+- The controller treats an `OnDelete` Cilium DaemonSet with older pods as ready, as
+  `ichor adopt` does: the agent check is one shared function. The CNI hand-over, the
+  values Job and the kube-proxy switch no longer wait at `WaitingForCilium`, and the
+  waiting message says what the DaemonSet waits for.
 
 ### CLI
 
@@ -123,6 +137,8 @@ field is added or removed.
   names the paths.
 - The `TalosMachine` webhook skips the quorum and last-control-plane checks when its
   TalosCluster is gone or deleting; the `allow-delete` annotation is still required.
+- The `IchorUser` webhook admits the DELETE of an object that carries the
+  `ichor.maesh.dev/allow-delete` annotation, the last enabled admin included.
 
 ### Chart
 
@@ -165,6 +181,11 @@ field is added or removed.
   with `ichor create credentials --bundle`), `--accept-cilium-diff` for a cluster whose
   Cilium record was lost with the namespace, and the closing
   `ichor rollout config --cluster NAME --follow`.
+- The uninstall steps delete every Ichor object in the namespace before the namespace,
+  and say they apply to a manifest install too. The recovery guide names a stuck
+  IchorUser as one the validating-webhook deletion unblocks, says adopt asks for
+  confirmation (`--yes` skips it), and says adopt server-side applies the old install's
+  cluster-scoped objects, as `ichor init` does.
 
 ## v0.3.4 (2026-11-26)
 

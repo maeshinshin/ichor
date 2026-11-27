@@ -30,11 +30,9 @@ a refusal: the disk, disk role or NIC was not among those discovery recorded.
 
 A node approved without `--install-disk` and with no disk in its configuration
 stays `Ready=False/InstallDiskUnknown`, and nothing is applied to it. `ichor approve node`
-refuses a node that is already approved, so there is no CLI command to set the disk
-afterwards. Set it in the UI (the machine's install disk) or write it on the
-TalosMachine: `kubectl -n ichor-system patch talosmachine NAME --type merge -p
-'{"spec":{"install":{"disk":{"devPath":"/dev/sda"}}}}'`. It only works until the
-machine has an applied configuration.
+refuses a node that is already approved, so set the disk with
+`ichor set install-disk NODE --install-disk DISK` (optionally `--install-image REF`), or in the UI
+(the machine's install disk). It only works until the machine has an applied configuration.
 
 After approval the controller renders and applies the configuration; the node
 installs Talos, reboots and joins.

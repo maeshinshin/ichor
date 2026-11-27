@@ -27,6 +27,12 @@ runs:
           keep-env-derivations = true
           keep-outputs = true
 
+    # The action extracts with `tar --skip-old-files`: a file the first attempt left half-written would be kept and registered.
+    - name: Empty /nix before the second attempt
+      if: steps.nix_install.outcome == 'failure'
+      shell: bash
+      run: sudo rm -rf /nix
+
     - name: Install Nix (second attempt)
       if: steps.nix_install.outcome == 'failure'
       uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35

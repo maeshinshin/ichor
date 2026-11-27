@@ -17,6 +17,7 @@ const repoRoot = "../../.."
 
 type step struct {
 	Name  string `yaml:"name"`
+	If    string `yaml:"if"`
 	Shell string `yaml:"shell"`
 	Run   string `yaml:"run"`
 }
@@ -313,6 +314,7 @@ var nixExempt = map[string]string{
 	".github/workflows/release.yml: Verify the signatures as the controller does":                      "bin/verifyimage is built by this workflow",
 	".github/workflows/test-chart.yml: Show why the deploy failed":                                     "failure diagnostics; every line is best effort",
 	".github/workflows/cilium-patch.yml: Open or update the issue":                                     "a job without a checkout; it only runs the runner's gh",
+	".github/actions/nix/action.yml: Empty /nix before the second attempt":                             "runs before Nix exists",
 	".github/actions/nix/action.yml: Free disk space":                                                  "runs before Nix exists",
 	".github/actions/nix/action.yml: Keep the devShell and the flake inputs out of garbage collection": "builds the dev shell profile itself",
 }
@@ -359,5 +361,20 @@ func TestDocsRunsForItsBuildInputs(t *testing.T) {
 				t.Errorf("docs.yml on.%s.paths lacks %q: a change to it would not run Docs", event, want)
 			}
 		}
+	}
+}
+
+// The install action extracts with `tar --skip-old-files`: a file the failed first attempt left half-written is kept
+// and registered, so the second attempt may only start from an empty /nix.
+func TestNixRetryStartsFromAnEmptyStore(t *testing.T) {
+	steps := load(t, ".github/actions/nix/action.yml").Runs.Steps
+	retry := slices.IndexFunc(steps, func(s step) bool { return s.Name == "Install Nix (second attempt)" })
+	if retry < 1 {
+		t.Fatal("the nix action has no second install attempt")
+	}
+
+	prev := steps[retry-1]
+	if prev.If != steps[retry].If || !strings.Contains(prev.Run, "sudo rm -rf /nix") {
+		t.Errorf("the step before the second attempt is %q (if %q): want `sudo rm -rf /nix` under the same if as the attempt (%q)", prev.Name, prev.If, steps[retry].If)
 	}
 }

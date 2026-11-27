@@ -80,3 +80,10 @@ test('nodes waiting for an API server restart are their own attention item, not 
 test('a blocked operation is an attention item', () => {
   assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: 'blocked' }), [{ kind: 'opPaused' }])
 })
+
+test('a failed installation read is an attention item, not a silent all-clear', () => {
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installationError: true }), [
+    { kind: 'installationUnreadable' },
+  ])
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installationError: false }), [])
+})

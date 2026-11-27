@@ -111,7 +111,9 @@ function Home({
   // The newer Ichor release the controller found, or null.
   const [release, setRelease] = useState<string | null>(null)
   // Automatic patching: whether it is on, and the automatic operation that halted it.
-  const [autoPatch, setAutoPatch] = useState<{ enabled: boolean; halted: string }>({ enabled: false, halted: '' })
+  const [autoPatch, setAutoPatch] = useState<{ enabled: boolean; halted: string } | null>({ enabled: false, halted: '' })
+  // Whether the installation could not be read: auto-patch and the installer check are then unknown.
+  const [installationError, setInstallationError] = useState(false)
   // Whether the installer image's signature was not checked.
   const [unverified, setUnverified] = useState(false)
   // What Talos and Kubernetes can move to, for the patch hints; null when the list could not be read.
@@ -161,10 +163,12 @@ function Home({
       setRelease(releaseNotice(info))
       setAutoPatch({ enabled: info.autoPatchEnabled, halted: info.autoPatchHaltedOperation })
       setUnverified(installerUnverified(info) !== null)
+      setInstallationError(false)
     } catch {
       setRelease(null)
       setUnverified(false)
-      setAutoPatch({ enabled: false, halted: '' })
+      setAutoPatch(null)
+      setInstallationError(true)
     }
   }
 
@@ -202,7 +206,7 @@ function Home({
   const cilium = versionOf('cilium')
   const notes = unavailableNotes(candidates)
   const patches = patchComponents(candidates)
-  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, apiRestartWaiting: apiRestart.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted, installerUnverified: unverified })
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, apiRestartWaiting: apiRestart.length, opState: currentState, patches, release, autoPatchHalted: autoPatch?.halted, installerUnverified: unverified, installationError })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
 
@@ -310,6 +314,12 @@ function Home({
                         <>
                           <AlertTitle>{t('home.attnInstallerUnverified')}</AlertTitle>
                           <AlertDescription>{t('home.attnInstallerUnverifiedHint')}</AlertDescription>
+                        </>
+                      )}
+                      {a.kind === 'installationUnreadable' && (
+                        <>
+                          <AlertTitle>{t('home.attnInstallationUnreadable')}</AlertTitle>
+                          <AlertDescription>{t('home.attnInstallationUnreadableHint')}</AlertDescription>
                         </>
                       )}
                       {a.kind === 'release' && (
@@ -454,7 +464,7 @@ function Home({
             <Card id="versions">
               <CardHeader>
                 <CardTitle>{t('home.versions')}</CardTitle>
-                {autoPatch.enabled && (
+                {autoPatch?.enabled && (
                   <CardAction>
                     <Badge variant="secondary">{t('versions.autoPatchOn')}</Badge>
                   </CardAction>

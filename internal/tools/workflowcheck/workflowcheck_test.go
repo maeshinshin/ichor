@@ -355,13 +355,90 @@ func TestDocsRunsForItsBuildInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	linked := docsLinksOutsideDocs(t)
+
 	for _, event := range []string{"push", "pull_request"} {
-		for _, want := range docsInputs {
-			if !slices.Contains(w.On[event].Paths, want) {
+		for _, want := range append(slices.Clone(docsInputs), linked...) {
+			if !slices.ContainsFunc(w.On[event].Paths, func(pat string) bool { return pathFilterMatches(pat, want) }) {
 				t.Errorf("docs.yml on.%s.paths lacks %q: a change to it would not run Docs", event, want)
 			}
 		}
 	}
+}
+
+// pathFilterMatches covers the two forms docs.yml uses: a file name, and a directory with `/**`.
+func pathFilterMatches(pattern, path string) bool {
+	if dir, ok := strings.CutSuffix(pattern, "/**"); ok {
+		return strings.HasPrefix(path, dir+"/")
+	}
+
+	return pattern == path
+}
+
+var mdLink = regexp.MustCompile(`\]\(([^)\s#]+)`)
+
+// docsLinksOutsideDocs lists the repository files that published docs pages link to outside docs/. The site build fails on
+// a broken relative link, so a change to one of them can break the build. docs/adr is not published.
+func docsLinksOutsideDocs(t *testing.T) []string {
+	t.Helper()
+
+	docs := filepath.Join(repoRoot, "docs")
+	seen := map[string]bool{}
+
+	err := filepath.WalkDir(docs, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() && p == filepath.Join(docs, "adr") {
+			return filepath.SkipDir
+		}
+
+		if d.IsDir() || !strings.HasSuffix(p, ".md") {
+			return nil
+		}
+
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+
+		for _, m := range mdLink.FindAllStringSubmatch(string(b), -1) {
+			if strings.Contains(m[1], ":") {
+				continue
+			}
+
+			target := filepath.Join(filepath.Dir(p), m[1])
+			if rel, _ := filepath.Rel(docs, target); !strings.HasPrefix(rel, "..") {
+				continue
+			}
+
+			if _, err := os.Stat(target); err != nil {
+				continue
+			}
+
+			rel, _ := filepath.Rel(repoRoot, target)
+			seen[filepath.ToSlash(rel)] = true
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(seen) == 0 {
+		t.Fatal("no docs page links outside docs/: the link scan is broken")
+	}
+
+	out := make([]string, 0, len(seen))
+	for p := range seen {
+		out = append(out, p)
+	}
+
+	slices.Sort(out)
+
+	return out
 }
 
 // The install action extracts with `tar --skip-old-files`: a file the failed first attempt left half-written is kept

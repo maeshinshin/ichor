@@ -210,3 +210,22 @@ func TestDecodedBundleClientCertificateIsBackdated(t *testing.T) {
 		t.Fatalf("NotBefore %s is not backdated (want before %s)", cert.NotBefore, want)
 	}
 }
+
+func TestDecodeRefusesAnIncompleteBundle(t *testing.T) {
+	for name, raw := range map[string]string{
+		"empty":       "{}",
+		"cluster id":  "cluster: {id: a}",
+		"talosconfig": "context: c\ncontexts:\n  c:\n    endpoints: [1.2.3.4]\n    ca: Zm9v\n",
+	} {
+		b, err := Decode([]byte(raw))
+		if err == nil || b != nil {
+			t.Errorf("%s: Decode = %v, %v, want a refusal", name, b, err)
+		} else if strings.Contains(err.Error(), "Zm9v") {
+			t.Errorf("%s: the error echoes the input: %v", name, err)
+		}
+	}
+
+	if _, err := Decode(marshalBundle(t, newTestBundle(t))); err != nil {
+		t.Errorf("a full bundle: %v", err)
+	}
+}

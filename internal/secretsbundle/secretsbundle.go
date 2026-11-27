@@ -114,6 +114,10 @@ func Decode(raw []byte) (*secrets.Bundle, error) {
 		return nil, err
 	}
 
+	if err := checkComplete(&bundle); err != nil {
+		return nil, err
+	}
+
 	// Bundle.Clock carries "yaml:\"-\"" (it is behavior, not data) and the machinery
 	// package's own populate() is the only other place that fills it in -- which only
 	// runs while building a brand-new bundle, never while decoding an existing one back
@@ -139,3 +143,33 @@ const clockSkew = 5 * time.Minute
 type backdatedClock struct{}
 
 func (backdatedClock) Now() time.Time { return time.Now().Add(-clockSkew) }
+
+// checkComplete refuses a bundle missing a member that rendering or the credentials dereference. It is a
+// nil check of exactly those members: machinery's Bundle.Validate wants a VersionContract and checks far more.
+// The error names the field and never carries the bytes.
+func checkComplete(b *secrets.Bundle) error {
+	missing := func(field string) error { return fmt.Errorf("secrets bundle is incomplete: %s is missing", field) }
+
+	switch {
+	case b.Cluster == nil:
+		return missing("cluster")
+	case b.Secrets == nil:
+		return missing("secrets")
+	case b.TrustdInfo == nil:
+		return missing("trustdinfo")
+	case b.Certs == nil:
+		return missing("certs")
+	case b.Certs.Etcd == nil:
+		return missing("certs.etcd")
+	case b.Certs.K8s == nil:
+		return missing("certs.k8s")
+	case b.Certs.K8sAggregator == nil:
+		return missing("certs.k8saggregator")
+	case b.Certs.K8sServiceAccount == nil:
+		return missing("certs.k8sserviceaccount")
+	case b.Certs.OS == nil:
+		return missing("certs.os")
+	}
+
+	return nil
+}

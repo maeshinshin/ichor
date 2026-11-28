@@ -20,6 +20,6 @@ ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 ```
 
 - `ichor bootstrap cni` refuses unless the cluster has no CNI (no CNI workload, no `CiliumNode` CRD, every node NotReady). It installs the pinned Cilium as Ichor's own Helm release (`cilium` in `kube-system`, record in `ichor-system`), waits for Ready nodes, and asks first unless `--yes`. Running it again is safe.
-- `--kube-proxy` is required: `enabled` if Talos runs kube-proxy, `replaced` if Talos disables it. The command has no Talos credentials, so it cannot read this. `--tunnel` is immutable afterwards.
+- `--kube-proxy` is required: `enabled` if Talos runs kube-proxy, `replaced` if Talos disables it. The command has no Talos credentials, so it cannot read this, and it does not delete a kube-proxy that is already running. Disable kube-proxy when you generate the machine config: setting it later stops Talos managing the DaemonSet but leaves it running, and Cilium and kube-proxy then route Services independently. If it runs, delete the `kube-proxy` DaemonSet and ConfigMap in `kube-system` before `replaced`. `--tunnel` is immutable afterwards.
 - KubePrism must be enabled on port 7445 on every node (the Talos default); adopt checks it later.
 - `ichor adopt` finds Cilium by its Ichor release record and checks tunnel and kube-proxy mode against it. What adopt does on a Helm install: [Adopt, when Ichor was installed with Helm](../adopt-a-cluster/with-helm.md).

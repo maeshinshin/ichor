@@ -16,11 +16,9 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - from:
-      - namespaceSelector:
-          matchLabels:
-            webhook: enabled
-      ports:
+    # No `from`: the apiserver calls from a node's address, which Cilium labels remote-node and no
+    # namespaceSelector or ipBlock matches (docs.cilium.io/en/stable/security/policy/layer3/). The webhook is TLS-only.
+    - ports:
         - port: {{ .Values.webhook.port }}
           protocol: TCP
 {{- end }}

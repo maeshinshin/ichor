@@ -296,3 +296,58 @@ func TestKustomizeCiliumPolicyPortsMatchTheBaseDeployments(t *testing.T) {
 	uiDeployment := loadYAMLDocs(t, "../../config/manager-ui/manager.yaml")[0]
 	requireSubset(t, "the ui policy", selectorLabels(specs["ui"]), podLabels(uiDeployment))
 }
+
+const ctrlMgrLabel = "controller-manager"
+
+// The apiserver reaches the webhook from a control-plane node's address, which Cilium labels
+// remote-node; no namespaceSelector matches it. So the plain NetworkPolicy opens the webhook port
+// to every source, and keeps the metrics port behind its namespaceSelector.
+func TestPlainNetworkPolicyWebhookPortHasNoFromRestriction(t *testing.T) {
+	docs := renderChartWithValues(t, "ichor", "networkPolicy.enabled=true", "networkPolicy.cilium.enabled=false",
+		usersOn, "ichorUI.users.externalURL=https://ichor.example.com")
+
+	policies := findAll(docs, "NetworkPolicy")
+	if len(policies) == 0 {
+		t.Fatal("no NetworkPolicy rendered")
+	}
+
+	var sawWebhook, sawMetricsFrom bool
+
+	for _, p := range policies {
+		spec, _ := p["spec"].(map[string]any)
+		sel, _ := spec["podSelector"].(map[string]any)
+		labels, _ := sel["matchLabels"].(map[string]any)
+
+		if labels["control-plane"] != ctrlMgrLabel {
+			continue
+		}
+
+		rules, _ := spec["ingress"].([]any)
+		for _, r := range rules {
+			rule, _ := r.(map[string]any)
+			from := rule["from"]
+
+			for _, port := range rule["ports"].([]any) {
+				switch fmt.Sprint(port.(map[string]any)["port"]) {
+				case "9443":
+					sawWebhook = true
+
+					if from != nil {
+						t.Errorf("%s: webhook port 9443 is limited by from=%v; the apiserver (remote-node) matches none",
+							nameOf(p), from)
+					}
+				case "8443":
+					sawMetricsFrom = from != nil
+				}
+			}
+		}
+	}
+
+	if !sawWebhook {
+		t.Error("no plain NetworkPolicy opens the webhook port")
+	}
+
+	if !sawMetricsFrom {
+		t.Error("the metrics rule lost its from restriction")
+	}
+}

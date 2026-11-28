@@ -97,6 +97,11 @@ is added or removed.
   version-skew check, like `approve node` and `apply`. Use a CLI of the running
   version. Reads are never refused.
 
+- **The plain webhook NetworkPolicy now opens the webhook port to every source.** With
+  the chart's Cilium policies off, the policy admits the apiserver, whose address a
+  NetworkPolicy cannot name, from any source. The `webhook: enabled` namespace label is
+  no longer needed.
+
 ### Controller
 
 - The kube-proxy switch, the Cilium upgrade and the hand-over's finish check agents
@@ -125,6 +130,9 @@ is added or removed.
 - A secrets bundle that decodes with a missing member is refused with an error that
   names the field and never carries the bytes.
 
+- Controller-made egress policies keep apiserver egress. They are removed within 30
+  seconds once the chart's Cilium policies go off.
+
 ### CLI
 
 - `ichor adopt`, when the operator cannot list Deployments, no longer calls a running
@@ -147,6 +155,9 @@ is added or removed.
   sign-in is already on and only the CA differs, it says the node's authenticator is
   updated to this install's issuer and CA.
 
+- `ichor adopt` names the permission that was refused (`list secrets` or
+  `list deployments`) instead of always `list deployments`.
+
 ### Webhooks
 
 - `TalosMachine.spec.hostname` refuses a label over 63 characters (a CRD rule), and the
@@ -154,6 +165,17 @@ is added or removed.
   IPv6 address.
 - A private key in a list-typed Cilium value is refused. An update keeps a stored
   list-form key editable.
+
+### Chart
+
+- The controller listens on `webhook.port`.
+- Without Cilium policies, the plain webhook NetworkPolicy admits the apiserver from
+  any source.
+- The default-deny CiliumNetworkPolicy is applied after the allow policies.
+
+### CNI
+
+- A null `podAnnotations` in the Cilium values no longer panics replaced mode.
 
 ### Docs
 
@@ -166,6 +188,9 @@ is added or removed.
   it installs Ichor when it is absent or its install is partial, and a running Ichor of
   another version is refused. ADR 0063 and ADR 0121 are amended for the per-target
   restart wait and the bounded sweep.
+
+- ADR 0063 and the CA and key rotation concepts page state the CA-rotation client
+  restart order the code uses: the CNI, then kube-proxy, CoreDNS and ichor-ui.
 
 ### CI
 

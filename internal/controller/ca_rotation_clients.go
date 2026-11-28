@@ -21,13 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -67,8 +67,8 @@ const (
 	ciliumOperatorName = "cilium-operator"
 )
 
-// caClientRestartTimeout is how long the restarted workloads get to become available again.
-// A variable so tests need not wait.
+// caClientRestartTimeout is how long each restarted workload gets to become available again (an OnDelete
+// DaemonSet: how long without another pod replaced). A variable so tests need not wait.
 var caClientRestartTimeout = 5 * time.Minute
 
 // caClient is one workload that is restarted.
@@ -118,7 +118,6 @@ func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note strin
 	}
 
 	token := string(c.op.UID)
-	var pending []string
 
 	targets, err := c.restartTargets(ctx)
 	if err != nil {
@@ -126,47 +125,98 @@ func (c *caRun) restartClients(ctx context.Context) (res ctrl.Result, note strin
 	}
 
 	// One at a time, in order: a workload is restarted only once the one before it is available again,
-	// so DNS and the proxy are never down together. On a wait, the later ones are not touched.
+	// so DNS and the proxy are never down together. A target that is out of its own wait is recorded as not
+	// back and the sequence goes on: a later workload is never skipped because an earlier one is stuck.
+	var notBack, waiting []string
+
 	for i, t := range targets {
-		ready, rerr := c.restartOne(ctx, t, token)
+		ready, progress, rerr := c.restartOne(ctx, t, token)
 		if rerr == nil && ready {
 			continue
 		}
 
+		desc := t.String()
 		if rerr != nil {
-			pending = append(pending, fmt.Sprintf("%s (%v)", t, rerr))
-		} else {
-			pending = append(pending, t.String())
+			desc += fmt.Sprintf(" (%v)", rerr)
 		}
 
+		if c.outOfWait(t, progress) {
+			notBack = append(notBack, desc)
+
+			continue
+		}
+
+		waiting = append(waiting, desc)
+
 		for _, later := range targets[i+1:] {
-			pending = append(pending, later.String()+" (not restarted yet)")
+			waiting = append(waiting, later.String()+" (not restarted yet)")
 		}
 
 		break
 	}
 
-	if len(pending) == 0 {
-		return ctrl.Result{}, "", true, nil
-	}
+	if len(waiting) == 0 {
+		c.dropClocks()
 
-	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
-	if cond == nil || cond.Reason != reasonCARotationRestarting || cond.Status != metav1.ConditionTrue {
-		// Start the clock: a removed condition gets a fresh transition time.
-		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
-	} else if time.Since(cond.LastTransitionTime.Time) > caClientRestartTimeout {
-		return ctrl.Result{}, "; not back after the restart: " + strings.Join(pending, ", "), true, nil
+		if len(notBack) == 0 {
+			return ctrl.Result{}, "", true, nil
+		}
+
+		return ctrl.Result{}, "; not back after the restart: " + strings.Join(notBack, ", "), true, nil
 	}
 
 	err = c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationRestarting,
-		"the old CAs are dropped; waiting for the clients restarted to load the new one: "+strings.Join(pending, ", "))
+		"the old CAs are dropped; waiting for the clients restarted to load the new one: "+strings.Join(append(notBack, waiting...), ", "))
 
 	return ctrl.Result{RequeueAfter: caClientPoll}, "", false, err
 }
 
+// caClock is one target's wait: when it began, and how many OnDelete replacements were Ready then.
+type caClock struct {
+	since    time.Time
+	progress int
+}
+
+// caClientClocks holds the waits, keyed by operation and target.
+// shortcut: in memory, so a controller restart restarts every wait (it only lengthens it); persist in status if that matters.
+var (
+	caClientClocksMu sync.Mutex
+	caClientClocks   = map[string]caClock{}
+	caClientNow      = time.Now // a variable so tests need not wait
+)
+
+// outOfWait reports whether t has gone caClientRestartTimeout without progress. The first poll that finds t not
+// back starts its clock; a changed progress (another OnDelete pod replaced) restarts it: only a stall times out.
+func (c *caRun) outOfWait(t caClient, progress int) bool {
+	key, now := string(c.op.UID)+"/"+t.String(), caClientNow()
+
+	caClientClocksMu.Lock()
+	defer caClientClocksMu.Unlock()
+
+	k, ok := caClientClocks[key]
+	if !ok || k.progress != progress {
+		caClientClocks[key] = caClock{now, progress}
+
+		return false
+	}
+
+	return now.Sub(k.since) > caClientRestartTimeout
+}
+
+func (c *caRun) dropClocks() {
+	caClientClocksMu.Lock()
+	defer caClientClocksMu.Unlock()
+
+	for k := range caClientClocks {
+		if strings.HasPrefix(k, string(c.op.UID)+"/") {
+			delete(caClientClocks, k)
+		}
+	}
+}
+
 // restartOne patches t's pod template unless it already carries token, and reports whether the rollout
 // is available. A t that does not exist counts as ready: there is nothing to wait for.
-func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready bool, err error) {
+func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready bool, progress int, err error) {
 	kc := c.r.KubeClient
 
 	var (
@@ -180,7 +230,7 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 	case kindDeployment:
 		d, gerr := kc.AppsV1().Deployments(t.namespace).Get(ctx, t.name, metav1.GetOptions{})
 		if gerr != nil {
-			return apierrors.IsNotFound(gerr), client.IgnoreNotFound(gerr)
+			return apierrors.IsNotFound(gerr), 0, client.IgnoreNotFound(gerr)
 		}
 
 		template, available = &d.Spec.Template.ObjectMeta, deploymentAvailable(d)
@@ -192,7 +242,7 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 	default:
 		d, gerr := kc.AppsV1().DaemonSets(t.namespace).Get(ctx, t.name, metav1.GetOptions{})
 		if gerr != nil {
-			return apierrors.IsNotFound(gerr), client.IgnoreNotFound(gerr)
+			return apierrors.IsNotFound(gerr), 0, client.IgnoreNotFound(gerr)
 		}
 
 		ds, template, available = d, &d.Spec.Template.ObjectMeta, daemonSetAvailable(d)
@@ -208,11 +258,11 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 			return c.replaceOnDeletePods(ctx, ds, token)
 		}
 
-		return available, nil
+		return available, 0, nil
 	}
 
 	// The patch just made the rollout; whatever status was read describes the previous one.
-	return false, patch(restartPatch(caRestartMarker, token))
+	return false, 0, patch(restartPatch(caRestartMarker, token))
 }
 
 // replaceOnDeletePods finishes the restart of an OnDelete DaemonSet, which replaces only the pods that are evicted:
@@ -220,42 +270,51 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 // DaemonSet restarted when none is left. One node at a time keeps the other agents serving. Old pods may be not Ready
 // (they no longer trust the API server's CA), so only a replacement (token on it) or a terminating pod is waited for.
 // A refused eviction (429, a PodDisruptionBudget) is asked again on the next poll.
-func (c *caRun) replaceOnDeletePods(ctx context.Context, ds *appsv1.DaemonSet, token string) (bool, error) {
+func (c *caRun) replaceOnDeletePods(ctx context.Context, ds *appsv1.DaemonSet, token string) (bool, int, error) {
 	sel, err := metav1.LabelSelectorAsSelector(ds.Spec.Selector)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 
 	pods, err := c.r.KubeClient.CoreV1().Pods(ds.Namespace).List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 
-	var old *corev1.Pod
+	var (
+		old      *corev1.Pod
+		inFlight bool
+		replaced int // Ready replacements: the progress that restarts the wait
+	)
 
 	for i := range pods.Items {
 		p := &pods.Items[i]
 		replacement := p.Annotations[caRestartMarker] == token
 
-		if p.DeletionTimestamp != nil || (replacement && !podIsReady(p)) {
-			return false, nil // the previous replacement is not back yet
-		}
-
-		if old == nil && !replacement {
+		switch {
+		case p.DeletionTimestamp != nil || (replacement && !podIsReady(p)):
+			inFlight = true // the previous replacement is not back yet
+		case replacement:
+			replaced++
+		case old == nil:
 			old = p
 		}
 	}
 
+	if inFlight {
+		return false, replaced, nil
+	}
+
 	if old == nil {
-		return daemonSetAvailable(ds), nil
+		return daemonSetAvailable(ds), replaced, nil
 	}
 
 	err = newDrainHelper(ctx, c.r.KubeClient, 0).EvictPod(*old, policyv1.SchemeGroupVersion)
 	if apierrors.IsTooManyRequests(err) {
-		return false, nil
+		return false, replaced, nil
 	}
 
-	return false, client.IgnoreNotFound(err)
+	return false, replaced, client.IgnoreNotFound(err)
 }
 
 func podIsReady(p *corev1.Pod) bool {

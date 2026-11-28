@@ -49,6 +49,9 @@ is added or removed.
   `CAClientsNotRestarted` condition name every one that is not back. On an `OnDelete`
   DaemonSet the wait restarts each time another agent pod is replaced Ready, so only a
   stall times out. The waits are held in memory, so a controller restart restarts them.
+  The `CAClientsNotRestarted` warning then lowers itself (reason `ClientsBack`) once
+  every workload it names is available again, instead of staying until the next
+  rotation.
 - **`TalosMachine.spec.hostname` refuses a label over 63 characters.** Each
   dot-separated label must be at most 63 characters, as Talos requires; the CRD says so
   at admission, so a longer one is refused when a machine is created or its hostname
@@ -96,6 +99,13 @@ is added or removed.
 - The Kubernetes upgrade's kube-proxy wait checks the DaemonSet's observed generation
   as well, so a read taken before the DaemonSet controller saw the new image is not
   taken for a finished rollout.
+- `CAClientsNotRestarted` lowers itself: the TalosCluster reconciler re-reads the
+  workloads the condition names on the cluster's regular reconcile (at least every
+  five minutes) while it is raised, and sets it False
+  with the reason `ClientsBack` once each is available on its current template. A
+  workload that no longer exists is not waited for. A failed re-read, such as a
+  Forbidden, is logged, leaves the condition as it is and never stops the reconcile.
+  ADR 0063 is amended.
 - The key rotation's Secret sweep ignores conflicts and pauses after 10 sweeps that
   still rewrite a Secret (see the upgrade notes).
 - A CA rotation on an `OnDelete` Cilium DaemonSet evicts the agent pods itself, one
@@ -153,6 +163,9 @@ is added or removed.
 
 ### UI
 
+- The operation page lists the operation's conditions and, for a running or paused
+  operation, shows a "Waiting" alert that says why it is waiting: the kube-proxy
+  switch's `OnDelete` remedy, and a pause reason that has no failure reason.
 - The Overview page shows an attention item, "The Ichor installation could not be
   read", when the IchorInstallation read fails. The auto-patch halt and the installer
   check are then unknown, and their warnings were hidden before; the auto-patch badge

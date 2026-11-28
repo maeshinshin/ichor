@@ -21,6 +21,19 @@ On a Cilium cluster, `ichor-system` is default-deny in both directions with one 
 - On a Cilium you manage with the L7 proxy off, a name is never allowed: set `networkPolicy.cilium.dynamicTalosEgress=false` to fall back to `world` rules, or `networkPolicy.cilium.enabled=false`.
 - `externalCIDRs` and `talosCIDRs` add fixed addresses beside the named ones.
 
+## Without Cilium policies
+
+With `networkPolicy.enabled=true` and `networkPolicy.cilium.enabled=false`, the chart renders two plain NetworkPolicies. They select the controller pods only.
+
+| Policy | Port | Allowed from |
+|---|---|---|
+| `ichor-allow-webhook-traffic` | webhook (9443) | every source |
+| `ichor-allow-metrics-traffic` | metrics (8443) | namespaces labelled `metrics: enabled` |
+
+- The webhook port has no source restriction. The apiserver calls it from a node's address, which Cilium labels `remote-node`; no namespace label or `ipBlock` matches that (an `ipBlock` skips pod and node IPs unless Cilium sets `policyCIDRMatchMode`). The webhook answers TLS admission reviews only.
+- To scrape the metrics port, label the scraper's namespace: `kubectl label namespace monitoring metrics=enabled`. The `webhook: enabled` label is not needed any more; an older release required it on the apiserver's side.
+- ichor-ui is selected by no plain policy: it is open on its port. It must be reachable from wherever users come from. To isolate it, use the Cilium policies (`networkPolicy.cilium.enabled=true`), which carry a `ui` policy.
+
 ## Metrics
 
 The controller's metrics port (8443) is closed to every pod until you name a scraper. The scraper also needs the `metrics-reader` ClusterRole. ichor-ui's `/metrics` shares the UI's port, so no network policy separates it; it answers only a caller whose token may `get` `/metrics`.

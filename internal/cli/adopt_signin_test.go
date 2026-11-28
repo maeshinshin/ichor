@@ -508,15 +508,7 @@ func TestAdoptSignIn_UnlistedDeploymentsAreNotLeftOver(t *testing.T) {
 	}
 
 	wc, _ := f.env.k8s.(client.WithWatch)
-	f.deps.K8s = interceptor.NewClient(wc, interceptor.Funcs{
-		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
-			if _, ok := list.(*appsv1.DeploymentList); ok {
-				return apierrors.NewForbidden(schema.GroupResource{Resource: "deployments"}, "", nil)
-			}
-
-			return c.List(ctx, list, o...)
-		},
-	})
+	f.deps.K8s = forbidDeploymentList(wc)
 
 	err := f.runSignIn()
 	if err == nil || strings.Contains(err.Error(), "left over") || !strings.Contains(err.Error(), "list deployments") {

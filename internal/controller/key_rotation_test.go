@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,7 +43,11 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -116,6 +121,7 @@ type keyWorld struct {
 
 	// sweeps is what each re-encryption sweep reports, in order; the last one repeats.
 	sweeps      []ReencryptResult
+	sweepWith   func(from ReencryptResult) (ReencryptResult, error) // when set, runs instead of sweeps
 	sweepCalls  int
 	sweepFroms  []ReencryptResult
 	sweepErr    error
@@ -306,6 +312,10 @@ func (w *keyWorld) reencrypt(_ context.Context, _ TalosClient, from ReencryptRes
 		return ReencryptResult{}, w.sweepErr
 	}
 
+	if w.sweepWith != nil {
+		return w.sweepWith(from)
+	}
+
 	if len(w.sweeps) == 0 {
 		return ReencryptResult{Scanned: 10}, nil
 	}
@@ -447,6 +457,8 @@ func (f *keyRotFixture) applyCountPerNodeAndHash() map[applyRecord]int {
 
 	return counts
 }
+
+const hotSecret = "hot"
 
 var _ = Describe("TalosOperation key-rotation", func() {
 	It("saves the new keys before any control plane is told to use them", func() {
@@ -687,13 +699,62 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 	It("keeps repeating the sweep until one rewrites nothing", func() {
 		f := newKeyRotFixture(fastBundle())
-		f.world.sweeps = []ReencryptResult{{Scanned: 9, Rewritten: 5}, {Scanned: 9, Conflicts: 2}, {Scanned: 9}}
+		f.world.sweeps = []ReencryptResult{{Scanned: 9, Rewritten: 5}, {Scanned: 9, Rewritten: 2}, {Scanned: 9}}
 
 		op := f.newOp(boxOnly)
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageDropping))
 
 		Expect(f.world.sweepCalls).To(Equal(3))
 		Expect(op.Status.KeyRotation.Reencryption.Sweeps).To(Equal(int32(3)))
+	})
+
+	// sweepOver runs the real sweep against a fake clientset whose Update reactor is the given one.
+	sweepOver := func(f *keyRotFixture, update k8stesting.ReactionFunc) {
+		cs := fake.NewSimpleClientset(secretIn("a", hotSecret, corev1.SecretTypeOpaque, nil), secretIn("a", "calm", corev1.SecretTypeOpaque, nil))
+		cs.PrependReactor("update", "secrets", update)
+		f.world.sweepWith = func(from ReencryptResult) (ReencryptResult, error) { return reencryptSweep(ctx, cs, from) }
+	}
+
+	It("the Reencrypting stage advances when a Secret conflicts on every sweep", func() {
+		f := newKeyRotFixture(fastBundle())
+		sweepOver(f, func(a k8stesting.Action) (bool, runtime.Object, error) {
+			if s := a.(k8stesting.UpdateAction).GetObject().(*corev1.Secret); s.Name == hotSecret {
+				return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "secrets"}, s.Name, errors.New("changed"))
+			}
+
+			return false, nil, nil
+		})
+
+		op := f.newOp(boxOnly)
+		_, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageDropping))
+
+		Expect(f.world.sweepCalls).To(Equal(1))
+	})
+
+	It("the Reencrypting stage pauses with a reason when a Secret is rewritten on every sweep", func() {
+		f := newKeyRotFixture(fastBundle())
+		n := 0
+		sweepOver(f, func(a k8stesting.Action) (bool, runtime.Object, error) {
+			s := a.(k8stesting.UpdateAction).GetObject().(*corev1.Secret)
+			if s.Name != hotSecret {
+				return false, nil, nil
+			}
+
+			n++
+			out := s.DeepCopy()
+			out.ResourceVersion = strconv.Itoa(n + 1) // a webhook changed it: the server stores it again
+
+			return true, out, nil
+		})
+
+		op := f.newOp(boxOnly)
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageReencrypting))
+		op = repeatStep(f.step, op, 2*keyReencryptMaxSweeps)
+
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageReencrypting), "the old key stays")
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(f.world.sweepCalls).To(Equal(keyReencryptMaxSweeps))
+		Expect(op.Status.FailureReason).To(And(ContainSubstring("a/"+hotSecret), ContainSubstring("mutating admission webhook")))
 	})
 
 	It("holds the old secretbox key while a sweep cannot finish, and resumes when it can", func() {

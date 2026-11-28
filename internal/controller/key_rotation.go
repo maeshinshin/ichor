@@ -99,6 +99,10 @@ const (
 	// keyRotationPoll is how often a restarting kube-apiserver is looked at.
 	keyRotationPoll = 10 * time.Second
 
+	// keyReencryptMaxSweeps is how many complete sweeps may each rewrite a Secret before the rotation pauses: a
+	// Secret a mutating webhook changes on every update never comes out clean.
+	keyReencryptMaxSweeps = 10
+
 	// keyReencryptTimeout bounds one sweep over every Secret.
 	keyReencryptTimeout = 10 * time.Minute
 
@@ -842,6 +846,13 @@ func (c *keyRun) reencrypt(ctx context.Context) (ctrl.Result, error) {
 	if res.Clean() {
 		return c.advance(ctx, ichorv1alpha1.KeyRotationStageReencrypting, fmt.Sprintf(
 			"every Secret is stored under the new key: sweep %d looked at %d Secret(s) and rewrote none", sweeps, res.Scanned))
+	}
+
+	if sweeps >= keyReencryptMaxSweeps {
+		// The old key stays: it is dropped only once every Secret is stored under the new one. A retry resumes with one more sweep.
+		return c.fail(ctx, fmt.Sprintf("%d sweeps in a row still rewrote Secrets (%d in the last), so the old secretbox key stays. "+
+			"Look for a mutating admission webhook that changes Secrets on update; the last sweep rewrote, among others: %s",
+			sweeps, res.Rewritten, strings.Join(res.Names, ", ")))
 	}
 
 	return ctrl.Result{RequeueAfter: keyRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,

@@ -81,6 +81,7 @@ spec:
         - --metrics-bind-address=0
         {{- end }}
         - --health-probe-bind-address=:8081
+        - --webhook-port={{ .Values.webhook.port }}
         # The controller creates the IchorInstallation once if it is absent, recorded as installed by
         # Helm.
         - --deployed-by=helm

@@ -90,6 +90,12 @@ is added or removed.
   waits with `SecretsBundleUnavailable`, and the error names the missing field
   (`cluster`, `secrets`, `trustdinfo`, `certs` and its members), instead of the
   controller panicking.
+- **A CLI more than one minor from the running Ichor now refuses the user, reclaim,
+  settings and credential-request commands.** `create`, `edit` and `delete user`,
+  `user set-password`, `user revoke-sessions`, `reclaim node`, `set settings`,
+  `create talosconfig` and `create credentials --acknowledge` are refused by the
+  version-skew check, like `approve node` and `apply`. Use a CLI of the running
+  version. Reads are never refused.
 
 ### Controller
 
@@ -121,6 +127,12 @@ is added or removed.
 
 ### CLI
 
+- `ichor adopt`, when the operator cannot list Deployments, no longer calls a running
+  Ichor "left over" and no longer advises deleting it. It uses the IchorInstallation's
+  installed version, or refuses as unconfirmed and names the missing permission.
+- The user, reclaim, settings and credential-request commands are refused by the
+  version-skew check when the CLI and server minors are too far apart, like the other
+  writing commands.
 - `ichor adopt` applies the install manifest again on a non-Helm install, in the
   sign-in step and in the write step, and notes "applied Ichor's install manifest to
   the existing install" when the IchorInstallation exists.

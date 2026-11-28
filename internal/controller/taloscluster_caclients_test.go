@@ -5,10 +5,14 @@ import (
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -44,6 +48,28 @@ var _ = Describe("CAClientsNotRestarted re-check", func() {
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal(reasonCAClientsBack))
 		Expect(cond.Message).To(ContainSubstring("Deployment kube-system/cilium-operator"))
+	})
+
+	It("lets the reconcile run on, condition unchanged, when reading a workload is forbidden", func() {
+		kc := fake.NewClientset()
+		kc.PrependReactor("get", "deployments", func(clienttesting.Action) (bool, runtime.Object, error) {
+			return true, nil, apierrors.NewForbidden(schema.GroupResource{Group: "apps", Resource: "deployments"}, ciliumOperatorName, nil)
+		})
+
+		cluster := newTestCluster("caclients-secret", "v1.14")
+		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type: ichorv1alpha1.ConditionCAClientsNotRestarted, Status: metav1.ConditionTrue, Reason: bundleStaleReason,
+			Message: "not back after the restart: Deployment kube-system/cilium-operator",
+		})
+		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+
+		res, err := reconcileCluster(&TalosClusterReconciler{Client: k8sClient, KubeClient: kc}, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(caClientsRecheck))
+
+		var got ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &got)).To(Succeed())
+		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, ichorv1alpha1.ConditionCAClientsNotRestarted)).To(BeTrue())
 	})
 
 	It("stays True while a named workload is still unavailable", func() {

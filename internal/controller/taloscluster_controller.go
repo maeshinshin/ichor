@@ -107,9 +107,10 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	// A failed re-check (a Forbidden Get, say) leaves the condition as it is and never stops the reconcile.
 	notBack, err := r.clearCAClients(ctx, &cluster)
 	if err != nil {
-		return ctrl.Result{}, err
+		ctrl.LoggerFrom(ctx).Error(err, "Could not re-check the workloads CAClientsNotRestarted names")
 	}
 
 	if err := sweepKubeProxyConsent(ctx, r.Client, r.Actor, &cluster); apierrors.IsForbidden(err) {

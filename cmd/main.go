@@ -630,6 +630,14 @@ func main() {
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader, Namespace: ns,
 		Repository: updateCheckRepository, List: relists, Settle: 3 * time.Second,
 	}), "Failed to add the release check")
+	// Controller-made egress policies are cut with the base policy: alone, each is a default-deny.
+	must(mgr.Add(&controller.StrandedPolicies{
+		Client: mgr.GetClient(), Namespace: ns,
+		Names: []string{
+			controller.DefaultReleaseCheckPolicyName, controller.DefaultInstallerImagePolicyName,
+			controller.DefaultUIEgressPolicyName, talosEgressPolicy, talosEgressPolicy + "-image-factory",
+		},
+	}), "Failed to add the stranded policy sweep")
 	// Automatic patch upgrades: off unless spec.autoPatch or the chart turns them on.
 	// The controller never writes a TalosCluster spec: the version and the operation are written as the
 	// ServiceAccount ichor-auto-patch, which the controller may impersonate (and only that one).

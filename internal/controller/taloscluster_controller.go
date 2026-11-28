@@ -25,6 +25,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,6 +82,9 @@ type TalosClusterReconciler struct {
 	// identity to the removal. Nil means no sweep.
 	Actor client.Client
 
+	// KubeClient reads the workloads CAClientsNotRestarted names, to lower it once they are back. Nil means no check.
+	KubeClient kubernetes.Interface
+
 	mu        sync.Mutex
 	firstSeen map[string]time.Time
 	now       func() time.Time // tests; nil means time.Now
@@ -103,6 +107,11 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	notBack, err := r.clearCAClients(ctx, &cluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := sweepKubeProxyConsent(ctx, r.Client, r.Actor, &cluster); apierrors.IsForbidden(err) {
 		// The ichor-consent-sweep identity does not exist (webhook.enabled=false): say so and reconcile on.
 		if r.Discovery != nil && r.Discovery.Recorder != nil {
@@ -114,6 +123,10 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if cluster.Spec.Discovery == nil {
+		if notBack {
+			return ctrl.Result{RequeueAfter: caClientsRecheck}, nil
+		}
+
 		return ctrl.Result{}, nil
 	}
 

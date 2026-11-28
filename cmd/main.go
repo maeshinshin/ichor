@@ -473,7 +473,7 @@ func main() {
 	sweepActor, err := client.New(sweepActorCfg, client.Options{Scheme: mgr.GetScheme()})
 	must(err, "Failed to create the consent sweep client")
 	must((&controller.TalosClusterReconciler{
-		Client: mgr.GetClient(), Actor: sweepActor,
+		Client: mgr.GetClient(), Actor: sweepActor, KubeClient: kubeClient,
 		Egress: egress,
 		Discovery: &controller.DiscoveryReconciler{
 			Client: mgr.GetClient(),

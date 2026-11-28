@@ -641,7 +641,7 @@ func TestCheckControllerNamespaceWhenItCannotBeTold(t *testing.T) {
 	forbidden := interceptor.Funcs{
 		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
 			if _, ok := list.(*appsv1.DeploymentList); ok {
-				return apierrors.NewForbidden(schema.GroupResource{Group: "apps", Resource: "deployments"}, "", errors.New("no list"))
+				return apierrors.NewForbidden(schema.GroupResource{Group: "apps", Resource: resDeployments}, "", errors.New("no list"))
 			}
 
 			return c.List(ctx, list, o...)

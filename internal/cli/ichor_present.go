@@ -54,9 +54,24 @@ type ichorPresence struct {
 	Release *release.Release
 	// Deployment is a controller Deployment carrying the chart's selector label.
 	Deployment *appsv1.Deployment
-	// Unlisted: the operator may not list Helm release Secrets or Deployments cluster-wide, so a
-	// missing Release or Deployment is no evidence that there is none.
-	Unlisted bool
+	// UnlistedSecrets / UnlistedDeployments: the operator may not list Helm release Secrets or
+	// Deployments cluster-wide, so a missing Release or Deployment is no evidence that there is none.
+	UnlistedSecrets, UnlistedDeployments bool
+}
+
+// Unlisted: either list was forbidden.
+func (p ichorPresence) Unlisted() bool { return p.UnlistedSecrets || p.UnlistedDeployments }
+
+// refusedPermissions names exactly the list permissions that were refused.
+func (p ichorPresence) refusedPermissions() string {
+	switch {
+	case p.UnlistedSecrets && p.UnlistedDeployments:
+		return "list secrets and list deployments"
+	case p.UnlistedSecrets:
+		return "list secrets"
+	}
+
+	return "list deployments"
 }
 
 func (p ichorPresence) Present() bool {
@@ -116,7 +131,7 @@ func (p ichorPresence) Version() string {
 // controller container's image. "" when neither says, or when no controller Deployment exists.
 // When Deployments could not be listed the status alone speaks: a missing Deployment is no evidence.
 func (p ichorPresence) runningVersion() string {
-	if p.Installation == nil || (p.Deployment == nil && !p.Unlisted) {
+	if p.Installation == nil || (p.Deployment == nil && !p.Unlisted()) {
 		return ""
 	}
 
@@ -211,7 +226,7 @@ func ichorPresent(ctx context.Context, c client.Reader) (ichorPresence, error) {
 			}
 		}
 	case apierrors.IsForbidden(err):
-		p.Unlisted = true
+		p.UnlistedSecrets = true
 	case !absent(err):
 		return p, fmt.Errorf("adopt: looking for a Helm release of Ichor: %w", err)
 	}
@@ -224,7 +239,7 @@ func ichorPresent(ctx context.Context, c client.Reader) (ichorPresence, error) {
 			p.Deployment = &deploys.Items[0]
 		}
 	case apierrors.IsForbidden(err):
-		p.Unlisted = true
+		p.UnlistedDeployments = true
 	case !absent(err):
 		return p, fmt.Errorf("adopt: looking for Ichor's controller Deployment: %w", err)
 	}
@@ -283,10 +298,10 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 // by `ichor upgrade ichor`. A partial install (no IchorInstallation or no controller Deployment), an
 // unknown version and a dev build (semverOf is "", as on the Helm path) are applied.
 func (p ichorPresence) refuseReapply(cliVersion string) error {
-	if p.Installation != nil && p.Deployment == nil && p.Unlisted && p.runningVersion() == "" && semverOf(cliVersion) != "" {
-		return errors.New("adopt: an IchorInstallation exists but its status reports no version, and the operator may not list Deployments " +
-			"(permission: list deployments, cluster-wide), so the running Ichor's version cannot be confirmed; " +
-			"run adopt again as an operator who can list Deployments; nothing was written")
+	if p.Installation != nil && p.Deployment == nil && p.Unlisted() && p.runningVersion() == "" && semverOf(cliVersion) != "" {
+		return fmt.Errorf("adopt: an IchorInstallation exists but its status reports no version, and the operator may not list "+
+			"what shows whether Ichor runs (permission: %s, cluster-wide), so the running Ichor's version cannot be confirmed; "+
+			"run adopt again as an operator who can list them; nothing was written", p.refusedPermissions())
 	}
 
 	have, want := semverOf(p.runningVersion()), semverOf(cliVersion)
@@ -322,7 +337,7 @@ func checkControllerNamespace(ctx context.Context, c client.Reader, install *ado
 	switch {
 	case p.Release != nil || p.Deployment != nil:
 		want = p.Namespace()
-	case !p.Present() && !p.Unlisted && install != nil:
+	case !p.Present() && !p.Unlisted() && install != nil:
 		want = cmp.Or(install.Namespace, ichorControllerNamespace)
 	}
 

@@ -214,3 +214,26 @@ func TestDetectKubeProxy(t *testing.T) {
 		t.Error("managed with no cilium-config: want an error")
 	}
 }
+
+func TestDetectKubeProxy_LiveDaemonSet(t *testing.T) {
+	kp := testDS("kube-proxy", "registry.k8s.io/kube-proxy:v1.34.1")
+
+	// Talos says disabled but the DaemonSet still runs: Cilium replacement would run beside it.
+	for _, unmanaged := range []bool{false, true} {
+		got, err := detectKubeProxy(factsFor(t, ciliumCM(kprTrue), kp), false, unmanaged)
+		if err == nil || got != "" || !strings.Contains(err.Error(), "kube-system/kube-proxy") ||
+			!strings.Contains(err.Error(), "ichor set kube-proxy replaced") {
+			t.Errorf("disabled + live kube-proxy (unmanaged=%v): got %q, %v; want a refusal naming the DaemonSet and the remedy", unmanaged, got, err)
+		}
+	}
+
+	// Control: disabled and no DaemonSet is replaced.
+	if got, err := detectKubeProxy(factsFor(t, ciliumCM(kprTrue)), false, false); err != nil || got != string(cni.KubeProxyReplaced) {
+		t.Errorf("disabled, no DaemonSet: got %q, %v; want replaced", got, err)
+	}
+
+	// Enabled with the DaemonSet is the ordinary case.
+	if got, err := detectKubeProxy(factsFor(t, ciliumCM("false"), kp), true, false); err != nil || got != string(cni.KubeProxyEnabled) {
+		t.Errorf("enabled + DaemonSet: got %q, %v; want enabled", got, err)
+	}
+}

@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Field as FormField, FieldLabel } from '@/components/ui/field'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { PageTitle } from '@/components/PageTitle'
@@ -23,7 +24,7 @@ import { credentialsPanel } from '@/lib/credentials'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
-import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
+import { formatDuration, nodePath, operationWaiting, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
 import { mayControlOperation } from '@/lib/actions'
 import { awaitingApproval, caStageProgress, keyStageProgress, kubernetesStageProgress, nextPollMs, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
@@ -118,6 +119,7 @@ export function OperationDetail({ name }: { name: string }) {
   if (!op) return <PageSkeleton label={t('ops.loading')} />
 
   const state = operationState(op.phase, op.failureReason, op.conditions)
+  const waiting = operationWaiting(op)
   const shownEvents = visibleEvents(events ?? [], warningsOnly)
   const title = op.summary || summaryFallback(op.ref?.name ?? name, enumLabel(OperationKind, op.kind), op.nodeMachine?.name)
   const { done, running } = progressCounts(op.machines)
@@ -226,6 +228,13 @@ export function OperationDetail({ name }: { name: string }) {
             <AlertDescription>{t('ops.awaitingApprovalHint')}</AlertDescription>
           </Alert>
         )}
+        {waiting && (
+          <Alert>
+            <InfoIcon />
+            <AlertTitle>{t('ops.waiting')}</AlertTitle>
+            <AlertDescription>{waiting}</AlertDescription>
+          </Alert>
+        )}
         {state === 'failed' && (
           <Alert variant="destructive">
             <CircleXIcon />
@@ -258,6 +267,15 @@ export function OperationDetail({ name }: { name: string }) {
                 </div>
               ))}
             </ItemGroup>
+          </CardContent>
+        </Card>
+
+        <Card id="conditions" className="scroll-mt-section">
+          <CardHeader>
+            <CardTitle>{t('cluster.conditions')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ConditionList conditions={op.conditions} />
           </CardContent>
         </Card>
 

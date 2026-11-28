@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from './operationDetail.ts'
+import { formatDuration, nodePath, operationWaiting, spanMs, summaryFallback, visibleEvents } from './operationDetail.ts'
 
 test('durations read as seconds, minutes or hours', () => {
   assert.equal(formatDuration(0), '0s')
@@ -37,4 +37,22 @@ test('the warning filter keeps only Warnings', () => {
 
 test('a machine row links to its node page', () => {
   assert.equal(nodePath('talos-02'), '/nodes/talos-02')
+})
+
+const cond = (type: string, status: string, reason: string, message: string) => ({ type, status, reason, message })
+
+test('a running operation waiting on VerifyingNewSide/NewSideNotReady returns that message', () => {
+  const op = { phase: 'InProgress', failureReason: '', conditions: [cond('VerifyingNewSide', 'True', 'NewSideNotReady', 'delete the agent pod, one node at a time')] }
+  assert.equal(operationWaiting(op), 'delete the agent pod, one node at a time')
+})
+
+test('a paused operation with no failure reason returns the Paused condition message', () => {
+  const op = { phase: 'Paused', failureReason: '', conditions: [cond('Paused', 'True', 'ClusterLockHeld', 'another operation holds the cluster lock')] }
+  assert.equal(operationWaiting(op), 'another operation holds the cluster lock')
+})
+
+test('a running operation with no waiting condition returns nothing', () => {
+  assert.equal(operationWaiting({ phase: 'InProgress', failureReason: '', conditions: [] }), undefined)
+  // The controller writes False/Verified once the wait is over.
+  assert.equal(operationWaiting({ phase: 'InProgress', failureReason: '', conditions: [cond('VerifyingNewSide', 'False', 'Verified', 'satisfied')] }), undefined)
 })

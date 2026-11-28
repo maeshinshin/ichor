@@ -1169,7 +1169,7 @@ func (c *caRun) setClientsNotRestarted(ctx context.Context, notBack bool, messag
 	}
 
 	cond := metav1.Condition{
-		Type: ichorv1alpha1.ConditionCAClientsNotRestarted, Status: metav1.ConditionFalse, Reason: "Restarted",
+		Type: ichorv1alpha1.ConditionCAClientsNotRestarted, Status: metav1.ConditionFalse, Reason: reasonCAClientsBack,
 		Message: "the clients restarted after the last CA rotation are back", ObservedGeneration: c.cluster.Generation,
 	}
 	if notBack {

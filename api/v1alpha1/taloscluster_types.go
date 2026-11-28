@@ -200,7 +200,7 @@ type TalosClusterRegistry struct {
 	// carries both mirror and auth, so "*" is only meaningful when authSecretRef is unset.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=255
-	// +kubebuilder:validation:XValidation:rule="self == '*' || self.matches('^([a-zA-Z0-9.-]+|\\\\[[0-9a-fA-F:.]+\\\\])(:[0-9]{1,5})?$')",message="host must be \"*\" or a hostname or bracketed IPv6 address, with an optional :port"
+	// +kubebuilder:validation:XValidation:rule="self == '*' || self.matches('^([a-zA-Z0-9.-]+|\\\\[[0-9a-fA-F:.]*:[0-9a-fA-F:.]*:[0-9a-fA-F:.]*\\\\])(:([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?$')",message="host must be \"*\" or a hostname or bracketed IPv6 address, with an optional :port from 1 to 65535"
 	// +required
 	Host string `json:"host"`
 

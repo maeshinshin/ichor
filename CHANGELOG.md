@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.3.7 (2026-11-29)
+
+A patch release of fixes to v0.3.6. No CRD field is added or removed.
+
+### Fixes
+
+- `ichor adopt` refuses a cluster whose Talos config disables kube-proxy while the
+  `kube-system/kube-proxy` DaemonSet still runs, instead of recording
+  `spec.cni.kubeProxy: replaced` beside it.
+- `ichor bootstrap cni --kube-proxy replaced` refuses to install Cilium while the
+  `kube-system/kube-proxy` DaemonSet still runs.
+- A `TalosCluster` registry host port must be 1-65535, and a bracketed host must be an
+  IPv6 literal. Stored values are not re-checked until edited.
+- `CAClientsNotRestarted` is set False with the documented reason `ClientsBack` when a
+  later CA rotation's clients come back.
+
+### Docs
+
+- The no-CNI guide says how to remove a running kube-proxy before choosing `replaced`.
+
 ## v0.3.6 (2026-11-28)
 
 A patch release of fixes to v0.3.5: `ichor adopt` finishes an Ichor install that an

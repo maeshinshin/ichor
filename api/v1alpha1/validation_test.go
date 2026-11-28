@@ -521,6 +521,22 @@ var _ = Describe("TalosCluster", func() {
 		}
 	})
 
+	It("rejects a registry host with a port outside 1-65535 or a bracket that is not IPv6", func() {
+		for _, h := range []string{"host:65536", "host:99999", "host:0", "[:]", "[.]", "[1.2.3.4]", "[1.2.3.4]:5000"} {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.Registries = []TalosClusterRegistry{{Host: h, Endpoints: []string{testMirrorEndpoint}}}
+			Expect(k8sClient.Create(context.Background(), c)).NotTo(Succeed(), h)
+		}
+	})
+
+	It("accepts registry hosts at the edges of the rule", func() {
+		for _, h := range []string{"[::1]:5000", "[fd00::1]", "host:65535", "host:1", testRegistryHost, "*"} {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.Registries = []TalosClusterRegistry{{Host: h, Endpoints: []string{testMirrorEndpoint}}}
+			Expect(k8sClient.Create(context.Background(), c)).To(Succeed(), h)
+		}
+	})
+
 	It("rejects a host that is neither \"*\" nor a hostname[:port]", func() {
 		c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 		c.Spec.Registries = []TalosClusterRegistry{{Host: "not a host/with slash", Endpoints: []string{testMirrorEndpoint}}}

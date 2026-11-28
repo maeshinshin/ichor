@@ -389,6 +389,23 @@ var _ = Describe("TalosOperation one-shot cluster conditions", func() {
 		Expect(serverHas(f, ichorv1alpha1.ConditionBundleBackupStale)).To(BeTrue())
 	})
 
+	It("setClientsNotRestarted lowers the condition with the ClientsBack reason", func() {
+		f, _ := restartFixture(ciliumNodes)
+		staleAndOther(f, ichorv1alpha1.ConditionCAClientsNotRestarted)
+		seeded := &ichorv1alpha1.TalosCluster{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, seeded)).To(Succeed())
+		run := &caRun{r: f.newReconciler(), cluster: seeded, op: &ichorv1alpha1.TalosOperation{}}
+
+		Expect(run.setClientsNotRestarted(ctx, false, "")).To(Succeed())
+
+		var live ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &live)).To(Succeed())
+		cond := apimeta.FindStatusCondition(live.Status.Conditions, ichorv1alpha1.ConditionCAClientsNotRestarted)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("ClientsBack"))
+	})
+
 	It("raiseBundleBackupStale keeps a condition another writer raised after the cluster was read", func() {
 		f, _ := restartFixture(ciliumNodes)
 		stale := staleAndOther(f, ichorv1alpha1.ConditionCAClientsNotRestarted)

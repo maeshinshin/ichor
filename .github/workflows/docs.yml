@@ -89,7 +89,8 @@ jobs:
         run: nix develop --command make docs-site-all
 
       # The release's own archives, so the digests baked into them stay; a tag whose chart is not in
-      # ghcr (no release, a failed publish) is skipped. The index is written even when empty, so
+      # ghcr is skipped only when it has no published release; a published release without its chart, or a gh
+      # failure other than "release not found", fails the step. The index is written even when empty, so
       # `helm repo add` works before the first release.
       - name: Helm repository
         env:
@@ -100,11 +101,20 @@ jobs:
           mkdir -p site/dist-all/charts
           for tag in $(git tag -l "v*"); do
             [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
-            # a chart can reach ghcr from a release that never finished; only a published release counts
-            [[ $(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null) == false ]] \
+            # a chart can reach ghcr from a release that never finished; only a published release counts.
+            # No release or a draft skips the tag; any other gh failure fails the step.
+            draft=$(gh release view "$tag" --json isDraft --jq '.isDraft' 2>&1) || {
+              [[ $draft == *"release not found"* ]] || { echo "::error::gh release view $tag: $draft"; exit 1; }
+              draft=true
+            }
+            [[ $draft == false ]] \
               || { echo "::warning::$tag has no published GitHub release, left out of the Helm repository"; continue; }
-            helm pull oci://ghcr.io/maeshinshin/charts/ichor --version "${tag#v}" -d site/dist-all/charts \
-              || echo "::warning::no chart for $tag in ghcr, left out of the Helm repository"
+            # a published release has its chart (publish pushes it first), so a pull that keeps failing fails the step
+            for attempt in 1 2 3; do
+              helm pull oci://ghcr.io/maeshinshin/charts/ichor --version "${tag#v}" -d site/dist-all/charts && continue 2
+              sleep 5
+            done
+            echo "::error::no chart for the published release $tag in ghcr"; exit 1
           done
           helm repo index site/dist-all/charts --url https://ichor.maesh.dev/charts
           EOF

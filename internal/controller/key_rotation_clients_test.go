@@ -132,8 +132,8 @@ func TestReencryptSweepLeavesConflictsAndNotFoundsToTheNextSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A Secret that changed under the sweep was not looked at; the sweep is not clean.
-	if got.Conflicts != 1 || got.Rewritten != 0 || got.Clean() {
+	// A Secret that changed under the sweep was stored by its other writer under the new key: the sweep is clean.
+	if got.Conflicts != 1 || got.Rewritten != 0 || !got.Clean() {
 		t.Fatalf("%+v", got)
 	}
 

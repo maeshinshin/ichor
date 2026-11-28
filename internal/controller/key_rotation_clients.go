@@ -41,16 +41,23 @@ type ReencryptResult struct {
 	// Rewritten is how many of them the API server stored again: their resourceVersion changed, which it does
 	// only for a Secret that another key than the current one had encrypted.
 	Rewritten int64
-	// Conflicts is how many changed while they were being updated, so this pass did not look at them.
+	// Conflicts is how many changed while they were being updated, so this pass did not look at them. Another
+	// writer stored each of them after the new key was the write key (ADR 0121, section 3), so they do not make a pass unclean.
 	Conflicts int64
+	// Names is the "namespace/name" of the first Secrets rewritten, up to reencryptNamesShown, of the last call; not kept in status.
+	Names []string
 	// Continue is where the pass stopped: the list continue token of the next page. Empty means the pass is complete.
 	Continue string
 }
 
-// Clean reports whether the pass proves no Secret is left under the old key: it is complete, wrote nothing and left nothing out.
+// Clean reports whether the pass proves no Secret is left under the old key: it is complete and wrote nothing.
+// A Conflict does not count: the write that caused it was encrypted with the new key.
 func (r ReencryptResult) Clean() bool {
-	return r.Continue == "" && r.Rewritten == 0 && r.Conflicts == 0
+	return r.Continue == "" && r.Rewritten == 0
 }
+
+// reencryptNamesShown is how many rewritten Secrets a pause names.
+const reencryptNamesShown = 5
 
 // ReencryptSecretsFunc continues a pass over every Secret in the cluster that talos belongs to from where `from`
 // stopped (a zero `from` starts a pass), updating each with its own content so that the API server stores it
@@ -157,6 +164,10 @@ func reencryptSweep(ctx context.Context, cs kubernetes.Interface, from Reencrypt
 
 			if updated.ResourceVersion != secret.ResourceVersion {
 				res.Rewritten++
+
+				if len(res.Names) < reencryptNamesShown {
+					res.Names = append(res.Names, secret.Namespace+"/"+secret.Name)
+				}
 			}
 		}
 

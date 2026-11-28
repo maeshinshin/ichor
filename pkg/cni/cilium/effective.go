@@ -158,7 +158,14 @@ func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
 	// valuesFor puts the kube-proxy annotation among the defaults (see kubeProxyModeAnnotation); a user value for it
 	// is overwritten here, the rest of podAnnotations is the user's. The merge returned a fresh map.
 	if kubeProxy == cni.KubeProxyReplaced {
-		eff["podAnnotations"].(map[string]any)[kubeProxyModeAnnotation] = string(kubeProxy)
+		// A user null (or other non-map) replaces the default map; start a fresh one holding only Ichor's annotation.
+		pa, ok := eff["podAnnotations"].(map[string]any)
+		if !ok {
+			pa = map[string]any{}
+			eff["podAnnotations"] = pa
+		}
+
+		pa[kubeProxyModeAnnotation] = string(kubeProxy)
 	}
 
 	return eff, nil

@@ -191,6 +191,10 @@ is added or removed.
 
 - ADR 0063 and the CA and key rotation concepts page state the CA-rotation client
   restart order the code uses: the CNI, then kube-proxy, CoreDNS and ichor-ui.
+- The network policy guide says that turning the Cilium policies on drops an existing
+  connection that no rule allows, such as the controller's open connection to an
+  external host, because every pod in `ichor-system` moves to default deny and the
+  connection reconnects.
 
 ### CI
 

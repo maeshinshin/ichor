@@ -21,6 +21,8 @@ On a Cilium cluster, `ichor-system` is default-deny in both directions with one 
 - On a Cilium you manage with the L7 proxy off, a name is never allowed: set `networkPolicy.cilium.dynamicTalosEgress=false` to fall back to `world` rules, or `networkPolicy.cilium.enabled=false`.
 - `externalCIDRs` and `talosCIDRs` add fixed addresses beside the named ones.
 
+Turning the Cilium policies on switches every pod in `ichor-system` to default deny, so a connection that already exists and that no rule allows (for example the controller's open connection to an external host) is dropped and reconnects. This is Cilium's documented behaviour: an endpoint [transitions to a default-deny state](https://docs.cilium.io/en/stable/security/policy/intro/) when the first policy selects it.
+
 ## Without Cilium policies
 
 With `networkPolicy.enabled=true` and `networkPolicy.cilium.enabled=false`, the chart renders two plain NetworkPolicies. They select the controller pods only.

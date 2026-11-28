@@ -50,6 +50,7 @@ const (
 	uiPatchKey      = "deployments/ichor-ichor-ui"
 
 	operatorPatchKey = "deployments/cilium-operator"
+	ciliumPatchKey   = "daemonsets/cilium"
 )
 
 // restartFixture is a CA rotation whose in-cluster clients are a fake clientset: CoreDNS and ichor-ui
@@ -130,7 +131,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		op, _ = f.runUntil(op, completed)
 		Expect(patchCount(kc)).To(Equal(map[string]int{
-			corednsPatchKey: 1, "daemonsets/cilium": 1, operatorPatchKey: 1, uiPatchKey: 1,
+			corednsPatchKey: 1, ciliumPatchKey: 1, operatorPatchKey: 1, uiPatchKey: 1,
 		}))
 
 		d, err := kc.AppsV1().Deployments(kubeSystemNamespace).Get(ctx, corednsName, metav1.GetOptions{})
@@ -159,7 +160,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 
 		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageFinalizing))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("cilium"))
-		Expect(patchCount(kc)["daemonsets/cilium"]).To(Equal(1), "waiting must not restart again")
+		Expect(patchCount(kc)[ciliumPatchKey]).To(Equal(1), "waiting must not restart again")
 		Expect(patchCount(kc)).NotTo(HaveKey(corednsPatchKey), "CoreDNS waits for the CNI to be available: it stays Pending on the agent-not-ready taint")
 		Expect(patchCount(kc)).NotTo(HaveKey(uiPatchKey), "ichor-ui waits for the CNI to be available")
 
@@ -176,7 +177,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 	})
 
 	It("on an OnDelete cilium DaemonSet evicts the old agent pods, which are not Ready, one node at a time", func() {
-		kc, op, replaced, maxGone := onDeleteRotation(0)
+		kc, op, replaced, maxGone := onDeleteRotation(0, ciliumNodes, true, nil)
 
 		Expect(completed(op)).To(BeTrue())
 		Expect(replaced).To(Equal(ciliumNodes), "every agent pod was replaced before the rotation completed")
@@ -188,8 +189,31 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		}
 	})
 
+	It("CA rotation restarts every later client even after an earlier one ran out its wait", func() {
+		advanceCAClock(10*time.Second, 40*time.Second)
+
+		kc, op, _, _ := onDeleteRotation(0, ciliumNodes, false, caClockTick)
+
+		Expect(completed(op)).To(BeTrue())
+		Expect(patchCount(kc)).To(Equal(map[string]int{
+			ciliumPatchKey: 1, operatorPatchKey: 1, "daemonsets/kube-proxy": 1, corednsPatchKey: 1, uiPatchKey: 1,
+		}))
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(
+			And(ContainSubstring("not back after the restart"), ContainSubstring("cilium")))
+	})
+
+	It("does not time out an OnDelete DaemonSet that keeps replacing pods, however long the whole takes", func() {
+		advanceCAClock(100*time.Second, 40*time.Second)
+
+		_, op, replaced, _ := onDeleteRotation(0, 8, true, caClockTick)
+
+		Expect(completed(op)).To(BeTrue())
+		Expect(replaced).To(Equal(8))
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).NotTo(ContainSubstring("not back"))
+	})
+
 	It("waits while a PodDisruptionBudget refuses the first eviction, then completes", func() {
-		kc, op, replaced, _ := onDeleteRotation(2)
+		kc, op, replaced, _ := onDeleteRotation(2, ciliumNodes, true, nil)
 
 		Expect(completed(op)).To(BeTrue())
 		Expect(replaced).To(Equal(ciliumNodes))
@@ -229,7 +253,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 			}
 		}
 
-		Expect(order).To(Equal([]string{"daemonsets/cilium", operatorPatchKey, corednsPatchKey, uiPatchKey}))
+		Expect(order).To(Equal([]string{ciliumPatchKey, operatorPatchKey, corednsPatchKey, uiPatchKey}))
 	})
 
 	It("starts no restart until the Nodes have stayed Ready for the settle window, asked live", func() {
@@ -378,7 +402,7 @@ var _ = Describe("TalosOperation one-shot cluster conditions", func() {
 // onDeleteRotation runs a CA rotation over an OnDelete cilium DaemonSet whose old pods are not Ready (the old agents
 // do not trust the new CA). The fake has no DaemonSet controller: an evicted pod is deleted, and recreated on the new
 // template, Ready. The first refuse evictions answer 429, as a PodDisruptionBudget does.
-func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOperation, replaced, maxGone int) {
+func onDeleteRotation(refuse, nodes int, replacementReady bool, tick func()) (kc *fake.Clientset, op *ichorv1alpha1.TalosOperation, replaced, maxGone int) {
 	f, kc := restartFixture(ciliumNodes)
 	sel := map[string]string{"k8s-app": ciliumName}
 
@@ -387,13 +411,19 @@ func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOp
 
 	ds.Spec.UpdateStrategy.Type = appsv1.OnDeleteDaemonSetStrategyType
 	ds.Spec.Selector = &metav1.LabelSelector{MatchLabels: sel}
+	ds.Status.DesiredNumberScheduled, ds.Status.NumberAvailable = int32(nodes), int32(nodes)
 	ds.Status.UpdatedNumberScheduled = 0 // what the template patch leaves: no pod matches it
 	_, err = kc.AppsV1().DaemonSets(kubeSystemNamespace).Update(ctx, ds, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
+	_, err = kc.AppsV1().DaemonSets(kubeSystemNamespace).Create(ctx, &appsv1.DaemonSet{
+		Namespace: kubeSystemNamespace, Name: kubeProxyName, Generation: 1, Status: appsv1.DaemonSetStatus{ObservedGeneration: 1},
+	}, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
 	newPod := func(name, token string) *corev1.Pod {
 		ready := corev1.ConditionFalse
-		if token != "" {
+		if token != "" && replacementReady {
 			ready = corev1.ConditionTrue
 		}
 
@@ -406,7 +436,7 @@ func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOp
 		return p
 	}
 
-	for i := range ciliumNodes {
+	for i := range nodes {
 		_, err = kc.CoreV1().Pods(kubeSystemNamespace).Create(ctx, newPod(fmt.Sprintf("cilium-%d", i), ""), metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -431,14 +461,14 @@ func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOp
 
 	op = f.newOp()
 
-	for range 80 {
+	for range 200 {
 		op = f.step(op)
 
 		pods, lerr := kc.CoreV1().Pods(kubeSystemNamespace).List(ctx, metav1.ListOptions{})
 		Expect(lerr).NotTo(HaveOccurred())
-		maxGone = max(maxGone, ciliumNodes-len(pods.Items))
+		maxGone = max(maxGone, nodes-len(pods.Items))
 
-		for i := len(pods.Items); i < ciliumNodes; i++ {
+		for i := len(pods.Items); i < nodes; i++ {
 			_, err = kc.CoreV1().Pods(kubeSystemNamespace).Create(ctx, newPod(fmt.Sprintf("cilium-new-%d", replaced), string(op.UID)), metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -450,6 +480,10 @@ func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOp
 			Expect(err).NotTo(HaveOccurred())
 		}
 
+		if tick != nil {
+			tick()
+		}
+
 		if completed(op) {
 			break
 		}
@@ -457,3 +491,18 @@ func onDeleteRotation(refuse int) (kc *fake.Clientset, op *ichorv1alpha1.TalosOp
 
 	return kc, op, replaced, maxGone
 }
+
+var caFakeNow time.Time
+
+// advanceCAClock gives the restart waits a fake clock and a timeout; caClockTick moves it by step.
+func advanceCAClock(timeout, step time.Duration) {
+	oldTimeout, oldNow := caClientRestartTimeout, caClientNow
+	caFakeNow, caClientRestartTimeout, caClockStep = time.Now(), timeout, step
+	caClientNow = func() time.Time { return caFakeNow }
+
+	DeferCleanup(func() { caClientRestartTimeout, caClientNow = oldTimeout, oldNow })
+}
+
+var caClockStep time.Duration
+
+func caClockTick() { caFakeNow = caFakeNow.Add(caClockStep) }

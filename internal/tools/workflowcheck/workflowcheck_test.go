@@ -317,6 +317,7 @@ var nixExempt = map[string]string{
 	".github/workflows/test-chart.yml: Show why the deploy failed":                                     "failure diagnostics; every line is best effort",
 	".github/workflows/cilium-patch.yml: Open or update the issue":                                     "a job without a checkout; it only runs the runner's gh",
 	".github/actions/nix/action.yml: Empty /nix before the second attempt":                             "runs before Nix exists",
+	".github/workflows/renovate-notices.yml: Commit and push when they changed":                        "a job without Nix; it only runs git, to keep repository code away from the write token",
 	".github/workflows/cilium-patch.yml: Apply the patch":                                              "a job without Nix; it only runs git, to keep repository code away from the write token",
 	".github/actions/nix/action.yml: Free disk space":                                                  "runs before Nix exists",
 	".github/actions/nix/action.yml: Keep the devShell and the flake inputs out of garbage collection": "builds the dev shell profile itself",

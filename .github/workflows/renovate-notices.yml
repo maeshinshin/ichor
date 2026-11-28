@@ -1,0 +1,99 @@
+name: Renovate notices
+
+# Renovate's gomod and npm updates change go.mod and ui/package-lock.json, which THIRD-PARTY-NOTICES records, and hosted
+# Renovate cannot run `make third-party-notices` (postUpgradeTasks need a self-hosted Renovate). The drift check in
+# test.yml stays strict; this workflow regenerates the file on the Renovate branch so the pull request passes it.
+# Renovate branches are created by the Renovate app inside this repository, never from a fork, so the code the first job
+# runs holds only a read token.
+on:
+  push:
+    branches: ["renovate/**"]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+# A newer push to the branch replaces the run in flight.
+concurrency:
+  group: renovate-notices-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Runs the repository's code and Go modules: no write token here.
+  generate:
+    name: Regenerate THIRD-PARTY-NOTICES
+    # Loop guard: the commit the push job makes is the branch head, so its own push stops here.
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore: regenerate THIRD-PARTY-NOTICES') }}"
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Nix
+        uses: ./.github/actions/nix
+
+      - name: Cache Go modules and builds
+        uses: ./.github/actions/go-cache
+        with:
+          name: renovate-notices
+
+      - name: Cache npm downloads
+        uses: ./.github/actions/npm-cache
+
+      - name: Regenerate the notices
+        run: nix develop --command make third-party-notices
+
+      - name: Upload the notices
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: third-party-notices
+          path: THIRD-PARTY-NOTICES
+          if-no-files-found: error
+          retention-days: 1
+
+  # Holds the write token and runs no repository code: it copies one file and commits it.
+  # A push made with the default GITHUB_TOKEN does not trigger Tests, Lint and PR Title, so the pull request would keep
+  # the red check it had. Set the RENOVATE_NOTICES_PUSH_TOKEN secret (a fine-grained token with contents write) to have
+  # them run on the new commit; without it the fallback token still pushes, and a person re-runs the checks.
+  push:
+    name: Commit the notices
+    needs: generate
+    permissions:
+      contents: write # push the notices to the branch (the fallback token)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download the notices
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: third-party-notices
+          path: ${{ runner.temp }}/notices
+
+      - name: Commit and push when they changed
+        env:
+          PUSH_TOKEN: ${{ secrets.RENOVATE_NOTICES_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          cp "$RUNNER_TEMP/notices/THIRD-PARTY-NOTICES" THIRD-PARTY-NOTICES
+          if git diff --quiet -- THIRD-PARTY-NOTICES; then
+            echo "The notices are current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: regenerate THIRD-PARTY-NOTICES" -- THIRD-PARTY-NOTICES
+          # Non-fast-forward when Renovate moved the branch meanwhile: the push of that move starts a fresh run.
+          git push "${REPO_URL/https:\/\//https://x-access-token:${PUSH_TOKEN}@}" "HEAD:refs/heads/$BRANCH"

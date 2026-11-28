@@ -218,3 +218,39 @@ func TestCNIBootstrap_RecordGoesToTheChosenNamespace(t *testing.T) {
 		t.Fatalf("namespace %q, plan:\n%s", got, r.stderr)
 	}
 }
+
+// Talos's disable setting does not delete a running kube-proxy; replaced beside it breaks connections.
+func TestCNIBootstrap_LiveKubeProxy(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode string
+		live       bool
+		refused    bool
+	}{
+		{"replaced with a live DaemonSet", kubeProxyReplaced, true, true},
+		{"replaced without one", kubeProxyReplaced, false, false},
+		{"enabled with a live DaemonSet", kubeProxyEnabled, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			objs := noCNINodes()
+			if tc.live {
+				objs = append(objs, testDS("kube-proxy", "registry.k8s.io/kube-proxy:v1.34.0"))
+			}
+
+			r := newBootstrapRun(t, objs...)
+			r.deps.KubeProxy = tc.mode
+
+			err := runCNIBootstrap(context.Background(), r.deps)
+			if tc.refused {
+				if err == nil || !strings.Contains(err.Error(), "kube-system/kube-proxy") || !strings.Contains(err.Error(), "--kube-proxy enabled") || len(r.calls) != 0 {
+					t.Fatalf("err = %v, calls = %d; want a refusal naming the DaemonSet and the remedy, no install", err, len(r.calls))
+				}
+
+				return
+			}
+
+			if err != nil || len(r.calls) != 1 {
+				t.Fatalf("err = %v, calls = %d; want one install", err, len(r.calls))
+			}
+		})
+	}
+}

@@ -21,7 +21,7 @@ cluster.network.cni.name to be none (the only way a cluster ends up like this) a
 else from Talos: --kube-proxy says whether Cilium replaces kube-proxy. Replaced: kube-proxy is
 disabled in Talos, and Cilium reaches the API through KubePrism on port 7445. Enabled: Cilium's
 API address is the chart's default unless --cilium-values sets k8sServiceHost and k8sServicePort.
-In both modes KubePrism must be enabled on port 7445 on every node (adopt checks this again later). --tunnel (vxlan or geneve) is immutable afterwards.
+Replaced is refused while the kube-system/kube-proxy DaemonSet exists: Talos's disable setting does not delete it, so delete it and its ConfigMap first. In both modes KubePrism must be enabled on port 7445 on every node (adopt checks this again later). --tunnel (vxlan or geneve) is immutable afterwards.
 --cilium-values is a YAML file of Cilium Helm values merged like spec.cni.cilium.values;
 Ichor-owned keys are refused.
 

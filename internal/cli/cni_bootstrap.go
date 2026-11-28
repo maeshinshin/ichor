@@ -51,7 +51,7 @@ cluster.network.cni.name to be none (the only way a cluster ends up like this) a
 else from Talos: --kube-proxy says whether Cilium replaces kube-proxy. Replaced: kube-proxy is
 disabled in Talos, and Cilium reaches the API through KubePrism on port 7445. Enabled: Cilium's
 API address is the chart's default unless --cilium-values sets k8sServiceHost and k8sServicePort.
-In both modes KubePrism must be enabled on port 7445 on every node (adopt checks this again later). --tunnel (vxlan or geneve) is immutable afterwards.
+Replaced is refused while the kube-system/kube-proxy DaemonSet exists: Talos's disable setting does not delete it, so delete it and its ConfigMap first. In both modes KubePrism must be enabled on port 7445 on every node (adopt checks this again later). --tunnel (vxlan or geneve) is immutable afterwards.
 --cilium-values is a YAML file of Cilium Helm values merged like spec.cni.cilium.values;
 Ichor-owned keys are refused.
 
@@ -139,6 +139,14 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 	facts, err := gatherK8sFacts(ctx, d.Target, d.Namespace)
 	if err != nil {
 		return fmt.Errorf("bootstrap cni: inspecting the CNI: %w", err)
+	}
+
+	// Talos's disable setting does not delete a running kube-proxy; Cilium would run beside it and break existing connections.
+	if d.KubeProxy == kubeProxyReplaced && facts.KubeProxyDaemonSet {
+		return fmt.Errorf("bootstrap cni: --kube-proxy replaced, but the DaemonSet %s/kube-proxy still runs and would run beside Cilium's replacement; "+
+			"delete the kube-proxy DaemonSet and ConfigMap in %s and run this again, "+
+			"or bootstrap with --kube-proxy enabled and switch later with `ichor set kube-proxy replaced`",
+			k8sFactsSystemNamespace, k8sFactsSystemNamespace)
 	}
 
 	rep := detectCNI(facts, CNIFacts{Kind: CNINone})

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.6 (2026-11-27)
+## v0.3.6 (2026-11-28)
 
 A patch release of fixes to v0.3.5: `ichor adopt` finishes an Ichor install that an
 earlier run stopped partway and no longer lets a rollout remove Ichor's sign-in
@@ -34,7 +34,21 @@ is added or removed.
   lists its sha256. The uninstall and recovery guides download it for a manifest
   install: `curl -fsSLO https://github.com/maeshinshin/ichor/releases/download/vX.Y.Z/install.yaml`,
   then `kubectl delete -f install.yaml --ignore-not-found`. Use the release you
-  installed; an earlier release has no such asset.
+  installed; an earlier release has no such asset. For v0.3.0 to v0.3.5 take the
+  v0.3.6 `install.yaml`: it names the same objects, and four more that an older install
+  lacks, which `--ignore-not-found` skips.
+- **A key rotation's Secret re-encryption no longer sweeps forever.** A Secret that
+  changes under the sweep (a conflict) no longer counts against it, since the other
+  writer's write was already stored under the new key. If sweeps keep rewriting Secrets,
+  as a mutating admission webhook on Secrets does, the rotation pauses after 10 sweeps,
+  names up to five of the Secrets the last sweep rewrote, and keeps the old secretbox
+  key. A retry runs one more sweep.
+- **CA-rotation client restarts each get their own wait.** A workload that is not back
+  after 5 minutes is recorded as not back and the later ones (CoreDNS, kube-proxy, the
+  operator, ichor-ui) are still restarted; the `CARotation` condition and the
+  `CAClientsNotRestarted` condition name every one that is not back. On an `OnDelete`
+  DaemonSet the wait restarts each time another agent pod is replaced Ready, so only a
+  stall times out. The waits are held in memory, so a controller restart restarts them.
 - **`TalosMachine.spec.hostname` refuses a label over 63 characters.** Each
   dot-separated label must be at most 63 characters, as Talos requires; the CRD says so
   at admission, so a longer one is refused when a machine is created or its hostname
@@ -46,6 +60,14 @@ is added or removed.
   after the controller has seeded the IchorInstallation, and creates the
   IchorInstallation only when it is missing. It sets only the pin fields the object
   lacks, and nothing on an unpinned run. A Helm-managed install is left alone.
+- **`ichor adopt` refuses to re-apply its install manifest over a running non-Helm
+  Ichor of a different version, and writes nothing.** Applying the CLI's manifest would
+  swap the running CRDs, webhooks, policies and RBAC for the CLI's, and an older CRD
+  schema prunes newer fields on the next write. With an older CLI the message asks for
+  a CLI of the running version or newer; with a newer CLI it points at
+  `ichor upgrade ichor VERSION`, which is what moves a running Ichor. A partial install
+  is still finished, a run of the same version still re-applies, and an unknown
+  version or a dev build is applied.
 - **A re-run of `ichor adopt` on a cluster whose sign-in is already on is no longer
   blocked by Ichor's own authenticator.** When this run does not turn sign-in on and
   `spec.authentication.ichor` is not enabled, a node that carries Ichor's authenticator
@@ -71,6 +93,11 @@ is added or removed.
 - The kube-proxy switch, the Cilium upgrade and the hand-over's finish check agents
   against the current pod template; the hand-over's health check still counts an
   `OnDelete` DaemonSet as ready.
+- The Kubernetes upgrade's kube-proxy wait checks the DaemonSet's observed generation
+  as well, so a read taken before the DaemonSet controller saw the new image is not
+  taken for a finished rollout.
+- The key rotation's Secret sweep ignores conflicts and pauses after 10 sweeps that
+  still rewrite a Secret (see the upgrade notes).
 - A CA rotation on an `OnDelete` Cilium DaemonSet evicts the agent pods itself, one
   node at a time. It waits for a replacement or a terminating pod, asks again after a
   refused eviction (429, a PodDisruptionBudget), and is not blocked by old agents that
@@ -87,6 +114,8 @@ is added or removed.
 - `ichor adopt` applies the install manifest again on a non-Helm install, in the
   sign-in step and in the write step, and notes "applied Ichor's install manifest to
   the existing install" when the IchorInstallation exists.
+- `ichor adopt` refuses to apply its install manifest over a running non-Helm Ichor of
+  another version (see the upgrade notes).
 - `ichor adopt` discovery applies the hostname check the CRD does (each label at most
   63 characters) and skips a name that fails it.
 - `ichor adopt` keeps a node's Ichor authenticator in the plan unless the cluster has
@@ -109,7 +138,12 @@ is added or removed.
 - The CNI concept page says that switching kube-proxy to `replaced` breaks long-lived
   Service connections opened before the switch, and that the ichor-controller restarts
   once.
-- The uninstall and recovery guides give the `install.yaml` download command.
+- The uninstall and recovery guides give the `install.yaml` download command, and say
+  that v0.3.0 to v0.3.5 take the v0.3.6 one.
+- The adopt guide and the recovery guide describe adopt's install step as it behaves:
+  it installs Ichor when it is absent or its install is partial, and a running Ichor of
+  another version is refused. ADR 0063 and ADR 0121 are amended for the per-target
+  restart wait and the bounded sweep.
 
 ### CI
 

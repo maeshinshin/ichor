@@ -143,7 +143,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultReleaseCheckPolicyName}, rule)).To(Succeed())
 
 		egress, _, _ := unstructured.NestedSlice(rule.Object, keySpec, keyEgress)
-		Expect(egress).To(HaveLen(1))
+		Expect(egress).To(HaveLen(2))
 
 		host, err := releasecheck.Host(releasecheck.DefaultRepository)
 		Expect(err).NotTo(HaveOccurred())

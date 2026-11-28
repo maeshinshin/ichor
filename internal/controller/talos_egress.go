@@ -428,6 +428,15 @@ func controllerPolicyApp(ctx context.Context, c client.Client, ns, skip string) 
 // writePolicy creates or updates the CiliumNetworkPolicy name in ns with spec, labelled for the
 // controller's app. It reports whether it wrote.
 func writePolicy(ctx context.Context, c client.Client, ns, name, app string, spec map[string]any) (bool, error) {
+	// Every such policy selects the controller's pods. Alone (the chart's base policy switched off) it is an
+	// egress default-deny, so it carries the apiserver rule of the base policy, as the sweep needs the API to delete it.
+	egress, _ := spec[keyEgress].([]any)
+	spec = maps.Clone(spec)
+	spec[keyEgress] = append(slices.Clone(egress), map[string]any{
+		"toEntities": []any{"kube-apiserver"},
+		keyToPorts:   []any{map[string]any{keyPorts: portList(6443)}},
+	})
+
 	cur := &unstructured.Unstructured{}
 	cur.SetGroupVersionKind(ciliumPolicyGVK)
 

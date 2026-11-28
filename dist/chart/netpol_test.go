@@ -303,8 +303,18 @@ const ctrlMgrLabel = "controller-manager"
 // remote-node; no namespaceSelector matches it. So the plain NetworkPolicy opens the webhook port
 // to every source, and keeps the metrics port behind its namespaceSelector.
 func TestPlainNetworkPolicyWebhookPortHasNoFromRestriction(t *testing.T) {
-	docs := renderChartWithValues(t, "ichor", "networkPolicy.enabled=true", "networkPolicy.cilium.enabled=false",
-		usersOn, "ichorUI.users.externalURL=https://ichor.example.com")
+	t.Run("default ports", func(t *testing.T) { plainWebhookPolicy(t, "9443", "8443") })
+	t.Run("custom ports", func(t *testing.T) {
+		plainWebhookPolicy(t, "9555", "8555", "webhook.port=9555", "metrics.port=8555")
+	})
+}
+
+func plainWebhookPolicy(t *testing.T, webhookPort, metricsPort string, sets ...string) {
+	t.Helper()
+
+	docs := renderChartWithValues(t, "ichor", slices.Concat([]string{
+		"networkPolicy.enabled=true", "networkPolicy.cilium.enabled=false",
+		usersOn, "ichorUI.users.externalURL=https://ichor.example.com"}, sets)...)
 
 	policies := findAll(docs, "NetworkPolicy")
 	if len(policies) == 0 {
@@ -329,14 +339,14 @@ func TestPlainNetworkPolicyWebhookPortHasNoFromRestriction(t *testing.T) {
 
 			for _, port := range rule["ports"].([]any) {
 				switch fmt.Sprint(port.(map[string]any)["port"]) {
-				case "9443":
+				case webhookPort:
 					sawWebhook = true
 
 					if from != nil {
-						t.Errorf("%s: webhook port 9443 is limited by from=%v; the apiserver (remote-node) matches none",
-							nameOf(p), from)
+						t.Errorf("%s: webhook port %s is limited by from=%v; the apiserver (remote-node) matches none",
+							nameOf(p), webhookPort, from)
 					}
-				case "8443":
+				case metricsPort:
 					sawMetricsFrom = from != nil
 				}
 			}

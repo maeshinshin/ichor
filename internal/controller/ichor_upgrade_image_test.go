@@ -386,7 +386,7 @@ var _ = Describe("installer image registry egress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		egress, _, _ := unstructured.NestedSlice(u.Object, keySpec, keyEgress)
-		Expect(egress).To(HaveLen(1))
+		Expect(egress).To(HaveLen(2))
 
 		toFQDNs, _, _ := unstructured.NestedSlice(egress[0].(map[string]any), "toFQDNs")
 		Expect(toFQDNs).To(ConsistOf(

@@ -1,6 +1,8 @@
 // Pure helpers for the operation's own page. No import from "@/gen": these run directly under
 // `node --test`.
 
+import { operationState } from './operations.ts'
+
 // formatDuration writes a span of milliseconds the way a person reads it: "45s", "3m 05s", "2h 04m".
 // A negative or missing span is a dash.
 export function formatDuration(ms: number | undefined): string {
@@ -38,4 +40,14 @@ export function visibleEvents<T extends EventLike>(events: T[], warningsOnly: bo
 // nodePath is where a machine table row links to.
 export function nodePath(name: string): string {
   return `/nodes/${encodeURIComponent(name)}`
+}
+
+// operationWaiting is the message that says why a running or paused operation is not moving, or undefined. A pause
+// without a failure reason keeps its cause only in the Paused condition; the kube-proxy switch's wait for a person
+// (the OnDelete remedy) lives only in VerifyingNewSide, which is True while it waits and False once verified.
+// shortcut: only that one running wait is known; another operation that waits in its own condition needs adding here.
+export function operationWaiting(op: { phase: string; failureReason: string; conditions: readonly { type: string; status: string; reason: string; message: string }[] }): string | undefined {
+  const state = operationState(op.phase, op.failureReason, op.conditions)
+  const type = state === 'paused' ? 'Paused' : state === 'running' ? 'VerifyingNewSide' : ''
+  return op.conditions.find((c) => c.type === type && c.status === 'True' && c.reason !== 'AwaitingApproval')?.message || undefined
 }

@@ -565,6 +565,7 @@ export const en = {
   'ops.startedByAutoPatch': 'Automatic patching',
   'ops.startedByStorage': 'Storage preset',
   'ops.awaitingApproval': 'Waiting for your approval',
+  'ops.waiting': 'Waiting',
   'ops.awaitingApprovalHint': 'A storage preset needs system extensions that the nodes do not have yet. Ichor added them to the cluster schematic; applying it upgrades Talos on every node and reboots each one. Nothing runs until you approve this operation.',
   'ops.startedAt': 'Started',
   'ops.finishedAt': 'Finished',

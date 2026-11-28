@@ -160,6 +160,7 @@ func newKubeProxyDaemonSet(version string, desired, ready int32) {
 		_ = k8sClient.Delete(ctx, ds, client.GracePeriodSeconds(0), client.PropagationPolicy(metav1.DeletePropagationBackground))
 	})
 
+	ds.Status.ObservedGeneration = ds.Generation // envtest runs no DaemonSet controller
 	ds.Status.DesiredNumberScheduled = desired
 	ds.Status.UpdatedNumberScheduled = ready
 	ds.Status.NumberReady = ready
@@ -892,6 +893,26 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
 
 		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeTrue())
+	})
+
+	It("kubeProxyNotReady waits while the kube-proxy DaemonSet has not observed its latest generation", func() {
+		newKubeProxyDaemonSet(testK8sTarget, 3, 3)
+
+		var ds appsv1.DaemonSet
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: kubeProxyName}, &ds)).To(Succeed())
+
+		// What an uncached read returns right after the sync rewrote the template: generation 2, the old rollout's counts.
+		ds.Spec.Template.Labels["rewritten"] = "yes"
+		Expect(k8sClient.Update(ctx, &ds)).To(Succeed())
+		Expect(ds.Generation).To(Equal(int64(2)))
+		Expect(ds.Status.ObservedGeneration).To(Equal(int64(1)))
+
+		a := newKubernetesAdvancer(&fakeTalosClient{}, &fakeKubernetesAdmin{})
+		Expect(a.kubeProxyNotReady(ctx, testK8sTarget)).NotTo(BeEmpty())
+
+		ds.Status.ObservedGeneration = ds.Generation
+		Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
+		Expect(a.kubeProxyNotReady(ctx, testK8sTarget)).To(BeEmpty())
 	})
 
 	It("stage KubeProxy syncs the manifests but waits for no kube-proxy when the CNI replaces it", func() {

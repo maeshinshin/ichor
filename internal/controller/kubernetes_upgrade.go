@@ -46,6 +46,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -729,8 +730,10 @@ func (a *kubernetesUpgradeAdvancer) kubeProxyNotReady(ctx context.Context, targe
 		}
 	}
 
-	if ds.Status.UpdatedNumberScheduled < ds.Status.DesiredNumberScheduled || ds.Status.NumberReady < ds.Status.DesiredNumberScheduled {
-		return fmt.Sprintf("kube-proxy is rolling out: %d/%d ready", ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+	// The sync has just changed the image: the strict predicate also checks ObservedGeneration, so a read
+	// taken before the DaemonSet controller saw the change is not taken for a finished rollout.
+	if ok, why := cilium.DaemonSetRunsCurrentTemplate(&ds); !ok {
+		return "kube-proxy is rolling out: " + why
 	}
 
 	return ""

@@ -4,6 +4,7 @@ package workflowcheck
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -499,4 +500,78 @@ func mapValues(m map[string]string) []string {
 	}
 
 	return out
+}
+
+// docsHelmScript is the script the docs.yml "Helm repository" step feeds to bash.
+func docsHelmScript(t *testing.T) string {
+	t.Helper()
+
+	for _, s := range load(t, ".github/workflows/docs.yml").Jobs["build"].Steps {
+		if s.Name == "Helm repository" {
+			_, body, _ := strings.Cut(s.Run, "<<'EOF'\n")
+			return strings.TrimSuffix(strings.TrimSpace(body), "EOF")
+		}
+	}
+
+	t.Fatal("docs.yml has no Helm repository step")
+
+	return ""
+}
+
+const pullOK = "touch site/dist-all/charts/c"
+
+// The Helm repository index is built from a published release's chart. Only "no release" and a draft leave a tag out; a gh
+// failure, or a chart that cannot be pulled from a published release, fails the step instead of dropping the version.
+func TestDocsHelmIndexFailsClosed(t *testing.T) {
+	script := docsHelmScript(t)
+
+	cases := []struct {
+		name, gh, helm string
+		wantFail       bool
+		wantChart      bool
+	}{
+		{"published, pull fails", "echo false", "echo 503 >&2; exit 1", true, false},
+		{"gh fails", "echo 'HTTP 502' >&2; exit 1", pullOK, true, false},
+		{"no release", "echo 'release not found' >&2; exit 1", pullOK, false, false},
+		{"draft", "echo true", pullOK, false, false},
+		{"published, pull works", "echo false", pullOK, false, true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Join(dir, "bin")
+
+			if err := os.MkdirAll(bin, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			shims := map[string]string{"git": "echo v1.2.3", "gh": c.gh, "sleep": "true"}
+			for name, body := range shims {
+				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil { //nolint:gosec // a test shim
+					t.Fatal(err)
+				}
+			}
+
+			// `helm repo index` shares the shim, so it must succeed whatever the pull shim does
+			helm := "case $1 in repo) exit 0;; esac\n" + c.helm
+			if err := os.WriteFile(filepath.Join(bin, "helm"), []byte("#!/bin/sh\n"+helm+"\n"), 0o755); err != nil { //nolint:gosec // a test shim
+				t.Fatal(err)
+			}
+
+			cmd := exec.Command("bash", "-euo", "pipefail", "-c", "mkdir -p site/dist-all/charts\n"+script)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+
+			out, err := cmd.CombinedOutput()
+			if failed := err != nil; failed != c.wantFail {
+				t.Errorf("step failed = %v, want %v\n%s", failed, c.wantFail, out)
+			}
+
+			_, statErr := os.Stat(filepath.Join(dir, "site/dist-all/charts/c"))
+			if kept := statErr == nil; kept != c.wantChart {
+				t.Errorf("chart kept = %v, want %v\n%s", kept, c.wantChart, out)
+			}
+		})
+	}
 }

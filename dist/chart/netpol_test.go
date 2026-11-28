@@ -361,3 +361,18 @@ func plainWebhookPolicy(t *testing.T, webhookPort, metricsPort string, sets ...s
 		t.Error("the metrics rule lost its from restriction")
 	}
 }
+
+// Helm applies a release's objects of one kind in manifest order, so a default-deny that comes
+// before the policies that allow the probes and the API leaves their pods cut off until the rest land.
+func TestChartCiliumDefaultDenyComesAfterEveryAllow(t *testing.T) {
+	docs := findAll(renderChartWithValues(t, "ichor", netpolAllOn...), kindCNP)
+	names := make([]string, 0, len(docs))
+
+	for _, d := range docs {
+		names = append(names, nameOf(d))
+	}
+
+	if i := slices.Index(names, "ichor-default-deny"); i != len(names)-1 {
+		t.Fatalf("ichor-default-deny is policy %d of %d in apply order %v; it must be last", i+1, len(names), names)
+	}
+}

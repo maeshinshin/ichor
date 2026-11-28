@@ -69,17 +69,6 @@ rule names them, without the whole world is allowed. */}}
 {{- $externalCIDRs := .Values.networkPolicy.cilium.externalCIDRs }}
 {{- $dynamic := .Values.networkPolicy.cilium.dynamicTalosEgress }}
 {{- $metricsNamespaces := .Values.networkPolicy.cilium.metricsNamespaces }}
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  {{- include "ichor.cnp.meta" (dict "suffix" "default-deny" "ctx" $) | nindent 2 }}
-spec:
-  description: Everything in the namespace is denied unless a policy below allows it.
-  endpointSelector: {}
-  ingress:
-  - {}
-  egress:
-  - {}
 {{- if .Values.manager.enabled }}
 ---
 apiVersion: cilium.io/v2
@@ -268,6 +257,19 @@ spec:
   egress:
   {{- include "ichor.cnp.apiserver" . | nindent 2 }}
 {{- end }}
+---
+# Last: Helm applies a kind in manifest order, and the deny must not land before the allows.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  {{- include "ichor.cnp.meta" (dict "suffix" "default-deny" "ctx" $) | nindent 2 }}
+spec:
+  description: Everything in the namespace is denied unless a policy below allows it.
+  endpointSelector: {}
+  ingress:
+  - {}
+  egress:
+  - {}
 # No policy for the Cilium Helm Job: it runs on the host network in kube-system, which CiliumNetworkPolicy
 # does not govern.
 {{- end }}

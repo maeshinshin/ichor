@@ -70,6 +70,9 @@ type k8sFacts struct {
 	// CNIDaemonSets are the DaemonSets recognised as a CNI agent, sorted by namespace and name.
 	CNIDaemonSets []daemonSetFact
 
+	// KubeProxyDaemonSet is whether kube-system/kube-proxy exists. Talos's disable setting does not delete it.
+	KubeProxyDaemonSet bool
+
 	// CiliumConfig is cilium-config's data; nil when the ConfigMap is absent.
 	CiliumConfig map[string]string
 
@@ -120,6 +123,10 @@ func gatherK8sFacts(ctx context.Context, r client.Reader, ichorNS string) (*k8sF
 
 	for i := range dsl.Items {
 		ds := &dsl.Items[i]
+
+		if ds.Namespace == k8sFactsSystemNamespace && ds.Name == "kube-proxy" {
+			facts.KubeProxyDaemonSet = true
+		}
 
 		image := ""
 		if cs := ds.Spec.Template.Spec.Containers; len(cs) > 0 {
@@ -263,6 +270,15 @@ func detectKubeProxy(f *k8sFacts, talosEnabled, unmanaged bool) (string, error) 
 	talosMode := string(cni.KubeProxyReplaced)
 	if talosEnabled {
 		talosMode = string(cni.KubeProxyEnabled)
+	}
+
+	// Talos's disable setting stops managing the DaemonSet; it does not delete one that runs.
+	// adopt writes no node or workload, so the user removes it.
+	if !talosEnabled && f.KubeProxyDaemonSet {
+		return "", fmt.Errorf("kube-proxy is disabled in Talos but the DaemonSet %s/kube-proxy still runs, so it would run beside Cilium's replacement and break existing connections; "+
+			"delete the kube-proxy DaemonSet and ConfigMap in %s, then run adopt again, "+
+			"or run adopt with kube-proxy enabled in Talos and switch later with `ichor set kube-proxy replaced`, which removes it properly",
+			k8sFactsSystemNamespace, k8sFactsSystemNamespace)
 	}
 
 	if unmanaged {

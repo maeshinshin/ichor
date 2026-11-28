@@ -495,3 +495,31 @@ func TestAdoptSignIn_LeftoverIchorInstallationIsNamed(t *testing.T) {
 		t.Fatalf("runAdopt error = %v, want the leftover IchorInstallation named with how to remove it", err)
 	}
 }
+
+// TestAdoptSignIn_UnlistedDeploymentsAreNotLeftOver: an operator who may not list Deployments is told
+// that, never that the IchorInstallation is left over (deleting it would bypass the version guard).
+func TestAdoptSignIn_UnlistedDeploymentsAreNotLeftOver(t *testing.T) {
+	f := signInFlow(t)
+
+	inst := &ichorv1alpha1.IchorInstallation{}
+	inst.Name = ichorv1alpha1.IchorInstallationName
+	if err := f.env.k8s.Create(context.Background(), inst); err != nil {
+		t.Fatal(err)
+	}
+
+	wc, _ := f.env.k8s.(client.WithWatch)
+	f.deps.K8s = interceptor.NewClient(wc, interceptor.Funcs{
+		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
+			if _, ok := list.(*appsv1.DeploymentList); ok {
+				return apierrors.NewForbidden(schema.GroupResource{Resource: "deployments"}, "", nil)
+			}
+
+			return c.List(ctx, list, o...)
+		},
+	})
+
+	err := f.runSignIn()
+	if err == nil || strings.Contains(err.Error(), "left over") || !strings.Contains(err.Error(), "list deployments") {
+		t.Fatalf("runAdopt error = %v, want a refusal naming the missing list deployments permission, not \"left over\"", err)
+	}
+}

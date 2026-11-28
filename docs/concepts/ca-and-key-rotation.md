@@ -60,7 +60,9 @@ credentials depend on, so it has no hand-off.
 Clients cannot hold both Kubernetes CAs. Before dropping the old one the
 controller waits until the new one is in every namespace, then a settle delay.
 Once every Node has been Ready for a while it restarts, one at a time, the
-clients that keep the old CA: CoreDNS, kube-proxy, the CNI and ichor-ui. Others
+clients that keep the old CA, in this order: the CNI (Cilium's agents, then its
+operator; skipped when the CNI is unmanaged), then kube-proxy, CoreDNS and
+ichor-ui. Others
 that load the CA once may still need a restart. CA expiry dates show in status,
 the UI and metrics.
 

@@ -327,3 +327,52 @@ func (r *ReleaseCheck) record(ctx context.Context, update func(inst *ichorv1alph
 
 	return true
 }
+
+// strandedPoliciesInterval is the time between two looks for a policy the base policy no longer backs.
+const strandedPoliciesInterval = 30 * time.Second
+
+// StrandedPolicies deletes the controller-made egress policies while the chart's own controller policy is
+// absent (networkPolicy.cilium.enabled turned off). Each of them selects the controller pods, so alone it
+// is an egress default-deny that cuts the pods off from the apiserver. The writers drop theirs on their
+// own pass, but those run every 6 hours or only on an event; this does it within the interval.
+type StrandedPolicies struct {
+	Client    client.Client
+	Namespace string
+	// Names are the policies the controller makes.
+	Names []string
+	// Interval is the time between two passes; zero means strandedPoliciesInterval.
+	Interval time.Duration
+}
+
+// NeedLeaderElection makes the sweep run on the leader only, as the writers do.
+func (s *StrandedPolicies) NeedLeaderElection() bool { return true }
+
+// Sync removes the policies when Ichor's base controller policy is not installed.
+func (s *StrandedPolicies) Sync(ctx context.Context) error {
+	app, err := controllerPolicyApp(ctx, s.Client, s.Namespace, "")
+	if err != nil || app != "" {
+		return err
+	}
+
+	var errs []error
+	for _, name := range s.Names {
+		errs = append(errs, removePolicy(ctx, s.Client, s.Namespace, name))
+	}
+
+	return errors.Join(errs...)
+}
+
+// Start syncs on the interval until ctx ends.
+func (s *StrandedPolicies) Start(ctx context.Context) error {
+	for {
+		if err := s.Sync(ctx); err != nil {
+			logf.FromContext(ctx).WithName("strandedpolicies").Info("Removing stranded egress policies failed; will retry", "error", err.Error())
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(cmp.Or(s.Interval, strandedPoliciesInterval)):
+		}
+	}
+}

@@ -156,6 +156,45 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		Expect(err).To(MatchError(apierrors.IsNotFound, "the rule goes with the switch"))
 	})
 
+	It("removes a stranded egress policy once the chart's base policy is gone, and keeps it while present", func() {
+		createInstallation("v0.1.0")
+
+		stranded := func() *unstructured.Unstructured {
+			u := cnpGVK()
+			u.SetNamespace(releaseCheckNS)
+			u.SetName(DefaultReleaseCheckPolicyName)
+			u.SetLabels(map[string]string{"app.kubernetes.io/managed-by": "ichor-controller"})
+			u.Object[keySpec] = releaseCheckSpec(releaseCheckApp, []string{testGHCR})
+
+			return u
+		}
+		get := func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultReleaseCheckPolicyName}, cnpGVK())
+		}
+		guard := &StrandedPolicies{Client: k8sClient, Namespace: releaseCheckNS, Names: []string{DefaultReleaseCheckPolicyName}}
+
+		static := cnpGVK()
+		static.SetNamespace(releaseCheckNS)
+		static.SetName("ichor-controller-manager")
+		static.Object[keySpec] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
+			"control-plane": "controller-manager", nameLabel: releaseCheckApp,
+		}}, keyEgress: []any{map[string]any{}}}
+		Expect(k8sClient.Create(ctx, static)).To(Succeed())
+
+		// Positive control: with the base policy on, the policy stays and the check keeps it.
+		Expect(k8sClient.Create(ctx, stranded())).To(Succeed())
+		Expect(guard.Sync(ctx)).To(Succeed())
+		Expect(get()).To(Succeed())
+
+		// The chart's policies are switched off.
+		Expect(k8sClient.Delete(ctx, static)).To(Succeed())
+		Expect(guard.Sync(ctx)).To(Succeed())
+		Expect(get()).To(MatchError(apierrors.IsNotFound, "stranded policy removed"))
+
+		Expect(newCheck(listing("0.2.0"), true).check(ctx)).To(BeTrue())
+		Expect(get()).To(MatchError(apierrors.IsNotFound, "and not written again"))
+	})
+
 	// byRepo lists the given repositories; any other one fails, as an unreachable registry would.
 	byRepo := func(tags map[string][]string) releasecheck.Lister {
 		return func(repo string) ([]string, error) {

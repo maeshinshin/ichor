@@ -148,6 +148,7 @@ func main() {
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
+	var webhookPort int
 	var enableLeaderElection bool
 	var probeAddr string
 	var secureMetrics bool
@@ -175,6 +176,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "The port the webhook server listens on.")
 	flag.StringVar(&webhookCertPath, "webhook-cert-path", "/tmp/k8s-webhook-server/serving-certs",
 		"The directory that contains the webhook certificate.")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
@@ -239,7 +241,7 @@ func main() {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
-	webhookServerOptions := webhook.Options{TLSOpts: tlsOpts}
+	webhookServerOptions := webhook.Options{Port: webhookPort, TLSOpts: tlsOpts}
 
 	if len(webhookCertPath) > 0 {
 		setupLog.Info("Initializing webhook certificate watcher using provided certificates",

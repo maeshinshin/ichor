@@ -114,13 +114,18 @@ func (p ichorPresence) Version() string {
 // runningVersion is the version of a running, non-Helm Ichor: the IchorInstallation's
 // status.installedVersion (the controller reports its own version there), else the tag of the
 // controller container's image. "" when neither says, or when no controller Deployment exists.
+// When Deployments could not be listed the status alone speaks: a missing Deployment is no evidence.
 func (p ichorPresence) runningVersion() string {
-	if p.Installation == nil || p.Deployment == nil {
+	if p.Installation == nil || (p.Deployment == nil && !p.Unlisted) {
 		return ""
 	}
 
 	if v := p.Installation.Status.InstalledVersion; v != "" {
 		return v
+	}
+
+	if p.Deployment == nil {
+		return ""
 	}
 
 	for _, c := range p.Deployment.Spec.Template.Spec.Containers {
@@ -278,6 +283,12 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 // by `ichor upgrade ichor`. A partial install (no IchorInstallation or no controller Deployment), an
 // unknown version and a dev build (semverOf is "", as on the Helm path) are applied.
 func (p ichorPresence) refuseReapply(cliVersion string) error {
+	if p.Installation != nil && p.Deployment == nil && p.Unlisted && p.runningVersion() == "" && semverOf(cliVersion) != "" {
+		return errors.New("adopt: an IchorInstallation exists but its status reports no version, and the operator may not list Deployments " +
+			"(permission: list deployments, cluster-wide), so the running Ichor's version cannot be confirmed; " +
+			"run adopt again as an operator who can list Deployments; nothing was written")
+	}
+
 	have, want := semverOf(p.runningVersion()), semverOf(cliVersion)
 	if have == "" || want == "" || semver.Compare(have, want) == 0 {
 		return nil

@@ -31,9 +31,12 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -327,5 +330,39 @@ func TestWriteAdopt_SeededHelmInstallationSkipsInstall(t *testing.T) {
 
 	if !slices.Contains(res.Unchanged, "Ichor installation") {
 		t.Fatalf("unchanged = %v", res.Unchanged)
+	}
+}
+
+func forbidDeployments(t *testing.T, objs ...client.Object) client.Client {
+	t.Helper()
+
+	return interceptor.NewClient(presenceClient(t, objs...).(client.WithWatch), interceptor.Funcs{
+		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
+			if _, ok := list.(*appsv1.DeploymentList); ok {
+				return apierrors.NewForbidden(schema.GroupResource{Resource: "deployments"}, "", nil)
+			}
+
+			return c.List(ctx, list, o...)
+		},
+	})
+}
+
+// TestCheckIchorPresence_UnlistedDeploymentsStillGuardTheVersion: an operator who may not list
+// Deployments must not read as "no Ichor running": the version guard uses the Installation's status.
+func TestCheckIchorPresence_UnlistedDeploymentsStillGuardTheVersion(t *testing.T) {
+	ctx := context.Background()
+	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
+	inst.Status.InstalledVersion = "v0.2.0"
+
+	err := checkIchorPresence(ctx, forbidDeployments(t, inst), &bytes.Buffer{}, "v0.3.0", false)
+	if err == nil || !strings.Contains(err.Error(), "v0.2.0") || !strings.Contains(err.Error(), "v0.3.0") {
+		t.Errorf("error = %v, want a refusal naming v0.2.0 and v0.3.0", err)
+	}
+
+	inst.Status.InstalledVersion = ""
+
+	err = checkIchorPresence(ctx, forbidDeployments(t, inst), &bytes.Buffer{}, "v0.3.0", false)
+	if err == nil || !strings.Contains(err.Error(), "list deployments") || !strings.Contains(err.Error(), "nothing was written") {
+		t.Errorf("error = %v, want a refusal that the version cannot be confirmed (list deployments)", err)
 	}
 }

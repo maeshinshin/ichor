@@ -97,6 +97,12 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		return nil
 	}
 
+	if present.Installation != nil && present.Deployment == nil && present.Unlisted {
+		return fmt.Errorf("adopt: the IchorInstallation %q exists but adopt could not list Deployments, so it cannot tell whether Ichor runs "+
+			"(permission: list deployments, cluster-wide); do not delete the IchorInstallation: run adopt again as an operator who can list them; nothing was written",
+			present.Installation.Name)
+	}
+
 	if present.Installation != nil && present.Deployment == nil {
 		return fmt.Errorf("adopt: the IchorInstallation %q is left over from a removed install (no Ichor controller Deployment exists): "+
 			"remove it with `kubectl delete ichorinstallation %s` and run adopt again",

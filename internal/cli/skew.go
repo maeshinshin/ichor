@@ -67,13 +67,19 @@ func checkServerSkew(ctx context.Context, c client.Reader, cliVersion string) er
 		cliVersion, inst.Status.InstalledVersion, distance, maxMinorSkew)
 }
 
+// commandWrites reports whether cmd, as invoked, changes the world: the mark, or `create credentials`
+// with --acknowledge (without it that command only reads and writes local files).
+func commandWrites(cmd *cobra.Command) bool {
+	return cmd.Annotations[writesAnnotation] == "true" || (cmd == createCredentialsCmd && clusterCredentialsOpts.Acknowledge)
+}
+
 // skewPreRun is the root's PersistentPreRunE.
 func skewPreRun(cmd *cobra.Command, _ []string) error {
 	if err := checkNamespaceFlag(cmd); err != nil {
 		return err
 	}
 
-	if cmd.Annotations[writesAnnotation] != "true" {
+	if !commandWrites(cmd) {
 		return nil
 	}
 
@@ -86,7 +92,8 @@ func skewPreRun(cmd *cobra.Command, _ []string) error {
 }
 
 func init() {
-	markWrites(approveNodeCmd, rejectNodeCmd, applyCmd, deletePatchCmd)
+	markWrites(approveNodeCmd, rejectNodeCmd, applyCmd, deletePatchCmd,
+		createUserCmd, editUserCmd, deleteUserCmd, userSetPasswordCmd, userRevokeCmd, reclaimNodeCmd, setSettingsCmd, createTalosconfigCmd)
 
 	rootCmd.PersistentPreRunE = skewPreRun
 	rootCmd.Version = clientVersion()

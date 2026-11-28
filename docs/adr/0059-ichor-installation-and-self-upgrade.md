@@ -79,9 +79,9 @@ hand". The chart's installer RBAC is also off in that mode (below).
 **6. CLI refuses writes beyond one minor.** The CLI compares its own `internal/version` with
 `IchorInstallation.status.installedVersion` (the controller's report, so it works with or without ichor-ui,
 including the `--local` fallback) before a command marked as a write: `approve node`, `reject node`,
-`apply/delete patch`. Reads are never refused. It refuses only on a positive finding: no
+`apply/delete patch`, and since 2026-11-28 the user commands (`create`, `edit`, `delete user`, `user set-password`, `user revoke-sessions`), `reclaim node`, `set settings`, `create talosconfig` and `create credentials --acknowledge`; a test classifies every leaf command, so a new one fails until it is marked or listed as exempt. Reads are never refused. It refuses only on a positive finding: no
 `IchorInstallation`, no reported version, an unreadable cluster, a `dev` build or different majors mean "cannot
-judge" and the command proceeds. Not marked yet: `init`, `adopt`, `restore`, `gitops` (they run before the
+judge" and the command proceeds. Not marked: `init`, `adopt`, `restore`, `gitops`, and the Job commands `bootstrap cni`, `cni helm apply`, `installer run` (they run before the
 server exists or against its absence; revisit when `ichor upgrade ichor` lands). `ichor init` now creates the
 `IchorInstallation` with its own version (skipped for a `dev` build).
 

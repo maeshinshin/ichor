@@ -333,10 +333,9 @@ func TestWriteAdopt_SeededHelmInstallationSkipsInstall(t *testing.T) {
 	}
 }
 
-func forbidDeployments(t *testing.T, objs ...client.Object) client.Client {
-	t.Helper()
-
-	return interceptor.NewClient(presenceClient(t, objs...).(client.WithWatch), interceptor.Funcs{
+// forbidDeploymentList is c as an operator who may not list Deployments sees it.
+func forbidDeploymentList(c client.WithWatch) client.Client {
+	return interceptor.NewClient(c, interceptor.Funcs{
 		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
 			if _, ok := list.(*appsv1.DeploymentList); ok {
 				return apierrors.NewForbidden(schema.GroupResource{Resource: "deployments"}, "", nil)
@@ -347,15 +346,21 @@ func forbidDeployments(t *testing.T, objs ...client.Object) client.Client {
 	})
 }
 
+func forbidDeployments(t *testing.T, objs ...client.Object) client.Client {
+	t.Helper()
+
+	return forbidDeploymentList(presenceClient(t, objs...).(client.WithWatch))
+}
+
 // TestCheckIchorPresence_UnlistedDeploymentsStillGuardTheVersion: an operator who may not list
 // Deployments must not read as "no Ichor running": the version guard uses the Installation's status.
 func TestCheckIchorPresence_UnlistedDeploymentsStillGuardTheVersion(t *testing.T) {
 	ctx := context.Background()
 	inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
-	inst.Status.InstalledVersion = "v0.2.0"
+	inst.Status.InstalledVersion = noticeNewer
 
 	err := checkIchorPresence(ctx, forbidDeployments(t, inst), &bytes.Buffer{}, "v0.3.0", false)
-	if err == nil || !strings.Contains(err.Error(), "v0.2.0") || !strings.Contains(err.Error(), "v0.3.0") {
+	if err == nil || !strings.Contains(err.Error(), noticeNewer) || !strings.Contains(err.Error(), "v0.3.0") {
 		t.Errorf("error = %v, want a refusal naming v0.2.0 and v0.3.0", err)
 	}
 

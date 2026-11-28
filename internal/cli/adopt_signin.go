@@ -97,10 +97,10 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		return nil
 	}
 
-	if present.Installation != nil && present.Deployment == nil && present.Unlisted {
-		return fmt.Errorf("adopt: the IchorInstallation %q exists but adopt could not list Deployments, so it cannot tell whether Ichor runs "+
-			"(permission: list deployments, cluster-wide); do not delete the IchorInstallation: run adopt again as an operator who can list them; nothing was written",
-			present.Installation.Name)
+	if present.Installation != nil && present.Deployment == nil && present.Unlisted() {
+		return fmt.Errorf("adopt: the IchorInstallation %q exists but adopt could not list what shows whether Ichor runs "+
+			"(permission: %s, cluster-wide); do not delete the IchorInstallation: run adopt again as an operator who can list them; nothing was written",
+			present.Installation.Name, present.refusedPermissions())
 	}
 
 	if present.Installation != nil && present.Deployment == nil {

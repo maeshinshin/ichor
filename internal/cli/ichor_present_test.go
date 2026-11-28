@@ -333,12 +333,14 @@ func TestWriteAdopt_SeededHelmInstallationSkipsInstall(t *testing.T) {
 	}
 }
 
+const resDeployments = "deployments"
+
 // forbidDeploymentList is c as an operator who may not list Deployments sees it.
 func forbidDeploymentList(c client.WithWatch) client.Client {
 	return interceptor.NewClient(c, interceptor.Funcs{
 		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
 			if _, ok := list.(*appsv1.DeploymentList); ok {
-				return apierrors.NewForbidden(schema.GroupResource{Resource: "deployments"}, "", nil)
+				return apierrors.NewForbidden(schema.GroupResource{Resource: resDeployments}, "", nil)
 			}
 
 			return c.List(ctx, list, o...)
@@ -369,5 +371,54 @@ func TestCheckIchorPresence_UnlistedDeploymentsStillGuardTheVersion(t *testing.T
 	err = checkIchorPresence(ctx, forbidDeployments(t, inst), &bytes.Buffer{}, "v0.3.0", false)
 	if err == nil || !strings.Contains(err.Error(), "list deployments") || !strings.Contains(err.Error(), "nothing was written") {
 		t.Errorf("error = %v, want a refusal that the version cannot be confirmed (list deployments)", err)
+	}
+}
+
+// TestCheckIchorPresence_RefusalNamesTheForbiddenPermissions: the refusal names exactly the lists
+// that were forbidden, never one that was allowed.
+func TestCheckIchorPresence_RefusalNamesTheForbiddenPermissions(t *testing.T) {
+	cases := []struct {
+		name                       string
+		secrets, deployments       bool
+		wantSecrets, wantDeploysIn bool
+	}{
+		{"secrets only", true, false, true, false},
+		{"deployments only", false, true, false, true},
+		{"both", true, true, true, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inst := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
+			c := interceptor.NewClient(presenceClient(t, inst).(client.WithWatch), interceptor.Funcs{
+				List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
+					switch list.(type) {
+					case *corev1.SecretList:
+						if tc.secrets {
+							return apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "", nil)
+						}
+					case *appsv1.DeploymentList:
+						if tc.deployments {
+							return apierrors.NewForbidden(schema.GroupResource{Resource: resDeployments}, "", nil)
+						}
+					}
+
+					return c.List(ctx, list, o...)
+				},
+			})
+
+			err := checkIchorPresence(context.Background(), c, &bytes.Buffer{}, "v0.3.0", false)
+			if err == nil {
+				t.Fatal("want a refusal")
+			}
+
+			if got := strings.Contains(err.Error(), "list secrets"); got != tc.wantSecrets {
+				t.Errorf("names list secrets = %v, want %v: %v", got, tc.wantSecrets, err)
+			}
+
+			if got := strings.Contains(err.Error(), "list deployments"); got != tc.wantDeploysIn {
+				t.Errorf("names list deployments = %v, want %v: %v", got, tc.wantDeploysIn, err)
+			}
+		})
 	}
 }

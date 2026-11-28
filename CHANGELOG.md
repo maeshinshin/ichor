@@ -16,6 +16,218 @@
   controller's namespace. A script passing another value now fails before anything is
   written.
 
+## v0.3.6 (2026-11-28)
+
+A patch release of fixes to v0.3.5: `ichor adopt` finishes an Ichor install that an
+earlier run stopped partway and no longer lets a rollout remove Ichor's sign-in
+authenticator, the kube-proxy switch and the Cilium upgrade wait until every agent
+runs the new configuration, a private key in a Cilium list value is refused, and the
+Overview page shows a failed installation read instead of an all-clear. No CRD field
+is added or removed.
+
+### Upgrade notes
+
+- **A cluster already on kube-proxy `replaced` restarts its Cilium agents once on
+  upgrade.** The agent pod template gains the `ichor.maesh.dev/kube-proxy-mode`
+  annotation, which is set only while kube-proxy is replaced, so the DaemonSet rolls.
+  A cluster with kube-proxy enabled keeps its template.
+- **The kube-proxy switch, the Cilium chart upgrade and the hand-over after a values
+  Job wait until every Cilium agent runs the current pod template.** The agents read
+  these settings only at start. On an `OnDelete` DaemonSet the old pods are not
+  replaced by themselves, and `rollout restart` restarts none of them. The waiting
+  message says to delete the agent pod of one node at a time
+  (`kubectl -n kube-system delete pod -l k8s-app=cilium --field-selector spec.nodeName=<node>`),
+  and after each to wait until the new agent is Ready and `kubectl get --raw /readyz`
+  answers before the next node.
+- **Switching kube-proxy to `replaced` breaks long-lived Service connections opened
+  before the switch.** They break when the Cilium agent on a pod's node restarts;
+  clients that reconnect recover and new connections are unaffected. The
+  ichor-controller is such a client: it restarts once, about 1.5 to 2 minutes in, and
+  the operation continues. Run the switch in a maintenance window if workloads hold
+  long-lived Service connections that do not reconnect. The CNI concept page says so.
+- **`install.yaml` is a release asset from v0.3.6 on.** It is the install manifest that
+  pins the release's image digests, and `ichor_X.Y.Z_checksums.txt`, which is signed,
+  lists its sha256. The uninstall and recovery guides download it for a manifest
+  install: `curl -fsSLO https://github.com/maeshinshin/ichor/releases/download/vX.Y.Z/install.yaml`,
+  then `kubectl delete -f install.yaml --ignore-not-found`. Use the release you
+  installed; an earlier release has no such asset. For v0.3.0 to v0.3.5 take the
+  v0.3.6 `install.yaml`: it names the same objects, and four more that an older install
+  lacks, which `--ignore-not-found` skips.
+- **A key rotation's Secret re-encryption no longer sweeps forever.** A Secret that
+  changes under the sweep (a conflict) no longer counts against it, since the other
+  writer's write was already stored under the new key. If sweeps keep rewriting Secrets,
+  as a mutating admission webhook on Secrets does, the rotation pauses after 10 sweeps,
+  names up to five of the Secrets the last sweep rewrote, and keeps the old secretbox
+  key. A retry runs one more sweep.
+- **CA-rotation client restarts each get their own wait.** A workload that is not back
+  after 5 minutes is recorded as not back and the later ones (CoreDNS, kube-proxy, the
+  operator, ichor-ui) are still restarted; the `CARotation` condition and the
+  `CAClientsNotRestarted` condition name every one that is not back. On an `OnDelete`
+  DaemonSet the wait restarts each time another agent pod is replaced Ready, so only a
+  stall times out. The waits are held in memory, so a controller restart restarts them.
+  The `CAClientsNotRestarted` warning then lowers itself (reason `ClientsBack`) once
+  every workload it names is available again, instead of staying until the next
+  rotation.
+- **`TalosMachine.spec.hostname` refuses a label over 63 characters.** Each
+  dot-separated label must be at most 63 characters, as Talos requires; the CRD says so
+  at admission, so a longer one is refused when a machine is created or its hostname
+  is set.
+- **`spec.registries[].host` accepts a bracketed IPv6 address**, with an optional
+  `:port`. This only relaxes validation.
+- **A re-run of `ichor adopt` finishes an Ichor install that an earlier run stopped
+  partway.** On a non-Helm install adopt applies Ichor's install manifest again, even
+  after the controller has seeded the IchorInstallation, and creates the
+  IchorInstallation only when it is missing. It sets only the pin fields the object
+  lacks, and nothing on an unpinned run. A Helm-managed install is left alone.
+- **`ichor adopt` refuses to re-apply its install manifest over a running non-Helm
+  Ichor of a different version, and writes nothing.** Applying the CLI's manifest would
+  swap the running CRDs, webhooks, policies and RBAC for the CLI's, and an older CRD
+  schema prunes newer fields on the next write. With an older CLI the message asks for
+  a CLI of the running version or newer; with a newer CLI it points at
+  `ichor upgrade ichor VERSION`, which is what moves a running Ichor. A partial install
+  is still finished, a run of the same version still re-applies, and an unknown
+  version or a dev build is applied.
+- **A re-run of `ichor adopt` on a cluster whose sign-in is already on is no longer
+  blocked by Ichor's own authenticator.** When this run does not turn sign-in on and
+  `spec.authentication.ichor` is not enabled, a node that carries Ichor's authenticator
+  is refused. That is a Helm-managed Ichor, or `enabled: false`. The message says to set
+  `spec.authentication.ichor` (`enabled: true`, `url`) on the TalosCluster, in the chart
+  values and on the TalosCluster for a Helm-managed Ichor, and to run adopt again;
+  adopt has no flag that turns sign-in on. Before, the authenticator was dropped from
+  the plan, so the rollout that adopt advised could remove it.
+- **A private key in a list value of the Cilium values is refused.** That covers a
+  ClusterMesh peer's TLS (`clustermesh.config.clusters`) and any PEM private key
+  anywhere in `spec.cni.cilium.values`, raw or base64. The message names a remedy for
+  its own setting: for a peer, remove the peer's `tls.cert` and `tls.key` (and
+  `tls.caCert` if the CA is shared) so the chart uses its generated remote
+  certificate; otherwise move the key into a Secret. A key an object already stores
+  unchanged, a list entry included, stays editable.
+- **A secrets bundle missing a required member is refused when read.** The machine
+  waits with `SecretsBundleUnavailable`, and the error names the missing field
+  (`cluster`, `secrets`, `trustdinfo`, `certs` and its members), instead of the
+  controller panicking.
+- **A CLI more than one minor from the running Ichor now refuses the user, reclaim,
+  settings and credential-request commands.** `create`, `edit` and `delete user`,
+  `user set-password`, `user revoke-sessions`, `reclaim node`, `set settings`,
+  `create talosconfig` and `create credentials --acknowledge` are refused by the
+  version-skew check, like `approve node` and `apply`. Use a CLI of the running
+  version. Reads are never refused.
+
+- **The plain webhook NetworkPolicy now opens the webhook port to every source.** With
+  the chart's Cilium policies off, the policy admits the apiserver, whose address a
+  NetworkPolicy cannot name, from any source. The `webhook: enabled` namespace label is
+  no longer needed.
+
+### Controller
+
+- The kube-proxy switch, the Cilium upgrade and the hand-over's finish check agents
+  against the current pod template; the hand-over's health check still counts an
+  `OnDelete` DaemonSet as ready.
+- The Kubernetes upgrade's kube-proxy wait checks the DaemonSet's observed generation
+  as well, so a read taken before the DaemonSet controller saw the new image is not
+  taken for a finished rollout.
+- `CAClientsNotRestarted` lowers itself: the TalosCluster reconciler re-reads the
+  workloads the condition names on the cluster's regular reconcile (at least every
+  five minutes) while it is raised, and sets it False
+  with the reason `ClientsBack` once each is available on its current template. A
+  workload that no longer exists is not waited for. A failed re-read, such as a
+  Forbidden, is logged, leaves the condition as it is and never stops the reconcile.
+  ADR 0063 is amended.
+- The key rotation's Secret sweep ignores conflicts and pauses after 10 sweeps that
+  still rewrite a Secret (see the upgrade notes).
+- A CA rotation on an `OnDelete` Cilium DaemonSet evicts the agent pods itself, one
+  node at a time. It waits for a replacement or a terminating pod, asks again after a
+  refused eviction (429, a PodDisruptionBudget), and is not blocked by old agents that
+  are not Ready, since they no longer trust the API server's CA. Before, it patched the
+  template, restarted nothing and gave up after 5 minutes.
+- Recording the Talos-side kube-proxy mode on status is a merge patch without an
+  optimistic lock, so a concurrent write to the cluster no longer pauses the switch
+  with a write conflict (`ichor set kube-proxy enabled`).
+- A secrets bundle that decodes with a missing member is refused with an error that
+  names the field and never carries the bytes.
+
+- Controller-made egress policies keep apiserver egress. They are removed within 30
+  seconds once the chart's Cilium policies go off.
+
+### CLI
+
+- `ichor adopt`, when the operator cannot list Deployments, no longer calls a running
+  Ichor "left over" and no longer advises deleting it. It uses the IchorInstallation's
+  installed version, or refuses as unconfirmed and names the missing permission.
+- The user, reclaim, settings and credential-request commands are refused by the
+  version-skew check when the CLI and server minors are too far apart, like the other
+  writing commands.
+- `ichor adopt` applies the install manifest again on a non-Helm install, in the
+  sign-in step and in the write step, and notes "applied Ichor's install manifest to
+  the existing install" when the IchorInstallation exists.
+- `ichor adopt` refuses to apply its install manifest over a running non-Helm Ichor of
+  another version (see the upgrade notes).
+- `ichor adopt` discovery applies the hostname check the CRD does (each label at most
+  63 characters) and skips a name that fails it.
+- `ichor adopt` keeps a node's Ichor authenticator in the plan unless the cluster has
+  sign-in on or this adopt turns it on, and refuses the node with a message naming
+  the ways forward.
+- `ichor adopt` says it turns sign-in on again only when this run turns it on. When
+  sign-in is already on and only the CA differs, it says the node's authenticator is
+  updated to this install's issuer and CA.
+
+- `ichor adopt` names the permission that was refused (`list secrets` or
+  `list deployments`) instead of always `list deployments`.
+
+### Webhooks
+
+- `TalosMachine.spec.hostname` refuses a label over 63 characters (a CRD rule), and the
+  UI approve path applies the same check. `spec.registries[].host` accepts a bracketed
+  IPv6 address.
+- A private key in a list-typed Cilium value is refused. An update keeps a stored
+  list-form key editable.
+
+### Chart
+
+- The controller listens on `webhook.port`.
+- Without Cilium policies, the plain webhook NetworkPolicy admits the apiserver from
+  any source.
+- The default-deny CiliumNetworkPolicy is applied after the allow policies.
+
+### CNI
+
+- A null `podAnnotations` in the Cilium values no longer panics replaced mode.
+
+### Docs
+
+- The CNI concept page says that switching kube-proxy to `replaced` breaks long-lived
+  Service connections opened before the switch, and that the ichor-controller restarts
+  once.
+- The uninstall and recovery guides give the `install.yaml` download command, and say
+  that v0.3.0 to v0.3.5 take the v0.3.6 one.
+- The adopt guide and the recovery guide describe adopt's install step as it behaves:
+  it installs Ichor when it is absent or its install is partial, and a running Ichor of
+  another version is refused. ADR 0063 and ADR 0121 are amended for the per-target
+  restart wait and the bounded sweep.
+
+- ADR 0063 and the CA and key rotation concepts page state the CA-rotation client
+  restart order the code uses: the CNI, then kube-proxy, CoreDNS and ichor-ui.
+- The network policy guide says that turning the Cilium policies on drops an existing
+  connection that no rule allows, such as the controller's open connection to an
+  external host, because every pod in `ichor-system` moves to default deny and the
+  connection reconnects.
+
+### CI
+
+- The GitHub release body's relative links point at the tagged tree: the release
+  workflow runs the section through `internal/tools/releasenotes`.
+- `install.yaml` is attached to the release and covered by the signed checksums.
+
+### UI
+
+- The operation page lists the operation's conditions and, for a running or paused
+  operation, shows a "Waiting" alert that says why it is waiting: the kube-proxy
+  switch's `OnDelete` remedy, and a pause reason that has no failure reason.
+- The Overview page shows an attention item, "The Ichor installation could not be
+  read", when the IchorInstallation read fails. The auto-patch halt and the installer
+  check are then unknown, and their warnings were hidden before; the auto-patch badge
+  is hidden as unknown.
+
 ## v0.3.5 (2026-11-27)
 
 A patch release of fixes to v0.3.4: deleting the controller namespace is refused until
